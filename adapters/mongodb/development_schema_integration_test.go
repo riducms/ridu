@@ -12,6 +12,7 @@ import (
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -29,7 +30,7 @@ func TestDecodeMongoDevelopmentManifestPreservesHistoricalBlockNameAbsence(t *te
 		Slug: "card", Fields: field.Fields{field.Text("title")},
 	}))
 	snapshot := current.Snapshot()
-	block := &snapshot.Collections[0].Fields[0].Blocks.Types[0]
+	block := &snapshot.Blocks[0]
 	if len(block.Fields) != 2 || block.Fields[1].Name != "blockName" {
 		t.Fatalf("current block fields = %#v", block.Fields)
 	}
@@ -46,11 +47,15 @@ func TestDecodeMongoDevelopmentManifestPreservesHistoricalBlockNameAbsence(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
+	compressed, err := encodeMongoDevelopmentManifest(historical)
+	if err != nil {
+		t.Fatal(err)
+	}
 	stored := func(recordedDigest string) bson.Raw {
 		t.Helper()
 		raw, err := bson.Marshal(bson.D{
 			{Key: "_id", Value: mongoDevelopmentSchemaID},
-			{Key: "manifestJSON", Value: string(encoded)},
+			{Key: mongoSchemaRecordManifestField, Value: bson.Binary{Subtype: bson.TypeBinaryGeneric, Data: compressed}},
 			{Key: "manifestDigest", Value: recordedDigest},
 		})
 		if err != nil {
@@ -157,7 +162,7 @@ func TestMongoDBDevelopmentUniqueAdmissionChecksPublishedOnlyDuplicates(t *testi
 			mongoRollback(t, write)
 			t.Fatal(err)
 		}
-		if _, err := write.Update(ctx, store.UpdateRequest{
+		if _, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{
 			Request: store.Request{Collection: collection, ID: id, ExpectedRevision: created.Revision},
 			Intent:  store.WriteIntentSaveDraft, Values: store.Values{"slug": store.String("draft-" + id)},
 		}); err != nil {
@@ -180,7 +185,7 @@ func TestMongoDBDevelopmentSchemaUnknownCannotBeCertifiedByPhysicalEquality(t *t
 	backend := mongoIntegrationStore(t)
 	before := mongoDevelopmentSchemaTestManifest(t, field.JSON("body"))
 	after := mongoDevelopmentSchemaTestManifest(t, field.Group("body", field.Fields{field.Text("note")}))
-	if err := backend.SyncIndexes(ctx, before); err != nil {
+	if err := backend.syncIndexes(ctx, before); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.VerifyIndexes(ctx, after); err != nil {
@@ -326,7 +331,7 @@ func TestMongoDBDevelopmentSchemaPublicationRechecksCurrentAndSnapshotValues(t *
 				t.Fatal(err)
 			}
 			if snapshotsOnly {
-				document, err = write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: resource, ID: document.ID, ExpectedRevision: document.Revision}, Values: store.Values{"body": store.Null()}})
+				document, err = conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: resource, ID: document.ID, ExpectedRevision: document.Revision}, Values: store.Values{"body": store.Null()}})
 				if err != nil {
 					t.Fatal(err)
 				}

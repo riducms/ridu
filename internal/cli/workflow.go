@@ -31,7 +31,6 @@ import (
 	"github.com/riducms/ridu/internal/goworkspace"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/projectfile"
-	"github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
 
@@ -436,7 +435,7 @@ func runBuild(ctx context.Context, args []string, stdout, stderr io.Writer, opti
 		reporter.Error("migration artifacts", err)
 		return 1
 	}
-	historyDigest, err := migrationArtifactHistoryDigest(files)
+	historyDigest, err := migrationartifact.HistoryDigest(files)
 	if err != nil {
 		reporter.Error("migration artifacts", err)
 		return 1
@@ -518,22 +517,6 @@ func projectMigrationPlannerName(adapter projectfile.DatabaseAdapter) (string, e
 	default:
 		return "", fmt.Errorf("unsupported database adapter %q", adapter)
 	}
-}
-
-func migrationArtifactHistoryDigest(files []migrationartifact.File) (string, error) {
-	identities := make([]migration.ArtifactIdentity, len(files))
-	for index, file := range files {
-		identities[index] = migration.ArtifactIdentity{Name: file.Name, Digest: file.Digest}
-	}
-	if len(files) == 0 {
-		return "", fmt.Errorf("migration artifact history is empty")
-	}
-	head := files[len(files)-1].Artifact
-	manifest, err := head.AfterManifest()
-	if err != nil {
-		return "", fmt.Errorf("read migration artifact history head: %w", err)
-	}
-	return migration.DigestArtifactHistory(identities, head.ToDigest, manifest)
 }
 
 func restoreAdminAssetsPlaceholder(definition projectfile.File) error {

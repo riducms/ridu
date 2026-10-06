@@ -283,7 +283,7 @@ func TestGraphQLAuthPasswordVariableNullDoesNotUseDefault(t *testing.T) {
 	failed := graphQL(t, server.URL, create, map[string]interface{}{"email": "null-password@example.test", "password": nil})
 	assertErrorCode(t, failed, "bad_query")
 	users, err := application.Local().List(t.Context(), "users", ridu.ListOptions{System: true, Draft: boolPointer(true)})
-	if err != nil || users.Total != 0 {
+	if err != nil || *users.Total != 0 {
 		t.Fatalf("explicit-null password created an account: page=%#v error=%v", users, err)
 	}
 	missingLogin := graphQL(t, server.URL, `mutation { loginUser(email: "null-password@example.test", password: "correct horse battery staple") { token } }`)
@@ -299,7 +299,7 @@ func TestGraphQLAuthPasswordVariableNullDoesNotUseDefault(t *testing.T) {
 		t.Fatalf("created draft auth user = %#v", created)
 	}
 	users, err = application.Local().List(t.Context(), "users", ridu.ListOptions{System: true, Draft: boolPointer(true)})
-	if err != nil || users.Total != 1 {
+	if err != nil || *users.Total != 1 {
 		t.Fatalf("default password account count = %#v, %v", users, err)
 	}
 	stored, err := application.Local().Find(t.Context(), "users", user["id"].(string), ridu.FindOptions{System: true, Draft: boolPointer(true)})

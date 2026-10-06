@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/riducms/ridu/internal/population"
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -22,7 +23,7 @@ func BenchmarkPopulationTraversal(b *testing.B) {
 				name = "Populated"
 			}
 			b.Run(fmt.Sprintf("%s/%d", name, size), func(b *testing.B) {
-				fields, values, path := populationBenchmarkFixture(size, populated)
+				fields, values, path := populationBenchmarkFixture(b, size, populated)
 				b.Run("VisitAtPath", func(b *testing.B) {
 					b.ReportAllocs()
 					for b.Loop() {
@@ -71,25 +72,27 @@ func BenchmarkPopulationTraversal(b *testing.B) {
 	}
 }
 
-func populationBenchmarkFixture(size int, populated bool) ([]schema.Field, store.Values, query.Path) {
-	path, err := query.NewPath("sections", "content", "quote", "credit", "author")
-	if err != nil {
-		panic(err)
+func populationBenchmarkFixture(tb testing.TB, size int, populated bool) ([]schema.Field, store.Values, query.Path) {
+	mustPath := func(segments ...string) query.Path {
+		path, err := query.NewPath(segments...)
+		if err != nil {
+			tb.Fatal(err)
+		}
+		return path
 	}
-	fields := []schema.Field{{
-		Name: "sections", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{{
-			Name: "content", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Slug: "quote", Fields: []schema.Field{{
-					Name: "credit", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{{
-						Name: "author", Path: path, Type: schema.FieldTypeRelationship, Localized: true,
-						Relationship: &schema.RelationshipField{CollectionID: "people", CollectionSlug: "people"},
-					}}},
-				}},
-			}, {
-				Slug: "plain", Fields: []schema.Field{{Name: "title", Type: schema.FieldTypeText}},
-			}}},
+	path := mustPath("sections", "content", "quote", "credit", "author")
+	quote := schema.BlockType{Slug: "quote", TypeName: "Quote", Fields: []schema.Field{{
+		Name: "credit", Path: mustPath("credit"), Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{{
+			Name: "author", Path: mustPath("credit", "author"), Type: schema.FieldTypeRelationship, Localized: true,
+			Relationship: &schema.RelationshipField{CollectionID: "people", CollectionSlug: "people"},
 		}}},
-	}}
+	}}}
+	plain := schema.BlockType{Slug: "plain", TypeName: "Plain", Fields: []schema.Field{{Name: "title", Path: mustPath("title"), Type: schema.FieldTypeText}}}
+	fields := schematest.Bind(tb, "pages", []schema.BlockType{quote, plain}, schema.Field{
+		Name: "sections", Path: mustPath("sections"), Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{{
+			Name: "content", Path: mustPath("sections", "content"), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"quote", "plain"}},
+		}}},
+	})
 	rows := make([]store.Value, size)
 	for index := range rows {
 		locales := store.Values{}

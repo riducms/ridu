@@ -1,0 +1,1 @@
+import{Cr as e,kr as t,lr as n,wr as r}from"./src-DBuVdSOR.js";var i=class{#e=r();get document(){return n(this.#e)}set document(t){e(this.#e,t)}},[a,o,s]=t();function c(){return o(new i)}function l(){return s()?a():void 0}export{c as n,l as t};

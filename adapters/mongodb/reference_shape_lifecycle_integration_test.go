@@ -13,6 +13,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -59,14 +60,14 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 			{
 				Slug: "records", Trash: true, Versions: true,
 				VersionConfig: ridu.VersionConfig{MaxPerDocument: 20},
-				Fields:        field.Fields{field.Text("title").Required(), field.Point("location"), field.Point("localLocation").Localized(), field.Group("localizedMeta", field.Fields{field.Text("headline"), field.Text("summary")}).Localized(), field.Relationship("guard", "people").Localized().OnDelete(field.ReferenceDeleteRestrict), field.Upload("assetGuard", "media").Localized().OnDelete(field.ReferenceDeleteRestrict), field.Relationship("editor", "people").Localized().OnDelete(field.ReferenceDeleteNullify), field.Relationships("contributors", "people").Localized().OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationships("subjects", "people", "teams").Localized().OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").Localized().OnDelete(field.ReferenceDeleteNullify), field.Array("sections", field.Fields{field.Point("waypoint"), field.Relationships("reviewers", "people").OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationship("localSubject", "people", "teams").Localized().OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").Localized().OnDelete(field.ReferenceDeleteNullify)}), field.Blocks("layout", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("reviewer", "people").OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationships("subjects", "people", "teams").OnDelete(field.ReferenceDeleteNullify), field.Upload("asset", "media").Localized().OnDelete(field.ReferenceDeleteNullify)}}), field.Array("localizedSections", field.Fields{field.Relationship("reviewer", "people").OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").OnDelete(field.ReferenceDeleteNullify)}).Localized(), field.Blocks("localizedLayout", field.Block{Slug: "quote", Fields: field.Fields{field.PolymorphicRelationships("subjects", "people", "teams").OnDelete(field.ReferenceDeleteNullify), field.Upload("asset", "media").OnDelete(field.ReferenceDeleteNullify)}}).Localized()},
+				Fields:        field.Fields{field.Text("title").Required(), field.Point("location"), field.Point("localLocation").Localized(), field.Group("localizedMeta", field.Fields{field.Text("headline"), field.Text("summary")}).Localized(), field.Relationship("guard", "people").Localized().OnDelete(field.ReferenceDeleteRestrict), field.Upload("assetGuard", "media").Localized().OnDelete(field.ReferenceDeleteRestrict), field.Relationship("editor", "people").Localized().OnDelete(field.ReferenceDeleteNullify), field.Relationships("contributors", "people").Localized().OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationships("subjects", "people", "teams").Localized().OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").Localized().OnDelete(field.ReferenceDeleteNullify), field.Array("sections", field.Fields{field.Point("waypoint"), field.Relationships("reviewers", "people").OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationship("localSubject", "people", "teams").Localized().OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").Localized().OnDelete(field.ReferenceDeleteNullify)}), field.Blocks("layout", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("reviewer", "people").OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationships("subjects", "people", "teams").OnDelete(field.ReferenceDeleteNullify), field.Upload("asset", "media").Localized().OnDelete(field.ReferenceDeleteNullify)}}), field.Array("localizedSections", field.Fields{field.Relationship("reviewer", "people").OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").OnDelete(field.ReferenceDeleteNullify)}).Localized(), field.Blocks("localizedLayout", field.Block{Slug: "localized-quote", Fields: field.Fields{field.PolymorphicRelationships("subjects", "people", "teams").OnDelete(field.ReferenceDeleteNullify), field.Upload("asset", "media").OnDelete(field.ReferenceDeleteNullify)}}).Localized()},
 			},
 		},
 	}, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	directCollection := mongoCollectionsBySlug(application.Manifest().Snapshot().Collections)["direct-records"]
@@ -84,7 +85,7 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 	}
 	mongoCommit(t, directTransaction)
 	directTransaction = mongoBegin(t, backend, false)
-	directDocument, err = directTransaction.Update(t.Context(), store.UpdateRequest{
+	directDocument, err = conformance.LockedUpdate(t.Context(), directTransaction, store.UpdateRequest{
 		Request: store.Request{Collection: directCollection, ID: directDocument.ID, Locales: directLocales},
 		Values: store.Values{"localizedMeta": store.Object(store.Values{
 			"en": store.Object(store.Values{"headline": store.String("New")}),
@@ -174,7 +175,7 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 			"_key": store.String("localized-section-fr"), "reviewer": store.String(personB.ID),
 		})),
 		"localizedLayout": store.List(store.Object(store.Values{
-			"_key": store.String("localized-quote-fr"), "blockType": store.String("quote"),
+			"_key": store.String("localized-quote-fr"), "blockType": store.String("localized-quote"),
 		})),
 	}, ridu.MutationOptions{ExpectedRevision: primary.Revision, Locale: "fr"})
 	if err != nil {
@@ -443,7 +444,7 @@ func mongoReferenceLifecycleEnglishValues(personA, personC, team, mediaA, mediaB
 			"_key": store.String("localized-section"), "reviewer": store.String(personA), "assets": store.List(store.String(mediaA)),
 		})),
 		"localizedLayout": store.List(store.Object(store.Values{
-			"_key": store.String("localized-quote"), "blockType": store.String("quote"),
+			"_key": store.String("localized-quote"), "blockType": store.String("localized-quote"),
 			"subjects": store.List(mongoReferenceLifecyclePoly("people", personA), mongoReferenceLifecyclePoly("teams", team)), "asset": store.String(mediaA),
 		})),
 	}
@@ -474,7 +475,7 @@ func mongoReferenceLifecycleFrenchValues(personA, personB, personC, team, mediaB
 			"_key": store.String("localized-section-fr"), "reviewer": store.String(personB), "assets": store.List(store.String(mediaB)),
 		})),
 		"localizedLayout": store.List(store.Object(store.Values{
-			"_key": store.String("localized-quote-fr"), "blockType": store.String("quote"),
+			"_key": store.String("localized-quote-fr"), "blockType": store.String("localized-quote"),
 			"subjects": store.List(mongoReferenceLifecyclePoly("people", personB), mongoReferenceLifecyclePoly("teams", team)),
 			"asset":    store.String(mediaB),
 		})),
@@ -495,7 +496,7 @@ func mongoReferenceLifecyclePopulations(t *testing.T) []query.Population {
 		"editor", "contributors", "subjects", "assets", "sections.reviewers", "sections.localSubject", "sections.assets",
 		"layout.quote.reviewer", "layout.quote.subjects", "layout.quote.asset",
 		"localizedSections.reviewer", "localizedSections.assets",
-		"localizedLayout.quote.subjects", "localizedLayout.quote.asset",
+		"localizedLayout.localized-quote.subjects", "localizedLayout.localized-quote.asset",
 	}
 	populations := make([]query.Population, len(paths))
 	for index, path := range paths {

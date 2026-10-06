@@ -9,19 +9,25 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-// ResolveIssueTarget resolves a callback's relative selectors only within its
-// own candidate value. The caller's exact locale and embedded prefix stay bound.
-func ResolveIssueTarget(field schema.Field, ctx Context, target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
-	return resolveIssueSegments(field, ctx, ctx.RuntimePath, ctx.Value, ctx.AllLocales && field.Localized, false, nil, target)
+// ResolveIssueTarget resolves a field callback's relative selectors only within
+// its own candidate value, from the field the callback is bound to. The
+// caller's exact locale and embedded prefix stay bound. The resolved field is
+// named by its placement.
+func ResolveIssueTarget(ctx Context, target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
+	field := ctx.BoundField()
+	placement := fieldPlacement{canonical: field.Path.Segments(), shared: ctx.bound.base != ""}
+	return resolveIssueSegments(field, ctx, ctx.RuntimePath, ctx.Value, ctx.AllLocales && field.Localized, false, nil, placement, target)
 }
 
 // ResolveRootIssueTarget resolves a resource hook's selectors from the
 // document root. A zero target addresses the document itself.
 func ResolveRootIssueTarget(fields []schema.Field, ctx Context, values store.Values, target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
-	return resolveIssueSegments(schema.Field{}, ctx, "", store.Object(values), false, true, fields, target)
+	return resolveIssueSegments(schema.Field{}, ctx, "", store.Object(values), false, true, fields, fieldPlacement{}, target)
 }
 
-func resolveIssueSegments(field schema.Field, ctx Context, path string, value store.Value, localized, objectScope bool, children []schema.Field, target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
+// placement follows the selected field's canonical path, so a field reached
+// through a shared block definition is reported by its placement.
+func resolveIssueSegments(field schema.Field, ctx Context, path string, value store.Value, localized, objectScope bool, children []schema.Field, placement fieldPlacement, target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
 	locale := ctx.Locale
 	invalid := func(message string) (schema.Field, string, schema.LocaleCode, error) {
 		return schema.Field{}, "", "", fmt.Errorf("invalid validation issue target at %s: %s", path, message)
@@ -65,7 +71,8 @@ func resolveIssueSegments(field schema.Field, ctx Context, path string, value st
 			if child == nil {
 				return invalid(fmt.Sprintf("no child field named %q", segment.Field))
 			}
-			value, field = value.Get(segment.Field), *child
+			placement = placement.child(child.Name)
+			value, field = value.Get(segment.Field), placementField(ctx.Collection.ID, *child, placement.canonical, placement.shared)
 			path = joinFieldPath(path, segment.Field)
 			localized = ctx.AllLocales && field.Localized
 			objectScope = false
@@ -97,11 +104,9 @@ func resolveIssueSegments(field schema.Field, ctx Context, path string, value st
 				return invalid(fmt.Sprintf("row %q has blockType %q, expected %q", segment.RowKey, actual, segment.BlockType))
 			}
 			if field.Blocks != nil {
-				for _, block := range field.Blocks.ResolvedTypes() {
-					if block.Slug == actual {
-						children = block.ResolvedFields()
-						break
-					}
+				if block, found := field.Blocks.Definition(actual); found {
+					children = block.ResolvedFields()
+					placement = placement.enter(actual)
 				}
 			}
 		} else if field.Nested != nil {

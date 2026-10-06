@@ -211,7 +211,7 @@ for (const container of ["sections", "content"] as const)
 		const product = await create(page, {
 			[container]: [
 				{
-					...(container === "content" ? { blockType: "card" } : {}),
+					...(container === "content" ? { blockType: "live-card" } : {}),
 					supplier: "acme",
 					supplierCodes: ["A-row"],
 					packSizes: [0],
@@ -221,7 +221,7 @@ for (const container of ["sections", "content"] as const)
 					],
 				},
 				{
-					...(container === "content" ? { blockType: "note" } : {}),
+					...(container === "content" ? { blockType: "live-note" } : {}),
 					supplier: "acme",
 					supplierCodes: ["A-second"],
 				},
@@ -237,7 +237,7 @@ for (const container of ["sections", "content"] as const)
 		expect(JSON.parse(issue.target!)).toEqual(
 			expect.arrayContaining([product[container][0]._key, product[container][0].links[0]._key])
 		);
-		if (container === "content") expect(JSON.parse(issue.target!)).toContain("card");
+		if (container === "content") expect(JSON.parse(issue.target!)).toContain("live-card");
 		check = nextCheck(page, `${container}.0.links.0.packSizes`);
 		await item(page, `${container}.0.links.0.packSizes`).fill("11");
 		await check;
@@ -316,7 +316,7 @@ for (const owner of ["body", "localizedBody"] as const)
 							type: "block",
 							version: 1,
 							fields: {
-								blockType: "card",
+								blockType: "live-embedded-card",
 								supplier: "acme",
 								supplierCodes: ["A-original", "A-original"],
 								packSizes: [0, 8],
@@ -329,7 +329,7 @@ for (const owner of ["body", "localizedBody"] as const)
 		});
 		await page.goto(`/admin/collections/${collection}/${product.id}`);
 		if (owner === "localizedBody") await chooseContentLocale(page, "French", "fr");
-		const card = list(page, owner).locator('article[data-block-type="card"]').first();
+		const card = list(page, owner).locator('article[data-block-type="live-embedded-card"]').first();
 		const codes = card.locator('[data-field-path$=".supplierCodes"]').first();
 		const sizes = card.locator('[data-field-path$=".packSizes"]').first();
 		const custom = card.locator('[data-local-editor="text-list"]');
@@ -402,7 +402,7 @@ test("packaged embedded list editors preserve feedback on their enclosing stable
 				{
 					kind: "widget",
 					content: {
-						schema: "card",
+						schema: "live-outline-card",
 						uid: "list-a",
 						supplier: "acme",
 						supplierCodes: ["A-first"],
@@ -412,7 +412,7 @@ test("packaged embedded list editors preserve feedback on their enclosing stable
 				{
 					kind: "widget",
 					content: {
-						schema: "card",
+						schema: "live-outline-card",
 						uid: "list-b",
 						supplier: "globex",
 						supplierCodes: ["G-other"],

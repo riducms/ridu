@@ -1,4 +1,118 @@
 {
+  "x-ridu-blocks": [
+    {
+      "typeName": "Card",
+      "slug": "card",
+      "labels": {
+        "singular": "Card",
+        "plural": "Cards"
+      },
+      "fields": [
+        {
+          "id": "block-card-points",
+          "name": "points",
+          "path": "points",
+          "type": "text-list",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Points"
+          },
+          "text": {
+            "maxLength": 120
+          },
+          "list": {}
+        },
+        {
+          "id": "block-card-sizes",
+          "name": "sizes",
+          "path": "sizes",
+          "type": "number-list",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Sizes"
+          },
+          "number": {
+            "min": 0
+          },
+          "list": {}
+        },
+        {
+          "id": "block-card-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "",
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        }
+      ]
+    },
+    {
+      "typeName": "Note",
+      "slug": "note",
+      "labels": {
+        "singular": "Note",
+        "plural": "Notes"
+      },
+      "fields": [
+        {
+          "id": "block-note-points",
+          "name": "points",
+          "path": "points",
+          "type": "text-list",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Points"
+          },
+          "text": {
+            "maxLength": 120
+          },
+          "list": {}
+        },
+        {
+          "id": "block-note-sizes",
+          "name": "sizes",
+          "path": "sizes",
+          "type": "number-list",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Sizes"
+          },
+          "number": {
+            "min": 0
+          },
+          "list": {}
+        },
+        {
+          "id": "block-note-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "",
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        }
+      ]
+    }
+  ],
   "openapi": "3.1.0",
   "info": {
     "title": "Primitive lists API",
@@ -252,6 +366,16 @@
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "Set false to skip counting every match: pagination omits totalDocs and totalPages, and hasNextPage stays exact.",
+            "in": "query",
+            "name": "pagination",
+            "required": false,
+            "schema": {
+              "default": true,
+              "type": "boolean"
             }
           },
           {
@@ -1405,6 +1529,228 @@
           "operations",
           "fields"
         ]
+      },
+      "Card": {
+        "type": "object",
+        "properties": {
+          "_key": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockType": {
+            "const": "card",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sizes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blockType",
+          "_key"
+        ]
+      },
+      "CardAllLocales": {
+        "type": "object",
+        "properties": {
+          "_key": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockType": {
+            "const": "card",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sizes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blockType",
+          "_key"
+        ]
+      },
+      "CardInput": {
+        "type": "object",
+        "properties": {
+          "_key": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockType": {
+            "const": "card",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sizes": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blockType"
+        ],
+        "additionalProperties": false
+      },
+      "CardUpdate": {
+        "type": "object",
+        "properties": {
+          "_key": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockType": {
+            "const": "card",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sizes": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blockType",
+          "_key"
+        ],
+        "description": "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime.",
+        "additionalProperties": false
       },
       "CollectionPageAccess": {
         "type": "object",
@@ -2632,6 +2978,228 @@
         "description": "Advisory unsaved input. Only explicitly opted-in fields run; this never replaces save validation. Maximum request body: 1 MiB.",
         "additionalProperties": false
       },
+      "Note": {
+        "type": "object",
+        "properties": {
+          "_key": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockType": {
+            "const": "note",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sizes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blockType",
+          "_key"
+        ]
+      },
+      "NoteAllLocales": {
+        "type": "object",
+        "properties": {
+          "_key": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockType": {
+            "const": "note",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sizes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blockType",
+          "_key"
+        ]
+      },
+      "NoteInput": {
+        "type": "object",
+        "properties": {
+          "_key": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockType": {
+            "const": "note",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sizes": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blockType"
+        ],
+        "additionalProperties": false
+      },
+      "NoteUpdate": {
+        "type": "object",
+        "properties": {
+          "_key": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockType": {
+            "const": "note",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sizes": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blockType",
+          "_key"
+        ],
+        "description": "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime.",
+        "additionalProperties": false
+      },
       "OperationCapabilities": {
         "type": "object",
         "properties": {
@@ -2703,908 +3271,20 @@
             "type": "integer"
           },
           "totalDocs": {
+            "description": "Exact number of matching documents; omitted when the list set pagination=false.",
             "type": "integer"
           },
           "totalPages": {
+            "description": "Number of pages at this limit; omitted when the list set pagination=false.",
             "type": "integer"
           }
         },
         "required": [
           "page",
           "limit",
-          "totalDocs",
-          "totalPages",
           "hasNextPage",
           "hasPrevPage"
         ]
-      },
-      "PrimitiveProductsBodyBlocksBlockCard": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "PrimitiveProductsBodyBlocksBlockCardAllLocales": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "PrimitiveProductsBodyBlocksBlockCardInput": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType"
-        ],
-        "additionalProperties": false
-      },
-      "PrimitiveProductsBodyBlocksBlockCardUpdate": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ],
-        "description": "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime.",
-        "additionalProperties": false
-      },
-      "PrimitiveProductsContentCard": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "PrimitiveProductsContentCardAllLocales": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "PrimitiveProductsContentCardInput": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType"
-        ],
-        "additionalProperties": false
-      },
-      "PrimitiveProductsContentCardUpdate": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ],
-        "description": "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime.",
-        "additionalProperties": false
-      },
-      "PrimitiveProductsContentNote": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "note",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "PrimitiveProductsContentNoteAllLocales": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "note",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "PrimitiveProductsContentNoteInput": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "note",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType"
-        ],
-        "additionalProperties": false
-      },
-      "PrimitiveProductsContentNoteUpdate": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "note",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ],
-        "description": "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime.",
-        "additionalProperties": false
-      },
-      "PrimitiveProductsLocalizedBodyBlocksBlockCard": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "PrimitiveProductsLocalizedBodyBlocksBlockCardInput": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType"
-        ],
-        "additionalProperties": false
-      },
-      "PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "points": {
-            "anyOf": [
-              {
-                "items": {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sizes": {
-            "anyOf": [
-              {
-                "items": {
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ],
-        "description": "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime.",
-        "additionalProperties": false
       },
       "ValidationIssue": {
         "type": "object",
@@ -4318,67 +3998,13 @@
                     "tag": "type",
                     "cases": [
                       {
+                        "blockReferences": [
+                          "card"
+                        ],
                         "tagValue": "block",
                         "payload": "fields",
                         "discriminator": "blockType",
-                        "identity": "_key",
-                        "types": [
-                          {
-                            "slug": "card",
-                            "labels": {
-                              "singular": "Card",
-                              "plural": "Cards"
-                            },
-                            "fields": [
-                              {
-                                "id": "primitive-products-body-blocks-block-card-points",
-                                "name": "points",
-                                "path": "body.blocks.block.card.points",
-                                "type": "text-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Points"
-                                },
-                                "text": {
-                                  "maxLength": 120
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-body-blocks-block-card-sizes",
-                                "name": "sizes",
-                                "path": "body.blocks.block.card.sizes",
-                                "type": "number-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Sizes"
-                                },
-                                "number": {
-                                  "min": 0
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-body-blocks-block-card-block-name",
-                                "name": "blockName",
-                                "path": "body.blocks.block.card.blockName",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "default": "",
-                                "admin": {
-                                  "label": "Block name"
-                                },
-                                "text": {}
-                              }
-                            ]
-                          }
-                        ]
+                        "identity": "_key"
                       }
                     ]
                   }
@@ -4395,17 +4021,17 @@
                 "items": {
                   "discriminator": {
                     "mapping": {
-                      "card": "#/components/schemas/PrimitiveProductsContentCard",
-                      "note": "#/components/schemas/PrimitiveProductsContentNote"
+                      "card": "#/components/schemas/Card",
+                      "note": "#/components/schemas/Note"
                     },
                     "propertyName": "blockType"
                   },
                   "oneOf": [
                     {
-                      "$ref": "#/components/schemas/PrimitiveProductsContentCard"
+                      "$ref": "#/components/schemas/Card"
                     },
                     {
-                      "$ref": "#/components/schemas/PrimitiveProductsContentNote"
+                      "$ref": "#/components/schemas/Note"
                     }
                   ]
                 },
@@ -5112,67 +4738,13 @@
                         "tag": "type",
                         "cases": [
                           {
+                            "blockReferences": [
+                              "card"
+                            ],
                             "tagValue": "block",
                             "payload": "fields",
                             "discriminator": "blockType",
-                            "identity": "_key",
-                            "types": [
-                              {
-                                "slug": "card",
-                                "labels": {
-                                  "singular": "Card",
-                                  "plural": "Cards"
-                                },
-                                "fields": [
-                                  {
-                                    "id": "primitive-products-localized-body-blocks-block-card-points",
-                                    "name": "points",
-                                    "path": "localizedBody.blocks.block.card.points",
-                                    "type": "text-list",
-                                    "category": "scalar",
-                                    "required": false,
-                                    "unique": false,
-                                    "admin": {
-                                      "label": "Points"
-                                    },
-                                    "text": {
-                                      "maxLength": 120
-                                    },
-                                    "list": {}
-                                  },
-                                  {
-                                    "id": "primitive-products-localized-body-blocks-block-card-sizes",
-                                    "name": "sizes",
-                                    "path": "localizedBody.blocks.block.card.sizes",
-                                    "type": "number-list",
-                                    "category": "scalar",
-                                    "required": false,
-                                    "unique": false,
-                                    "admin": {
-                                      "label": "Sizes"
-                                    },
-                                    "number": {
-                                      "min": 0
-                                    },
-                                    "list": {}
-                                  },
-                                  {
-                                    "id": "primitive-products-localized-body-blocks-block-card-block-name",
-                                    "name": "blockName",
-                                    "path": "localizedBody.blocks.block.card.blockName",
-                                    "type": "text",
-                                    "category": "scalar",
-                                    "required": false,
-                                    "unique": false,
-                                    "default": "",
-                                    "admin": {
-                                      "label": "Block name"
-                                    },
-                                    "text": {}
-                                  }
-                                ]
-                              }
-                            ]
+                            "identity": "_key"
                           }
                         ]
                       }
@@ -5833,67 +5405,13 @@
                           "tag": "type",
                           "cases": [
                             {
+                              "blockReferences": [
+                                "card"
+                              ],
                               "tagValue": "block",
                               "payload": "fields",
                               "discriminator": "blockType",
-                              "identity": "_key",
-                              "types": [
-                                {
-                                  "slug": "card",
-                                  "labels": {
-                                    "singular": "Card",
-                                    "plural": "Cards"
-                                  },
-                                  "fields": [
-                                    {
-                                      "id": "primitive-products-localized-body-blocks-block-card-points",
-                                      "name": "points",
-                                      "path": "localizedBody.blocks.block.card.points",
-                                      "type": "text-list",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "label": "Points"
-                                      },
-                                      "text": {
-                                        "maxLength": 120
-                                      },
-                                      "list": {}
-                                    },
-                                    {
-                                      "id": "primitive-products-localized-body-blocks-block-card-sizes",
-                                      "name": "sizes",
-                                      "path": "localizedBody.blocks.block.card.sizes",
-                                      "type": "number-list",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "label": "Sizes"
-                                      },
-                                      "number": {
-                                        "min": 0
-                                      },
-                                      "list": {}
-                                    },
-                                    {
-                                      "id": "primitive-products-localized-body-blocks-block-card-block-name",
-                                      "name": "blockName",
-                                      "path": "localizedBody.blocks.block.card.blockName",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "default": "",
-                                      "admin": {
-                                        "label": "Block name"
-                                      },
-                                      "text": {}
-                                    }
-                                  ]
-                                }
-                              ]
+                              "identity": "_key"
                             }
                           ]
                         }
@@ -6720,67 +6238,13 @@
                     "tag": "type",
                     "cases": [
                       {
+                        "blockReferences": [
+                          "card"
+                        ],
                         "tagValue": "block",
                         "payload": "fields",
                         "discriminator": "blockType",
-                        "identity": "_key",
-                        "types": [
-                          {
-                            "slug": "card",
-                            "labels": {
-                              "singular": "Card",
-                              "plural": "Cards"
-                            },
-                            "fields": [
-                              {
-                                "id": "primitive-products-body-blocks-block-card-points",
-                                "name": "points",
-                                "path": "body.blocks.block.card.points",
-                                "type": "text-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Points"
-                                },
-                                "text": {
-                                  "maxLength": 120
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-body-blocks-block-card-sizes",
-                                "name": "sizes",
-                                "path": "body.blocks.block.card.sizes",
-                                "type": "number-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Sizes"
-                                },
-                                "number": {
-                                  "min": 0
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-body-blocks-block-card-block-name",
-                                "name": "blockName",
-                                "path": "body.blocks.block.card.blockName",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "default": "",
-                                "admin": {
-                                  "label": "Block name"
-                                },
-                                "text": {}
-                              }
-                            ]
-                          }
-                        ]
+                        "identity": "_key"
                       }
                     ]
                   }
@@ -6797,17 +6261,17 @@
                 "items": {
                   "discriminator": {
                     "mapping": {
-                      "card": "#/components/schemas/PrimitiveProductsContentCardInput",
-                      "note": "#/components/schemas/PrimitiveProductsContentNoteInput"
+                      "card": "#/components/schemas/CardInput",
+                      "note": "#/components/schemas/NoteInput"
                     },
                     "propertyName": "blockType"
                   },
                   "oneOf": [
                     {
-                      "$ref": "#/components/schemas/PrimitiveProductsContentCardInput"
+                      "$ref": "#/components/schemas/CardInput"
                     },
                     {
-                      "$ref": "#/components/schemas/PrimitiveProductsContentNoteInput"
+                      "$ref": "#/components/schemas/NoteInput"
                     }
                   ]
                 },
@@ -7508,67 +6972,13 @@
                     "tag": "type",
                     "cases": [
                       {
+                        "blockReferences": [
+                          "card"
+                        ],
                         "tagValue": "block",
                         "payload": "fields",
                         "discriminator": "blockType",
-                        "identity": "_key",
-                        "types": [
-                          {
-                            "slug": "card",
-                            "labels": {
-                              "singular": "Card",
-                              "plural": "Cards"
-                            },
-                            "fields": [
-                              {
-                                "id": "primitive-products-localized-body-blocks-block-card-points",
-                                "name": "points",
-                                "path": "localizedBody.blocks.block.card.points",
-                                "type": "text-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Points"
-                                },
-                                "text": {
-                                  "maxLength": 120
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-localized-body-blocks-block-card-sizes",
-                                "name": "sizes",
-                                "path": "localizedBody.blocks.block.card.sizes",
-                                "type": "number-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Sizes"
-                                },
-                                "number": {
-                                  "min": 0
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-localized-body-blocks-block-card-block-name",
-                                "name": "blockName",
-                                "path": "localizedBody.blocks.block.card.blockName",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "default": "",
-                                "admin": {
-                                  "label": "Block name"
-                                },
-                                "text": {}
-                              }
-                            ]
-                          }
-                        ]
+                        "identity": "_key"
                       }
                     ]
                   }
@@ -8341,67 +7751,13 @@
                     "tag": "type",
                     "cases": [
                       {
+                        "blockReferences": [
+                          "card"
+                        ],
                         "tagValue": "block",
                         "payload": "fields",
                         "discriminator": "blockType",
-                        "identity": "_key",
-                        "types": [
-                          {
-                            "slug": "card",
-                            "labels": {
-                              "singular": "Card",
-                              "plural": "Cards"
-                            },
-                            "fields": [
-                              {
-                                "id": "primitive-products-body-blocks-block-card-points",
-                                "name": "points",
-                                "path": "body.blocks.block.card.points",
-                                "type": "text-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Points"
-                                },
-                                "text": {
-                                  "maxLength": 120
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-body-blocks-block-card-sizes",
-                                "name": "sizes",
-                                "path": "body.blocks.block.card.sizes",
-                                "type": "number-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Sizes"
-                                },
-                                "number": {
-                                  "min": 0
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-body-blocks-block-card-block-name",
-                                "name": "blockName",
-                                "path": "body.blocks.block.card.blockName",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "default": "",
-                                "admin": {
-                                  "label": "Block name"
-                                },
-                                "text": {}
-                              }
-                            ]
-                          }
-                        ]
+                        "identity": "_key"
                       }
                     ]
                   }
@@ -8420,20 +7776,20 @@
                     {
                       "anyOf": [
                         {
-                          "$ref": "#/components/schemas/PrimitiveProductsContentCardInput"
+                          "$ref": "#/components/schemas/CardInput"
                         },
                         {
-                          "$ref": "#/components/schemas/PrimitiveProductsContentCardUpdate"
+                          "$ref": "#/components/schemas/CardUpdate"
                         }
                       ]
                     },
                     {
                       "anyOf": [
                         {
-                          "$ref": "#/components/schemas/PrimitiveProductsContentNoteInput"
+                          "$ref": "#/components/schemas/NoteInput"
                         },
                         {
-                          "$ref": "#/components/schemas/PrimitiveProductsContentNoteUpdate"
+                          "$ref": "#/components/schemas/NoteUpdate"
                         }
                       ]
                     }
@@ -9136,67 +8492,13 @@
                     "tag": "type",
                     "cases": [
                       {
+                        "blockReferences": [
+                          "card"
+                        ],
                         "tagValue": "block",
                         "payload": "fields",
                         "discriminator": "blockType",
-                        "identity": "_key",
-                        "types": [
-                          {
-                            "slug": "card",
-                            "labels": {
-                              "singular": "Card",
-                              "plural": "Cards"
-                            },
-                            "fields": [
-                              {
-                                "id": "primitive-products-localized-body-blocks-block-card-points",
-                                "name": "points",
-                                "path": "localizedBody.blocks.block.card.points",
-                                "type": "text-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Points"
-                                },
-                                "text": {
-                                  "maxLength": 120
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-localized-body-blocks-block-card-sizes",
-                                "name": "sizes",
-                                "path": "localizedBody.blocks.block.card.sizes",
-                                "type": "number-list",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Sizes"
-                                },
-                                "number": {
-                                  "min": 0
-                                },
-                                "list": {}
-                              },
-                              {
-                                "id": "primitive-products-localized-body-blocks-block-card-block-name",
-                                "name": "blockName",
-                                "path": "localizedBody.blocks.block.card.blockName",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "default": "",
-                                "admin": {
-                                  "label": "Block name"
-                                },
-                                "text": {}
-                              }
-                            ]
-                          }
-                        ]
+                        "identity": "_key"
                       }
                     ]
                   }

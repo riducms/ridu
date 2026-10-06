@@ -399,7 +399,7 @@ func TestSQLiteNativeNumberPredicatesCompareInFloat64Space(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != "large" {
+			if *page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != "large" {
 				t.Fatalf("large-number page = %#v", page)
 			}
 		})
@@ -495,7 +495,7 @@ func TestComplexAccessRemainsAnAtomicSQLitePredicate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != "allowed" {
+	if *page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != "allowed" {
 		t.Fatalf("localized repeated/null access page = %#v", page)
 	}
 
@@ -511,7 +511,7 @@ func TestComplexAccessRemainsAnAtomicSQLitePredicate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 0 || len(page.Documents) != 0 {
+	if *page.Total != 0 || len(page.Documents) != 0 {
 		t.Fatalf("all-locales access did not require every locale: %#v", page)
 	}
 }
@@ -573,7 +573,7 @@ func TestSQLiteResidualListMaximumPageDoesNotOverflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Documents) != 0 || page.Total != 2 || page.Page != math.MaxInt || page.Limit != 2 {
+	if len(page.Documents) != 0 || *page.Total != 2 || page.Page != math.MaxInt || page.Limit != 2 {
 		t.Fatalf("residual maximum page = %#v", page)
 	}
 }

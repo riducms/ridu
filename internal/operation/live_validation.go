@@ -110,7 +110,7 @@ func (engine *Engine) LiveValidate(ctx context.Context, request LiveValidationRe
 	read.Data = store.Values{}
 	decision, accessError := authorize(collection, read)
 	if accessError != nil {
-		return result, capabilityAccessError("read access rule failed", accessError)
+		return result, accessRuleError("read access rule failed", accessError)
 	}
 	if decision.Kind == Deny || request.ID == "" && decision.Kind != Allow {
 		return result, liveDenied()
@@ -157,7 +157,7 @@ func (engine *Engine) LiveValidate(ctx context.Context, request LiveValidationRe
 	base.Data = candidate
 	decision, accessError = authorize(collection, base)
 	if accessError != nil {
-		return result, capabilityAccessError("write access rule failed", accessError)
+		return result, accessRuleError("write access rule failed", accessError)
 	}
 	if decision.Kind == Deny || kind == operation.Create && decision.Kind != Allow {
 		return result, liveDenied()
@@ -182,23 +182,22 @@ func (engine *Engine) LiveValidate(ctx context.Context, request LiveValidationRe
 	if err != nil {
 		return result, err
 	}
-	root := store.CloneValues(scope.data)
-	base.RootData = root
+	root := store.Object(scope.data)
+	base.enclosingRoot = root
 	for _, selector := range request.Embedded {
 		scope, err = liveDescendScope(scope, base, selector)
 		if err != nil {
 			return result, err
 		}
 	}
-	base.RootData = root
 	base.Data, base.Document, base.originalCanonical = scope.data, nil, nil
 	base.Collection.Fields = scope.collection.Schema.Fields
 	base.Original = &store.Document{Values: scope.prior}
-	tokens := fieldIssueTargets(scope.collection.Schema.Fields, scope.data, false)
+	tokens := fieldIssueTargets(scope.collection, scope.data, false)
 	entries := liveEntries(scope.collection, scope.data)
 	inputs := liveEntries(scope.collection, scope.input)
 	priors := liveEntries(scope.collection, scope.prior)
-	priorTokens := fieldIssueTargets(scope.collection.Schema.Fields, scope.prior, false)
+	priorTokens := fieldIssueTargets(scope.collection, scope.prior, false)
 	result.Evaluations = make([]LiveValidationEvaluation, 0, len(request.Fields))
 	issueCount, issueBytes := 0, 0
 	for _, path := range request.Fields {
@@ -207,8 +206,8 @@ func (engine *Engine) LiveValidate(ctx context.Context, request LiveValidationRe
 		}
 		entry, found := entries[path]
 		if !found {
-			field, valid := liveUnavailableField(scope.collection.Schema.Fields, scope.data, strings.Split(path, "."))
-			if !valid || !liveHasValidator(scope.collection, field.ID) {
+			location, valid := liveUnavailableField(scope.collection, scope.data, strings.Split(path, "."))
+			if !valid || !liveHasValidator(scope.collection, location) {
 				return LiveValidationResult{}, liveBadRequest("requested field is not an available live validation field")
 			}
 			if livePathDenied(scope.denied, path) {
@@ -223,22 +222,19 @@ func (engine *Engine) LiveValidate(ctx context.Context, request LiveValidationRe
 		if livePathDenied(scope.denied, path) {
 			return LiveValidationResult{}, liveDenied()
 		}
-		previous := livePriorLocations(entry.binding, priors, priorTokens, tokens)
-		scoped := scopedBindingContext(base, entry.binding, entry.location, previous)
+		previous := livePriorLocations(entry, priors, priorTokens, tokens)
+		scoped := scopedBindingContext(base, entry.binding, entry.location, previous, nil)
 		// Advisory snapshots preserve unavailable/read-redacted keys as absent.
-		// The save callback scalar-normalization helper must not recreate them.
-		scoped.SiblingData, _ = entry.location.siblings.CopyObject()
-		scoped.OriginalSiblingData = nil
+		// Save-callback scalar normalization must not recreate them.
+		scoped.Siblings, scoped.Prior = entry.location.siblings, store.Value{}
 		if old, exists := previous[entry.location.identity]; exists {
-			scoped.OriginalSiblingData, _ = old.siblings.CopyObject()
+			scoped.Prior = old.siblings
 		}
-		scoped.RootData = root
-		scoped.InputSiblingData = nil
 		if input, ok := inputs[path]; ok {
-			scoped.InputSiblingData, _ = input.location.siblings.CopyObject()
+			scoped.Input = input.location.siblings
 		}
 		evaluation := LiveValidationEvaluation{Path: path, Target: tokens[path], Status: "checked", Issues: []schema.Issue{}}
-		if !liveStructuredValueAvailable(entry.binding.Field, entry.location.value) {
+		if !liveStructuredValueAvailable(entry.field, entry.location.value) {
 			evaluation.Status = "skipped"
 			result.Evaluations = append(result.Evaluations, evaluation)
 			continue
@@ -290,7 +286,7 @@ func liveAuthorizeResource(collection Collection, base Context, kind operation.K
 	}
 	decision, err := authorize(collection, base)
 	if err != nil {
-		return capabilityAccessError("resource access rule failed", err)
+		return accessRuleError("resource access rule failed", err)
 	}
 	if decision.Kind != Allow {
 		return liveDenied()

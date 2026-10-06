@@ -21,7 +21,7 @@ import (
 )
 
 func registryCard(key, visibility string) store.Value {
-	return store.Object(store.Values{"_key": store.String(key), "blockType": store.String("card"), "visibility": store.String(visibility), "secret": store.String("classified"), "details": store.Object(store.Values{"caption": store.String("nested")}), "children": store.List(store.Object(store.Values{"_key": store.String(key + "-child"), "blockType": store.String("note"), "text": store.String("leaf")}))})
+	return store.Object(store.Values{"_key": store.String(key), "blockType": store.String(blockreferences.CardSlug), "visibility": store.String(visibility), "secret": store.String("classified"), "details": store.Object(store.Values{"caption": store.String("nested")}), "children": store.List(store.Object(store.Values{"_key": store.String(key + "-child"), "blockType": store.String(blockreferences.NoteSlug), "text": store.String("leaf")}))})
 }
 func TestBlockRegistryCompactManifestAndPlacement(t *testing.T) {
 	app, err := ridu.New(blockreferences.Config(true), teststore.New())
@@ -32,30 +32,38 @@ func TestBlockRegistryCompactManifestAndPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Count(encoded, []byte(`"typeName": "Card"`)) != 1 {
+	if bytes.Count(encoded, []byte(`"typeName": "RegistryCard"`)) != 1 {
 		t.Fatalf("shared definition repeated: %s", encoded)
 	}
-	// An explicit empty inline array cannot mask references after JSON decoding.
+	// Containers have one representation: inline types are not part of a manifest.
 	originalEncoded := bytes.Clone(encoded)
-	encoded = bytes.ReplaceAll(encoded, []byte(`"blockReferences": [`), []byte(`"types": [], "blockReferences": [`))
+	if _, err := schema.Parse(bytes.ReplaceAll(encoded, []byte(`"blockReferences": [`), []byte(`"types": [], "blockReferences": [`))); err == nil {
+		t.Fatal("manifest accepted inline block types")
+	}
 	parsed, err := schema.Parse(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
 	snapshot := parsed.Snapshot()
-	if len(snapshot.Blocks) != 1 {
-		t.Fatalf("registry: %+v", snapshot.Blocks)
+	// The registered card and the note declared inline within it are each
+	// recorded once.
+	var slugs []string
+	for _, block := range snapshot.Blocks {
+		slugs = append(slugs, block.Slug)
+	}
+	if !reflect.DeepEqual(slugs, []string{blockreferences.CardSlug, blockreferences.NoteSlug}) {
+		t.Fatalf("registry slugs: %v", slugs)
 	}
 	layout := snapshot.Collections[0].Fields[1]
-	if len(layout.Blocks.Types) != 0 || !reflect.DeepEqual(layout.Blocks.BlockReferences, []string{"card"}) {
+	if !reflect.DeepEqual(layout.Blocks.BlockReferences, []string{blockreferences.CardSlug}) {
 		t.Fatal("reference expanded in wire snapshot")
 	}
 	child := layout.Blocks.ResolvedTypes()[0].ResolvedFields()[1]
-	if child.Path.String() != "layout.card.secret" || child.ID != "pages-layout-card-secret" {
+	if child.Path.String() != "layout.registry-card.secret" || child.ID != "pages-layout-registry-card-secret" {
 		t.Fatalf("placement: %+v", child)
 	}
 	caption := layout.Blocks.ResolvedTypes()[0].ResolvedFields()[2].Nested.ResolvedFields()[0]
-	if caption.Path.String() != "layout.card.details.caption" {
+	if caption.Path.String() != "layout.registry-card.details.caption" {
 		t.Fatalf("nested placement: %s", caption.Path)
 	}
 	// Mutation of a detached view must not change the manifest or another placement.
@@ -81,7 +89,7 @@ func TestBlockRegistryInlineAccessEquivalence(t *testing.T) {
 			for _, tenant := range []string{"open", "closed"} {
 				input := store.Values{"tenant": store.String(tenant), "layout": store.List(registryCard("a", "visible"), registryCard("b", "hidden"))}
 				if collection == "pages" {
-					input["body"] = richtextblocks.Document(richtextblocks.Block("card", "embedded", store.Values{"visibility": store.String("visible"), "secret": store.String("embedded-secret")}))
+					input["body"] = richtextblocks.Document(richtextblocks.Block(blockreferences.CardSlug, "embedded", store.Values{"visibility": store.String("visible"), "secret": store.String("embedded-secret")}))
 				}
 				doc, err := app.Local().Create(t.Context(), collection, input, ridu.MutationOptions{})
 				if err != nil {
@@ -99,7 +107,7 @@ func TestBlockRegistryInlineAccessEquivalence(t *testing.T) {
 				}
 				data, _ = json.Marshal(capabilities)
 				results = append(results, data)
-				patch := store.Values{"layout": store.List(store.Object(store.Values{"_key": store.String("b"), "blockType": store.String("card"), "secret": store.String("changed")}), store.Object(store.Values{"_key": store.String("a"), "blockType": store.String("card")}))}
+				patch := store.Values{"layout": store.List(store.Object(store.Values{"_key": store.String("b"), "blockType": store.String(blockreferences.CardSlug), "secret": store.String("changed")}), store.Object(store.Values{"_key": store.String("a"), "blockType": store.String(blockreferences.CardSlug)}))}
 				_, err = app.Local().Update(t.Context(), collection, doc.ID, patch, ridu.MutationOptions{})
 				if err == nil {
 					t.Fatal("document-dependent write denial was skipped")
@@ -170,7 +178,7 @@ func TestBlockRegistryPlacementLocalizationAndLayouts(t *testing.T) {
 }
 func TestBlockRegistryRejectsReusedPlacementIDCollision(t *testing.T) {
 	config := blockreferences.Config(true)
-	config.Collections[1].Fields = append(config.Collections[1].Fields, field.Text("layout_card_secret"))
+	config.Collections[1].Fields = append(config.Collections[1].Fields, field.Text("layout_registry_card_secret"))
 	if _, err := ridu.Resolve(config); err == nil || !strings.Contains(err.Error(), "duplicate_field_id") {
 		t.Fatalf("collision not rejected: %v", err)
 	}
@@ -324,14 +332,14 @@ func TestBlockRegistryAccessContextMatrix(t *testing.T) {
 	}
 }
 
-func TestBlockRegistrySymbolicReferencesValidateEachPlacement(t *testing.T) {
+func TestBlockRegistrySymbolicReferencesValidateEachPlacingResource(t *testing.T) {
 	block := field.Block{Slug: "card", Fields: field.Fields{field.Text("caption").Admin(field.Admin{VisibleWhen: field.Equal(field.Root("tenant"), "open")})}}
 	config := ridu.Config{Name: "Selectors", Blocks: []field.Block{block}, Collections: []ridu.Collection{
 		{Slug: "pages", Fields: field.Fields{field.Text("tenant"), field.Blocks("layout").References("card")}},
 		{Slug: "articles", Fields: field.Fields{field.Blocks("layout").References("card")}},
 	}}
-	if _, err := ridu.Resolve(config); err == nil || !strings.Contains(err.Error(), "collections[1]") {
-		t.Fatalf("missing target at second placement: %v", err)
+	if _, err := ridu.Resolve(config); err == nil || !strings.Contains(err.Error(), "blocks.card.fields[0].admin.visibleWhen") || !strings.Contains(err.Error(), `placed in collection "articles"`) {
+		t.Fatalf("missing target in the second placing resource: %v", err)
 	}
 	config.Collections[1].Fields = append(config.Collections[1].Fields, field.Text("tenant"))
 	if _, err := ridu.Resolve(config); err != nil {
@@ -384,6 +392,122 @@ func TestBlockRegistryCreateAccess(t *testing.T) {
 			expected = results
 		} else if !reflect.DeepEqual(expected, results) {
 			t.Fatal("create capabilities or enforcement differ")
+		}
+	}
+}
+
+// A block definition's field rules are bound once. Capabilities report each
+// located value, each placement holding values, and one schema-level entry per
+// definition field for every other placement, such as a row a client has yet
+// to add, so their size follows the document and the definitions rather than
+// every placement of the schema.
+func TestBlockFieldCapabilitiesFollowDefinitions(t *testing.T) {
+	app, err := ridu.New(blockreferences.Config(true), teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	created, err := app.Local().Create(ctx, "pages", store.Values{"tenant": store.String("open"), "layout": store.List(registryCard("a", "visible"), registryCard("b", "hidden"))}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	capabilities, err := app.Local().Capabilities(ctx, "pages", created.ID, ridu.CapabilityOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	located := func(path string) ridu.FieldCapabilities {
+		t.Helper()
+		capability, found := capabilities.Fields[path]
+		if !found {
+			t.Fatalf("no capabilities at %s in %v", path, capabilities.Fields)
+		}
+		return capability
+	}
+	// The rule reads each row's siblings and the document root.
+	if !located("layout.0.secret").Read || located("layout.1.secret").Read {
+		t.Fatal("located values were not evaluated individually")
+	}
+	// A placement holding values reports their conjunction, as before.
+	if located("layout.registry-card.secret").Read {
+		t.Fatal("the placement's conjunction allowed a denied row")
+	}
+	// Placements without values share their definition's schema-level entry.
+	if _, placed := capabilities.Fields["sidebar.registry-card.secret"]; placed {
+		t.Fatal("a placement without values has its own entry")
+	}
+	secret, found := capabilities.BlockFields[blockreferences.CardSlug]["secret"]
+	if !found || secret.Read || secret.Update {
+		t.Fatalf("definition entry = %+v, %v in %v", secret, found, capabilities.BlockFields)
+	}
+	if _, found := capabilities.BlockFields[blockreferences.CardSlug]["controlled"]; !found {
+		t.Fatal("a definition field with an update rule has no definition entry")
+	}
+	if _, found := capabilities.BlockFields[blockreferences.CardSlug]["visibility"]; found {
+		t.Fatal("a definition field without rules has a definition entry")
+	}
+}
+
+// A block definition's hooked field is bound once, yet hooks of different
+// fields still run placement by placement in schema order, as if each
+// placement had its own binding: the card placed directly in the layout before
+// the card inside a section, then the resource's own field, then the sidebar.
+// Each placement's values run in document order, and each callback names its
+// placement.
+func TestBlockDefinitionHooksRunInPlacementOrder(t *testing.T) {
+	var calls []string
+	record := func(ctx operation.Context, _ operation.Value[string]) (operation.Change[string], error) {
+		calls = append(calls, string(ctx.SchemaOccurrenceID)+" "+string(ctx.OccurrenceID))
+		return operation.Keep[string](), nil
+	}
+	hooked := func(name string) field.TextField {
+		return field.Text(name).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{record}})
+	}
+	card := field.Block{Slug: "card", Fields: field.Fields{hooked("title")}}
+	section := field.Block{Slug: "section", Fields: field.Fields{field.Blocks("cards").References("card")}}
+	app, err := ridu.New(ridu.Config{Name: "Order", Blocks: []field.Block{card, section}, Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{
+		field.Blocks("layout").References("card", "section"), hooked("middle"), field.Blocks("sidebar").References("card"),
+	}}}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := func(key, kind string, values store.Values) store.Value {
+		values["_key"], values["blockType"] = store.String(key), store.String(kind)
+		return store.Object(values)
+	}
+	if _, err := app.Local().Create(t.Context(), "pages", store.Values{
+		"sidebar": store.List(row("s1", "card", store.Values{"title": store.String("Sidebar")})),
+		"middle":  store.String("Middle"),
+		"layout": store.List(
+			row("l1", "section", store.Values{"cards": store.List(row("c1", "card", store.Values{"title": store.String("Nested")}))}),
+			row("l2", "card", store.Values{"title": store.String("First")}),
+			row("l3", "card", store.Values{"title": store.String("Second")}),
+		),
+	}, ridu.MutationOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 5 {
+		t.Fatalf("hook calls = %v", calls)
+	}
+	placements := make([]string, len(calls))
+	for index, call := range calls {
+		schemaOccurrence, occurrence, _ := strings.Cut(call, " ")
+		if !strings.HasPrefix(occurrence, schemaOccurrence+"/") {
+			t.Fatalf("occurrence %q does not extend its schema occurrence %q", occurrence, schemaOccurrence)
+		}
+		placements[index] = schemaOccurrence
+	}
+	// The two direct layout cards share a placement; every other call has its own.
+	if placements[0] != placements[1] || len(slices.Compact(slices.Clone(placements))) != 4 {
+		t.Fatalf("schema occurrences = %v", placements)
+	}
+	for index, want := range []string{"layout.card.title", "layout.card.title", "layout.section.cards.card.title", "", "sidebar.card.title"} {
+		if want != "" && !strings.HasSuffix(placements[index], want) {
+			t.Fatalf("call %d named %q, want placement %s; calls %v", index, placements[index], want, calls)
+		}
+	}
+	for index, key := range []string{"l2", "l3", "c1", "", "s1"} {
+		if key != "" && !strings.Contains(calls[index], key) {
+			t.Fatalf("call %d = %q, want row %s", index, calls[index], key)
 		}
 	}
 }

@@ -51,7 +51,7 @@ func TestMongoDBGlobalUsesResourceStorePathAndSnapshotPredicates(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifest := application.Manifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {

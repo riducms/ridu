@@ -105,7 +105,7 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 1 || len(page.Documents) != 1 {
+	if *page.Total != 1 || len(page.Documents) != 1 {
 		t.Fatalf("populated post page = %#v", page)
 	}
 	if page.Documents[0].ID != post.ID {

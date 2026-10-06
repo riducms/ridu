@@ -67,6 +67,8 @@ export const frMessages = {
 	"apiReference:jsonSchema": "Schéma JSON du plugin",
 	"apiReference:queryPage": "Numéro de page à partir de 1. Défaut : 1.",
 	"apiReference:queryLimit": "Documents par page, de 1 à 100. Défaut : 10.",
+	"apiReference:queryPagination":
+		"Mettre à false pour ne pas compter le total ; hasNextPage reste exact. Défaut : true.",
 	"apiReference:queryWhere":
 		'Filtre JSON avec chemins de champs et opérateurs, par exemple {"title":{"equals":"Bonjour"}}. Seuls les champs interrogeables sont acceptés.',
 	"apiReference:querySort":
@@ -127,7 +129,9 @@ export const frMessages = {
 	"collections:and": "Et",
 	"collections:addAndFilter": "Ajouter une condition ET",
 	"collections:perPageLabel": "Par page : {count}",
-	"collections:operatorIncludesItem": "Contient un élément",
+	"collections:operatorIsAnyOf": "est l’un de",
+	"collections:operatorIsNoneOf": "n’est aucun de",
+	"collections:filterCollection": "Collection du filtre",
 	"fields:listAdd": "Ajouter un élément",
 	"fields:listEmpty": "Aucun élément.",
 	"fields:listItem": "{label}, élément {number}",
@@ -413,6 +417,16 @@ export const frMessages = {
 	"collections:filteredResultLoadFailed": "Impossible de charger le résultat filtré.",
 	"collections:filterDocuments": "Filtrer les documents",
 	"collections:filterField": "Champ du filtre",
+	"collections:filterFieldsLoadFailed": "Impossible de charger la liste des champs.",
+	"collections:allFields": "Tous les champs",
+	"collections:searchFilterFields": "Rechercher des champs",
+	"collections:filterFieldBack": "Retour à {label}",
+	"collections:filterFieldGroup": "Groupe",
+	"collections:filterFieldArray": "Tableau",
+	"collections:filterFieldBlocks": "Blocs",
+	"collections:filterFieldBlock": "Bloc",
+	"collections:filterFieldMoreMatches":
+		"Affichage des {count} premières correspondances. Affinez la recherche ou ouvrez un champ pour en voir davantage.",
 	"collections:filterOperator": "Opérateur du filtre",
 	"collections:filterSummary": "{field} {operator} {value}",
 	"collections:filterValue": "Valeur du filtre",

@@ -458,8 +458,8 @@ func assertTotal(t *testing.T, application *ridu.App, collection string, actor *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != expected {
-		t.Fatalf("%s total = %d, want %d", collection, page.Total, expected)
+	if *page.Total != expected {
+		t.Fatalf("%s total = %d, want %d", collection, *page.Total, expected)
 	}
 }
 

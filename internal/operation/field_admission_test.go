@@ -19,7 +19,14 @@ func TestBoundReadPoliciesProtectNestedQueryPaths(t *testing.T) {
 	if err := authorizeQuery(nested, false, query.Equal(childPath, "probe"), nil); err == nil {
 		t.Fatal("nested attached policy did not protect canonical field query")
 	}
-	if err := authorizeQuery(nested, true, query.Equal(childPath, "probe"), []query.Sort{{Path: parentPath, Direction: query.Ascending}}); err != nil {
+	if err := authorizeQuery(nested, false, nil, []query.Sort{{Path: childPath, Direction: query.Ascending}}); err == nil {
+		t.Fatal("a sort revealed the order of a read-ruled field")
+	}
+	if err := authorizeQuery(nested, true, query.Equal(childPath, "probe"), []query.Sort{{Path: childPath, Direction: query.Ascending}}); err != nil {
 		t.Fatalf("a system query was refused a read-ruled field: %v", err)
+	}
+	// A container has no value to order by, whoever asks.
+	if err := authorizeQuery(nested, true, nil, []query.Sort{{Path: parentPath, Direction: query.Ascending}}); err == nil {
+		t.Fatal("a system query sorted by a group")
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -29,7 +30,7 @@ func TestMongoDBCrossCapabilityTransactionAtomicity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	collections := mongoCollectionsBySlug(manifest.Snapshot().Collections)
@@ -72,7 +73,7 @@ func TestMongoDBCrossCapabilityTransactionAtomicity(t *testing.T) {
 		mongoRollback(t, seed)
 		t.Fatal(err)
 	}
-	original, err = seed.Update(t.Context(), store.UpdateRequest{
+	original, err = conformance.LockedUpdate(t.Context(), seed, store.UpdateRequest{
 		Request: store.Request{Collection: users, ID: userID, ExpectedRevision: original.Revision},
 		Values:  store.Values{"note": store.String("old revision two")},
 	})

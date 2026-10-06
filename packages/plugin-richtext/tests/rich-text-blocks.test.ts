@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
+import { bindSchemaManifest, type SchemaBlockType, type SchemaField } from "@riducms/protocol";
 import { copyBlockClipboardNodes } from "../src/block/rich-text-block-clipboard";
 import { richTextBlockTypes } from "../src/field/rich-text-blocks";
 
@@ -34,13 +34,27 @@ const field: SchemaField = {
 						payload: "fields",
 						discriminator: "blockType",
 						identity: "_key",
-						types: [callout],
+						blockReferences: ["callout"],
 					},
 				],
 			},
 		],
 	},
 };
+bindSchemaManifest({
+	blocks: [callout],
+	globals: [],
+	collections: [
+		{
+			id: "pages",
+			slug: "pages",
+			labels: { singular: "Page", plural: "Pages" },
+			admin: {},
+			capabilities: { auth: false, upload: false, versions: false, trash: false, locking: false },
+			fields: [field],
+		},
+	],
+});
 
 describe("rich-text schema block authoring", () => {
 	it("uses resolved definitions, not arbitrary plugin settings, for the allowed block types", () => {

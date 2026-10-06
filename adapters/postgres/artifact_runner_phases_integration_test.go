@@ -161,9 +161,10 @@ func TestPostgresAdvisoryTimeout(t *testing.T) {
 
 }
 
-func TestDevelopmentPlanAndArtifactRunnerShareSchemaLock(t *testing.T) {
+func TestDevelopmentSyncAndArtifactRunnerShareSchemaLock(t *testing.T) {
 	backend := migrationArtifactTestBackend(t)
 	ctx := context.Background()
+	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
 	locker, err := backend.pool.Acquire(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -173,20 +174,20 @@ func TestDevelopmentPlanAndArtifactRunnerShareSchemaLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	blocked, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	err = backend.ApplyPlan(blocked, []Statement{{Kind: "lock probe", SQL: `CREATE TABLE ridu_development_lock_probe (id integer)`}})
+	err = backend.SyncDevelopmentSchema(blocked, manifest)
 	cancel()
 	if err == nil {
-		t.Fatal("development plan bypassed the artifact runner schema lock")
+		t.Fatal("development sync bypassed the artifact runner schema lock")
 	}
 	var exists bool
-	if err := backend.pool.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.ridu_development_lock_probe') IS NOT NULL`).Scan(&exists); err != nil || exists {
-		t.Fatalf("blocked development plan mutated schema: exists=%t err=%v", exists, err)
+	if err := backend.pool.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.ridu_postgres_schema') IS NOT NULL`).Scan(&exists); err != nil || exists {
+		t.Fatalf("blocked development sync mutated schema: exists=%t err=%v", exists, err)
 	}
 	if _, err := locker.Exec(ctx, `SELECT pg_advisory_unlock($1)`, migrationLockID); err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.ApplyPlan(ctx, []Statement{{Kind: "lock probe", SQL: `CREATE TABLE ridu_development_lock_probe (id integer)`}}); err != nil {
-		t.Fatalf("development plan after unlock: %v", err)
+	if err := backend.SyncDevelopmentSchema(ctx, manifest); err != nil {
+		t.Fatalf("development sync after unlock: %v", err)
 	}
 }
 

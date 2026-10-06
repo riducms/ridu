@@ -8,6 +8,7 @@ import (
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestPostgresNewUniqueRejectsDuplicatePublishedHeads(t *testing.T) {
@@ -44,7 +45,7 @@ func TestPostgresNewUniqueRejectsDuplicatePublishedHeads(t *testing.T) {
 				}
 				created, err := write.Create(ctx, store.CreateRequest{Collection: collection, ID: candidate.id, Status: store.StatusPublished, Values: store.Values{"slug": store.String("shared-live")}})
 				if err == nil {
-					_, err = write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: candidate.id, ExpectedRevision: created.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"slug": store.String(candidate.pending)}})
+					_, err = conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: candidate.id, ExpectedRevision: created.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"slug": store.String(candidate.pending)}})
 				}
 				if err != nil {
 					_ = write.Rollback(ctx)

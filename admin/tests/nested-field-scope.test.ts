@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import type { SchemaField } from "@riducms/protocol";
+import { resolveBlockTypes, type SchemaBlockType, type SchemaField } from "@riducms/protocol";
 
 import { fieldAccessPath, scopeRepeatedRowField } from "../src/fields/nested/scoped-field";
+import { bindBlockField } from "./block-manifest";
 
 describe("repeating-row field scope", () => {
 	it("recursively scopes descendants without dropping nested metadata", () => {
@@ -19,7 +20,7 @@ describe("repeating-row field scope", () => {
 		const choices = scoped.nested?.fields[1];
 		const title = choices?.nested?.fields[0];
 		const content = scoped.nested?.fields[2];
-		const caption = content?.blocks?.types?.[0]?.fields[0];
+		const caption = resolveBlockTypes(content?.blocks)[0]?.fields[0];
 		expect(mode?.path).toBe("sections.2.settings.mode");
 		expect(title?.path).toBe("sections.2.settings.choices.title");
 		expect(caption?.path).toBe("sections.2.settings.content.caption");
@@ -55,7 +56,12 @@ describe("repeating-row field scope", () => {
 });
 
 function groupField(): SchemaField {
-	return {
+	const hero: SchemaBlockType = {
+		slug: "hero",
+		labels: { singular: "Hero", plural: "Heroes" },
+		fields: [{ ...textField("caption", "caption"), id: "block-hero-caption" }],
+	};
+	return bindBlockField([hero], {
 		id: "settings",
 		name: "settings",
 		path: "sections.settings",
@@ -102,19 +108,11 @@ function groupField(): SchemaField {
 					unique: false,
 					admin: { label: "Content" },
 					nested: { fields: [] },
-					blocks: {
-						types: [
-							{
-								slug: "hero",
-								labels: { singular: "Hero", plural: "Heroes" },
-								fields: [textField("caption", "sections.settings.content.hero.caption")],
-							},
-						],
-					},
+					blocks: { blockReferences: ["hero"] },
 				},
 			],
 		},
-	};
+	});
 }
 
 function textField(name: string, path: string): SchemaField {

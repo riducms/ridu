@@ -35,7 +35,7 @@ func TestMongoDBListWindowUsesVerifiedUniqueIndexAndOneOverflowSentinel(t *testi
 	}
 	mongoRollback(t, unverified)
 
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	write := mongoBegin(t, backend, false)

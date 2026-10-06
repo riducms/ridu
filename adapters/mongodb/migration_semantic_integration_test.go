@@ -103,7 +103,7 @@ func TestMongoDBSemanticMigrationLifecycleOnAuthenticatedReplicaSet(t *testing.T
 				if document.ID != seed.settingsID {
 					continue
 				}
-				if _, err := transaction.Update(callbackContext, store.UpdateRequest{
+				if _, err := transaction.Update(callbackContext, ridumigration.UpdateRequest{
 					Request: store.Request{Collection: settings, ID: document.ID, ExpectedRevision: document.Revision},
 					Values:  store.Values{"note": store.String("after-transform")},
 				}); err != nil {
@@ -253,6 +253,11 @@ func mongoDBSemanticLiveAfterManifest(t *testing.T, before schema.Manifest) sche
 		collections = append(collections, collection)
 	}
 	snapshot.Collections = collections
+	// Block containers select shared definitions; their references to the
+	// renamed collection are retargeted once, wherever they are placed.
+	for blockIndex := range snapshot.Blocks {
+		mongoDBSemanticLiveRenameAuthorRelationshipTargets(snapshot.Blocks[blockIndex].Fields)
+	}
 	if snapshot.Application.Admin != nil {
 		admin := *snapshot.Application.Admin
 		admin.UserCollectionID, admin.UserCollectionSlug = "members", "members"
@@ -282,15 +287,6 @@ func mongoDBSemanticLiveRenameAuthorRelationshipTargets(fields []schema.Field) {
 			nested.Fields = append([]schema.Field(nil), nested.ResolvedFields()...)
 			mongoDBSemanticLiveRenameAuthorRelationshipTargets(nested.ResolvedFields())
 			fields[fieldIndex].Nested = &nested
-		}
-		if fields[fieldIndex].Blocks != nil {
-			blocks := *fields[fieldIndex].Blocks
-			blocks.Types = append([]schema.BlockType(nil), blocks.ResolvedTypes()...)
-			for blockIndex := range blocks.ResolvedTypes() {
-				blocks.ResolvedTypes()[blockIndex].Fields = append([]schema.Field(nil), blocks.ResolvedTypes()[blockIndex].ResolvedFields()...)
-				mongoDBSemanticLiveRenameAuthorRelationshipTargets(blocks.ResolvedTypes()[blockIndex].ResolvedFields())
-			}
-			fields[fieldIndex].Blocks = &blocks
 		}
 	}
 }
@@ -376,6 +372,14 @@ func mongoDBSeedSemanticLiveState(t *testing.T, ctx context.Context, backend *St
 	}
 	if deleted.DeletedCount != 1 {
 		t.Fatalf("delete version-only current author: deleted %d documents, want 1", deleted.DeletedCount)
+	}
+	// A deleted document keeps neither a working row nor a published head; only history remains.
+	deleted, err = backend.database.Collection(physicalPublishedCollectionName(authors.ID)).DeleteOne(ctx, bson.D{{Key: "_id", Value: seed.versionOnlyAuthorID}})
+	if err != nil {
+		t.Fatalf("delete version-only published author: %v", err)
+	}
+	if deleted.DeletedCount != 1 {
+		t.Fatalf("delete version-only published author: deleted %d documents, want 1", deleted.DeletedCount)
 	}
 
 	seed.authorToken = store.AuthToken{

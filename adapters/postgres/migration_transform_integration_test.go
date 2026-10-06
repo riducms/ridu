@@ -425,7 +425,7 @@ func TestPostgresCompiledDataTransformFailureInvalidatesEscapedTransactionAndRol
 		if err != nil {
 			return err
 		}
-		if _, err := transaction.Update(ctx, store.UpdateRequest{
+		if _, err := transaction.Update(ctx, ridumigration.UpdateRequest{
 			Request: request, Values: store.Values{"title": store.String("changed"), "summary": store.String("filled")},
 		}); err != nil {
 			return err
@@ -452,7 +452,7 @@ func TestPostgresCompiledDataTransformFailureInvalidatesEscapedTransactionAndRol
 	}
 	escapedUse := make(chan error, 1)
 	go func() {
-		_, escapedErr := escaped.Update(context.Background(), store.UpdateRequest{
+		_, escapedErr := escaped.Update(context.Background(), ridumigration.UpdateRequest{
 			Request: store.Request{
 				Collection: afterCollection, Collections: map[schema.StableID]schema.Collection{afterCollection.ID: afterCollection},
 				ID: "post-1", Page: 1, Limit: 10,
@@ -533,7 +533,7 @@ func TestPostgresCompiledDataTransformCancellationRollsBackSchemaDataStepsAndLed
 				Collection: afterCollection, Collections: map[schema.StableID]schema.Collection{afterCollection.ID: afterCollection},
 				ID: "post-1", Page: 1, Limit: 10,
 			}
-			if _, err := transaction.Update(callbackContext, store.UpdateRequest{
+			if _, err := transaction.Update(callbackContext, ridumigration.UpdateRequest{
 				Request: request, Values: store.Values{"title": store.String("cancelled"), "summary": store.String("cancelled")},
 			}); err != nil {
 				return err
@@ -862,7 +862,7 @@ func postgresTransformDocumentTitle(t *testing.T, ctx context.Context, backend *
 }
 
 func updatePostgresTransformTitle(ctx context.Context, transaction ridumigration.DataTransaction, request store.Request, title string) error {
-	_, err := transaction.Update(ctx, store.UpdateRequest{
+	_, err := transaction.Update(ctx, ridumigration.UpdateRequest{
 		Request: request, Values: store.Values{"title": store.String(title)},
 	})
 	return err

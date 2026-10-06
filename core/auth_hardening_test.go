@@ -536,8 +536,8 @@ func TestCreateAuthUserStoresCredentialInsideCreateTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 1 {
-		t.Fatalf("users after rejected create = %d, want 1", page.Total)
+	if *page.Total != 1 {
+		t.Fatalf("users after rejected create = %d, want 1", *page.Total)
 	}
 }
 
@@ -601,7 +601,7 @@ func TestAnonymousFirstAuthUserBootstrapIsAtomic(t *testing.T) {
 		t.Fatalf("bootstrap outcomes = %d success, %d denied", succeeded, denied)
 	}
 	page, err := application.Local().List(context.Background(), "users", ridu.ListOptions{})
-	if err != nil || page.Total != 1 || page.Documents[0].ID != winner.ID {
+	if err != nil || *page.Total != 1 || page.Documents[0].ID != winner.ID {
 		t.Fatalf("bootstrapped users = %#v, %v", page, err)
 	}
 	identity, _ := winner.Values["email"].StringValue()

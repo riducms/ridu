@@ -147,7 +147,7 @@ An artifact records the information needed to identify and re-run the transition
 - machine-readable safety findings with notice, warning, or destructive severity.
 
 PostgreSQL artifacts can use atomic transaction phases, checkpointed batch phases, and narrowly
-typed non-transactional concurrent-index phases. MongoDB planner contract `3.0.0` artifacts emit
+typed non-transactional concurrent-index phases. MongoDB planner contract `5.0.0` artifacts emit
 only typed physical index, confirmed rename, compiled-transform, retirement, and assertion steps;
 they do not embed arbitrary driver commands. Arbitrary non-transactional SQL is not admitted.
 Formatting-only JSON changes do not alter the canonical artifact digest, but renaming, reordering,
@@ -193,6 +193,9 @@ Kinds that store the same plain string need no review when every stored value st
 textarea, code, email, date, select and radio values all fit text, textarea and code, and a select
 or radio fits another select or radio that keeps all of its options. The reverse is reviewed: an
 arbitrary text value may not be a valid option, email address or date.
+
+A kind change inside a block is reviewed once for the block, as `block hero.score`, and its counts
+and clearing cover every stored `hero` block in every collection and global that places it.
 
 A kind change inside a plugin field's embedded payload, such as a rich-text block field changed
 from text to number, is reviewed at the plugin field. Ridu counts every document with a value in
@@ -245,6 +248,74 @@ versioned-resource and reference-shape safety rules still apply. PostgreSQL chan
 before the transform runs, so it also refuses a column type it cannot convert in place, such as
 text to number. Add a field with the new kind and copy the values into it instead.
 
+## Making a field required {#required-fields}
+
+A field becomes required when you add `.Required()` to it, add a required field to a collection or
+global that already has documents, require a child of an existing group, array row or block, or
+change the kind of a required field. Documents saved earlier may have no value for it. Ridu checks
+them when the schema changes, so a missing value stops the migration instead of surfacing later.
+
+`ridu migrate create` plans an `audit_required_values` step and records a
+`RIDU_REQUIRED_FIELD_AUDIT` warning for each newly required field. When `ridu migrate up` reaches
+that step, after the migration's data transforms, it reads the stored documents and stops if any of
+them has no value:
+
+```text
+RIDU_REQUIRED_VALUES_MISSING: stored documents have no value for fields that become required:
+posts.summary in 3 documents, for example post_1, post_4, post_9; posts.seo.title (locale fr) in
+1 document, for example post_2. ...
+```
+
+The message names each field, the locale where one applies, how many documents lack a value, up to
+five of their IDs, and the documents it read.
+
+A value is missing when it is absent or null, an empty string for text, select, relationship and
+upload fields, or an empty list for arrays, blocks, lists and multiple selections, the same rule a
+save applies. Translations follow [the save rule too](./localization.md): a locale without a
+translation is optional, but an empty translation is missing, and so is a translated field with no
+translation in any locale. A child is checked in every group, array row, block and translation
+that exists; an absent optional group holds nothing to check. A field required inside a block is
+one requirement for the block, named like `block hero.heading`, checked in every stored `hero`
+block of every collection and global that places it.
+
+The audit reads the documents that must be complete:
+
+- every document of a collection or global without drafts, including trashed documents;
+- every published document of a resource with drafts, and its working copy unless that copy is a
+  draft. Drafts may stay incomplete, and publishing validates them.
+
+Retained version snapshots are history and are not audited. MongoDB cannot lock its collections
+against old writers, so a MongoDB migration with this audit needs `--allow-maintenance`.
+
+To continue, write the missing values before the field becomes required, or keep it optional:
+
+- Bind a [compiled data transform](#data-transforms) that backfills the values to the same
+  migration: `ridu migrate create require-summary --transform backfill-summaries`. It runs before
+  the audit and can read and update those documents with the collection's new schema.
+- A transform cannot change the fields of a versioned collection or global. Backfill those in an
+  earlier data-only migration, then require the field in the next one.
+- PostgreSQL writes a top-level, non-translated field's `.Default(...)` into existing rows when it
+  adds the column, so adding a required field with a default needs no transform there. SQLite and
+  MongoDB apply defaults only to new documents.
+
+On PostgreSQL, the migration adds a new column as nullable or keeps an existing one nullable, runs
+its transforms, audits the stored rows under a lock that holds writers until it commits, and only
+then adds `NOT NULL`. The transforms, the audit and the constraint share the final transaction
+phase, so a refusal rolls them back together. When the migration has no transform or content
+rename, the audit also runs before any phase commits. SQLite applies a migration in one
+transaction, and its `ridu migrate down` audits a rollback that requires a field again.
+
+`ridu dev` applies the same audit before it synchronizes a changed schema. It keeps the current
+schema and stored values and lists the documents to complete; fill them in, or keep the field
+optional, then save again.
+
+A stored document without a value for a required field stays readable, for example a draft or a
+document saved before the field became required: the field is returned as `null`. Only a read hook
+that returns `null` for a required field of a published or unversioned document is an error.
+
+Fields inside a plugin payload, such as the fields of a rich-text block, keep their own rule: making
+one required needs a data transform, because the audit does not read plugin payloads.
+
 ## Renames preserve identity {#renames}
 
 When a slug or field path changes, `create` proposes only unambiguous one-to-one candidates:
@@ -260,6 +331,16 @@ state, task references, polymorphic relationships, and declared plugin reference
 specific transition requires.
 
 Ridu proposes renames for collections and their fields, not for the fields of a global.
+
+A block is defined once and placed in many fields, so a field renamed inside it is one candidate:
+
+```text
+Detected block field rename "hero".heading -> "hero".headline in every "hero" block.
+```
+
+Confirming it moves the value in every stored `hero` block, at any depth, in every collection and
+global that places the block, including published rows and version snapshots. Renaming a blocks
+field and a field of its blocks in the same change is two renames to confirm.
 
 A field rename changes the field's name and nothing else. `create` refuses one that also renames
 the children of a group, array, or blocks field, or changes whether the field is localized,
@@ -343,8 +424,9 @@ task input and arbitrary JSON remain opaque; the generic runner never searches t
 Compiled data transforms can perform admitted data changes on unversioned resources. PostgreSQL,
 SQLite, and MongoDB reject transform mutations of versioned collections and globals: a general
 transform cannot yet rewrite the current document and all retained snapshots atomically. This
-applies to revision history even when drafts are disabled, and can block backfills, retypes, or
-required-field transitions that need to rewrite versioned content.
+applies to revision history even when drafts are disabled, and can block backfills and retypes
+that need to rewrite versioned content. To [require a field](#required-fields) of a versioned
+resource, backfill it in an earlier data-only migration.
 
 Supported typed rename executors preserve retained history; the restriction does not prohibit all
 schema evolution. Prefer an admitted additive change or confirmed typed rename when it fits the
@@ -404,6 +486,10 @@ Stable codes are intended for CI policy and runbook search, not for bypass scrip
     <dd>Dormant auth, API-key, recovery, verification, version, draft, lock, or trash state could reactivate later. Keep the capability enabled or add the cleanup contract named by the finding.</dd>
   </div>
   <div>
+    <dt><code>RIDU_REQUIRED_VALUES_MISSING</code></dt>
+    <dd>Stored documents have no value for a field the migration or <code>ridu dev</code> makes required. Backfill the listed documents with a data transform, or keep the field optional. See <a href="#required-fields">Making a field required</a>.</dd>
+  </div>
+  <div>
     <dt><code>RIDU_RETIRE_DEPENDENT_VERSION_HISTORY</code></dt>
     <dd>Resource retirement must also delete dependent owner history. Include that version-history loss in backup, review, and acceptance.</dd>
   </div>
@@ -418,7 +504,7 @@ and step progress separately: an interrupted transaction leaves neither its data
 batch resumes after its last committed keyset checkpoint, and a concurrent index resumes from
 catalog state or removes an invalid interrupted build before retrying the reviewed definition.
 
-MongoDB planner contract `3.0.0` artifacts use that same immutable format-`1` envelope. The
+MongoDB planner contract `5.0.0` artifacts use that same immutable format-`1` envelope. The
 runner authenticates every committed artifact against the planner, takes a fenced, expiring lease,
 records completed steps durably, recognizes already-completed physical work, and resumes the same
 artifact after an interrupted process. It never treats process exit or
@@ -457,10 +543,10 @@ sequence:
    fingerprints using `$MONGODB_APP_URL`, then wait for `/readyz`.
 
 Semantic work includes persisted content renames, compiled transforms, reference-index rebuilds,
-and typed resource retirement. MongoDB `verify` requires maintenance admission whenever any of that
-work appears in the complete committed history; `up` requires it only when the pending or incomplete
-suffix contains that work. The flag is an assertion that old writers are stopped, not a lock that
-stops them for you.
+typed resource retirement, and required-value audits. MongoDB `verify` requires maintenance
+admission whenever any of that work appears in the complete committed history; `up` requires it
+only when the pending or incomplete suffix contains that work. The flag is an assertion that old
+writers are stopped, not a lock that stops them for you.
 
 See [PostgreSQL](./postgres.md) or [MongoDB](./mongodb.md) for connection and adapter-specific
 recovery configuration, [Production](./production.md) for the wider cutover checklist,

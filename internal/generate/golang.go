@@ -389,25 +389,21 @@ func goPluginTypes(snapshot schema.Snapshot) (map[string]string, map[string]stri
 	}
 	used := make(map[string]bool)
 	needsJSON := false
-	var inspect func([]schema.Field)
-	inspect = func(fields []schema.Field) {
-		for _, field := range fields {
-			if field.Type == schema.FieldTypePlugin {
-				if field.Plugin == nil || available[field.Plugin.Key].Key == "" {
-					needsJSON = true
-				} else {
-					used[field.Plugin.Key] = true
-				}
+	var roots [][]schema.Field
+	for _, resource := range append(append([]schema.Collection(nil), snapshot.Collections...), snapshot.Globals...) {
+		roots = append(roots, resource.Fields)
+	}
+	// Each block definition is inspected once, wherever it is placed.
+	schema.WalkDefinitionFields(func(field schema.Field) bool {
+		if field.Type == schema.FieldTypePlugin {
+			if field.Plugin == nil || available[field.Plugin.Key].Key == "" {
+				needsJSON = true
+			} else {
+				used[field.Plugin.Key] = true
 			}
-			inspect(schema.ChildFields(field))
 		}
-	}
-	for _, collection := range snapshot.Collections {
-		inspect(collection.Fields)
-	}
-	for _, global := range snapshot.Globals {
-		inspect(global.Fields)
-	}
+		return true
+	}, roots...)
 
 	result := make(map[string]string)
 	imports := make(map[string]string)

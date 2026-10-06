@@ -40,7 +40,7 @@ func TestPostgresDurableTaskPhysicalSchemaHasNoInspectorDrift(t *testing.T) {
 			t.Fatalf("apply %s: %v\n%s", step.Name, err, step.SQL)
 		}
 	}
-	if plan, err := backend.Plan(ctx, manifest); err != nil || len(plan) != 0 {
+	if err := backend.VerifySchema(ctx, manifest); err != nil {
 		rows, queryErr := backend.pool.Query(ctx, `SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'ridu_tasks' ORDER BY indexname`)
 		if queryErr == nil {
 			defer rows.Close()
@@ -51,7 +51,7 @@ func TestPostgresDurableTaskPhysicalSchemaHasNoInspectorDrift(t *testing.T) {
 				}
 			}
 		}
-		t.Fatalf("post-task-schema plan = %#v, %v", plan, err)
+		t.Fatalf("post-task-schema verification = %v", err)
 	}
 	base := `INSERT INTO ridu_tasks (
   id, task_slug, queue, input, output, state, run_at, max_attempts,

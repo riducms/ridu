@@ -568,9 +568,13 @@ func postsCollection() ridu.Collection {
 					}),
 				}),
 				field.UnnamedTab("Layout", field.Fields{
+					// A slug names one block definition per application; the
+					// rich-text fixture owns "callout", so this differently
+					// shaped block keeps its editor label under its own slug.
 					field.Blocks("layout",
 						field.Block{
-							Slug: "callout",
+							Slug:   "post-callout",
+							Labels: field.BlockLabels{Singular: "Callout", Plural: "Callouts"},
 							Fields: field.Fields{
 								field.Select("tone").Options(
 									field.Option{Value: "note", Label: "note"},
@@ -1084,7 +1088,7 @@ var outlineCollection = ridu.Collection{
 	Fields: field.Fields{
 		field.Text("title").Required(),
 		field.Checkbox("bodyLocked").Access(field.Access{Update: allowFieldRoles(roleAdministrator)}),
-		embeddedplugin.Field("body", field.Block{Slug: "card", Fields: field.Fields{
+		embeddedplugin.Field("body", field.Block{Slug: "outline-card", Labels: field.BlockLabels{Singular: "Card", Plural: "Cards"}, Fields: field.Fields{
 			field.Text("title").Access(field.Access{Update: func(ctx operation.Context) (bool, error) {
 				locked, _ := ctx.Siblings.Get("locked").BooleanValue()
 				return !locked, nil

@@ -4,14 +4,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"testing"
 )
 
 func TestEmbeddedReferenceMigrationUsesDeclaredPayloads(t *testing.T) {
-	relation := schema.Field{ID: "ref", Name: "author", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true, Targets: []schema.RelationshipTarget{{CollectionID: "authors", CollectionSlug: "authors"}}}}
-	tree := schema.EmbeddedTree{Version: 1, Key: "parts", Root: []string{"document"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "attributes", Identity: "uid", Discriminator: "variant", Types: []schema.BlockType{{Slug: "card", Fields: []schema.Field{relation}}}}}}
-	field := schema.Field{ID: "canvas", Name: "canvas", Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{Key: "canvas", EmbeddedTrees: []schema.EmbeddedTree{tree}}}
+	relation := schema.Field{ID: "block-card-author", Name: "author", Path: query.Field("author"), Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true, Targets: []schema.RelationshipTarget{{CollectionID: "authors", CollectionSlug: "authors"}}}}
+	tree := schema.EmbeddedTree{Version: 1, Key: "parts", Root: []string{"document"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "attributes", Identity: "uid", Discriminator: "variant", BlockReferences: []string{"card"}}}}
+	card := schema.BlockType{Slug: "card", TypeName: "Card", Fields: []schema.Field{relation}}
+	before := schema.Snapshot{Blocks: []schema.BlockType{card}, Collections: []schema.Collection{{ID: "pages", Fields: []schema.Field{{
+		ID: "canvas", Name: "canvas", Path: query.Field("canvas"), Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{Key: "canvas", EmbeddedTrees: []schema.EmbeddedTree{tree}},
+	}}}}}
+	if err := schema.BindBlockReferences(&before); err != nil {
+		t.Fatal(err)
+	}
+	field := before.Collections[0].Fields[0]
 	reference := map[string]any{"relationTo": "authors", "id": "one"}
 	ordinary := map[string]any{"relationTo": "authors", "id": "untouched"}
 	value := map[string]any{"document": map[string]any{"kind": "widget", "attributes": map[string]any{"uid": "one", "variant": "card", "author": reference}}, "opaque": ordinary}
@@ -31,7 +39,6 @@ func TestEmbeddedReferenceMigrationUsesDeclaredPayloads(t *testing.T) {
 	if !fieldContainsCollectionReferences(field) {
 		t.Fatal("schema discovery missed embedded reference")
 	}
-	before := schema.Snapshot{Collections: []schema.Collection{{ID: "pages", Fields: []schema.Field{field}}}}
 	after := schema.Snapshot{Collections: []schema.Collection{{ID: "pages", Fields: []schema.Field{{ID: "canvas", Name: "canvas", Type: schema.FieldTypePlugin}}}}}
 	if !referenceIndexTopologyChanged(before, after) {
 		t.Fatal("reference topology missed removed embedded schema")
@@ -42,14 +49,14 @@ func TestEmbeddedReferenceRenameComposesEnvelopeAndPayloads(t *testing.T) {
 	for _, rootArray := range []bool{false, true} {
 		for _, localized := range []bool{false, true} {
 			t.Run(fmt.Sprintf("array=%v/localized=%v", rootArray, localized), func(t *testing.T) {
-				manifest := postgresEmbeddedEvolutionFixture()
-				field := manifest.Snapshot().Collections[0].Fields[0]
+				snapshot := postgresEmbeddedEvolutionSnapshot()
+				postgresEmbeddedBlock(t, &snapshot, "card").Fields = []schema.Field{
+					{ID: "block-card-target", Name: "target", Path: query.Field("target"), Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true}},
+					{ID: "block-card-raw", Name: "raw", Path: query.Field("raw"), Type: schema.FieldTypeJSON},
+				}
+				field := schema.NewManifest(snapshot).Snapshot().Collections[0].Fields[0]
 				field.Localized = localized
 				field.Plugin.ReferenceKeys = []string{"relationTo"}
-				field.Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0].Fields = []schema.Field{
-					{Name: "target", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true}},
-					{Name: "raw", Type: schema.FieldTypeJSON},
-				}
 				if rootArray {
 					field.Plugin.EmbeddedTrees[0].Root = []string{}
 				}

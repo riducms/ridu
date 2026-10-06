@@ -2,8 +2,9 @@ package operation
 
 import (
 	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/internal/membership"
 	"github.com/riducms/ridu/internal/population"
-	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/querypath"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 )
@@ -23,13 +24,8 @@ func authorizeQuery(collection Collection, trusted bool, filter query.Expression
 		if err := authorizeQueryPath(collection, trusted, sort.Path); err != nil {
 			return err
 		}
-		if field, found := population.FieldAtPath(collection.Schema.Fields, sort.Path); found {
-			if primitivefield.IsList(field) {
-				return primitiveListQueryError(sort.Path, "primitive lists cannot be sorted; choose a singular scalar field")
-			}
-			if !trusted && queryDescendantsRequireRead(collection, schema.ChildFields(field)) {
-				return queryFieldAccessError(sort.Path)
-			}
+		if err := validateSortPath(collection.Schema, sort.Path); err != nil {
+			return err
 		}
 	}
 	for _, path := range paths {
@@ -40,12 +36,23 @@ func authorizeQuery(collection Collection, trusted bool, filter query.Expression
 	return nil
 }
 
+// validateSortPath rejects a sort path, before any store, with the shared
+// rule configuration also applies to join default sorts, so each transport
+// and adapter reports the same unsupported_path.
+func validateSortPath(collection schema.Collection, path query.Path) error {
+	if err := querypath.ValidateSort(collection, path); err != nil {
+		return unsupportedPathError(path, err.Error(), nil)
+	}
+	return nil
+}
+
 func authorizeQueryNode(collection Collection, trusted bool, node query.Node) error {
 	if node.Comparison != nil {
-		if field, found := population.FieldAtPath(collection.Schema.Fields, node.Comparison.Path); found {
-			if err := primitivefield.ValidateComparison(field, *node.Comparison); err != nil {
-				return primitiveListQueryError(node.Comparison.Path, err.Error())
-			}
+		// Paths that are not fields, such as id or a key in a JSON value, are
+		// checked too: only a polymorphic relationship accepts a reference.
+		field, _ := population.FieldAtPath(collection.Schema.Fields, node.Comparison.Path)
+		if err := membership.ValidateComparison(field, *node.Comparison); err != nil {
+			return queryOperatorError(node.Comparison.Path, err.Error())
 		}
 		if err := authorizeQueryPath(collection, trusted, node.Comparison.Path); err != nil {
 			return err
@@ -67,6 +74,7 @@ func authorizeQueryPath(collection Collection, trusted bool, path query.Path) er
 	segments := path.Segments()
 	resolved := false
 	opaque := false
+	embeddedTree := false
 	for length := 1; length <= len(segments); length++ {
 		prefix, err := query.NewPath(segments[:length]...)
 		if err != nil {
@@ -81,12 +89,18 @@ func authorizeQueryPath(collection Collection, trusted bool, path query.Path) er
 		// payloads require canonical variant paths, otherwise raw wire aliases
 		// could reach a different field than the one whose rule was checked.
 		opaque = field.Type == schema.FieldTypeJSON || field.Type == schema.FieldTypePlugin && !embedded.HasFields(field)
+		embeddedTree = embeddedTree || length < len(segments) && embedded.HasFields(field)
 		if field.QueryRestricted && !trusted {
 			// Rules may depend on each document, value, siblings, or locale. A
 			// request-only evaluation cannot prove that all queried rows are
 			// readable; checking after filtering/counting/sorting is too late.
 			return queryFieldAccessError(path)
 		}
+	}
+	if embeddedTree {
+		// Schema paths into a plugin's embedded trees describe validation and
+		// generated types; they are not a query language over the tree.
+		return unsupportedPathError(path, "paths inside a plugin field's embedded trees cannot be queried; model searchable content as ordinary fields", nil)
 	}
 	if !resolved && !opaque {
 		return &Error{
@@ -97,15 +111,13 @@ func authorizeQueryPath(collection Collection, trusted bool, path query.Path) er
 	return nil
 }
 
-// Ordering a container compares its stored children in some adapters. A caller
-// cannot use the readable parent as an alias for otherwise protected values.
-func queryDescendantsRequireRead(collection Collection, fields []schema.Field) bool {
-	for _, field := range fields {
-		if field.QueryRestricted || queryDescendantsRequireRead(collection, schema.ChildFields(field)) {
-			return true
-		}
+// unsupportedPathError rejects a caller query path whose shape no store
+// evaluates for the requested use. It never depends on stored values.
+func unsupportedPathError(path query.Path, message string, cause error) error {
+	return &Error{
+		Code: "bad_query", Status: 400, Message: message, Cause: cause,
+		Issues: []schema.Issue{{Code: "unsupported_path", Path: path.String(), Message: message}},
 	}
-	return false
 }
 
 func queryFieldAccessError(path query.Path) error {
@@ -116,6 +128,8 @@ func queryFieldAccessError(path query.Path) error {
 	}
 }
 
-func primitiveListQueryError(path query.Path, message string) error {
+// queryOperatorError rejects an operator or operand that a field's query
+// contract does not define, such as equals on a has-many relationship.
+func queryOperatorError(path query.Path, message string) error {
 	return &Error{Code: "bad_query", Status: 400, Message: message, Issues: []schema.Issue{{Code: "unsupported_operator", Path: path.String(), Message: message}}}
 }

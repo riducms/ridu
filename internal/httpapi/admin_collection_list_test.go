@@ -216,6 +216,42 @@ func TestAdminInitialListFilterPlanningHandlesPrimitiveMembership(t *testing.T) 
 	}
 }
 
+func TestAdminListFiltersHasManyFieldsByMembership(t *testing.T) {
+	path := func(name string) query.Path { parsed, _ := query.ParsePath(name); return parsed }
+	collection := schema.Collection{Slug: "posts", Fields: []schema.Field{
+		{Name: "tags", Path: path("tags"), Type: schema.FieldTypeSelect, Select: &schema.SelectField{HasMany: true}},
+		{Name: "authors", Path: path("authors"), Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{CollectionSlug: "people", HasMany: true}},
+		{Name: "subject", Path: path("subject"), Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true, Targets: []schema.RelationshipTarget{{CollectionSlug: "people"}}}},
+		{Name: "gallery", Path: path("gallery"), Type: schema.FieldTypeUpload, Upload: &schema.UploadField{CollectionSlug: "media", HasMany: true}},
+	}}
+	snapshot := schema.Snapshot{Collections: []schema.Collection{collection}}
+	api := &API{}
+	for filter, want := range map[string]string{
+		`{"field":"tags","operator":"in","value":["news","tech"]}`:         `{"tags":{"in":["news","tech"]}}`,
+		`{"field":"authors","operator":"notIn","value":["ada"]}`:           `{"not":{"authors":{"in":["ada"]}}}`,
+		`{"field":"gallery","operator":"in","value":"m1"}`:                 `{"gallery":{"in":["m1"]}}`,
+		`{"field":"subject","operator":"in","value":["people:a:b"]}`:       `{"subject":{"in":[{"id":"a:b","relationTo":"people"}]}}`,
+		`{"field":"subject","operator":"exists","value":"false"}`:          `{"subject":{"exists":false}}`,
+		`{"field":"authors","operator":"equals","value":"ada"}`:            `null`,
+		`{"field":"tags","operator":"in","value":[]}`:                      `null`,
+		`{"field":"subject","operator":"in","value":["people:"]}`:          `null`,
+		`{"field":"subject","operator":"in","value":["ada"]}`:              `null`,
+		`{"field":"authors","operator":"in","value":[{"relationTo":"x"}]}`: `null`,
+	} {
+		where := api.adminListWhere(snapshot, "posts", url.Values{"filters": {"[[" + filter + "]]"}}, nil)
+		encoded, _ := json.Marshal(where)
+		if string(encoded) != want {
+			t.Errorf("%s planned %s, want %s", filter, encoded, want)
+			continue
+		}
+		if where != nil {
+			if _, err := decodeWhere(encoded, collection); err != nil {
+				t.Errorf("%s: %v", encoded, err)
+			}
+		}
+	}
+}
+
 func TestAdminListGroupsDecodeAndPreserveConjunctions(t *testing.T) {
 	path, _ := query.NewPath("title")
 	collection := schema.Collection{Slug: "posts", Fields: []schema.Field{{Name: "title", Path: path, Type: schema.FieldTypeText}}}

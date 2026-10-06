@@ -645,6 +645,70 @@ describe("Fetch client", () => {
 		}
 	});
 
+	it("requests a count-free page only for pagination: false", async () => {
+		const requested: URL[] = [];
+		const counted = {
+			page: 2,
+			limit: 1,
+			totalDocs: 3,
+			totalPages: 3,
+			hasNextPage: true,
+			hasPrevPage: true,
+		};
+		const uncounted = { page: 2, limit: 1, hasNextPage: true, hasPrevPage: true };
+		const client = createClient<TestConfig>({
+			baseURL: "https://cms.example.test",
+			fetch: async (request) => {
+				const url = new URL((request as Request).url);
+				requested.push(url);
+				const pagination = url.searchParams.get("pagination") === "false" ? uncounted : counted;
+				return Response.json({ docs: [{ id: "post_2", title: "Second" }], pagination });
+			},
+		});
+
+		const page = await client.list("posts", { page: 2, limit: 1, pagination: false });
+		expect(requested[0]?.searchParams.get("pagination")).toBe("false");
+		expect(page.pagination).toEqual(uncounted);
+		expect("totalDocs" in page.pagination).toBe(false);
+
+		await client.list("posts", { page: 2, limit: 1 });
+		await client.list("posts", { page: 2, limit: 1, pagination: true });
+		expect(requested.slice(1).map((url) => url.searchParams.has("pagination"))).toEqual([
+			false,
+			false,
+		]);
+	});
+
+	it("rejects page metadata that does not match the requested pagination mode", async () => {
+		const page = (pagination: Record<string, unknown>) => Response.json({ docs: [], pagination });
+		const withTotals = {
+			page: 1,
+			limit: 10,
+			totalDocs: 0,
+			totalPages: 0,
+			hasNextPage: false,
+			hasPrevPage: false,
+		};
+		const withoutTotals = { page: 1, limit: 10, hasNextPage: false, hasPrevPage: false };
+		for (const [options, pagination] of [
+			[{}, withoutTotals],
+			[{ pagination: false }, withTotals],
+			[{ pagination: false }, { ...withoutTotals, totalDocs: 0 }],
+		] as const) {
+			const client = createClient<TestConfig>({
+				baseURL: "https://cms.example.test",
+				fetch: async () => page(pagination),
+			});
+			try {
+				await client.list("posts", options);
+				expect.unreachable();
+			} catch (error) {
+				expect(error).toBeInstanceOf(RiduError);
+				if (error instanceof RiduError) expect(error.message).toContain("invalid page response");
+			}
+		}
+	});
+
 	it("serializes depth for individual document reads", async () => {
 		let captured: Request | undefined;
 		const client = createClient<TestConfig>({

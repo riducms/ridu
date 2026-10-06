@@ -1,6 +1,7 @@
 import * as migration_20260815_053403_performance_baseline from "./20260815_053403_performance_baseline";
 import * as migration_20260828_215931_performance_fixture_sync from "./20260828_215931_performance_fixture_sync";
 import * as migration_20260929_070151_performance_trash_sync from "./20260929_070151_performance_trash_sync";
+import * as migration_20261004_182022_performance_blocks_sync from "./20261004_182022_performance_blocks_sync";
 
 export const migrations = [
 	{
@@ -17,5 +18,10 @@ export const migrations = [
 		up: migration_20260929_070151_performance_trash_sync.up,
 		down: migration_20260929_070151_performance_trash_sync.down,
 		name: "20260929_070151_performance_trash_sync",
+	},
+	{
+		up: migration_20261004_182022_performance_blocks_sync.up,
+		down: migration_20261004_182022_performance_blocks_sync.down,
+		name: "20261004_182022_performance_blocks_sync",
 	},
 ];

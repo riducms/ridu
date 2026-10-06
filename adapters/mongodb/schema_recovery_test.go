@@ -6,13 +6,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riducms/ridu/internal/schematest"
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestMongoDecodersPreserveSchemaRecoveryDiagnostics(t *testing.T) {
-	block := schema.Field{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero"}}}}
+	blocks := []schema.BlockType{{Slug: "hero", TypeName: "Hero"}, mongoEmbeddedCard()}
+	bind := func(field schema.Field) schema.Field { return schematest.Bind(t, "pages", blocks, field)[0] }
+	blockAt := func(path string) schema.Field {
+		return schema.Field{Name: "layout", Path: query.Field(strings.Split(path, ".")...), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"hero"}}}
+	}
+	block := bind(blockAt("layout"))
 	unknown := store.List(store.Object(store.Values{"blockType": store.String("retired-private-type"), "private": store.String("private-payload")}))
 	embeddedValue := func(kind, key string) store.Value {
 		payload := store.Values{"variant": store.String(kind), "title": store.String("private-payload")}
@@ -29,12 +36,12 @@ func TestMongoDecodersPreserveSchemaRecoveryDiagnostics(t *testing.T) {
 		code  string
 	}{
 		{"root", block, unknown, "layout.0.blockType", "unknown_block_schema"},
-		{"localized", func() schema.Field { f := block; f.Localized = true; return f }(), store.Object(store.Values{"en": unknown}), "layout.en.0.blockType", "unknown_block_schema"},
-		{"nested", schema.Field{Name: "sections", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{block}}}, store.List(store.Object(store.Values{"layout": unknown})), "sections.0.layout.0.blockType", "unknown_block_schema"},
-		{"embedded-unknown", mongoEmbeddedFixture(), embeddedValue("retired-private-type", "one"), "canvas.document.attributes.variant", "unknown_embedded_schema"},
-		{"embedded-missing-identity", mongoEmbeddedFixture(), embeddedValue("card", ""), "canvas.document.attributes.uid", "missing_embedded_identity"},
-		{"embedded-localized", func() schema.Field { f := mongoEmbeddedFixture(); f.Localized = true; return f }(), store.Object(store.Values{"en": embeddedValue("retired-private-type", "one")}), "canvas.en.document.attributes.variant", "unknown_embedded_schema"},
-		{"embedded-nested", schema.Field{Name: "settings", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{mongoEmbeddedFixture()}}}, store.Object(store.Values{"canvas": embeddedValue("retired-private-type", "one")}), "settings.canvas.document.attributes.variant", "unknown_embedded_schema"},
+		{"localized", func() schema.Field { f := blockAt("layout"); f.Localized = true; return bind(f) }(), store.Object(store.Values{"en": unknown}), "layout.en.0.blockType", "unknown_block_schema"},
+		{"nested", bind(schema.Field{Name: "sections", Path: query.Field("sections"), Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{blockAt("sections.layout")}}}), store.List(store.Object(store.Values{"layout": unknown})), "sections.0.layout.0.blockType", "unknown_block_schema"},
+		{"embedded-unknown", mongoEmbeddedFixture(t), embeddedValue("retired-private-type", "one"), "canvas.document.attributes.variant", "unknown_embedded_schema"},
+		{"embedded-missing-identity", mongoEmbeddedFixture(t), embeddedValue("card", ""), "canvas.document.attributes.uid", "missing_embedded_identity"},
+		{"embedded-localized", func() schema.Field { f := mongoEmbeddedCanvas("canvas"); f.Localized = true; return bind(f) }(), store.Object(store.Values{"en": embeddedValue("retired-private-type", "one")}), "canvas.en.document.attributes.variant", "unknown_embedded_schema"},
+		{"embedded-nested", bind(schema.Field{Name: "settings", Path: query.Field("settings"), Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{mongoEmbeddedCanvas("settings.canvas")}}}), store.Object(store.Values{"canvas": embeddedValue("retired-private-type", "one")}), "settings.canvas.document.attributes.variant", "unknown_embedded_schema"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			collection := schema.Collection{ID: "pages", Slug: "pages", Versions: &schema.VersionSettings{Drafts: true}, Fields: []schema.Field{test.field}}

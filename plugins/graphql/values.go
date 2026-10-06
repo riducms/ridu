@@ -372,7 +372,7 @@ func normalizeInputValue(value interface{}, field schema.Field) interface{} {
 		for index, item := range items {
 			object, _ := item.(map[string]interface{})
 			blockType, _ := object["blockType"].(string)
-			for _, block := range field.Blocks.ResolvedTypes() {
+			for _, block := range field.Blocks.Definitions() {
 				if block.Slug != blockType {
 					continue
 				}
@@ -488,15 +488,15 @@ func pageMap(page store.Page) map[string]interface{} {
 	for index, document := range page.Documents {
 		documents[index] = documentMap(document)
 	}
-	totalPages := 0
-	if page.Limit > 0 {
-		totalPages = int(math.Ceil(float64(page.Total) / float64(page.Limit)))
-	}
 	result := map[string]interface{}{
-		"docs": documents, "page": page.Page, "limit": page.Limit, "totalDocs": page.Total, "totalPages": totalPages,
-		"hasNextPage": page.Page < totalPages, "hasPrevPage": page.Page > 1, "pagingCounter": (page.Page-1)*page.Limit + 1,
+		"docs": documents, "page": page.Page, "limit": page.Limit,
+		"hasNextPage": page.HasNextPage, "hasPrevPage": page.Page > 1, "pagingCounter": (page.Page-1)*page.Limit + 1,
 	}
-	if page.Page < totalPages {
+	// pagination: false leaves totalDocs and totalPages null rather than estimated.
+	if page.Total != nil {
+		result["totalDocs"], result["totalPages"] = *page.Total, (*page.Total+page.Limit-1)/page.Limit
+	}
+	if page.HasNextPage {
 		result["nextPage"] = page.Page + 1
 	}
 	if page.Page > 1 {

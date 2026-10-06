@@ -44,7 +44,7 @@ func variantIsolation(t *testing.T, factory Factory, options Options) {
 		t.Fatal(err)
 	}
 	page, err := app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Contains(path("layout.hero.secret"), "hidden-token")})
-	if err != nil || page.Total != 0 || len(page.Documents) != 0 {
+	if err != nil || *page.Total != 0 || len(page.Documents) != 0 {
 		t.Fatalf("public variant matched a private variant's shape: %#v, %v", page, err)
 	}
 	response := request(app.Handler(ridu.HandlerOptions{}), http.MethodGet, "/api/collections/pages/count?where="+url.QueryEscape(`{"layout.hero.secret":{"contains":"hidden-token"}}`), "")
@@ -61,7 +61,7 @@ func variantIsolation(t *testing.T, factory Factory, options Options) {
 	// Opaque JSON has no authored child permissions or variant discriminator;
 	// its existing Local API descendant queries must remain usable.
 	page, err = app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Equal(path("metadata.tag"), "visible")})
-	if err != nil || page.Total != 1 || len(page.Documents) != 1 {
+	if err != nil || *page.Total != 1 || len(page.Documents) != 1 {
 		t.Fatalf("opaque JSON descendant query: %#v, %v", page, err)
 	}
 	// Resolve the managed Block prefix using its schema discriminator before
@@ -69,7 +69,7 @@ func variantIsolation(t *testing.T, factory Factory, options Options) {
 	// make the quote variant's private hero.metadata look like public content.
 	for token, total := range map[string]int{"hidden-json-token": 0, "public-json-token": 1} {
 		page, err = app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Equal(path("layout.hero.metadata.tag"), token)})
-		if err != nil || page.Total != total || len(page.Documents) != total {
+		if err != nil || *page.Total != total || len(page.Documents) != total {
 			t.Fatalf("variant opaque JSON descendant %q: %#v, %v", token, page, err)
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/requiredfield"
 	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -193,13 +194,17 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 			var stored []fieldchange.Change
 			tables := make(map[schema.StableID]bool)
 			for _, resource := range fieldchange.AffectedResources(changes) {
-				table := collectionTable(resource.ID)
-				exists, err := transactionTableExists(ctx, transaction, table)
-				if err != nil {
-					return err
-				}
-				if exists {
-					tables[resource.ID] = true
+				for index, table := range documentTables(resource, resource.ID) {
+					exists, err := transactionTableExists(ctx, transaction, table)
+					if err != nil {
+						return err
+					}
+					if !exists {
+						continue
+					}
+					if index == 0 {
+						tables[resource.ID] = true
+					}
 					if _, err := transaction.ExecContext(ctx, `LOCK TABLE `+quote(table)+` IN SHARE ROW EXCLUSIVE MODE`); err != nil {
 						return err
 					}
@@ -249,9 +254,26 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 	if err != nil {
 		return err
 	}
+	// A field must not become required while stored documents lack its value.
+	// The audit reads the current layout before any statement runs, under the
+	// same locks that keep writers out until this transaction commits.
+	if exists {
+		var locales []schema.LocaleCode
+		if localization := manifest.Snapshot().Application.Localization; localization != nil {
+			locales = localization.LocaleCodes()
+		}
+		requirements := requiredfield.Detect(before.Snapshot(), manifest.Snapshot(), requiredfield.Renames{})
+		if err := auditPostgresRequiredValues(ctx, transaction, locales, requirements, true, true); err != nil {
+			return err
+		}
+	}
+	// Reject cross-table unique conflicts before creating the indexes.
+	if err := checkMigrationPublishedUniqueUnion(ctx, transaction, manifest); err != nil {
+		return fmt.Errorf("verify development uniqueness: %w", err)
+	}
 	for _, statement := range statements {
-		if _, err := transaction.ExecContext(ctx, statement.SQL); err != nil {
-			return fmt.Errorf("apply %s: %w", statement.Kind, err)
+		if _, err := transaction.ExecContext(ctx, statement.sql); err != nil {
+			return fmt.Errorf("apply %s: %w", statement.kind, migrationConflict(err))
 		}
 	}
 	if err := assertPhysicalSchema(ctx, transaction, manifest); err != nil {
@@ -259,6 +281,15 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 	}
 	if err := checkMigrationPublishedUniqueUnion(ctx, transaction, manifest); err != nil {
 		return fmt.Errorf("verify development uniqueness: %w", err)
+	}
+	// Writes leave index rows alone when a document's references are
+	// unchanged, so rows for a removed or changed reference field would
+	// otherwise outlive it. Migrations add StepBackfillReferences for the
+	// same topology changes.
+	if exists && referenceIndexTopologyChanged(before.Snapshot(), manifest.Snapshot()) {
+		if err := rebuildReferenceIndex(ctx, transaction, manifest); err != nil {
+			return fmt.Errorf("rebuild development reference index: %w", err)
+		}
 	}
 	if err := writePostgresDevelopmentManifest(ctx, transaction, manifest); err != nil {
 		return err

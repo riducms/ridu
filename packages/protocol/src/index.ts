@@ -1,4 +1,5 @@
 export {
+	blockDefinitionPath,
 	cloneSchemaField,
 	bindSchemaManifest,
 	resolveBlockTypes,
@@ -14,12 +15,31 @@ import type {
 	ErrorPayload,
 	PageEnvelope,
 	Pagination,
+	UncountedPagination,
 	ValidationIssue,
 	AdminCollectionListDataV1,
 	AccessCapabilitiesEnvelope,
 	AdminPreparedRouteDataV1,
 	AdminReadResultV1,
+	FieldCapabilities,
+	SchemaField,
 } from "./generated.js";
+import { blockDefinitionPath } from "./schema-registry.js";
+
+/**
+ * The capabilities of a block definition's field at a placement without an entry of
+ * its own in `fields`, such as a row the client has yet to add: the definition's
+ * entry, located through the bound fields along the canonical path.
+ */
+export function blockFieldCapabilities(
+	access: AccessCapabilitiesEnvelope,
+	fields: readonly SchemaField[],
+	canonicalPath: string
+): FieldCapabilities | undefined {
+	if (access.blockFields === undefined) return undefined;
+	const located = blockDefinitionPath(fields, canonicalPath);
+	return located && access.blockFields[located.block]?.[located.path];
+}
 
 /** Validate prepared domain data once, before route controllers receive it. */
 export function isAdminPreparedRouteData(value: unknown): value is AdminPreparedRouteDataV1 {
@@ -163,6 +183,19 @@ function isDocumentVersion(value: unknown) {
 export function isAccessCapabilities(value: unknown): value is AccessCapabilitiesEnvelope {
 	if (!isRecord(value) || !isRecord(value.operations) || !isRecord(value.fields)) return false;
 	const operations = value.operations;
+	const isFieldCapabilities = (field: unknown) =>
+		isRecord(field) && ["read", "create", "update"].every((key) => typeof field[key] === "boolean");
+	const blockFields = value.blockFields;
+	if (
+		blockFields !== undefined &&
+		!(
+			isRecord(blockFields) &&
+			Object.values(blockFields).every(
+				(definition) => isRecord(definition) && Object.values(definition).every(isFieldCapabilities)
+			)
+		)
+	)
+		return false;
 	return (
 		[
 			"admin",
@@ -178,11 +211,7 @@ export function isAccessCapabilities(value: unknown): value is AccessCapabilitie
 			"deletePermanent",
 			"selectAll",
 		].every((key) => typeof operations[key] === "boolean") &&
-		Object.values(value.fields).every(
-			(field) =>
-				isRecord(field) &&
-				["read", "create", "update"].every((key) => typeof field[key] === "boolean")
-		)
+		Object.values(value.fields).every(isFieldCapabilities)
 	);
 }
 
@@ -269,21 +298,41 @@ export function isErrorEnvelope(value: unknown): value is ErrorEnvelope {
 	);
 }
 
+/** Validate a counted page, the default list response, including both totals. */
 export function isPageEnvelope<Document>(value: unknown): value is PageEnvelope<Document> {
-	return isRecord(value) && Array.isArray(value.docs) && isPagination(value.pagination);
+	return (
+		isRecord(value) &&
+		Array.isArray(value.docs) &&
+		isPageMetadata(value.pagination) &&
+		isInteger(value.pagination.totalDocs) &&
+		isInteger(value.pagination.totalPages)
+	);
+}
+
+/** Validate a `pagination=false` page, which must carry neither total. */
+export function isUncountedPageEnvelope<Document>(
+	value: unknown
+): value is PageEnvelope<Document, UncountedPagination> {
+	return (
+		isRecord(value) &&
+		Array.isArray(value.docs) &&
+		isPageMetadata(value.pagination) &&
+		!("totalDocs" in value.pagination) &&
+		!("totalPages" in value.pagination)
+	);
 }
 
 export function errorPayload(envelope: ErrorEnvelope): ErrorPayload {
 	return envelope.error;
 }
 
-function isPagination(value: unknown): value is Pagination {
+function isPageMetadata(
+	value: unknown
+): value is Omit<Pagination, "totalDocs" | "totalPages"> & Record<string, unknown> {
 	return (
 		isRecord(value) &&
 		isInteger(value.page) &&
 		isInteger(value.limit) &&
-		isInteger(value.totalDocs) &&
-		isInteger(value.totalPages) &&
 		typeof value.hasNextPage === "boolean" &&
 		typeof value.hasPrevPage === "boolean"
 	);

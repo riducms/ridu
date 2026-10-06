@@ -12,6 +12,7 @@ import (
 
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/blocktypes"
+	"github.com/riducms/ridu/internal/querypath"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"golang.org/x/text/language"
@@ -35,17 +36,18 @@ func resolveBound(input Input) (schema.Manifest, error) {
 }
 
 // resolveBoundSnapshot also returns the snapshot the manifest was frozen from.
-// Its placement views were materialized during resolution, so reading it does
-// not rebuild every view the way a Manifest.Snapshot copy would.
+// Reading it avoids the deep copy and rebinding of a Manifest.Snapshot copy.
 func resolveBoundSnapshot(input Input) (schema.Manifest, schema.Snapshot, error) {
+	templates := make(map[string]schema.BlockType)
 	resolver := &resolver{
-		input:           input,
-		blockTemplates:  make(map[string]schema.BlockType),
-		collectionSlugs: make(map[schema.CollectionSlug]collectionReference),
-		globalSlugs:     make(map[schema.CollectionSlug]string),
-		pluginKeys:      make(map[string]string),
-		pluginFieldKeys: make(map[string]string),
-		adminPluginKeys: make(map[string]struct{}),
+		input:            input,
+		blockTemplates:   templates,
+		blockDefinitions: schema.NewBlockDefinitions(templates),
+		collectionSlugs:  make(map[schema.CollectionSlug]collectionReference),
+		globalSlugs:      make(map[schema.CollectionSlug]string),
+		pluginKeys:       make(map[string]string),
+		pluginFieldKeys:  make(map[string]string),
+		adminPluginKeys:  make(map[string]struct{}),
 	}
 	return resolver.resolve()
 }
@@ -63,16 +65,17 @@ type collectionReference struct {
 }
 
 type resolver struct {
-	blockTemplates  map[string]schema.BlockType
-	blockTypeNames  map[string]struct{ shape, path string }
-	input           Input
-	issues          []schema.Issue
-	collectionSlugs map[schema.CollectionSlug]collectionReference
-	globalSlugs     map[schema.CollectionSlug]string
-	pluginKeys      map[string]string
-	pluginFieldKeys map[string]string
-	adminPluginKeys map[string]struct{}
-	adminLanguages  map[string]struct{}
+	blockTemplates map[string]schema.BlockType
+	// blockDefinitions shares blockTemplates with placement and definition views.
+	blockDefinitions *schema.BlockDefinitions
+	input            Input
+	issues           []schema.Issue
+	collectionSlugs  map[schema.CollectionSlug]collectionReference
+	globalSlugs      map[schema.CollectionSlug]string
+	pluginKeys       map[string]string
+	pluginFieldKeys  map[string]string
+	adminPluginKeys  map[string]struct{}
+	adminLanguages   map[string]struct{}
 }
 
 func (resolver *resolver) resolve() (schema.Manifest, schema.Snapshot, error) {
@@ -134,10 +137,15 @@ func (resolver *resolver) resolve() (schema.Manifest, schema.Snapshot, error) {
 		Globals:     globals,
 		Plugins:     plugins,
 	}
-	// Lowering adds framework-owned children such as blockName. Recheck the
-	// resolved graph with the same budget and lazy binding used by schema.Parse.
+	// Lowering adds framework-owned children such as blockName. Check the
+	// resolved block graph's structure and placement identities and bind it
+	// lazily, as schema.Parse does.
 	if err := schema.BindBlockReferences(&snapshot); err != nil {
-		resolver.issue("invalid_block_graph", "fields", err.Error())
+		if validation, ok := err.(*schema.ValidationError); ok {
+			resolver.issues = append(resolver.issues, validation.Issues...)
+		} else {
+			resolver.issue("invalid_block_graph", "fields", err.Error())
+		}
 		return schema.Manifest{}, schema.Snapshot{}, schema.NewValidationError(resolver.issues)
 	}
 	return schema.NewManifest(snapshot), snapshot, nil
@@ -996,6 +1004,8 @@ func (resolver *resolver) validateRootEndpointNamespaces(endpoints []schema.Endp
 	}
 }
 
+// validateDefinitionIndexes checks index declarations of one field list. Block
+// definitions are checked once each when they are resolved, as repeated rows.
 func (resolver *resolver) validateDefinitionIndexes(definitions field.Fields, fieldsPath string, repeated bool) {
 	for index, node := range definitions {
 		definition := field.Snapshot(node)
@@ -1013,10 +1023,6 @@ func (resolver *resolver) validateDefinitionIndexes(definitions field.Fields, fi
 			resolver.validateDefinitionIndexes(definition.Fields(), fieldPath+".fields", repeated)
 		case field.KindArray:
 			resolver.validateDefinitionIndexes(definition.Fields(), fieldPath+".fields", true)
-		case field.KindBlocks:
-			for blockIndex, block := range definition.Blocks() {
-				resolver.validateDefinitionIndexes(block.Fields, fmt.Sprintf("%s.blocks[%d].fields", fieldPath, blockIndex), true)
-			}
 		case field.KindRow, field.KindCollapsible:
 			resolver.validateDefinitionIndexes(definition.Fields(), fieldPath+".fields", repeated)
 		case field.KindTabs:
@@ -1232,8 +1238,14 @@ func fieldByPath(fields []schema.Field, segments []string) *schema.Field {
 }
 
 func (fieldResolver *fieldResolver) validateSlugSources(fields []schema.Field) {
+	// Each shared block definition is inspected once: its slug fields are
+	// nested at every placement.
+	entered := schema.FieldListSet{}
 	var inspect func([]schema.Field, bool)
 	inspect = func(candidates []schema.Field, nested bool) {
+		if !entered.Add(candidates) {
+			return
+		}
 		for _, candidate := range candidates {
 			if candidate.Text != nil && candidate.Text.Slug != nil {
 				configPath := strings.TrimSuffix(fieldResolver.seenPaths[candidate.Path.String()], ".name")
@@ -1266,12 +1278,12 @@ func (fieldResolver *fieldResolver) validateSlugSources(fields []schema.Field) {
 					}
 				}
 			}
-			inspect(schema.EmbeddedBlocks(candidate), true)
+			inspect(schema.EmbeddedDefinitionBlocks(candidate), true)
 			if candidate.Nested != nil {
 				inspect(candidate.Nested.ResolvedFields(), true)
 			}
 			if candidate.Blocks != nil {
-				for _, block := range candidate.Blocks.ResolvedTypes() {
+				for _, block := range candidate.Blocks.Definitions() {
 					inspect(block.ResolvedFields(), true)
 				}
 			}
@@ -1281,8 +1293,14 @@ func (fieldResolver *fieldResolver) validateSlugSources(fields []schema.Field) {
 }
 
 func (fieldResolver *fieldResolver) validateFieldConditions(fields []schema.Field) {
+	// A shared definition's conditions resolve against its own siblings and the
+	// resource root, so each definition is inspected once per resource.
+	entered := schema.FieldListSet{}
 	var inspect func([]schema.Field)
 	inspect = func(siblings []schema.Field) {
+		if !entered.Add(siblings) {
+			return
+		}
 		for _, candidate := range siblings {
 			if candidate.Admin.Condition != nil {
 				configPath := strings.TrimSuffix(fieldResolver.seenPaths[candidate.Path.String()], ".name")
@@ -1296,12 +1314,12 @@ func (fieldResolver *fieldResolver) validateFieldConditions(fields []schema.Fiel
 					configPath+".admin.visibleWhen",
 				)
 			}
-			inspect(schema.EmbeddedBlocks(candidate))
+			inspect(schema.EmbeddedDefinitionBlocks(candidate))
 			if candidate.Nested != nil {
 				inspect(candidate.Nested.ResolvedFields())
 			}
 			if candidate.Blocks != nil {
-				for _, block := range candidate.Blocks.ResolvedTypes() {
+				for _, block := range candidate.Blocks.Definitions() {
 					inspect(block.ResolvedFields())
 				}
 			}
@@ -1849,7 +1867,7 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 		fieldResolver.resolver.issue("unknown_field_kind", configPath+".type", fmt.Sprintf("unknown field kind %q", definition.Kind()))
 	}
 	if resolved.Localized {
-		clearDescendantLocalization(&resolved)
+		schema.ClearDescendantLocalization(&resolved)
 	}
 	return resolved
 }
@@ -1946,37 +1964,6 @@ func resolvedScalarLiteral(value field.DefaultValue) schema.ScalarLiteral {
 		resolved.Type = schema.ValueTypeBoolean
 	}
 	return resolved
-}
-
-func clearDescendantLocalization(field *schema.Field) {
-	if field.Nested != nil {
-		for index := range field.Nested.ResolvedFields() {
-			field.Nested.ResolvedFields()[index].Localized = false
-			clearDescendantLocalization(&field.Nested.ResolvedFields()[index])
-		}
-	}
-	if field.Blocks != nil {
-		for blockIndex := range field.Blocks.ResolvedTypes() {
-			for fieldIndex := range field.Blocks.ResolvedTypes()[blockIndex].ResolvedFields() {
-				field.Blocks.ResolvedTypes()[blockIndex].ResolvedFields()[fieldIndex].Localized = false
-				clearDescendantLocalization(&field.Blocks.ResolvedTypes()[blockIndex].ResolvedFields()[fieldIndex])
-			}
-		}
-	}
-	if field.Plugin != nil {
-		for i := range field.Plugin.EmbeddedTrees {
-			for j := range field.Plugin.EmbeddedTrees[i].Cases {
-				for k := range field.Plugin.EmbeddedTrees[i].Cases[j].ResolvedTypes() {
-					for n := range field.Plugin.EmbeddedTrees[i].Cases[j].ResolvedTypes()[k].ResolvedFields() {
-						child := &field.Plugin.EmbeddedTrees[i].Cases[j].ResolvedTypes()[k].ResolvedFields()[n]
-						child.Localized = false
-						clearDescendantLocalization(child)
-					}
-				}
-			}
-		}
-	}
-
 }
 
 func (fieldResolver *fieldResolver) effectiveFieldID(pathSegments []string) schema.StableID {
@@ -2230,8 +2217,14 @@ func (resolver *resolver) validateCrossCollectionFields(collections []schema.Col
 		byID[collection.ID] = collection
 	}
 	validate := func(prefix string, collection schema.Collection, joinsAllowed bool) {
+		// Checks depend on the field and its resource, never on a placement,
+		// so each shared block definition is inspected once per resource.
+		entered := schema.FieldListSet{}
 		var inspect func([]schema.Field, string)
 		inspect = func(fields []schema.Field, fieldsPath string) {
+			if !entered.Add(fields) {
+				return
+			}
 			for fieldIndex, candidate := range fields {
 				path := fmt.Sprintf("%s[%d]", fieldsPath, fieldIndex)
 				if candidate.Join != nil {
@@ -2258,6 +2251,9 @@ func (resolver *resolver) validateCrossCollectionFields(collections []schema.Col
 							sortPath, err := query.ParsePath(rawSort)
 							if err != nil || (!isJoinSystemColumn(rawSort) && directFieldByPath(target.Fields, sortPath) == nil) {
 								resolver.issue("invalid_join_sort", path+".defaultSort", fmt.Sprintf("join sort %q does not exist in collection %q", candidate.Join.DefaultSort, target.Slug))
+							} else if err := querypath.ValidateSort(target, sortPath); err != nil {
+								// The operation engine applies the same rule to caller sorts.
+								resolver.issue("invalid_join_sort", path+".defaultSort", fmt.Sprintf("join sort %q cannot order collection %q: %v", candidate.Join.DefaultSort, target.Slug, err))
 							}
 						}
 					}
@@ -2315,12 +2311,12 @@ func (resolver *resolver) validateCrossCollectionFields(collections []schema.Col
 						}
 					}
 				}
-				inspect(schema.EmbeddedBlocks(candidate), path+".plugin.embeddedTrees")
+				inspect(schema.EmbeddedDefinitionBlocks(candidate), path+".plugin.embeddedTrees")
 				if candidate.Nested != nil {
 					inspect(candidate.Nested.ResolvedFields(), path+".nested.fields")
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					for blockIndex, block := range candidate.Blocks.Definitions() {
 						inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", path, blockIndex))
 					}
 				}
@@ -2498,72 +2494,45 @@ func defaultBlockNameField() field.View {
 	return field.Snapshot(field.Text("blockName").Label("Block name").Default(""))
 }
 
-func (fieldResolver *fieldResolver) resolveBlockTypes(blocks []field.Block, configPath string, pathSegments []string) []schema.BlockType {
-	if len(blocks) == 0 {
-		fieldResolver.resolver.issue("missing_block_types", configPath+".blocks", "blocks field requires at least one block type")
+// resolveBlockDefinition resolves one block definition at blockPath. Its
+// fields' paths begin with the block's slug; BlockTemplate makes them
+// definition-relative.
+func (fieldResolver *fieldResolver) resolveBlockDefinition(block field.Block, blockPath string) schema.BlockType {
+	segments := []string{block.Slug}
+	labels := fieldResolver.resolver.resolveBlockLabels(block.Slug, block.Labels, blockPath+".labels")
+	blockFields := fieldResolver.resolveFields(block.Fields, blockPath+".fields", segments)
+	if name, found := resolvedDirectField(blockFields, "blockName"); found {
+		if reason := invalidBlockNameFieldReason(name); reason != "" {
+			fieldResolver.resolver.issue("invalid_block_name_field", blockPath+".fields.blockName", reason)
+		}
+	} else {
+		blockFields = append(blockFields, fieldResolver.resolveField(defaultBlockNameField(), fmt.Sprintf("%s.fields[%d]", blockPath, len(block.Fields)), segments))
 	}
-	resolvedBlocks := make([]schema.BlockType, len(blocks))
-	seen := make(map[string]bool, len(blocks))
-	for index, block := range blocks {
-		blockPath := fmt.Sprintf("%s.blocks[%d]", configPath, index)
-		if !schema.IsValidPluginKey(block.Slug) || seen[block.Slug] {
-			fieldResolver.resolver.issue("invalid_block_slug", blockPath+".slug", "block slug must be unique lowercase kebab-case")
+	for _, blockField := range blockFields {
+		if blockField.Name == "blockType" {
+			fieldResolver.resolver.issue("reserved_field_name", blockPath+".fields", "direct block field name \"blockType\" is reserved for the framework block discriminator")
+			break
 		}
-		seen[block.Slug] = true
-		labels := fieldResolver.resolver.resolveBlockLabels(block.Slug, block.Labels, blockPath+".labels")
-		blockFields := fieldResolver.resolveFields(block.Fields, blockPath+".fields", append(pathSegments, block.Slug))
-		if name, found := resolvedDirectField(blockFields, "blockName"); found {
-			if reason := invalidBlockNameFieldReason(name); reason != "" {
-				fieldResolver.resolver.issue("invalid_block_name_field", blockPath+".fields.blockName", reason)
-			}
-		} else {
-			blockFields = append(blockFields, fieldResolver.resolveField(defaultBlockNameField(), fmt.Sprintf("%s.fields[%d]", blockPath, len(block.Fields)), append(pathSegments, block.Slug)))
-		}
-		for _, blockField := range blockFields {
-			if blockField.Name == "blockType" {
-				fieldResolver.resolver.issue("reserved_field_name", blockPath+".fields", "direct block field name \"blockType\" is reserved for the framework block discriminator")
+	}
+	var admin *schema.BlockAdmin
+	if rowLabel := strings.TrimSpace(block.Admin.RowLabelPath); rowLabel != "" {
+		found := false
+		for _, child := range blockFields {
+			if child.Name == rowLabel && child.Category == schema.FieldCategoryScalar && child.Type != schema.FieldTypeJSON && child.Type != schema.FieldTypePoint && child.Type != schema.FieldTypeTextList && child.Type != schema.FieldTypeNumberList && (child.Select == nil || !child.Select.HasMany) {
+				found = true
 				break
 			}
 		}
-		var admin *schema.BlockAdmin
-		if rowLabel := strings.TrimSpace(block.Admin.RowLabelPath); rowLabel != "" {
-			found := false
-			for _, child := range blockFields {
-				if child.Name == rowLabel && child.Category == schema.FieldCategoryScalar && child.Type != schema.FieldTypeJSON && child.Type != schema.FieldTypePoint && child.Type != schema.FieldTypeTextList && child.Type != schema.FieldTypeNumberList && (child.Select == nil || !child.Select.HasMany) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				fieldResolver.resolver.issue("invalid_block_row_label", blockPath+".admin.rowLabelPath", "block row label must name a direct stored scalar child field")
-			}
-			if admin == nil {
-				admin = &schema.BlockAdmin{}
-			}
-			admin.RowLabel = rowLabel
+		if !found {
+			fieldResolver.resolver.issue("invalid_block_row_label", blockPath+".admin.rowLabelPath", "block row label must name a direct stored scalar child field")
 		}
-		resolvedBlocks[index] = schema.BlockType{
-			Admin: admin, TypeName: block.TypeName,
-			Slug: block.Slug, Labels: labels,
-			Fields: blockFields,
-		}
-		if block.TypeName != "" {
-			shape, err := blocktypes.Shape(resolvedBlocks[index])
-			if err == nil {
-				if fieldResolver.resolver.blockTypeNames == nil {
-					fieldResolver.resolver.blockTypeNames = make(map[string]struct{ shape, path string })
-				}
-				if prior, exists := fieldResolver.resolver.blockTypeNames[block.TypeName]; exists && prior.shape != shape {
-					fieldResolver.resolver.issue("block_type_name_conflict", blockPath+".typeName", fmt.Sprintf("block type name %q has a different resolved definition at %s", block.TypeName, prior.path))
-				} else {
-					fieldResolver.resolver.blockTypeNames[block.TypeName] = struct{ shape, path string }{shape, blockPath + ".typeName"}
-				}
-			}
-		}
-
+		admin = &schema.BlockAdmin{RowLabel: rowLabel}
 	}
-
-	return resolvedBlocks
+	return schema.BlockType{
+		Admin: admin, TypeName: block.TypeName,
+		Slug: block.Slug, Labels: labels,
+		Fields: blockFields,
+	}
 }
 
 func resolvedDirectField(fields []schema.Field, name string) (schema.Field, bool) {

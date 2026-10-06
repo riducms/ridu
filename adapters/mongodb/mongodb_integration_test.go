@@ -28,13 +28,19 @@ import (
 )
 
 func TestMongoDBConformance(t *testing.T) {
-	conformance.Run(t, func(t *testing.T, manifest schema.Manifest) store.Store {
-		backend := mongoIntegrationStore(t)
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
-			t.Fatal(err)
-		}
-		return backend
-	})
+	conformance.Run(t, openMongoDBConformanceStore)
+}
+
+func TestMongoDBStoreWriteGuards(t *testing.T) {
+	conformance.RunWriteGuards(t, openMongoDBConformanceStore)
+}
+
+func openMongoDBConformanceStore(t *testing.T, manifest schema.Manifest) store.Store {
+	backend := mongoIntegrationStore(t)
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
+		t.Fatal(err)
+	}
+	return backend
 }
 
 func TestMongoDBOpenRejectsStandaloneWithoutCreatingTheSelectedDatabase(t *testing.T) {
@@ -121,7 +127,7 @@ func TestMongoDBOperationEngineCRUDUsesMutationFences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -186,7 +192,7 @@ func TestMongoDBOperationEngineNestedGroupsRejectArrayAncestorMatches(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -235,7 +241,7 @@ func TestMongoDBOperationEngineNestedGroupsRejectArrayAncestorMatches(t *testing
 	if err != nil {
 		t.Fatalf("operation-engine nested list: %v", err)
 	}
-	if page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != created.ID {
+	if *page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != created.ID {
 		t.Fatalf("nested filter page = %#v, want created document", page)
 	}
 
@@ -252,15 +258,15 @@ func TestMongoDBOperationEngineNestedGroupsRejectArrayAncestorMatches(t *testing
 	if err != nil {
 		t.Fatalf("nested list after out-of-band array corruption: %v", err)
 	}
-	if page.Total != 0 || len(page.Documents) != 0 {
+	if *page.Total != 0 || len(page.Documents) != 0 {
 		t.Fatalf("array ancestor satisfied nested scalar predicate: %#v", page)
 	}
 }
 
 func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T) {
 	backend := mongoIntegrationStore(t)
-	collection := mongoRepeatedCollection()
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	collection := mongoRepeatedCollection(t)
+	if err := backend.syncIndexes(t.Context(), mongoRepeatedManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -282,7 +288,7 @@ func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T
 			t.Fatal(err)
 		}
 	}
-	updated, err := write.Update(t.Context(), store.UpdateRequest{
+	updated, err := conformance.LockedUpdate(t.Context(), write, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: "whole-root"},
 		Values: store.Values{
 			"tags": store.List(store.String("beta")),
@@ -364,7 +370,7 @@ func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T
 			mongoRollback(t, read)
 			t.Fatalf("shape-guarded query for %q: %v", fixture.id, err)
 		}
-		if page.Total != 0 || len(page.Documents) != 0 {
+		if *page.Total != 0 || len(page.Documents) != 0 {
 			mongoRollback(t, read)
 			t.Fatalf("corrupt repeated value bypassed OR shape guard for %q: %#v", fixture.id, page)
 		}
@@ -384,7 +390,7 @@ func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T
 		mongoRollback(t, read)
 		t.Fatal(err)
 	}
-	if page.Total != 0 {
+	if *page.Total != 0 {
 		mongoRollback(t, read)
 		t.Fatalf("corrupt repeated value bypassed NOT shape guard: %#v", page)
 	}
@@ -393,8 +399,8 @@ func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T
 
 func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t *testing.T) {
 	backend := mongoIntegrationStore(t)
-	collection := mongoRepeatedCollection()
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	collection := mongoRepeatedCollection(t)
+	if err := backend.syncIndexes(t.Context(), mongoRepeatedManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -404,8 +410,6 @@ func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t
 		value any
 	}{
 		{id: "wrong-type-leaf", path: "values.rows", value: bson.A{bson.D{{Key: "kind", Value: int32(7)}, {Key: "label", Value: "visible"}}}},
-		{id: "missing-required-leaf", path: "values.rows", value: bson.A{bson.D{{Key: "label", Value: "visible"}}}},
-		{id: "incomplete-row", path: "values.rows", value: bson.A{bson.D{{Key: "kind", Value: "primary"}}}},
 		{id: "unknown-row-key", path: "values.rows", value: bson.A{bson.D{{Key: "kind", Value: "primary"}, {Key: "label", Value: "visible"}, {Key: "unknown", Value: "leak"}}}},
 		{id: "invalid-row-key", path: "values.rows", value: bson.A{bson.D{{Key: "_key", Value: int32(7)}, {Key: "kind", Value: "primary"}, {Key: "label", Value: "visible"}}}},
 		{id: "duplicate-row-key", path: "values.rows", value: bson.A{
@@ -416,7 +420,6 @@ func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t
 		{id: "invalid-select-choice", path: "values.tags", value: bson.A{"unknown"}},
 		{id: "duplicate-select-choice", path: "values.tags", value: bson.A{"alpha", "alpha"}},
 		{id: "nested-group-scalar", path: "values.rows", value: bson.A{bson.D{{Key: "kind", Value: "primary"}, {Key: "label", Value: "visible"}, {Key: "details", Value: int32(7)}}}},
-		{id: "missing-block-required", path: "values.layout", value: bson.A{bson.D{{Key: "blockType", Value: "hero"}, {Key: "tone", Value: "bright"}}}},
 		{id: "invalid-block-type", path: "values.layout", value: bson.A{bson.D{{Key: "blockType", Value: "unknown"}, {Key: "heading", Value: "unsafe"}}}},
 		{id: "unknown-block-key", path: "values.layout", value: bson.A{bson.D{{Key: "blockType", Value: "quote"}, {Key: "heading", Value: "unsafe"}, {Key: "tone", Value: "leak"}}}},
 	}
@@ -459,17 +462,14 @@ func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t
 		access query.Expression
 	}{
 		{name: "wrong-type queried leaf not-equal", id: "wrong-type-leaf", access: query.NotEqual(rowKind, "blocked")},
-		{name: "missing required queried leaf not-equal", id: "missing-required-leaf", access: query.NotEqual(rowKind, "blocked")},
-		{name: "incomplete row not-equal", id: "incomplete-row", access: query.NotEqual(rowKind, "blocked")},
 		{name: "unknown row key not-equal", id: "unknown-row-key", access: query.NotEqual(rowKind, "blocked")},
 		{name: "invalid row key not-equal", id: "invalid-row-key", access: query.NotEqual(rowKind, "blocked")},
 		{name: "duplicate row key not-equal", id: "duplicate-row-key", access: query.NotEqual(rowKind, "blocked")},
 		{name: "invalid row select choice not-equal", id: "invalid-row-choice", access: query.NotEqual(rowKind, "blocked")},
-		{name: "invalid select choice not-equal", id: "invalid-select-choice", access: query.NotEqual(tags, "blocked")},
-		{name: "duplicate select choice not-equal", id: "duplicate-select-choice", access: query.NotEqual(tags, "blocked")},
+		{name: "invalid select choice not-in", id: "invalid-select-choice", access: query.Not(query.In(tags, "blocked"))},
+		{name: "duplicate select choice not-in", id: "duplicate-select-choice", access: query.Not(query.In(tags, "blocked"))},
 		{name: "nested group scalar not first", id: "nested-group-scalar", access: forwardNot},
 		{name: "nested group scalar first", id: "nested-group-scalar", access: reverseNot},
-		{name: "missing block required not-equal", id: "missing-block-required", access: query.NotEqual(heroHeading, "blocked")},
 		{name: "invalid block type not-equal", id: "invalid-block-type", access: query.NotEqual(heroHeading, "blocked")},
 		{name: "unknown block key not-equal", id: "unknown-block-key", access: query.NotEqual(quoteHeading, "blocked")},
 	}
@@ -492,7 +492,7 @@ func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t
 			if err != nil {
 				t.Fatal(err)
 			}
-			if page.Total != 0 || len(page.Documents) != 0 {
+			if *page.Total != 0 || len(page.Documents) != 0 {
 				t.Fatalf("corrupt document entered decoder-free list total: %#v", page)
 			}
 			values, err := distinct.Distinct(t.Context(), store.DistinctRequest{
@@ -510,10 +510,68 @@ func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t
 	mongoCommit(t, read)
 }
 
+// A row or block without a required child is an incomplete document, such as
+// a draft, not corruption. Decoded reads, decoder-free totals, distinct values
+// and repeated-root guards all keep it.
+func TestMongoDBIncompleteRequiredValuesStayVisibleToEveryRead(t *testing.T) {
+	backend := mongoIntegrationStore(t)
+	collection := mongoRepeatedCollection(t)
+	if err := backend.syncIndexes(t.Context(), mongoRepeatedManifest(collection)); err != nil {
+		t.Fatal(err)
+	}
+	incomplete := map[string]store.Values{
+		"row-without-required-leaf":   {"rows": store.List(store.Object(store.Values{"_key": store.String("a"), "label": store.String("visible")}))},
+		"row-without-second-required": {"rows": store.List(store.Object(store.Values{"_key": store.String("b"), "kind": store.String("primary")}))},
+		"block-without-required":      {"layout": store.List(store.Object(store.Values{"_key": store.String("c"), "blockType": store.String("hero"), "tone": store.String("bright")}))},
+	}
+	write := mongoBegin(t, backend, false)
+	for id, values := range incomplete {
+		values["title"] = store.String(id)
+		if _, err := write.Create(t.Context(), store.CreateRequest{Collection: collection, ID: id, Values: values}); err != nil {
+			mongoRollback(t, write)
+			t.Fatalf("store incomplete %s: %v", id, err)
+		}
+	}
+	mongoCommit(t, write)
+
+	read := mongoBegin(t, backend, true)
+	distinct, ok := read.(store.DistinctTransaction)
+	if !ok {
+		mongoRollback(t, read)
+		t.Fatal("MongoDB transaction does not implement DistinctTransaction")
+	}
+	title := mongoMustPath(t, "title")
+	for id, access := range map[string]query.Expression{
+		"row-without-required-leaf":   query.NotEqual(mongoMustPath(t, "rows.kind"), "blocked"),
+		"row-without-second-required": query.NotEqual(mongoMustPath(t, "rows.kind"), "blocked"),
+		"block-without-required":      query.NotEqual(mongoMustPath(t, "layout.hero.heading"), "blocked"),
+	} {
+		filter := query.Equal(title, id).Node()
+		node := access.Node()
+		if _, err := read.Find(t.Context(), store.Request{Collection: collection, ID: id}); err != nil {
+			mongoRollback(t, read)
+			t.Fatalf("decoded read of %s: %v", id, err)
+		}
+		page, err := read.List(t.Context(), store.Request{Collection: collection, Filter: &filter, Access: &node, Page: 1, Limit: 1})
+		if err != nil || *page.Total != 1 || len(page.Documents) != 1 {
+			mongoRollback(t, read)
+			t.Fatalf("list of %s = %#v, %v", id, page, err)
+		}
+		values, err := distinct.Distinct(t.Context(), store.DistinctRequest{
+			Collection: collection, Field: title, Filter: &filter, Access: &node, Page: 1, Limit: 10,
+		})
+		if err != nil || values.Total != 1 {
+			mongoRollback(t, read)
+			t.Fatalf("distinct of %s = %#v, %v", id, values, err)
+		}
+	}
+	mongoCommit(t, read)
+}
+
 func TestMongoDBDecoderFreeReadsExcludeCorruptUntouchedAuthoredFields(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoScalarCollection(false)
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -579,7 +637,7 @@ func TestMongoDBDecoderFreeReadsExcludeCorruptUntouchedAuthoredFields(t *testing
 		mongoRollback(t, read)
 		t.Fatal(err)
 	}
-	if page.Total != 1 || len(page.Documents) != 0 || page.Page != math.MaxInt {
+	if *page.Total != 1 || len(page.Documents) != 0 || page.Page != math.MaxInt {
 		mongoRollback(t, read)
 		t.Fatalf("decoder-free high page admitted untouched-field corruption: %#v", page)
 	}
@@ -625,7 +683,7 @@ func TestMongoDBDecoderFreeReadsExcludeCorruptUntouchedAuthoredFields(t *testing
 func TestMongoDBMutationFenceExcludesConcurrentWritersAndRollsBack(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoScalarCollection(false)
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 	seed := mongoBegin(t, backend, false)
@@ -699,7 +757,7 @@ func TestMongoDBRESTScalarCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(application.Handler(ridu.HandlerOptions{}))
@@ -749,7 +807,7 @@ func TestMongoDBCanonicalImportIDsRoundTripThroughTheEngine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	ids := []string{"00042", "Case-Sensitive/界", strings.Repeat("x", store.MaxDocumentIDBytes)}
@@ -771,7 +829,7 @@ func TestMongoDBCanonicalImportIDsRoundTripThroughTheEngine(t *testing.T) {
 func TestMongoDBReadsFailClosedOnOutOfBandSchemaDrift(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoScalarCollection(false)
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 	seed := mongoBegin(t, backend, false)
@@ -830,7 +888,7 @@ func TestMongoDBReadsFailClosedOnOutOfBandSchemaDrift(t *testing.T) {
 func TestMongoDBTransactionalScalarVerticalSlice(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoScalarCollection(true)
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -887,7 +945,7 @@ func TestMongoDBTransactionalScalarVerticalSlice(t *testing.T) {
 		mongoRollback(t, snapshot)
 		t.Fatal(err)
 	}
-	if page.Total != 2 || len(page.Documents) != 2 || page.Documents[0].ID != "post-a" || page.Documents[1].ID != "post-b" {
+	if *page.Total != 2 || len(page.Documents) != 2 || page.Documents[0].ID != "post-a" || page.Documents[1].ID != "post-b" {
 		mongoRollback(t, snapshot)
 		t.Fatalf("access-filtered stable page = %#v", page)
 	}
@@ -915,7 +973,7 @@ func TestMongoDBTransactionalScalarVerticalSlice(t *testing.T) {
 	overflowPage, err := snapshot.List(t.Context(), store.Request{
 		Collection: collection, Filter: &filter, Access: &access, Page: math.MaxInt, Limit: 10,
 	})
-	if err != nil || overflowPage.Total != 2 || len(overflowPage.Documents) != 0 || overflowPage.Page != math.MaxInt {
+	if err != nil || *overflowPage.Total != 2 || len(overflowPage.Documents) != 0 || overflowPage.Page != math.MaxInt {
 		mongoRollback(t, snapshot)
 		t.Fatalf("overflow-safe page = %#v, %v", overflowPage, err)
 	}
@@ -940,7 +998,7 @@ func TestMongoDBTransactionalScalarVerticalSlice(t *testing.T) {
 
 	mutation := mongoBegin(t, backend, false)
 	equalRank := query.Equal(rank, 2).Node()
-	updated, err := mutation.Update(t.Context(), store.UpdateRequest{
+	updated, err := conformance.LockedUpdate(t.Context(), mutation, store.UpdateRequest{
 		Request: store.Request{
 			Collection: collection, ID: "post-b", Filter: &equalRank, Access: &access,
 			Select: []query.Path{title},
@@ -1045,7 +1103,7 @@ func TestMongoDBTransactionalScalarVerticalSlice(t *testing.T) {
 func TestMongoDBReadSnapshotDoesNotObserveLaterCommit(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoScalarCollection(false)
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 	seed := mongoBegin(t, backend, false)
@@ -1071,7 +1129,7 @@ func TestMongoDBReadSnapshotDoesNotObserveLaterCommit(t *testing.T) {
 		t.Fatalf("snapshot mutation error = %v, want read-only rejection", err)
 	}
 	first, err := snapshot.List(t.Context(), store.Request{Collection: collection, Limit: 10})
-	if err != nil || first.Total != 1 {
+	if err != nil || *first.Total != 1 {
 		mongoRollback(t, snapshot)
 		t.Fatalf("initial snapshot page = %#v, %v", first, err)
 	}
@@ -1090,7 +1148,7 @@ func TestMongoDBReadSnapshotDoesNotObserveLaterCommit(t *testing.T) {
 		mongoRollback(t, snapshot)
 		t.Fatal(err)
 	}
-	if second.Total != 1 || len(second.Documents) != 1 || second.Documents[0].ID != "before" {
+	if *second.Total != 1 || len(second.Documents) != 1 || second.Documents[0].ID != "before" {
 		mongoRollback(t, snapshot)
 		t.Fatalf("later snapshot page = %#v, want original view", second)
 	}
@@ -1100,7 +1158,7 @@ func TestMongoDBReadSnapshotDoesNotObserveLaterCommit(t *testing.T) {
 func TestMongoDBCanceledCommitAbortsBeforeSendingCommit(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoScalarCollection(false)
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 	transaction := mongoBegin(t, backend, false)

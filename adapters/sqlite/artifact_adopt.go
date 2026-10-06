@@ -123,7 +123,9 @@ func (backend *Store) HasMigrationHistory(ctx context.Context) (bool, error) {
 func sqliteBlockingStep(file migrationartifact.File) string {
 	for _, phase := range file.Artifact.Phases {
 		for _, step := range phase.Steps {
-			if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepAssertSchema {
+			// Schema sync runs the same required-value audit, so the audit does
+			// not block adopting history that sync already brought forward.
+			if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepAuditRequiredValues && step.Kind != ridumigration.StepAssertSchema {
 				return string(step.Kind)
 			}
 		}

@@ -138,11 +138,19 @@ func mongoDBReplayRequiresMaintenance(replay []mongoDBArtifactReplayPlan) bool {
 	return false
 }
 
-// mongoDBMaintenanceStep reports a step that changes documents or other
-// semantic state rather than only building or asserting indexes. Only the
-// migration runner performs one; baseline adoption and replacement never do.
+// mongoDBMaintenanceStep reports a step that needs every application writer
+// stopped: one that changes documents or other semantic state, or a
+// required-value audit, which MongoDB cannot isolate from writers with locks.
+// Building or asserting indexes needs neither.
 func mongoDBMaintenanceStep(kind ridumigration.StepKind) bool {
 	return kind != ridumigration.StepMongoDBCreateIndex && kind != ridumigration.StepMongoDBAssertSchema
+}
+
+// mongoDBRunnerOnlyStep reports a maintenance step that development schema
+// synchronization never performs, so baseline adoption and replacement cannot
+// record it as applied. Synchronization runs the same required-value audit.
+func mongoDBRunnerOnlyStep(kind ridumigration.StepKind) bool {
+	return mongoDBMaintenanceStep(kind) && kind != ridumigration.StepAuditRequiredValues
 }
 
 func (lease *mongoMigrationLease) heartbeat(ctx context.Context, cancel context.CancelFunc, result chan<- error) {

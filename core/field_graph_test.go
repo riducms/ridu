@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"maps"
 	"math"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -55,11 +57,17 @@ func TestFieldGraphOccurrenceReuseAndBindings(t *testing.T) {
 			t.Fatalf("duplicate occurrence %s", o.ID)
 		}
 		ids[o.ID] = true
-		if o.Stored {
+		if o.Stored && o.ResourceKind == configresolver.BlockResource {
+			// A block definition's fields are recorded once, by definition.
+			byPath[o.Resource+"/"+o.ResolvedPath] = o
+		} else if o.Stored {
 			byPath[o.ResolvedPath] = o
 		}
 	}
-	paths := []string{"code", "primary.code", "secondary.code", "rows.code", "body.card.code", "translated.code", "details.code", "row_code", "tab_code"}
+	if _, placed := byPath["body.card.code"]; placed {
+		t.Fatal("a block definition's field was recorded at its placement")
+	}
+	paths := []string{"code", "primary.code", "secondary.code", "rows.code", "card/code", "translated.code", "details.code", "row_code", "tab_code"}
 	for _, path := range paths {
 		o, ok := byPath[path]
 		if !ok {
@@ -90,7 +98,7 @@ func TestFieldGraphOccurrenceReuseAndBindings(t *testing.T) {
 		if path == "row_code" || path == "tab_code" {
 			wantSibling = "kind"
 		}
-		if o.References[0].ResolvedPath != wantSibling || o.References[0].TargetID != byPath[wantSibling].ID {
+		if wanted := strings.TrimPrefix(wantSibling, "card/"); o.References[0].ResolvedPath != wanted || o.References[0].TargetID != byPath[wantSibling].ID {
 			t.Fatalf("sibling binding %s = %#v; want %s", path, o.References, wantSibling)
 		}
 		if ref := x.AdminPolicy().VisibleWhen.Reference(); ref.Scope() != field.SiblingScope || ref.Path() != "kind" {
@@ -108,8 +116,10 @@ func TestFieldGraphOccurrenceReuseAndBindings(t *testing.T) {
 	if a := byPath["rows.code"].Repeated; len(a) != 1 || a[0].Identity != "_key" || a[0].OccurrenceID != byPath["rows"].ID {
 		t.Fatalf("array identity axis %#v", a)
 	}
-	if a := byPath["body.card.code"].Repeated; len(a) != 1 || a[0].Identity != "_key" || a[0].Case != "card" {
-		t.Fatalf("block identity axis %#v", a)
+	// A definition's own scope has no repeated axis: each placement's rows
+	// are identified by the document walk that reaches them.
+	if card := byPath["card/code"]; len(card.Repeated) != 0 || card.LocaleOwner != card.ID {
+		t.Fatalf("block definition occurrence %#v", card)
 	}
 	if byPath["details"].Boundary != "named_tab" || byPath["details.code"].ScopeID != byPath["details"].ID {
 		t.Fatal("named tab did not establish an object scope")
@@ -377,7 +387,11 @@ func TestFieldGraphPluginEmbeddedSchemasRetainBehaviorAndIdentity(t *testing.T) 
 	}
 	var found bool
 	for _, o := range r.Occurrences() {
-		if o.ResolvedPath != "body.widgets.widget.card.code" {
+		if o.ResolvedPath == "body.widgets.widget.card.code" {
+			t.Fatal("an embedded block's field was recorded at its placement")
+		}
+		// The payload's block is a definition, recorded once.
+		if o.ResourceKind != configresolver.BlockResource || o.Resource != "card" || o.ResolvedPath != "code" {
 			continue
 		}
 		found = true
@@ -385,10 +399,10 @@ func TestFieldGraphPluginEmbeddedSchemasRetainBehaviorAndIdentity(t *testing.T) 
 		if !ok || d.BehaviorSummary().Validators != 1 {
 			t.Fatal("embedded behavior lost")
 		}
-		if len(o.Repeated) != 1 || o.Repeated[0].Identity != "uid" || o.Repeated[0].Case != "card" {
-			t.Fatalf("embedded identity=%#v", o.Repeated)
+		if v, ok := d.Private("embedded"); !ok || v.IsZero() {
+			t.Fatal("embedded private attachment lost")
 		}
-		if o.References[0].ResolvedPath != "body.widgets.widget.card.kind" || o.SchemaID == schema.StableID("") {
+		if o.References[0].ResolvedPath != "kind" || o.SchemaID != schema.StableID("block-card-code") {
 			t.Fatalf("embedded occurrence=%#v", o)
 		}
 	}
@@ -478,10 +492,10 @@ func TestFieldGraphLayoutRejectsUnsupportedAdminInsteadOfDiscardingIt(t *testing
 	}
 }
 
-// Resolution memory follows behavior, not placements: a registered block without
-// executable behavior or conditions adds no occurrences wherever it is used,
-// while a validated field inside a referenced block keeps its binding.
-func TestFieldGraphExpandsOnlyBlocksWithBehavior(t *testing.T) {
+// Resolution memory follows definitions, not placements: a registered block's
+// fields are recorded once, wherever and however often it is used, and a
+// validated field inside a referenced block keeps its binding.
+func TestFieldGraphRecordsEachBlockDefinitionOnce(t *testing.T) {
 	plain := field.Block{Slug: "plain", Fields: field.Fields{field.Text("heading"), field.Group("settings", field.Fields{field.Text("theme")})}}
 	checked := field.Block{Slug: "checked", Fields: field.Fields{field.Text("code").Validate(graphRule)}}
 	r, err := resolveTestFieldGraph(Config{Name: "Pruned", Blocks: []field.Block{plain, checked}, Collections: []Collection{{Slug: "pages", Fields: field.Fields{
@@ -492,18 +506,26 @@ func TestFieldGraphExpandsOnlyBlocksWithBehavior(t *testing.T) {
 	}
 	byPath := map[string]configresolver.Occurrence{}
 	for _, o := range r.Occurrences() {
-		byPath[o.ResolvedPath] = o
+		key := o.ResolvedPath
+		if o.ResourceKind == configresolver.BlockResource {
+			key = o.Resource + "/" + key
+		}
+		if _, duplicate := byPath[key]; duplicate {
+			t.Fatalf("%s recorded twice", key)
+		}
+		byPath[key] = o
 	}
-	for _, pruned := range []string{"layout.plain", "layout.plain.heading", "more.plain.settings.theme"} {
-		if _, exists := byPath[pruned]; exists {
-			t.Fatalf("behavior-free placement %q entered the graph", pruned)
+	want := []string{"layout", "more", "plain/heading", "plain/settings", "plain/settings.theme", "plain/blockName", "checked/code", "checked/blockName"}
+	if len(byPath) != len(want) {
+		t.Fatalf("occurrences = %v, want %v", slices.Sorted(maps.Keys(byPath)), want)
+	}
+	for _, key := range want {
+		if _, exists := byPath[key]; !exists {
+			t.Fatalf("missing %s in %v", key, slices.Sorted(maps.Keys(byPath)))
 		}
 	}
-	code, exists := byPath["layout.checked.code"]
-	if _, layout := byPath["layout"]; !exists || !layout {
-		t.Fatalf("occurrences = %#v", byPath)
-	}
-	if definition, bound := r.graph.Binding(code.ID); !bound || definition.BehaviorSummary().Validators != 1 || code.SchemaID == "" {
+	code := byPath["checked/code"]
+	if definition, bound := r.graph.Binding(code.ID); !bound || definition.BehaviorSummary().Validators != 1 || code.SchemaID != "block-checked-code" {
 		t.Fatalf("validated block field lost its binding: %#v", code)
 	}
 }

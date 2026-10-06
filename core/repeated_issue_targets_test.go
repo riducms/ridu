@@ -25,8 +25,8 @@ func TestAggregateIssueTargetsAgreeAcrossLocalAndREST(t *testing.T) {
 		return store.Object(store.Values{"_key": store.String(key), "heading": store.String(heading), "links": store.List(links...)})
 	}
 	link := store.Object(store.Values{"_key": store.String("link-b"), "url": store.String("invalid")})
-	block := store.Object(store.Values{"_key": store.String("block-a"), "blockType": store.String("card"), "heading": store.String("invalid"), "links": store.List(link)})
-	body := richtextblocks.Document(richtextblocks.Block("card", "embed-a", store.Values{"links": store.List(link)}))
+	block := store.Object(store.Values{"_key": store.String("block-a"), "blockType": store.String(issuetargets.CardSlug), "heading": store.String("invalid"), "links": store.List(link)})
+	body := richtextblocks.Document(richtextblocks.Block(issuetargets.EmbeddedCardSlug, "embed-a", store.Values{"links": store.List(link)}))
 	for _, test := range []struct {
 		name, field, locale string
 		value               store.Value
@@ -34,7 +34,7 @@ func TestAggregateIssueTargetsAgreeAcrossLocalAndREST(t *testing.T) {
 	}{
 		{"array child", "sections", "en", store.List(row("section-a", "invalid")), []string{"sections.0.heading"}, []string{"section-a"}},
 		{"nested array child", "sections", "en", store.List(row("section-a", "ok", link)), []string{"sections.0.links.0.url"}, []string{"section-a", "link-b"}},
-		{"block child and nested array", "content", "en", store.List(block), []string{"content.0.heading", "content.0.links.0.url"}, []string{"block-a", "card"}},
+		{"block child and nested array", "content", "en", store.List(block), []string{"content.0.heading", "content.0.links.0.url"}, []string{"block-a", issuetargets.CardSlug}},
 		{"localized array", "localizedSections", "fr", store.List(row("section-a", "ok", link)), []string{"localizedSections.0.links.0.url"}, []string{"section-a", "link-b"}},
 		{"embedded array", "body", "en", body, []string{"body.root.children.0.fields.links.0.url"}, []string{"embed-a", "link-b"}},
 		{"localized embedded array", "localizedBody", "fr", body, []string{"localizedBody.root.children.0.fields.links.0.url"}, []string{"embed-a", "link-b"}},

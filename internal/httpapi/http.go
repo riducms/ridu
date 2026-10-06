@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/riducms/ridu/internal/jsonlimit"
@@ -109,10 +110,14 @@ type LocaleOptions struct {
 type Config struct {
 	AdminLoad func(context.Context, AdminLoaderRequest) (json.RawMessage, error)
 	Manifest  schema.Manifest
-	// Snapshot is the engine's resolved schema, shared read-only so requests
-	// reuse its placement views. Without one, New reads a copy of Manifest.
-	Snapshot                     schema.Snapshot
-	ManifestForRequest           func(context.Context, *AuthIdentity) (schema.Snapshot, error)
+	// Snapshot is the engine's resolved schema, the same content as Manifest,
+	// shared read-only so requests reuse its block definition views and the
+	// admin presents it without copying. Without one, New reads a copy of Manifest.
+	Snapshot schema.Snapshot
+	// LocalizationForRequest returns the content localization presented to one
+	// identity, or nil when it sees the manifest's settings unchanged. It only
+	// narrows admin presentation; it never weakens API validation or access.
+	LocalizationForRequest       func(context.Context, *AuthIdentity) (*schema.LocalizationSettings, error)
 	Engine                       *operationengine.Engine
 	AdminAssets                  fs.FS
 	MaxBodyBytes                 int64
@@ -264,7 +269,14 @@ type RequestErrorEvent struct {
 }
 
 type API struct {
-	config           Config
+	config Config
+	// manifest is the shared, read-only presentation manifest.
+	manifest         schema.Snapshot
+	manifestEncoding struct {
+		once  sync.Once
+		value encodedAdminManifest
+		err   error
+	}
 	collections      map[string]schema.Collection
 	globals          map[string]schema.Global
 	pluginEndpoints  map[string]PluginEndpoint
@@ -317,6 +329,7 @@ func New(config Config) http.Handler {
 	if snapshot.Version == 0 {
 		snapshot = config.Manifest.Snapshot()
 	}
+	api.manifest = snapshot
 	for _, collection := range snapshot.Collections {
 		api.collections[string(collection.Slug)] = collection
 	}
@@ -424,14 +437,10 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 			api.methodNotAllowed(writer, requestID, http.MethodGet)
 			return
 		}
-		snapshot := api.config.Manifest.Snapshot()
-		if api.config.ManifestForRequest != nil {
-			var err error
-			snapshot, err = api.config.ManifestForRequest(request.Context(), api.optionalIdentity(request))
-			if err != nil {
-				api.writeError(writer, requestID, err)
-				return
-			}
+		snapshot, _, err := api.presentedManifest(request.Context(), api.optionalIdentity(request))
+		if err != nil {
+			api.writeError(writer, requestID, err)
+			return
 		}
 		writeJSON(writer, http.StatusOK, protocol.SchemaEnvelope{Schema: snapshot})
 		return
@@ -856,6 +865,16 @@ func accessCapabilitiesJSON(capabilities operationengine.AccessCapabilities) pro
 	for path, field := range capabilities.Fields {
 		fields[path] = protocol.FieldCapabilities{Read: field.Read, Create: field.Create, Update: field.Update}
 	}
+	var blockFields map[string]map[string]protocol.FieldCapabilities
+	for slug, definition := range capabilities.BlockFields {
+		if blockFields == nil {
+			blockFields = make(map[string]map[string]protocol.FieldCapabilities, len(capabilities.BlockFields))
+		}
+		blockFields[slug] = make(map[string]protocol.FieldCapabilities, len(definition))
+		for path, field := range definition {
+			blockFields[slug][path] = protocol.FieldCapabilities{Read: field.Read, Create: field.Create, Update: field.Update}
+		}
+	}
 	operations := capabilities.Operations
 	return protocol.AccessCapabilitiesEnvelope{
 		Operations: protocol.OperationCapabilities{
@@ -866,7 +885,8 @@ func accessCapabilitiesJSON(capabilities operationengine.AccessCapabilities) pro
 			RestoreDeleted: operations.RestoreDeleted, DeletePermanent: operations.DeletePermanent,
 			SelectAll: operations.SelectAll,
 		},
-		Fields: fields,
+		Fields:      fields,
+		BlockFields: blockFields,
 	}
 }
 
@@ -1547,7 +1567,7 @@ func (api *API) emptyCollectionTrash(writer http.ResponseWriter, request *http.R
 		return
 	}
 	result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
-		Operation: operation.Read, Collection: string(collection.Slug), Page: 1, Limit: 100,
+		Operation: operation.Read, Collection: string(collection.Slug), Page: 1, Limit: 100, SkipTotal: true,
 		Actor: actor, ActorCollection: actorCollection, TrashOnly: true, Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
 		DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales,
 	})
@@ -1555,11 +1575,11 @@ func (api *API) emptyCollectionTrash(writer http.ResponseWriter, request *http.R
 		api.writeError(writer, requestID, err)
 		return
 	}
-	if result.Page.Total > 100 {
+	if result.Page.HasNextPage {
 		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "empty trash supports at most 100 documents per atomic operation"})
 		return
 	}
-	if result.Page.Total == 0 {
+	if len(result.Page.Documents) == 0 {
 		writeJSON(writer, http.StatusOK, protocol.BulkEnvelope[json.RawMessage]{Docs: []json.RawMessage{}})
 		return
 	}
@@ -3240,14 +3260,19 @@ type listQuery struct {
 	disableFallback bool
 	allLocales      bool
 	includeAccess   bool
+	// skipTotal is set by pagination=false.
+	skipTotal bool
 }
 
-func decodeListQuery(values url.Values, collection schema.Collection, allowAccess bool) (listQuery, error) {
+// decodeListQuery decodes a collection list or count query. pageRead admits
+// the parameters that only shape a returned page, include-access and
+// pagination; the count endpoint rejects them as unknown.
+func decodeListQuery(values url.Values, collection schema.Collection, pageRead bool) (listQuery, error) {
 	for key := range values {
 		if strings.HasPrefix(key, "where[") {
 			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "bracket-style where[...] parameters are not supported; send the filter as one URL-encoded JSON where parameter, for example where=" + bracketWhereExample(values)}
 		}
-		if key != "page" && key != "limit" && key != "depth" && key != "where" && key != "select" && key != "populate" && key != "sort" && key != "trash" && key != "locale" && key != "fallback-locale" && key != "fallbackLocale" && key != "draft" && (key != "include-access" || !allowAccess) {
+		if key != "page" && key != "limit" && key != "depth" && key != "where" && key != "select" && key != "populate" && key != "sort" && key != "trash" && key != "locale" && key != "fallback-locale" && key != "fallbackLocale" && key != "draft" && (key != "include-access" && key != "pagination" || !pageRead) {
 			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("unknown query parameter %q", key)}
 		}
 	}
@@ -3255,13 +3280,13 @@ func decodeListQuery(values url.Values, collection schema.Collection, allowAcces
 	if err != nil {
 		return listQuery{}, err
 	}
-	includeAccessValues := values["include-access"]
-	if len(includeAccessValues) > 1 {
-		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "include-access query parameter must be provided once"}
+	includeAccess, err := decodeBooleanQuery(values, "include-access", false)
+	if err != nil {
+		return listQuery{}, err
 	}
-	includeAccess := len(includeAccessValues) == 1 && includeAccessValues[0] == "true"
-	if len(includeAccessValues) == 1 && includeAccessValues[0] != "true" && includeAccessValues[0] != "false" {
-		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "include-access query parameter must be true or false"}
+	pagination, err := decodeBooleanQuery(values, "pagination", true)
+	if err != nil {
+		return listQuery{}, err
 	}
 	trashOnly := values.Get("trash") == "true"
 	if encoded := values.Get("trash"); encoded != "" && encoded != "true" && encoded != "false" {
@@ -3285,7 +3310,7 @@ func decodeListQuery(values url.Values, collection schema.Collection, allowAcces
 			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid where query", Cause: err}
 		}
 	}
-	sorts, err := decodeSort(values["sort"], collection)
+	sorts, err := decodeSort(values["sort"])
 	if err != nil {
 		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid sort query", Cause: err}
 	}
@@ -3311,8 +3336,24 @@ func decodeListQuery(values url.Values, collection schema.Collection, allowAcces
 	if err != nil {
 		return listQuery{}, err
 	}
-	return listQuery{draft: draft, page: page, limit: limit, filter: filter, sort: sorts, selectFields: selection.stored, outputFields: selection.output, populate: population, trashOnly: trashOnly, includeAccess: includeAccess,
+	return listQuery{draft: draft, page: page, limit: limit, filter: filter, sort: sorts, selectFields: selection.stored, outputFields: selection.output, populate: population, trashOnly: trashOnly, includeAccess: includeAccess, skipTotal: !pagination,
 		locale: localeOptions.locale, fallbackLocales: localeOptions.fallbackLocales, disableFallback: localeOptions.disableFallback, allLocales: localeOptions.allLocales}, nil
+}
+
+// decodeBooleanQuery reads an optional query flag that may appear once as
+// true or false.
+func decodeBooleanQuery(values url.Values, name string, fallback bool) (bool, error) {
+	encoded, present := values[name]
+	if !present {
+		return fallback, nil
+	}
+	if len(encoded) != 1 {
+		return false, &operationengine.Error{Code: "bad_query", Status: 400, Message: name + " query parameter must be provided once"}
+	}
+	if encoded[0] != "true" && encoded[0] != "false" {
+		return false, &operationengine.Error{Code: "bad_query", Status: 400, Message: name + " query parameter must be true or false"}
+	}
+	return encoded[0] == "true", nil
 }
 
 type localeQuery struct {
@@ -3380,10 +3421,10 @@ func decodeDepthPopulation(encoded string, collection schema.Collection) ([]quer
 	if err != nil || depth < 0 || depth > populationwalk.MaxDepth {
 		return nil, fmt.Errorf("depth must be an integer between 0 and %d", populationwalk.MaxDepth)
 	}
-	fields := populationwalk.ReferenceFields(collection.Fields)
-	if len(fields) > populationwalk.MaxExplicitPaths {
+	if populationwalk.ReferenceFieldCount(collection.Fields) > populationwalk.MaxExplicitPaths {
 		return nil, fmt.Errorf("depth population expands more than %d root relationship fields", populationwalk.MaxExplicitPaths)
 	}
+	fields := populationwalk.ReferenceFields(collection.Fields)
 	result := make([]query.Population, len(fields))
 	for index, field := range fields {
 		result[index] = query.Population{Path: field.Path, Depth: depth}
@@ -3391,7 +3432,9 @@ func decodeDepthPopulation(encoded string, collection schema.Collection) ([]quer
 	return result, nil
 }
 
-func decodeSort(values []string, collection schema.Collection) ([]query.Sort, error) {
+// decodeSort parses sort terms. Whether a path can be sorted is the operation
+// engine's decision, shared by every transport.
+func decodeSort(values []string) ([]query.Sort, error) {
 	if len(values) > maxSortFields {
 		return nil, fmt.Errorf("sort supports at most %d fields", maxSortFields)
 	}
@@ -3410,12 +3453,6 @@ func decodeSort(values []string, collection schema.Collection) ([]query.Sort, er
 		path, err := query.ParsePath(name)
 		if err != nil {
 			return nil, err
-		}
-		if name != "id" && name != "createdAt" && name != "updatedAt" {
-			field, many, exists := schemaFieldAtPath(collection, path)
-			if !exists || many || field.Type == schema.FieldTypeGroup || field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks || field.Type == schema.FieldTypeJSON || field.Plugin != nil {
-				return nil, fmt.Errorf("sort field %q is not defined or sortable", name)
-			}
 		}
 		result[index], err = query.NewSort(path, direction)
 		if err != nil {

@@ -26,8 +26,11 @@ export interface ScalarWhere<Value> {
 
 export type TimestampWhere = Omit<ScalarWhere<string>, "contains" | "like">;
 
-export interface MultiSelectWhere<Value extends string> {
-	contains?: Value;
+/** Item membership for lists, multi-selects, reference lists and polymorphic relationships; wrap `in` in `not` to exclude. */
+export interface MembershipWhere<Value> {
+	in?: readonly Value[];
+	equals?: null;
+	notEquals?: null;
 	exists?: boolean;
 }
 
@@ -35,62 +38,80 @@ export interface ExistsWhere {
 	exists?: boolean;
 }
 
-export type PostsLayoutQuoteInput = {
+/** Places a nested definition's relative dotted paths under the path prefix of one placement. */
+export type RiduPrefixedPaths<Prefix extends string, Paths> = {
+	[Path in keyof Paths as `${Prefix}${Path & string}`]: Paths[Path];
+};
+
+export type QuoteInput = {
 	"source"?: ID | null;
 	"blockName"?: string | null;
 } & { blockType: "quote"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
-export type PostsLayoutQuoteUpdate = {
+export type QuoteUpdate = {
 	"source"?: ID | null;
 	"blockName"?: string | null;
 } & { blockType: "quote"; _key: string };
 
-export type PostsLayoutQuote = {
+export type Quote = {
 	"source"?: ID | Authors | null;
 	"blockName"?: string | null;
 } & { blockType: "quote"; _key: string };
 
-export type PostsLayoutQuoteDraftInput = {
+export type QuoteDraftInput = {
 	"source"?: ID | null;
 	"blockName"?: string | null;
 } & { blockType: "quote"; _key?: string };
 
-export type PostsLayoutQuoteDraftUpdate = {
+export type QuoteDraftUpdate = {
 	"source"?: ID | null;
 	"blockName"?: string | null;
 } & { blockType: "quote"; _key: string };
 
-export type PostsLayoutQuoteAllLocales = {
+export type QuoteAllLocales = {
 	"source"?: ID | AuthorsAllLocales | null;
 	"blockName"?: string | null;
 } & { blockType: "quote"; _key: string };
 
-export type PostsLayoutQuoteAllLocalesValue = {
+export type QuoteAllLocalesValue = {
 	"source"?: ID | AuthorsAllLocales | null;
 	"blockName"?: string | null;
 } & { blockType: "quote"; _key: string };
 
-export type PostsLayoutBlockInput = PostsLayoutQuoteInput;
+export type PostsLayoutBlockInput = QuoteInput;
 export type PostsLayoutInput = Array<PostsLayoutBlockInput>;
 
-export type PostsLayoutBlockUpdate = PostsLayoutQuoteUpdate | PostsLayoutQuoteInput;
+export type PostsLayoutBlockUpdate = QuoteUpdate | QuoteInput;
 export type PostsLayoutUpdate = Array<PostsLayoutBlockUpdate>;
 
-export type PostsLayoutBlock = PostsLayoutQuote;
+export type PostsLayoutBlock = Quote;
 export type PostsLayout = Array<PostsLayoutBlock>;
 
-export type PostsLayoutBlockDraftInput = PostsLayoutQuoteDraftInput;
+export type PostsLayoutBlockDraftInput = QuoteDraftInput;
 export type PostsLayoutDraftInput = Array<PostsLayoutBlockDraftInput>;
 
-export type PostsLayoutBlockDraftUpdate = PostsLayoutQuoteDraftUpdate | PostsLayoutQuoteDraftInput;
+export type PostsLayoutBlockDraftUpdate = QuoteDraftUpdate | QuoteDraftInput;
 export type PostsLayoutDraftUpdate = Array<PostsLayoutBlockDraftUpdate>;
 
-export type PostsLayoutBlockAllLocales = PostsLayoutQuoteAllLocales;
+export type PostsLayoutBlockAllLocales = QuoteAllLocales;
 export type PostsLayoutAllLocales = Array<PostsLayoutBlockAllLocales>;
 
-export type PostsLayoutBlockAllLocalesValue = PostsLayoutQuoteAllLocalesValue;
+export type PostsLayoutBlockAllLocalesValue = QuoteAllLocalesValue;
 export type PostsLayoutAllLocalesValue = Array<PostsLayoutBlockAllLocalesValue>;
+
+/** Filters relative to one Quote block row; a resource filter prefixes them with the row's path. */
+export interface QuoteWhere {
+	"source"?: ScalarWhere<ID>;
+	"blockName"?: ScalarWhere<string>;
+}
+
+/** Population paths relative to one Quote block row. */
+export interface QuotePopulate {
+	"source"?: boolean | AuthorsPopulationSelect | { depth?: number; select?: AuthorsPopulationSelect };
+}
+
+export type QuoteValidationPath = "source" | "blockName";
 
 export interface Authors {
 	id: ID;
@@ -167,10 +188,6 @@ export interface AuthorsPopulationSelect {
 
 export type AuthorsPopulate = Record<string, never>;
 
-export type AuthorsPopulateOutput = Record<string, never>;
-
-export type AuthorsAllLocalesPopulateOutput = Record<string, never>;
-
 export type AuthorsValidationPath = "name" | `name.${Locale}` | "bio";
 
 export interface History {
@@ -230,10 +247,6 @@ export interface HistoryPopulationSelect {
 }
 
 export type HistoryPopulate = Record<string, never>;
-
-export type HistoryPopulateOutput = Record<string, never>;
-
-export type HistoryAllLocalesPopulateOutput = Record<string, never>;
 
 export type HistoryValidationPath = "event";
 
@@ -372,7 +385,8 @@ export interface PostsDraftUpdate {
 	"subject"?: { relationTo: "authors"; id: ID } | { relationTo: "posts"; id: ID } | null;
 }
 
-export interface PostsWhere {
+export interface PostsWhere extends
+	RiduPrefixedPaths<"layout.quote.", QuoteWhere> {
 	and?: readonly PostsWhere[];
 	or?: readonly PostsWhere[];
 	not?: PostsWhere;
@@ -389,11 +403,9 @@ export interface PostsWhere {
 	"sections"?: ExistsWhere;
 	"sections.reviewer"?: ScalarWhere<ID>;
 	"layout"?: ExistsWhere;
-	"layout.quote.source"?: ScalarWhere<ID>;
-	"layout.quote.blockName"?: ScalarWhere<string>;
 	"localeNamed"?: ExistsWhere;
 	"localeNamed.en"?: ScalarWhere<ID>;
-	"subject"?: ScalarWhere<ID>;
+	"subject"?: MembershipWhere<{ relationTo: "authors"; id: ID } | { relationTo: "posts"; id: ID }>;
 }
 
 export interface PostsSelect {
@@ -428,34 +440,16 @@ export interface PostsPopulationSelect {
 	"subject"?: boolean;
 }
 
-export interface PostsPopulate {
+export interface PostsPopulate extends
+	RiduPrefixedPaths<"layout.quote.", QuotePopulate> {
 	"author"?: boolean | AuthorsPopulationSelect | { depth?: number; select?: AuthorsPopulationSelect };
 	"seo.reviewer"?: boolean | AuthorsPopulationSelect | { depth?: number; select?: AuthorsPopulationSelect };
 	"sections.reviewer"?: boolean | AuthorsPopulationSelect | { depth?: number; select?: AuthorsPopulationSelect };
-	"layout.quote.source"?: boolean | AuthorsPopulationSelect | { depth?: number; select?: AuthorsPopulationSelect };
 	"localeNamed.en"?: boolean | AuthorsPopulationSelect | { depth?: number; select?: AuthorsPopulationSelect };
 	"subject"?: boolean | AuthorsPopulationSelect | PostsPopulationSelect | { depth?: number; select?: AuthorsPopulationSelect | PostsPopulationSelect };
 }
 
-export interface PostsPopulateOutput {
-	"author": ID | Authors | null;
-	"seo.reviewer": ID | Authors | null;
-	"sections.reviewer": ID | Authors | null;
-	"layout.quote.source": ID | Authors | null;
-	"localeNamed.en": ID | Authors | null;
-	"subject": { relationTo: "authors"; id: ID | Authors } | { relationTo: "posts"; id: ID | Posts } | null;
-}
-
-export interface PostsAllLocalesPopulateOutput {
-	"author": RiduLocalizedValues<ID | AuthorsAllLocales | null>;
-	"seo.reviewer": ID | AuthorsAllLocales | null;
-	"sections.reviewer": ID | AuthorsAllLocales | null;
-	"layout.quote.source": ID | AuthorsAllLocales | null;
-	"localeNamed.en": ID | AuthorsAllLocales | null;
-	"subject": { relationTo: "authors"; id: ID | AuthorsAllLocales } | { relationTo: "posts"; id: ID | PostsAllLocales } | null;
-}
-
-export type PostsValidationPath = "title" | `title.${Locale}` | "status" | "author" | `author.${Locale}` | "seo" | "seo.description" | "seo.reviewer" | "sections" | `sections.${number}` | `sections.${number}._key` | `sections.${number}.reviewer` | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.source` | `layout.${number}.blockName` | "localeNamed" | "localeNamed.en" | "subject";
+export type PostsValidationPath = "title" | `title.${Locale}` | "status" | "author" | `author.${Locale}` | "seo" | "seo.description" | "seo.reviewer" | "sections" | `sections.${number}` | `sections.${number}._key` | `sections.${number}.reviewer` | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.${QuoteValidationPath}` | "localeNamed" | "localeNamed.en" | "subject";
 
 export interface RiduConfig {
 	locale: Locale;
@@ -474,8 +468,6 @@ export interface RiduConfig {
 			where: AuthorsWhere;
 			select: AuthorsSelect;
 			populate: AuthorsPopulate;
-			populateOutput: AuthorsPopulateOutput;
-			allPopulateOutput: AuthorsAllLocalesPopulateOutput;
 			validationPath: AuthorsValidationPath;
 		};
 		"history": {
@@ -492,8 +484,6 @@ export interface RiduConfig {
 			where: HistoryWhere;
 			select: HistorySelect;
 			populate: HistoryPopulate;
-			populateOutput: HistoryPopulateOutput;
-			allPopulateOutput: HistoryAllLocalesPopulateOutput;
 			validationPath: HistoryValidationPath;
 		};
 		"posts": {
@@ -512,8 +502,6 @@ export interface RiduConfig {
 			where: PostsWhere;
 			select: PostsSelect;
 			populate: PostsPopulate;
-			populateOutput: PostsPopulateOutput;
-			allPopulateOutput: PostsAllLocalesPopulateOutput;
 			validationPath: PostsValidationPath;
 		};
 	};

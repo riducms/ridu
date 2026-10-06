@@ -9,6 +9,9 @@ import { createAdminI18n } from "@riducms/translations";
 
 import { FormController } from "@admin/core/forms/form-controller.svelte";
 import { createEmbeddedSchemaDraft } from "@admin/core/forms/embedded-schema-draft.svelte";
+
+import { bindBlockField } from "../block-manifest";
+import { card } from "./draft-fixture";
 const leaf: SchemaField = {
 	id: "value",
 	name: "value",
@@ -243,8 +246,8 @@ describe("advanced plugin occurrence bindings", () => {
 	});
 });
 
-const title: SchemaField = { ...leaf, id: "title", name: "title", path: "body.title" };
-const embedded: SchemaField = {
+const title: SchemaField = { ...leaf, id: "block-card-title", name: "title", path: "title" };
+const embedded = bindBlockField([card([title])], {
 	...leaf,
 	id: "body",
 	name: "body",
@@ -265,15 +268,13 @@ const embedded: SchemaField = {
 						payload: "content",
 						discriminator: "schema",
 						identity: "uid",
-						types: [
-							{ slug: "card", labels: { singular: "Card", plural: "Cards" }, fields: [title] },
-						],
+						blockReferences: ["card"],
 					},
 				],
 			},
 		],
 	},
-};
+} satisfies SchemaField);
 function embeddedFixture() {
 	const form = new FormController();
 	form.reset(

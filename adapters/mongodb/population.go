@@ -11,16 +11,17 @@ import (
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const maxMongoPopulationLookupIDs = 256
 
-func validateMongoPopulationEnvelope(request store.Request) error {
-	return validateMongoPopulationPlan(request, true)
+// validateMongoPopulationEnvelope checks a request's population plan; validate
+// checks each target collection's contract.
+func validateMongoPopulationEnvelope(request store.Request, validate func(schema.Collection) error) error {
+	return validateMongoPopulationPlan(request, true, validate)
 }
 
-func validateMongoPopulationPlan(request store.Request, enforceExplicitLimit bool) error {
+func validateMongoPopulationPlan(request store.Request, enforceExplicitLimit bool, validate func(schema.Collection) error) error {
 	if len(request.Populate) == 0 {
 		return nil
 	}
@@ -61,7 +62,7 @@ func validateMongoPopulationPlan(request store.Request, enforceExplicitLimit boo
 				if !exists || target.ID != targetReference.CollectionID || target.Slug != targetReference.CollectionSlug {
 					return fmt.Errorf("MongoDB relationship target %q is unavailable", targetReference.CollectionID)
 				}
-				if err := validateCollectionEnvelope(target); err != nil {
+				if err := validate(target); err != nil {
 					return fmt.Errorf("MongoDB relationship target %q: %w", target.ID, err)
 				}
 				if level+1 >= depth {
@@ -96,7 +97,7 @@ func (transaction *documentTransaction) populatePlan(
 	if len(request.Populate) == 0 {
 		return documents, nil
 	}
-	if err := validateMongoPopulationPlan(request, enforceExplicitLimit); err != nil {
+	if err := validateMongoPopulationPlan(request, enforceExplicitLimit, transaction.store.validateCollectionEnvelope); err != nil {
 		return nil, err
 	}
 	populationBudget := request.PopulationBudget
@@ -130,7 +131,7 @@ func (transaction *documentTransaction) populatePlan(
 			if !exists || target.ID != relationshipTarget.CollectionID || target.Slug != relationshipTarget.CollectionSlug {
 				return nil, fmt.Errorf("MongoDB relationship target %q is unavailable", relationshipTarget.CollectionID)
 			}
-			if err := validateCollectionEnvelope(target); err != nil {
+			if err := transaction.store.validateCollectionEnvelope(target); err != nil {
 				return nil, fmt.Errorf("MongoDB relationship target %q: %w", target.ID, err)
 			}
 			if err := transaction.store.requireVerifiedIndexes(target); err != nil {
@@ -167,7 +168,7 @@ func (transaction *documentTransaction) populatePlan(
 					mongoTypeGuard(mongoIDPath, "string"),
 					{{Key: mongoIDPath, Value: bson.D{{Key: "$in", Value: batch}}}},
 				})
-				cursor, err := transaction.readCollection(targetRequest).Find(ctx, predicate, options.Find().SetSort(bson.D{{Key: mongoIDPath, Value: int32(1)}}))
+				cursor, err := mongoFind(ctx, transaction.readCollection(targetRequest), predicate, mongoFindCommand{sort: bson.D{{Key: mongoIDPath, Value: int32(1)}}})
 				if err != nil {
 					return nil, translateMongoError(ctx, err)
 				}

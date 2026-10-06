@@ -120,7 +120,7 @@ func TestAdminLoaderReadsPreservePredicatesRedactionHooksAndAudit(t *testing.T) 
 		if _, exists := document.Values["secret"]; exists {
 			t.Fatal("read facade leaked redacted field")
 		}
-		return data{ID: document.ID, Count: page.Total}, nil
+		return data{ID: document.ID, Count: *page.Total}, nil
 	})}
 	app, err := New(config, teststore.New())
 	if err != nil {

@@ -314,11 +314,6 @@ func TestMongoCollectionDecodeRejectsSchemaAndMetadataDrift(t *testing.T) {
 			want: "does not match field type",
 		},
 		{
-			name:     "missing required field",
-			document: store.Document{ID: "post-missing", CreatedAt: now, UpdatedAt: now, Values: store.Values{"rank": store.Number(1)}},
-			want:     "missing required field",
-		},
-		{
 			name: "version metadata in unversioned collection",
 			document: store.Document{ID: "post-version", CreatedAt: now, UpdatedAt: now, Revision: 1, Values: store.Values{
 				"title": store.String("unsafe"), "rank": store.Number(1),
@@ -340,6 +335,24 @@ func TestMongoCollectionDecodeRejectsSchemaAndMetadataDrift(t *testing.T) {
 				t.Fatalf("collection decode error = %v, want containing %q", err, test.want)
 			}
 		})
+	}
+	// Requiredness is an operation rule: a draft, or a document stored before
+	// a field became required, decodes without the value.
+	for name, values := range map[string]store.Values{
+		"absent": {"rank": store.Number(1)},
+		"null":   {"title": store.Null(), "rank": store.Number(1)},
+	} {
+		encoded, err := encodeDocument(store.Document{ID: "post-" + name, CreatedAt: now, UpdatedAt: now, Values: values})
+		if err != nil {
+			t.Fatal(err)
+		}
+		bytes, err := bson.Marshal(encoded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := decodeCollectionDocument(bson.Raw(bytes), collection); err != nil {
+			t.Fatalf("%s required value failed decoding: %v", name, err)
+		}
 	}
 }
 
@@ -374,7 +387,7 @@ func TestMongoCollectionCodecPreservesNestedGroupObjects(t *testing.T) {
 }
 
 func TestMongoCollectionCodecPreservesAndStrictlyValidatesRepeatedRoots(t *testing.T) {
-	collection := mongoRepeatedCollection()
+	collection := mongoRepeatedCollection(t)
 	now := time.Date(2026, time.August, 30, 12, 34, 56, 789, time.UTC)
 	valid := store.Document{
 		ID: "repeated", CreatedAt: now, UpdatedAt: now,
@@ -411,9 +424,6 @@ func TestMongoCollectionCodecPreservesAndStrictlyValidatesRepeatedRoots(t *testi
 		{name: "array wrong child type", field: "rows", value: store.List(store.Object(store.Values{
 			"kind": store.Number(1), "label": store.String("visible"),
 		})), want: "does not match field type"},
-		{name: "array missing required child", field: "rows", value: store.List(store.Object(store.Values{
-			"kind": store.String("primary"),
-		})), want: "missing required field"},
 		{name: "array invalid select option", field: "rows", value: store.List(store.Object(store.Values{
 			"kind": store.String("primary"), "label": store.String("visible"), "state": store.String("unknown"),
 		})), want: "unknown select option"},

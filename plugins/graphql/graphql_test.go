@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -90,6 +91,26 @@ func TestGraphQLCollectionCRUDFilteringPaginationAndGlobals(t *testing.T) {
 	count := objectAt(t, listed, "data", "countPosts")
 	if count["totalDocs"] != float64(1) {
 		t.Fatalf("count = %#v", count)
+	}
+	uncounted := graphQL(t, server.URL, `query {
+  first: Posts(sort: "title", limit: 1, pagination: false) { docs { title } totalDocs totalPages hasNextPage hasPrevPage nextPage prevPage pagingCounter }
+  last: Posts(sort: "title", page: 2, limit: 1, pagination: false) { docs { title } totalDocs totalPages hasNextPage hasPrevPage nextPage prevPage pagingCounter }
+  counted: Posts(sort: "title", limit: 1, pagination: true) { totalDocs totalPages hasNextPage nextPage }
+}`)
+	for name, want := range map[string]map[string]interface{}{
+		"first": {
+			"docs": []interface{}{map[string]interface{}{"title": "First"}}, "totalDocs": nil, "totalPages": nil,
+			"hasNextPage": true, "hasPrevPage": false, "nextPage": float64(2), "prevPage": nil, "pagingCounter": float64(1),
+		},
+		"last": {
+			"docs": []interface{}{map[string]interface{}{"title": "Second"}}, "totalDocs": nil, "totalPages": nil,
+			"hasNextPage": false, "hasPrevPage": true, "nextPage": nil, "prevPage": float64(1), "pagingCounter": float64(2),
+		},
+		"counted": {"totalDocs": float64(2), "totalPages": float64(2), "hasNextPage": true, "nextPage": float64(2)},
+	} {
+		if got := objectAt(t, uncounted, "data", name); !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s page = %#v, want %#v", name, got, want)
+		}
 	}
 
 	updated := graphQL(t, server.URL, `mutation($id: ID!) {
@@ -310,14 +331,14 @@ func TestGraphQLBlocksExposeTypedUnions(t *testing.T) {
   Post(id: $id) {
     layout {
       __typename
-      ... on PostLayoutBlockHero { blockType heading }
-      ... on PostLayoutBlockQuote { blockType quote }
+      ... on HeroBlock { blockType heading }
+      ... on QuoteBlock { blockType quote }
     }
   }
 }`, map[string]interface{}{"id": id})
 	post := objectAt(t, result, "data", "Post")
 	blocks, _ := post["layout"].([]interface{})
-	if len(blocks) != 2 || blocks[0].(map[string]interface{})["__typename"] != "PostLayoutBlockHero" || blocks[1].(map[string]interface{})["__typename"] != "PostLayoutBlockQuote" {
+	if len(blocks) != 2 || blocks[0].(map[string]interface{})["__typename"] != "HeroBlock" || blocks[1].(map[string]interface{})["__typename"] != "QuoteBlock" {
 		t.Fatalf("blocks = %#v", blocks)
 	}
 }
@@ -356,11 +377,88 @@ func TestGraphQLNestedFieldsAndSelectEnumsRemainTyped(t *testing.T) {
 		t.Fatalf("nested page = %#v", page)
 	}
 	filtered := graphQL(t, server.URL, `query {
-  Pages(where: {seo__tone: {equals: WARM}, roles: {contains: ADMIN}, links__label: {equals: "Docs"}}) { docs { title } totalDocs }
+  Pages(where: {seo: {tone: {equals: WARM}}, roles: {in: [ADMIN]}, links: {label: {equals: "Docs"}}}) { docs { title } totalDocs }
 }`)
 	filteredPage := objectAt(t, filtered, "data", "Pages")
 	if filteredPage["totalDocs"] != float64(1) || filteredPage["docs"].([]interface{})[0].(map[string]interface{})["title"] != "Home" {
 		t.Fatalf("nested filtered page = %#v", filteredPage)
+	}
+	excluded := objectAt(t, graphQL(t, server.URL, `query { Pages(where: {roles: {not_in: [ADMIN]}}) { totalDocs } }`), "data", "Pages")
+	if excluded["totalDocs"] != float64(0) {
+		t.Fatalf("not_in roles = %#v", excluded)
+	}
+	// A has-many select offers membership operators only.
+	rejected := graphQL(t, server.URL, `query { Pages(where: {roles: {contains: ADMIN}}) { totalDocs } }`)
+	if rejected["data"] != nil || !strings.Contains(fmt.Sprint(rejected["errors"]), "contains") {
+		t.Fatalf("contains on a has-many select = %#v", rejected)
+	}
+}
+
+func TestGraphQLFiltersRelationshipsByMembership(t *testing.T) {
+	application, err := ridu.New(ridu.Config{
+		Name: "GraphQL membership", Plugins: []ridu.Plugin{graphqlplugin.New()}, AllowIDOnCreate: true,
+		Collections: []ridu.Collection{
+			{Slug: "people", Fields: field.Fields{field.Text("name")}},
+			{Slug: "teams", Fields: field.Fields{field.Text("name")}},
+			{Slug: "posts", Fields: field.Fields{
+				field.Text("title"),
+				field.Relationships("authors", "people"),
+				field.PolymorphicRelationships("subjects", "people", "teams"),
+				field.PolymorphicRelationship("subject", "people", "teams"),
+			}},
+		},
+	}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, slug := range []string{"people", "teams"} {
+		if _, err := application.Local().Create(t.Context(), slug, store.Values{"name": store.String("shared")}, ridu.MutationOptions{ID: "shared"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reference := func(collection string) store.Value {
+		return store.Object(store.Values{"relationTo": store.String(collection), "id": store.String("shared")})
+	}
+	for title, values := range map[string]store.Values{
+		"person": {"authors": store.List(store.String("shared")), "subjects": store.List(reference("people")), "subject": reference("people")},
+		"team":   {"authors": store.List(), "subjects": store.List(reference("teams")), "subject": reference("teams")},
+	} {
+		values["title"] = store.String(title)
+		if _, err := application.Local().Create(t.Context(), "posts", values, ridu.MutationOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	server := httptest.NewServer(application.Handler(ridu.HandlerOptions{}))
+	defer server.Close()
+	for where, want := range map[string]string{
+		`{authors: {in: ["shared"]}}`:                                       "person",
+		`{authors: {not_in: ["shared"]}}`:                                   "team",
+		`{subjects: {in: [{relationTo: TEAMS, value: "shared"}]}}`:          "team",
+		`{subject: {in: [{relationTo: PEOPLE, value: "shared"}]}}`:          "person",
+		`{subject: {not_in: [{relationTo: PEOPLE, value: "shared"}]}}`:      "team",
+		`{AND: [{authors: {exists: true}}, {subject: {exists: true}}]}`:     "person,team",
+		`{OR: [{subjects: {in: [{relationTo: PEOPLE, value: "shared"}]}}]}`: "person",
+	} {
+		result := objectAt(t, graphQL(t, server.URL, `query { Posts(where: `+where+`, sort: "title") { docs { title } } }`), "data", "Posts")
+		var titles []string
+		for _, document := range result["docs"].([]interface{}) {
+			titles = append(titles, document.(map[string]interface{})["title"].(string))
+		}
+		if strings.Join(titles, ",") != want {
+			t.Errorf("where %s = %v, want %s", where, titles, want)
+		}
+	}
+	for _, where := range []string{`{authors: {equals: "shared"}}`, `{subject: {equals: "shared"}}`, `{subjects: {contains: "shared"}}`} {
+		if result := graphQL(t, server.URL, `query { Posts(where: `+where+`) { totalDocs } }`); result["data"] != nil {
+			t.Errorf("where %s accepted: %#v", where, result)
+		}
+	}
+	// Sort admission is the operation engine's, as for every transport.
+	for _, sort := range []string{"authors", "subject", "-subjects"} {
+		result := graphQL(t, server.URL, `query { Posts(sort: "`+sort+`") { totalDocs } }`)
+		if posts, _ := result["data"].(map[string]interface{}); posts != nil && posts["Posts"] != nil || !strings.Contains(fmt.Sprint(result["errors"]), "order by") {
+			t.Errorf("sort %s = %#v, want an unsupported path error", sort, result)
+		}
 	}
 }
 
@@ -422,7 +520,7 @@ func TestGraphQLSelectionPopulatesRelationshipsInsideGroupsArraysAndBlocks(t *te
     meta { reviewer { id name secret } }
     sections { reviewer { id name secret } }
     layout {
-      ... on PageLayoutBlockQuote {
+      ... on QuoteBlock {
         source { id name owner { id name secret } }
       }
     }
@@ -522,6 +620,15 @@ func TestGraphQLJoinsExposeRedactedTargetDocuments(t *testing.T) {
 	}
 	if join["totalDocs"] != float64(1) || join["hasNextPage"] != false {
 		t.Fatalf("join pagination = %#v", join)
+	}
+	// Without count: true the join reads one overflow row instead of counting.
+	graphQL(t, server.URL, `mutation($category: ID!) { createPost(data: {title: "Sequel", category: $category}) { id } }`, map[string]interface{}{"category": categoryID})
+	for limit, want := range map[int]bool{1: true, 2: false} {
+		uncounted := graphQL(t, server.URL, fmt.Sprintf(`query($id: ID!) { Category(id: $id) { posts(limit: %d) { docs { title } totalDocs hasNextPage } } }`, limit), map[string]interface{}{"id": categoryID})
+		page := objectAt(t, uncounted, "data", "Category", "posts")
+		if docs, _ := page["docs"].([]interface{}); len(docs) != limit || page["totalDocs"] != nil || page["hasNextPage"] != want {
+			t.Fatalf("uncounted join limit %d = %#v", limit, page)
+		}
 	}
 	for _, predicate := range []string{`where: {privateNote: {contains: "redact"}}`, `sort: "privateNote"`, `where: {category: {equals: "` + categoryID + `"}}`} {
 		denied := graphQL(t, server.URL, `query { Category(id: "`+categoryID+`") { posts(count: true, `+predicate+`) { docs { title } totalDocs } } }`)
@@ -1613,7 +1720,10 @@ func TestGraphQLCompiledExtensionsReceiveOnlySafeRuntimeFacades(t *testing.T) {
 			page, err := ctx.Local.List(ctx.Context, "posts", ridu.ListOptions{
 				Page: 1, Limit: 1, Actor: ctx.Actor, ActorCollection: ctx.ActorCollection,
 			})
-			return page.Total, err
+			if err != nil {
+				return nil, err
+			}
+			return *page.Total, nil
 		},
 	}}})
 	application, err := ridu.New(ridu.Config{

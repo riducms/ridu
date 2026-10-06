@@ -439,6 +439,9 @@ func (renames *developmentRenames) createMigration(ctx context.Context, adapter 
 // renames the developer accepted.
 func developmentRenameRecorded(file migrationartifact.File, accepted []schemadiff.RenameCandidate) error {
 	describe := func(rename migration.Rename) string {
+		if rename.Block != "" {
+			return fmt.Sprintf("block %s.%s -> %s", rename.Block, rename.FieldBefore, rename.FieldAfter)
+		}
 		return fmt.Sprintf("%s.%s -> %s.%s", rename.CollectionBefore, rename.FieldBefore, rename.CollectionAfter, rename.FieldAfter)
 	}
 	recorded := make(map[string]bool)
@@ -531,8 +534,7 @@ func (target *developmentRenameTarget) has(ctx context.Context, directory string
 		// that the migrations reaching the new config have run.
 		return !target.migratedTo(ctx, directory, current), nil
 	}
-	plan, err := target.postgres.Plan(ctx, baseline)
-	return err == nil && len(plan) == 0, nil
+	return target.postgres.VerifySchema(ctx, baseline) == nil, nil
 }
 
 // migratedTo reports whether the committed migrations end at current and the
@@ -679,6 +681,9 @@ var (
 func developmentRenameName(accepted []schemadiff.RenameCandidate) string {
 	candidate := accepted[0]
 	words := []string{"rename", string(candidate.BeforeCollection.Slug)}
+	if candidate.Kind == schemadiff.RenameBlockField {
+		words[1] = candidate.Block
+	}
 	if candidate.Kind == schemadiff.RenameCollection {
 		words = append(words, "to", string(candidate.AfterCollection.Slug))
 	} else {

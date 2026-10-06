@@ -343,7 +343,8 @@ export function referenceParameters(
 	i18n: AdminI18n
 ) {
 	const names: string[] = [];
-	if (operation === "list") names.push("page", "limit", "where", "sort", "include-access");
+	if (operation === "list")
+		names.push("page", "limit", "pagination", "where", "sort", "include-access");
 	if (operation === "list" || operation === "read") names.push("depth", "select", "populate");
 	if (operation === "list" && context.collection.capabilities.trash) names.push("trash");
 	if (
@@ -363,6 +364,7 @@ export function referenceParameters(
 	const descriptions = {
 		page: "apiReference:queryPage",
 		limit: "apiReference:queryLimit",
+		pagination: "apiReference:queryPagination",
 		where: "apiReference:queryWhere",
 		sort: "apiReference:querySort",
 		"include-access": "apiReference:queryAccess",

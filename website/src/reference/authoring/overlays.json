@@ -15240,6 +15240,11 @@
 					"name": "ValueList",
 					"type": "\"list\"",
 					"description": "List of query operands."
+				},
+				{
+					"name": "ValueReference",
+					"type": "\"reference\"",
+					"description": "Polymorphic relationship reference: a collection slug and document ID."
 				}
 			],
 			"details": [],
@@ -15248,6 +15253,37 @@
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/query#Reference": {
+			"summary": "Construct a polymorphic relationship candidate.",
+			"group": "Values",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "relationTo",
+					"type": "string",
+					"description": "The slug of one of the relationship's target collections."
+				},
+				{
+					"name": "id",
+					"type": "string",
+					"description": "The document ID in that collection."
+				}
+			],
+			"returns": {
+				"type": "Value",
+				"description": "A reference operand that equals a stored {relationTo, id} value."
+			},
+			"details": [
+				"Polymorphic relationships are filtered by membership, so pass references to In; an ID shared by two collections matches only its own collection."
+			],
+			"example": "query.In(\"subjects\", query.Reference(\"posts\", postID))",
+			"keywords": ["query.Reference", "Reference", "polymorphic", "relationTo"],
+			"relatedDocs": ["/docs/querying/#membership"],
+			"relatedSymbols": ["go:github.com/riducms/ridu/query#In"],
+			"typeLinkIDs": {
+				"Value": "go:github.com/riducms/ridu/query#Value"
+			}
 		},
 		"go:github.com/riducms/ridu/query#String": {
 			"summary": "Construct a string query operand.",
@@ -15843,6 +15879,22 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
+		"go:github.com/riducms/ridu/query#Value.ReferenceValue": {
+			"summary": "ReferenceValue returns the collection slug, document ID, and true when this is a reference operand.",
+			"group": "Methods",
+			"parametersLabel": "",
+			"parameters": [],
+			"returns": {
+				"type": "(relationTo string, id string, ok bool)",
+				"description": "The declared result."
+			},
+			"details": [],
+			"example": "",
+			"keywords": ["query.Value.ReferenceValue", "Value.ReferenceValue"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
 		"go:github.com/riducms/ridu/query#Value.Values": {
 			"summary": "Values returns a deep copy for a list operand.",
 			"group": "Methods",
@@ -15891,6 +15943,18 @@
 			"details": [],
 			"example": "",
 			"keywords": ["query.ValueNull", "ValueNull"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/query#ValueReference": {
+			"summary": "Public constant ValueReference from github.com/riducms/ridu/query.",
+			"group": "Constants",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [],
+			"example": "",
+			"keywords": ["query.ValueReference", "ValueReference"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -23493,6 +23557,11 @@
 					"description": "Invoke one checksum-bound application-compiled callback."
 				},
 				{
+					"name": "StepAuditRequiredValues",
+					"type": "\"audit_required_values\"",
+					"description": "Refuse the migration while a stored document has no value for a field it makes required."
+				},
+				{
 					"name": "StepConcurrentIndex",
 					"type": "\"concurrent_index\"",
 					"description": "Create or drop one index outside a transaction."
@@ -23543,7 +23612,7 @@
 				{
 					"name": "CollectionBefore",
 					"type": "schema.CollectionSlug",
-					"description": "CollectionBefore and CollectionAfter are current public slugs."
+					"description": "CollectionBefore and CollectionAfter are current public slugs. Both are empty for a block field rename."
 				},
 				{
 					"name": "CollectionAfter",
@@ -23551,9 +23620,14 @@
 					"description": "The CollectionAfter value."
 				},
 				{
+					"name": "Block",
+					"type": "string",
+					"description": "Block names the block definition whose field is renamed. The definition is shared, so the rename moves the field's content in every stored block of it, in every resource and version snapshot."
+				},
+				{
 					"name": "FieldBefore",
 					"type": "string",
-					"description": "FieldBefore and FieldAfter are canonical field paths. Empty paths mean the\nrename applies to the collection itself."
+					"description": "FieldBefore and FieldAfter are canonical field paths, relative to Block for a block field rename. Empty paths mean the\nrename applies to the collection itself."
 				},
 				{
 					"name": "FieldAfter",
@@ -23567,7 +23641,7 @@
 				}
 			],
 			"details": [
-				"Inference may propose a rename, but runners execute only persisted intent. Collection renames include all nested/top-level field identity changes."
+				"Inference may propose a rename, but runners execute only persisted intent. Collection renames include their own nested and top-level field identity changes; a field renamed inside a block definition is one block field rename for every placement of the block."
 			],
 			"example": "",
 			"keywords": ["migration.Rename", "Rename"],
@@ -23632,6 +23706,11 @@
 					"name": "PurgeVersionOwnerIDs",
 					"type": "[]schema.StableID",
 					"description": "PurgeVersionOwnerIDs identifies surviving resources whose complete\nhistorical version rows could otherwise restore references to a retired\nresource. It is present only while planning StepRetireResources."
+				},
+				{
+					"name": "RequiredFields",
+					"type": "[]RequiredFieldAddress",
+					"description": "RequiredFields is present only for StepAuditRequiredValues."
 				}
 			],
 			"details": [
@@ -23643,6 +23722,7 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {
 				"StepKind": "go:github.com/riducms/ridu/migration#StepKind",
+				"RequiredFieldAddress": "go:github.com/riducms/ridu/migration#RequiredFieldAddress",
 				"Rename": "go:github.com/riducms/ridu/migration#Rename"
 			}
 		},
@@ -24152,6 +24232,56 @@
 			"details": [],
 			"example": "",
 			"keywords": ["migration.AssertSchemaPayload", "AssertSchemaPayload"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/migration#AuditRequiredValuesPayload": {
+			"summary": "The fields whose stored values a required-value audit checks.",
+			"group": "Payloads",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "Fields",
+					"type": "[]RequiredFieldAddress",
+					"description": "Each field the artifact newly requires, in planner order."
+				}
+			],
+			"details": [
+				"Runners regenerate the plan and refuse a payload that differs from the fields the planner derives from the embedded manifests."
+			],
+			"example": "",
+			"keywords": ["migration.AuditRequiredValuesPayload", "AuditRequiredValuesPayload"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"RequiredFieldAddress": "go:github.com/riducms/ridu/migration#RequiredFieldAddress"
+			}
+		},
+		"go:github.com/riducms/ridu/migration#RequiredFieldAddress": {
+			"summary": "One field of an artifact's after manifest, addressed by its resource and canonical path, or by its block definition.",
+			"group": "Payloads",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "ResourceID",
+					"type": "schema.StableID",
+					"description": "The stable ID of the collection or global, or empty for a field of a block definition checked in every stored block of it."
+				},
+				{
+					"name": "Path",
+					"type": "string",
+					"description": "The canonical field path. A path through a blocks field names the block type, as in layout.hero.heading. A \"**\" segment finds the block it precedes at any depth, as in **.hero.heading."
+				},
+				{
+					"name": "Scope",
+					"type": "string",
+					"description": "Limits the first block found to placements beneath a localized ancestor (\"localized\") or not (\"unlocalized\"); empty for both."
+				}
+			],
+			"details": [],
+			"example": "",
+			"keywords": ["migration.RequiredFieldAddress", "RequiredFieldAddress"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -24834,6 +24964,22 @@
 			"details": [],
 			"example": "",
 			"keywords": ["migration.StepDataTransform", "StepDataTransform"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/migration#StepAuditRequiredValues": {
+			"summary": "StepAuditRequiredValues fails the migration while a stored document has no value for a field the artifact makes required. It runs after every data transform in its transaction, so a transform can backfill values.",
+			"group": "Constants",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [],
+			"example": "",
+			"keywords": [
+				"migration.StepAuditRequiredValues",
+				"StepAuditRequiredValues",
+				"RIDU_REQUIRED_VALUES_MISSING"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -26941,8 +27087,8 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/adapters/postgres#Store.Plan": {
-			"summary": "Inspect the live database and plan only a safe development synchronization.",
+		"go:github.com/riducms/ridu/adapters/postgres#Store.VerifySchema": {
+			"summary": "Verify without changing anything that the physical schema exactly matches a manifest.",
 			"group": "Methods",
 			"parametersLabel": "",
 			"parameters": [
@@ -26958,74 +27104,14 @@
 				}
 			],
 			"returns": {
-				"type": "([]Statement, error)",
-				"description": "The declared result."
-			},
-			"details": ["This is for ridu dev. Production changes use reviewed migration artifacts."],
-			"example": "",
-			"keywords": ["postgres.Store.Plan", "Store.Plan"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {
-				"Statement": "go:github.com/riducms/ridu/adapters/postgres#Statement"
-			}
-		},
-		"go:github.com/riducms/ridu/adapters/postgres#Store.ApplyPlan": {
-			"summary": "Apply a non-destructive development plan in one transaction.",
-			"group": "Methods",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "ctx",
-					"type": "context.Context",
-					"description": "The ctx value."
-				},
-				{
-					"name": "statements",
-					"type": "[]Statement",
-					"description": "The statements value."
-				}
-			],
-			"returns": {
 				"type": "error",
 				"description": "The declared result."
 			},
-			"details": [],
-			"example": "",
-			"keywords": ["postgres.Store.ApplyPlan", "Store.ApplyPlan"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
-		"go:github.com/riducms/ridu/adapters/postgres#Statement": {
-			"summary": "One ordered development schema change.",
-			"group": "Types",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "Kind",
-					"type": "string",
-					"description": "Kind is a stable, human-readable description of the planned change."
-				},
-				{
-					"name": "SQL",
-					"type": "string",
-					"description": "SQL is the complete PostgreSQL statement to apply."
-				},
-				{
-					"name": "CollectionID",
-					"type": "schema.StableID",
-					"description": "CollectionID identifies the collection affected by the statement, when any."
-				},
-				{
-					"name": "FieldID",
-					"type": "schema.StableID",
-					"description": "FieldID identifies the top-level field affected by the statement, when any."
-				}
+			"details": [
+				"Schema changes go only through SyncDevelopmentSchema or reviewed immutable artifacts, which also audit stored content against the new schema."
 			],
-			"details": [],
 			"example": "",
-			"keywords": ["postgres.Statement", "Statement"],
+			"keywords": ["postgres.Store.VerifySchema", "Store.VerifySchema"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -27200,6 +27286,11 @@
 					"name": "RenameField",
 					"type": "\"field\"",
 					"description": "Preserve a field while changing its derived identity."
+				},
+				{
+					"name": "RenameBlockField",
+					"type": "\"block-field\"",
+					"description": "Preserve a block definition's field at every placement of the block while changing its name."
 				}
 			],
 			"details": [],
@@ -27690,6 +27781,18 @@
 			"details": [],
 			"example": "",
 			"keywords": ["postgres.RenameField", "RenameField"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/adapters/postgres#RenameBlockField": {
+			"summary": "RenameBlockField preserves a block definition's field at every placement of the block while changing its name.",
+			"group": "Constants",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [],
+			"example": "",
+			"keywords": ["postgres.RenameBlockField", "RenameBlockField"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -31917,35 +32020,6 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/adapters/mongodb#Store.SyncIndexes": {
-			"summary": "Create only missing managed indexes for explicit development/bootstrap synchronization.",
-			"group": "Methods",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "ctx",
-					"type": "context.Context",
-					"description": "The ctx value."
-				},
-				{
-					"name": "manifest",
-					"type": "schema.Manifest",
-					"description": "The manifest value."
-				}
-			],
-			"returns": {
-				"type": "error",
-				"description": "The declared result."
-			},
-			"details": [
-				"SyncIndexes never drops or rewrites an index and does not install migration state. Production changes use reviewed immutable artifacts."
-			],
-			"example": "",
-			"keywords": ["mongodb.Store.SyncIndexes", "Store.SyncIndexes"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
 		"go:github.com/riducms/ridu/adapters/mongodb#Store.VerifyIndexes": {
 			"summary": "Non-mutatingly verify the complete managed index plan and authorize this Store instance.",
 			"group": "Methods",
@@ -32182,7 +32256,7 @@
 			}
 		},
 		"go:github.com/riducms/ridu/adapters/mongodb#ArtifactOptions": {
-			"summary": "Reviewed semantic intent frozen into a planner 3.0.0 artifact.",
+			"summary": "Reviewed semantic intent frozen into a planner 5.0.0 artifact.",
 			"group": "Migrations",
 			"parametersLabel": "Fields",
 			"parameters": [

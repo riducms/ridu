@@ -120,23 +120,23 @@ func TestProjectorOwnsSelectionKeysAndEvictsOldVariants(t *testing.T) {
 	}
 	projector.Values(store.Values{"body": body}, variants[0]) // Retain the recently used oldest variant.
 	projector.Values(store.Values{"body": body}, variants[projectionEntriesPerField])
+	if len(projector.roots[0].entries) != projectionEntriesPerField {
+		t.Fatal("cache did not retain its bounded selections")
+	}
+	if !projector.roots[0].source.SameBacking(body) {
+		t.Fatal("cache changed its source generation")
+	}
 	for _, entry := range projector.roots[0].entries {
-		if !entry.valid || !entry.source.SameBacking(body) || sameProjectionSelection(entry.selection, variants[1]) {
+		if sameProjectionSelection(*entry.selection, variants[1]) {
 			t.Fatal("cache did not evict the least recently used selection within its bound")
 		}
 	}
 	updated := projectorBody("Updated")
 	projector.Values(store.Values{"body": updated}, original)
-	valid := 0
-	for _, entry := range projector.roots[0].entries {
-		if entry.valid {
-			valid++
-			if !entry.source.SameBacking(updated) {
-				t.Fatal("cache retained an earlier source generation")
-			}
-		}
+	if !projector.roots[0].source.SameBacking(updated) {
+		t.Fatal("cache retained an earlier source generation")
 	}
-	if valid != 1 {
+	if len(projector.roots[0].entries) != 1 {
 		t.Fatal("changed source did not replace all cached locale variants")
 	}
 	if text, _ := first.Get("title").StringValue(); text != "English" {
@@ -146,16 +146,12 @@ func TestProjectorOwnsSelectionKeysAndEvictsOldVariants(t *testing.T) {
 	if _, exists := partial["body"]; exists {
 		t.Fatal("partial projection resurrected a missing root")
 	}
-	if !projector.roots[0].entries[0].source.SameBacking(updated) {
+	if !projector.roots[0].source.SameBacking(updated) || len(projector.roots[0].entries) == 0 {
 		t.Fatal("partial projection discarded an unchanged cached root")
 	}
 	projector.Clear()
-	for _, root := range projector.roots {
-		for _, entry := range root.entries {
-			if entry.valid || !entry.source.IsZero() || !entry.value.IsZero() || entry.sources != nil || entry.selection.Chain != nil || entry.selection.Configured != nil {
-				t.Fatal("Clear retained cached values, metadata or selection slices")
-			}
-		}
+	if projector.roots != nil || projector.selections != nil {
+		t.Fatal("Clear retained cached values, metadata or selection slices")
 	}
 }
 
@@ -167,7 +163,7 @@ func TestProjectorSeparatesSchemasAndRetainsCheckedAdmission(t *testing.T) {
 	if localized.Values(input, selection)["title"].Kind() != store.ValueString || ordinary.Values(input, selection)["title"].Kind() != store.ValueObject {
 		t.Fatal("schema ownership was shared across projector instances")
 	}
-	projector := NewProjector([]schema.Field{immutableEmbeddedField(false)})
+	projector := NewProjector([]schema.Field{immutableEmbeddedField(t, false)})
 	bad := store.Document{Values: store.Values{"body": store.Object(store.Values{"outline": store.List(store.String("invalid node"))})}}
 	projector.Document(bad, selection) // Populate an unchecked invisible projection.
 	for range 2 {

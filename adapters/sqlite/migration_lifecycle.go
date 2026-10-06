@@ -252,6 +252,11 @@ func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sq
 	if err := assertSQLitePhysicalSchema(ctx, connection, target, true); err != nil {
 		return fmt.Errorf("roll back SQLite migration %s: %w", file.Name, err)
 	}
+	// A rollback that makes a field required again is audited like a
+	// migration that does.
+	if err := auditSQLiteRollbackRequiredValues(ctx, connection, file.Artifact, current, target); err != nil {
+		return fmt.Errorf("roll back SQLite migration %s: %w", file.Name, err)
+	}
 	if err := writeSQLiteManifest(ctx, connection, target, files[len(files)-1].Digest, backend.now().UTC()); err != nil {
 		return fmt.Errorf("record SQLite rollback %s manifest: %w", file.Name, err)
 	}
@@ -305,7 +310,7 @@ func (backend *Store) scrubSQLiteRollbackFields(ctx context.Context, connection 
 				continue
 			}
 			document.Values = values
-			if err := transaction.persistDocument(ctx, targetResource, document); err != nil {
+			if err := transaction.persistDocument(ctx, targetResource, document, document); err != nil {
 				return fmt.Errorf("scrub resource %s document %s: %w", currentResource.ID, document.ID, err)
 			}
 		}
@@ -453,12 +458,15 @@ func scrubSQLiteRollbackField(current, target schema.Field, value store.Value) (
 	return scrubSQLiteRollbackFieldValue(current, target, value)
 }
 
+// scrubSQLiteRollbackFieldValue compares a block's fields through its shared
+// definition on both sides, as the embedded walk reports them, so fields
+// match by their definition-relative IDs.
 func scrubSQLiteRollbackFieldValue(current, target schema.Field, value store.Value) (store.Value, bool) {
 	if embedded.HasFields(current) && embedded.HasFields(target) {
 		targets := map[string][]schema.Field{}
 		for _, tree := range target.Plugin.EmbeddedTrees {
 			for _, c := range tree.Cases {
-				for _, variant := range c.ResolvedTypes() {
+				for _, variant := range c.Definitions() {
 					targets[tree.Key+"/"+c.TagValue+"/"+variant.Slug] = variant.ResolvedFields()
 				}
 			}
@@ -515,12 +523,12 @@ func scrubSQLiteRollbackFieldValue(current, target schema.Field, value store.Val
 		if !valid || current.Blocks == nil || target.Blocks == nil {
 			return value, false
 		}
-		currentTypes := make(map[string]schema.BlockType, len(current.Blocks.ResolvedTypes()))
-		for _, block := range current.Blocks.ResolvedTypes() {
+		currentTypes := make(map[string]schema.BlockType, len(current.Blocks.BlockReferences))
+		for _, block := range current.Blocks.Definitions() {
 			currentTypes[block.Slug] = block
 		}
-		targetTypes := make(map[string]schema.BlockType, len(target.Blocks.ResolvedTypes()))
-		for _, block := range target.Blocks.ResolvedTypes() {
+		targetTypes := make(map[string]schema.BlockType, len(target.Blocks.BlockReferences))
+		for _, block := range target.Blocks.Definitions() {
 			targetTypes[block.Slug] = block
 		}
 		updated := make([]store.Value, 0, len(items))
@@ -589,7 +597,7 @@ func (backend *Store) retireSQLiteRollbackResources(ctx context.Context, connect
 				continue
 			}
 			document.Values = values
-			if err := transaction.persistDocument(ctx, resource, document); err != nil {
+			if err := transaction.persistDocument(ctx, resource, document, document); err != nil {
 				return fmt.Errorf("scrub retired resource references from %s/%s: %w", resource.ID, document.ID, err)
 			}
 		}

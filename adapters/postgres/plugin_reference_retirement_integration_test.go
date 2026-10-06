@@ -96,12 +96,24 @@ func TestPostgresPluginReferenceRetirementPreventsCurrentAndVersionResurrectionA
 		revision int
 		pending  bool
 	}
+	// The retired root's column is dropped from the live table; every other
+	// live column and the live metadata must survive retirement unchanged.
+	contentColumn := func(resource schema.StableID) string {
+		t.Helper()
+		for _, candidate := range append(before.Snapshot().Collections, before.Snapshot().Globals...) {
+			if candidate.ID == resource {
+				return fieldColumn(fieldNamed(candidate.Fields, "content").ID)
+			}
+		}
+		t.Fatalf("resource %s is absent", resource)
+		return ""
+	}
 	readRetainedHead := func(resource schema.StableID, id string) retainedHead {
 		t.Helper()
 		var head retainedHead
-		if err := backend.pool.QueryRow(ctx, `SELECT (snapshot #- ARRAY['Values', 'content']::text[])::text,
-revision, has_draft_changes FROM ridu_published_documents WHERE collection_id = $1 AND document_id = $2`,
-			string(resource), id).Scan(&head.snapshot, &head.revision, &head.pending); err != nil {
+		if err := backend.pool.QueryRow(ctx, `SELECT (to_jsonb(live) - $2::text)::text, _revision, has_draft_changes
+FROM `+quote(publishedCollectionTable(resource))+` AS live WHERE id = $1`,
+			id, contentColumn(resource)).Scan(&head.snapshot, &head.revision, &head.pending); err != nil {
 			t.Fatal(err)
 		}
 		return head

@@ -379,6 +379,11 @@ func identityChangeWarnings(existingPath string, current schema.Manifest) []stri
 				"possible field rename %s.%s -> %s.%s; run ridu migrate create to confirm it and preserve existing data",
 				candidate.BeforeCollection.Slug, candidate.BeforeField.Path, candidate.AfterCollection.Slug, candidate.AfterField.Path,
 			))
+		case schemadiff.RenameBlockField:
+			warnings = append(warnings, fmt.Sprintf(
+				"possible field rename %s.%s -> %s.%s in every %s block; run ridu migrate create to confirm it and preserve existing data",
+				candidate.Block, candidate.BeforeField.Path, candidate.Block, candidate.AfterField.Path, candidate.Block,
+			))
 		}
 	}
 	return warnings

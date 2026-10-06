@@ -114,7 +114,7 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 	page, err := application.Local().List(ctx, "posts", ridu.ListOptions{
 		Page: 1, Limit: 10, Populate: []query.Population{{Path: authorPath}},
 	})
-	if err != nil || page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != public.ID {
+	if err != nil || *page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != public.ID {
 		t.Fatalf("access-filtered page = %#v, %v", page, err)
 	}
 	if populated, ok := page.Documents[0].Values["author"].CopyDocument(); !ok || populated.ID != user.ID {

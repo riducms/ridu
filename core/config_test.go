@@ -734,7 +734,7 @@ func TestBlockDiscriminatorFieldNameIsReserved(t *testing.T) {
 		t.Fatalf("Resolve error = %T, want *schema.ValidationError", err)
 	}
 	for _, issue := range validationError.Issues {
-		if issue.Code == "reserved_field_name" && strings.Contains(issue.Path, "blocks[0].fields") {
+		if issue.Code == "reserved_field_name" && strings.HasPrefix(issue.Path, "blocks.hero.fields") {
 			return
 		}
 	}

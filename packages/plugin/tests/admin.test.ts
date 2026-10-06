@@ -420,8 +420,11 @@ test("route collision identity follows the router's case-insensitive matching", 
 });
 
 test("embedded local row labels use the same registration and config checks as ordinary rows", () => {
-	const embeddedRow = { ...row, path: "body.blocks.card.rows" };
+	const embeddedRow = { ...structuredClone(row), id: "block-card-rows", path: "rows" };
 	const embeddedManifest = {
+		blocks: [
+			{ slug: "card", labels: { singular: "Card", plural: "Cards" }, fields: [embeddedRow] },
+		],
 		collections: [
 			{
 				slug: "articles",
@@ -438,7 +441,9 @@ test("embedded local row labels use the same registration and config checks as o
 						plugin: {
 							key: "body",
 							config: {},
-							embeddedTrees: [{ cases: [{ types: [{ fields: [embeddedRow] }] }] }],
+							embeddedTrees: [
+								{ key: "blocks", cases: [{ tagValue: "block", blockReferences: ["card"] }] },
+							],
 						},
 					},
 				],
@@ -468,7 +473,7 @@ test("embedded local row labels use the same registration and config checks as o
 		embeddedManifest
 	);
 	expect(() => validateAdminManifest(resolveAdminConfig({ plugins }), embeddedManifest)).toThrow(
-		"articles.body.blocks.card.rows"
+		"articles.body.blocks.block.card.rows"
 	);
 	expect(() =>
 		validateAdminManifest(
@@ -478,7 +483,7 @@ test("embedded local row labels use the same registration and config checks as o
 			}),
 			embeddedManifest
 		)
-	).toThrow("articles.body.blocks.card.rows");
+	).toThrow("articles.body.blocks.block.card.rows");
 });
 
 test("local row label settings distinguish omission, explicit empty config and malformed supplied values", () => {

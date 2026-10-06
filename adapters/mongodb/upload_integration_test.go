@@ -17,13 +17,14 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	media, posts, manifest := mongoUploadTestSchema(t)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -41,7 +42,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 		mongoRollback(t, seed)
 		t.Fatal(err)
 	}
-	current, err := seed.Update(t.Context(), store.UpdateRequest{
+	current, err := conformance.LockedUpdate(t.Context(), seed, store.UpdateRequest{
 		Request: store.Request{Collection: media, ID: original.ID},
 		Intent:  store.WriteIntentPublish,
 		Values: store.Values{
@@ -129,7 +130,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 		t.Fatalf("establish upload-reference snapshot = %#v, %v", result, err)
 	}
 	peerMutation := mongoBegin(t, backend, false)
-	if _, err := peerMutation.Update(t.Context(), store.UpdateRequest{
+	if _, err := conformance.LockedUpdate(t.Context(), peerMutation, store.UpdateRequest{
 		Request: store.Request{Collection: media, ID: target.ID},
 		Values:  store.Values{"objectKey": store.String("peer-new-object")},
 		Intent:  store.WriteIntentPublish,
@@ -193,7 +194,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 		if err != nil {
 			t.Fatalf("list upload by %s object key: %v", candidate.name, err)
 		}
-		if page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != target.ID {
+		if *page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != target.ID {
 			t.Fatalf("upload %s object-key result = %#v", candidate.name, page)
 		}
 	}
@@ -267,7 +268,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 	if err != nil {
 		t.Fatalf("list singular upload with access composition: %v", err)
 	}
-	if matching.Total != 1 || len(matching.Documents) != 1 || matching.Documents[0].ID != post.ID {
+	if *matching.Total != 1 || len(matching.Documents) != 1 || matching.Documents[0].ID != post.ID {
 		t.Fatalf("singular upload filter/access result = %#v", matching)
 	}
 	if _, err := backend.database.Collection(physicalCollectionName(posts.ID)).UpdateOne(
@@ -283,7 +284,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 	if err != nil {
 		t.Fatalf("list over corrupt nested upload owner: %v", err)
 	}
-	if corruptMatch.Total != 0 || len(corruptMatch.Documents) != 0 {
+	if *corruptMatch.Total != 0 || len(corruptMatch.Documents) != 0 {
 		t.Fatalf("corrupt nested has-many upload entered list result: %#v", corruptMatch)
 	}
 
@@ -308,7 +309,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 func TestMongoDBUploadObjectLocksRemainHeldReleaseAndFollowTransactionLifetime(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	media, _, manifest := mongoUploadTestSchema(t)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	peer := mongoUploadPeerStore(t, backend.database.Name())

@@ -1,3 +1,5 @@
+//go:build !postgresonly
+
 package main
 
 import (

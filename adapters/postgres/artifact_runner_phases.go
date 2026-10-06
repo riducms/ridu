@@ -346,6 +346,20 @@ func applyArtifact(ctx context.Context, connection *sql.Conn, file migrationarti
 			_ = transaction.Rollback()
 			return false, err
 		}
+		// Reject cross-table unique conflicts before any index build commits.
+		after, err := file.Artifact.AfterManifest()
+		if err != nil {
+			_ = transaction.Rollback()
+			return false, err
+		}
+		if err := checkMigrationPublishedUniqueUnion(ctx, transaction, after); err != nil {
+			_ = transaction.Rollback()
+			return false, fmt.Errorf("verify migration %s uniqueness: %w", file.Name, err)
+		}
+		if err := preflightPostgresRequiredValues(ctx, transaction, file.Artifact); err != nil {
+			_ = transaction.Rollback()
+			return false, fmt.Errorf("verify migration %s required values: %w", file.Name, err)
+		}
 		if err := transaction.Rollback(); err != nil {
 			return false, err
 		}
@@ -462,7 +476,7 @@ func applyTransactionPhase(ctx context.Context, connection *sql.Conn, file migra
 	}
 	for _, step := range phase.Steps {
 		if err := executeTransactionStep(ctx, connection, transaction, file, step, registry); err != nil {
-			return fmt.Errorf("migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
+			return fmt.Errorf("migration %s step %s (%s): %w", file.Name, step.ID, step.Name, migrationConflict(err))
 		}
 		if _, err := transaction.ExecContext(ctx, `INSERT INTO ridu_migration_steps
 (artifact_name, artifact_digest, phase_id, step_id, phase_mode, state, checkpoint, attempts, completed_at)
@@ -575,6 +589,13 @@ func collectionRenameBindings(artifact ridumigration.Artifact) ([]collectionRena
 				afterTable:  collectionTable(after.ID),
 				phaseIndex:  phaseIndex,
 			})
+			if before.Versions != nil && after.Versions != nil {
+				bindings = append(bindings, collectionRenameBinding{
+					beforeTable: publishedCollectionTable(before.ID),
+					afterTable:  publishedCollectionTable(after.ID),
+					phaseIndex:  phaseIndex,
+				})
+			}
 		}
 	}
 	return bindings, nil
@@ -634,7 +655,7 @@ func executeTransactionStep(ctx context.Context, connection *sql.Conn, transacti
 		if err := json.Unmarshal(step.Payload, &payload); err != nil {
 			return err
 		}
-		return retireFrameworkResourceState(ctx, transaction, file.Artifact, payload.ResourceIDs, payload.PurgeVersionOwnerIDs)
+		return retireFrameworkResourceState(ctx, transaction, payload.ResourceIDs, payload.PurgeVersionOwnerIDs)
 	case ridumigration.StepDataTransform:
 		var payload ridumigration.DataTransformPayload
 		if err := json.Unmarshal(step.Payload, &payload); err != nil {
@@ -645,6 +666,16 @@ func executeTransactionStep(ctx context.Context, connection *sql.Conn, transacti
 			return fmt.Errorf("compiled PostgreSQL data transform %q does not match the immutable artifact", payload.Transform.Name)
 		}
 		return executePostgresDataTransform(ctx, connection, file.Artifact, transform)
+	case ridumigration.StepAuditRequiredValues:
+		var payload ridumigration.AuditRequiredValuesPayload
+		if err := json.Unmarshal(step.Payload, &payload); err != nil {
+			return err
+		}
+		requirements, locales, err := postgresRequiredRequirements(file.Artifact, payload)
+		if err != nil {
+			return err
+		}
+		return auditPostgresRequiredValues(ctx, transaction, locales, requirements, true, false)
 	case ridumigration.StepAssertSchema:
 		after, err := file.Artifact.AfterManifest()
 		if err != nil {
@@ -681,7 +712,6 @@ WHERE target_collection_id = $1 OR requested_by_collection_id = $1
 WHERE collection_id = $1 OR owner_collection_id = $1`,
 	},
 	{table: "ridu_versions", query: `DELETE FROM ridu_versions WHERE collection_id = $1`},
-	{table: "ridu_published_documents", query: `DELETE FROM ridu_published_documents WHERE collection_id = $1`},
 	{table: "ridu_preferences", query: `DELETE FROM ridu_preferences WHERE collection_id = $1`},
 	{table: "ridu_auth_tokens", query: `DELETE FROM ridu_auth_tokens WHERE collection_id = $1`},
 	{table: "ridu_auth_sessions", query: `DELETE FROM ridu_auth_sessions WHERE collection_id = $1`},
@@ -689,34 +719,7 @@ WHERE collection_id = $1 OR owner_collection_id = $1`,
 	{table: "ridu_auth_credentials", query: `DELETE FROM ridu_auth_credentials WHERE collection_id = $1`},
 }
 
-func retireFrameworkResourceState(ctx context.Context, transaction *sql.Tx, artifact ridumigration.Artifact, resourceIDs, purgeVersionOwnerIDs []schema.StableID) error {
-	publishedHeadsExist, err := transactionTableExists(ctx, transaction, "ridu_published_documents")
-	if err != nil {
-		return err
-	}
-	if publishedHeadsExist {
-		if err := scrubRetiredPublishedRoots(ctx, transaction, artifact, purgeVersionOwnerIDs); err != nil {
-			return err
-		}
-	}
-	if publishedHeadsExist && len(resourceIDs) != 0 {
-		retiring := make([]string, len(resourceIDs))
-		for index, resourceID := range resourceIDs {
-			retiring[index] = string(resourceID)
-		}
-		for _, resourceID := range resourceIDs {
-			var survivingReference bool
-			if err := transaction.QueryRowContext(ctx, `SELECT EXISTS (
-SELECT 1 FROM ridu_document_references WHERE target_collection_id = $1
-AND published_head = true AND owner_collection_id <> ALL($2::text[])
-)`, string(resourceID), retiring).Scan(&survivingReference); err != nil {
-				return err
-			}
-			if survivingReference {
-				return fmt.Errorf("cannot retire resource %s while a surviving published head still references it; unpublish or migrate the live content first", resourceID)
-			}
-		}
-	}
+func retireFrameworkResourceState(ctx context.Context, transaction *sql.Tx, resourceIDs, purgeVersionOwnerIDs []schema.StableID) error {
 	for _, statement := range frameworkResourceRetirementStatements {
 		exists, err := transactionTableExists(ctx, transaction, statement.table)
 		if err != nil {
@@ -749,151 +752,6 @@ AND published_head = true AND owner_collection_id <> ALL($2::text[])
 	// would weaken throttling for unrelated auth collections, while retaining a
 	// bucket cannot authenticate or recover data for a reincarnated resource.
 	return nil
-}
-
-// The working table's dropped columns do not remove the independent live
-// snapshot. Remove only roots whose physical columns this artifact drops, then
-// derive the live reference index from the surviving manifest before the
-// retirement guard evaluates it. All of this runs in the retirement phase's
-// transaction, before any target table is dropped.
-func scrubRetiredPublishedRoots(ctx context.Context, transaction *sql.Tx, artifact ridumigration.Artifact, purgeOwnerIDs []schema.StableID) error {
-	if len(purgeOwnerIDs) == 0 {
-		return nil
-	}
-	if artifact.Before == nil {
-		return fmt.Errorf("resource retirement has no predecessor manifest")
-	}
-	beforeResources := make(map[schema.StableID]schema.Collection)
-	for _, resource := range append(append([]schema.Collection(nil), artifact.Before.Collections...), artifact.Before.Globals...) {
-		beforeResources[resource.ID] = resource
-	}
-	afterResources := make(map[schema.StableID]schema.Collection)
-	for _, resource := range append(append([]schema.Collection(nil), artifact.After.Collections...), artifact.After.Globals...) {
-		afterResources[resource.ID] = resource
-	}
-	var locales []schema.LocaleCode
-	if artifact.Before.Application.Localization != nil {
-		locales = artifact.Before.Application.Localization.LocaleCodes()
-	}
-	for _, ownerID := range purgeOwnerIDs {
-		current, afterExists := afterResources[ownerID]
-		previous, beforeExists := beforeResources[ownerID]
-		if afterExists && !beforeExists {
-			for _, phase := range artifact.Phases {
-				for _, step := range phase.Steps {
-					if step.Kind != ridumigration.StepRenameContent {
-						continue
-					}
-					var payload ridumigration.RenamePayload
-					if err := json.Unmarshal(step.Payload, &payload); err != nil {
-						return fmt.Errorf("decode resource rename before retirement: %w", err)
-					}
-					if payload.Rename.CollectionAfter != current.Slug {
-						continue
-					}
-					for _, candidate := range beforeResources {
-						if candidate.Slug == payload.Rename.CollectionBefore {
-							previous, beforeExists = candidate, true
-							break
-						}
-					}
-				}
-			}
-		}
-		if !beforeExists || !afterExists {
-			return fmt.Errorf("cannot reconcile published roots for surviving resource %s", ownerID)
-		}
-		retainedFields := make(map[schema.StableID]bool, len(current.Fields))
-		for _, field := range current.Fields {
-			retainedFields[field.ID] = true
-		}
-		for _, root := range previous.Fields {
-			if retainedFields[root.ID] {
-				continue
-			}
-			columns := []string{fieldColumn(root.ID)}
-			if root.Localized {
-				columns = columns[:0]
-				for _, locale := range locales {
-					columns = append(columns, localizedFieldColumn(root.ID, locale))
-				}
-			}
-			if len(columns) == 0 {
-				return fmt.Errorf("cannot verify dropped localized root %s.%s without locales", ownerID, root.Name)
-			}
-			dropped := true
-			for _, column := range columns {
-				if !artifactDropsColumn(artifact, collectionTable(ownerID), column) {
-					dropped = false
-					break
-				}
-			}
-			if !dropped {
-				continue
-			}
-			if _, err := transaction.ExecContext(ctx, `UPDATE ridu_published_documents
-SET snapshot = snapshot #- ARRAY['Values', $2]::text[] WHERE collection_id = $1`, string(ownerID), root.Name); err != nil {
-				return fmt.Errorf("scrub retired published root %s.%s: %w", ownerID, root.Name, err)
-			}
-		}
-		if _, err := transaction.ExecContext(ctx, `DELETE FROM ridu_document_references
-WHERE owner_collection_id = $1 AND published_head = true`, string(ownerID)); err != nil {
-			return fmt.Errorf("clear published references for resource %s: %w", ownerID, err)
-		}
-		rows, err := transaction.QueryContext(ctx, `SELECT snapshot FROM ridu_published_documents WHERE collection_id = $1`, string(ownerID))
-		if err != nil {
-			return fmt.Errorf("read published snapshots for resource %s: %w", ownerID, err)
-		}
-		var heads []store.Document
-		for rows.Next() {
-			var encoded []byte
-			if err := rows.Scan(&encoded); err != nil {
-				rows.Close()
-				return err
-			}
-			var head store.Document
-			if err := json.Unmarshal(encoded, &head); err != nil {
-				rows.Close()
-				return fmt.Errorf("decode published snapshot for resource %s: %w", ownerID, err)
-			}
-			heads = append(heads, head)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return err
-		}
-		rows.Close()
-		for _, head := range heads {
-			entries, err := referenceindex.Collect(current, head)
-			if err != nil {
-				return fmt.Errorf("collect published references for resource %s: %w", ownerID, err)
-			}
-			for _, entry := range entries {
-				if _, err := transaction.ExecContext(ctx, `INSERT INTO ridu_document_references (
-owner_collection_id, owner_document_id, field_id, target_collection_id, target_document_id, locale, occurrence, published_head
-) VALUES ($1, $2, $3, $4, $5, $6, $7, true)`, string(entry.Owner.CollectionID), entry.Owner.DocumentID,
-					string(entry.FieldID), string(entry.Target.CollectionID), entry.Target.DocumentID, string(entry.Locale), entry.Occurrence); err != nil {
-					return fmt.Errorf("restore surviving published references for resource %s: %w", ownerID, err)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func artifactDropsColumn(artifact ridumigration.Artifact, table, column string) bool {
-	for _, phase := range artifact.Phases {
-		for _, step := range phase.Steps {
-			if step.Kind != ridumigration.StepSQL {
-				continue
-			}
-			var payload ridumigration.SQLPayload
-			if json.Unmarshal(step.Payload, &payload) == nil && isDropColumnStatement(payload.SQL, table, column) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func applyBatchPhase(ctx context.Context, connection *sql.Conn, file migrationartifact.File, phase ridumigration.Phase, ledger map[string]artifactStepLedgerRow, options RunnerOptions) error {
@@ -1051,7 +909,7 @@ func referenceBackfillBatch(ctx context.Context, transaction *sql.Tx, manifest s
 		return true, checkpoint, nil
 	}
 	resource := resources[checkpoint.Resource]
-	fields := storedSchemaFields(resource.Fields)
+	fields := storedSchemaFields(resource)
 	var locales []schema.LocaleCode
 	if localization := manifest.Snapshot().Application.Localization; localization != nil {
 		locales = localization.LocaleCodes()
@@ -1063,7 +921,7 @@ func referenceBackfillBatch(ctx context.Context, transaction *sql.Tx, manifest s
 	}
 	documents := make([]schemaDocument, 0, batchSize)
 	for rows.Next() {
-		document, err := scanDocument(rows, resource, fields)
+		document, err := scanDocument(rows, resource, fields, locales)
 		if err != nil {
 			rows.Close()
 			return false, checkpoint, err
@@ -1103,20 +961,15 @@ owner_collection_id, owner_document_id, field_id, target_collection_id, target_d
 		for index, document := range documents {
 			ids[index] = document.ID
 		}
-		rows, err := transaction.QueryContext(ctx, `SELECT snapshot FROM ridu_published_documents
-WHERE collection_id = $1 AND document_id = ANY($2::text[])`, string(resource.ID), ids)
+		rows, err := transaction.QueryContext(ctx, fmt.Sprintf("SELECT %s FROM %s WHERE %s = ANY($1::text[])",
+			selectColumns(resource, fields, locales), quote(publishedCollectionTable(resource.ID)), quote("id")), ids)
 		if err != nil {
 			return false, checkpoint, err
 		}
 		var heads []store.Document
 		for rows.Next() {
-			var encoded []byte
-			if err := rows.Scan(&encoded); err != nil {
-				rows.Close()
-				return false, checkpoint, err
-			}
-			var head store.Document
-			if err := json.Unmarshal(encoded, &head); err != nil {
+			head, err := scanDocument(rows, resource, fields, locales)
+			if err != nil {
 				rows.Close()
 				return false, checkpoint, err
 			}
@@ -1144,6 +997,25 @@ owner_collection_id, owner_document_id, field_id, target_collection_id, target_d
 	}
 	checkpoint.LastID = documents[len(documents)-1].ID
 	return false, checkpoint, nil
+}
+
+// developmentReferenceBatchSize bounds each document batch of a development
+// reference-index rebuild, which runs inside one transaction.
+const developmentReferenceBatchSize = 500
+
+// rebuildReferenceIndex derives the complete reference index from the stored
+// working and live rows of manifest's resources in transaction.
+func rebuildReferenceIndex(ctx context.Context, transaction *sql.Tx, manifest schema.Manifest) error {
+	snapshot := manifest.Snapshot()
+	resources := append(append([]schema.Collection(nil), snapshot.Collections...), snapshot.Globals...)
+	checkpoint := referenceBackfillCheckpoint{}
+	for {
+		completed, next, err := referenceBackfillBatch(ctx, transaction, manifest, resources, checkpoint, developmentReferenceBatchSize)
+		if err != nil || completed {
+			return err
+		}
+		checkpoint = next
+	}
 }
 
 type schemaDocument struct {
@@ -1189,7 +1061,7 @@ WHERE ridu_migration_steps.artifact_digest = EXCLUDED.artifact_digest AND ridu_m
 	}
 	defer setConnectionTimeout(context.Background(), connection, "statement_timeout", 0)
 	if err := reconcileConcurrentIndex(commandContext, connection, payload); err != nil {
-		return fmt.Errorf("migration %s concurrent-index step %s: %w", file.Name, step.ID, err)
+		return fmt.Errorf("migration %s concurrent-index step %s: %w", file.Name, step.ID, migrationConflict(err))
 	}
 	transaction, err := connection.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 	graphqlplugin "github.com/riducms/ridu/plugins/graphql"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/tests/contracts/blockreferences"
 )
 
 // A registered block is one GraphQL type however many collections and blocks
@@ -33,16 +34,28 @@ func TestRegisteredBlocksShareOneTypeAcrossPlacements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for text, want := range map[string]int{"type CardBlock {": 1, "tone: CardBlockToneOption\n": 1, "input CardBlockToneOptionWhere {": 1, "type SectionBlock {": 1} {
+	for text, want := range map[string]int{
+		"type CardBlock {": 1, "tone: CardBlockToneOption\n": 1, "input CardBlockToneOptionWhere {": 1, "type SectionBlock {": 1,
+		// Filters nest like the schema, with one input for each registered block.
+		"input CardBlockWhere {": 1, "tone: CardBlockToneOptionWhere\n": 1, "input SectionBlockWhere {": 1, "card: CardBlockWhere\n": 4,
+	} {
 		if got := strings.Count(sdl, text); got != want {
 			t.Fatalf("%q appears %d times, want %d:\n%s", text, got, want, sdl)
 		}
 	}
+	inputBody := func(name string) string {
+		body := sdl[strings.Index(sdl, "input "+name+" {"):]
+		return body[:strings.Index(body, "}")]
+	}
+	if cards := inputBody("SectionBlockCardsWhere"); !strings.Contains(cards, "card: CardBlockWhere") {
+		t.Fatalf("SectionBlockCardsWhere does not select the shared block:\n%s", cards)
+	}
 	for _, name := range []string{"Page", "Post", "Landing"} {
-		where := sdl[strings.Index(sdl, "input "+name+"Where {"):]
-		where = where[:strings.Index(where, "}")]
-		if !strings.Contains(where, "layout__card__tone: CardBlockToneOptionWhere") || !strings.Contains(where, "layout__section__cards__card__tone: CardBlockToneOptionWhere") {
-			t.Fatalf("%sWhere does not filter shared block fields:\n%s", name, where)
+		if where := inputBody(name + "Where"); !strings.Contains(where, "layout: "+name+"LayoutWhere") {
+			t.Fatalf("%sWhere does not filter its layout:\n%s", name, where)
+		}
+		if layout := inputBody(name + "LayoutWhere"); !strings.Contains(layout, "card: CardBlockWhere") || !strings.Contains(layout, "section: SectionBlockWhere") {
+			t.Fatalf("%sLayoutWhere does not select shared blocks:\n%s", name, layout)
 		}
 	}
 
@@ -65,7 +78,7 @@ func TestRegisteredBlocksShareOneTypeAcrossPlacements(t *testing.T) {
 		}
 	}
 	result := graphQL(t, server.URL, `{
-  Pages(where: {layout__section__cards__card__tone: {equals: LOUD}}) {
+  Pages(where: {layout: {section: {cards: {card: {tone: {equals: LOUD}}}}}}) {
     docs {
       title
       layout {
@@ -91,5 +104,26 @@ func TestRegisteredBlocksShareOneTypeAcrossPlacements(t *testing.T) {
 	}
 	if nested := cards[0].(map[string]interface{}); nested["heading"] != "Nested loud" || nested["tone"] != "LOUD" {
 		t.Fatalf("nested card = %#v", nested)
+	}
+}
+
+// The schema is built eagerly at startup, so its size must follow block
+// definitions. This graph has 24 definitions and about 56,000 placements.
+func TestGraphQLSchemaFollowsDefinitions(t *testing.T) {
+	config := blockreferences.LayeredConfig(7, 3)
+	config.Plugins = append(config.Plugins, graphqlplugin.New())
+	manifest, err := ridu.Resolve(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sdl, err := graphqlplugin.GenerateSDL(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blocks := strings.Count(sdl, "Block {\n"); blocks != 24 {
+		t.Fatalf("schema has %d block types", blocks)
+	}
+	if len(sdl) > 64<<10 {
+		t.Fatalf("schema is %d bytes", len(sdl))
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/riducms/ridu/internal/blockgraph"
 	"github.com/riducms/ridu/schema"
 )
 
@@ -17,6 +18,9 @@ type RenameKind string
 const (
 	RenameCollection RenameKind = "collection"
 	RenameField      RenameKind = "field"
+	// RenameBlockField renames a field of a block definition. The definition
+	// is shared, so the rename applies at every placement of the block.
+	RenameBlockField RenameKind = "block-field"
 )
 
 // FieldPair relates the same physical field before and after a collection rename.
@@ -28,12 +32,20 @@ type FieldPair struct {
 // RenameCandidate is an unambiguous structural match that still requires
 // explicit human confirmation before migration SQL may preserve its data.
 type RenameCandidate struct {
-	Kind             RenameKind
+	Kind RenameKind
+	// BeforeCollection and AfterCollection hold a collection or field rename.
+	// They are zero for a block field rename.
 	BeforeCollection schema.Collection
 	AfterCollection  schema.Collection
-	BeforeField      *schema.Field
-	AfterField       *schema.Field
-	Fields           []FieldPair
+	// Block names the definition of a block field rename, whose fields have
+	// definition-relative paths and IDs.
+	Block       string
+	BeforeField *schema.Field
+	AfterField  *schema.Field
+	// Fields contains a collection rename's own field pairs: its fields and
+	// their groups' and arrays' fields. Block definitions are shared and keep
+	// their fields under a collection rename.
+	Fields []FieldPair
 }
 
 // RenameCandidates returns only one-to-one, shape-compatible collection and
@@ -47,6 +59,11 @@ func RenameCandidates(before, after schema.Manifest) []RenameCandidate {
 // to replay immutable multi-rename artifacts where an owner and one of its
 // relationship or upload targets move in the same transaction. Every mapped
 // collection must still match its own unique structural rename candidate.
+//
+// A resource's fields are compared without entering the block definitions
+// its containers select. Each definition both schemas place beneath a
+// surviving resource is compared once, so its field renames are found once
+// and the work follows definitions rather than placements.
 func RenameCandidatesWithCollectionMapping(before, after schema.Manifest, collectionMapping map[schema.StableID]schema.StableID) []RenameCandidate {
 	beforeSnapshot := before.Snapshot()
 	afterSnapshot := after.Snapshot()
@@ -71,6 +88,10 @@ func RenameCandidatesWithCollectionMapping(before, after schema.Manifest, collec
 	var candidates []RenameCandidate
 	renamedBefore := make(map[schema.StableID]bool)
 	renamedAfter := make(map[schema.StableID]bool)
+	survivors := make(map[schema.StableID]schema.StableID)
+	for id, mapped := range collectionMapping {
+		survivors[id] = mapped
+	}
 	for shape, removed := range removedByShape {
 		added := addedByShape[shape]
 		if len(removed) != 1 || len(added) != 1 || removed[0].Slug == added[0].Slug {
@@ -88,6 +109,7 @@ func RenameCandidatesWithCollectionMapping(before, after schema.Manifest, collec
 		})
 		renamedBefore[removed[0].ID] = true
 		renamedAfter[added[0].ID] = true
+		survivors[removed[0].ID] = added[0].ID
 	}
 
 	for id, beforeCollection := range beforeByID {
@@ -95,12 +117,32 @@ func RenameCandidatesWithCollectionMapping(before, after schema.Manifest, collec
 		if !exists || renamedBefore[id] || renamedAfter[id] {
 			continue
 		}
-		candidates = append(candidates, fieldRenameCandidates(beforeCollection, afterCollection, collectionMapping)...)
+		candidates = append(candidates, fieldRenameCandidatesWithin(beforeCollection, afterCollection, "", beforeCollection.Fields, afterCollection.Fields, collectionMapping)...)
 	}
+	candidates = append(candidates, blockFieldRenameCandidates(beforeSnapshot, afterSnapshot, survivors, collectionMapping)...)
 
 	sort.Slice(candidates, func(left, right int) bool {
 		return candidateKey(candidates[left]) < candidateKey(candidates[right])
 	})
+	return candidates
+}
+
+// blockFieldRenameCandidates compares each block definition placed before and
+// after the change beneath a surviving resource. Both of a definition's
+// localization views declare the same names and shapes, so one is compared.
+func blockFieldRenameCandidates(before, after schema.Snapshot, survivors, collectionMapping map[schema.StableID]schema.StableID) []RenameCandidate {
+	previous, current := blockgraph.New(before), blockgraph.New(after)
+	var candidates []RenameCandidate
+	compared := make(map[string]bool)
+	for _, key := range blockgraph.SortedKeys(blockgraph.Shared(previous, current, survivors, false)) {
+		if compared[key.Slug] {
+			continue
+		}
+		compared[key.Slug] = true
+		beforeView, _ := previous.View(key)
+		afterView, _ := current.View(key)
+		candidates = append(candidates, fieldRenameCandidatesWithin(schema.Collection{}, schema.Collection{}, key.Slug, beforeView.ResolvedFields(), afterView.ResolvedFields(), collectionMapping)...)
+	}
 	return candidates
 }
 
@@ -113,10 +155,13 @@ func collectionsByID(collections []schema.Collection) map[schema.StableID]schema
 }
 
 func candidateKey(candidate RenameCandidate) string {
-	if candidate.Kind == RenameCollection {
+	switch candidate.Kind {
+	case RenameCollection:
 		return "collection:" + string(candidate.BeforeCollection.Slug) + ":" + string(candidate.AfterCollection.Slug)
+	case RenameBlockField:
+		return "field:block:" + candidate.Block + ":" + candidate.BeforeField.Path.String() + ":" + candidate.AfterField.Path.String()
 	}
-	return "field:" + string(candidate.BeforeCollection.Slug) + ":" + candidate.BeforeField.Name + ":" + candidate.AfterField.Name
+	return "field:" + string(candidate.BeforeCollection.Slug) + ":" + candidate.BeforeField.Path.String() + ":" + candidate.AfterField.Path.String()
 }
 
 func collectionShape(collection schema.Collection, collectionMapping map[schema.StableID]schema.StableID) string {
@@ -131,6 +176,9 @@ func collectionShape(collection schema.Collection, collectionMapping map[schema.
 	return fmt.Sprintf("auth=%s;upload=%s;versions=%s;fields=%s", auth, upload, versions, strings.Join(fieldShapes, "|"))
 }
 
+// fieldShape describes how a field's values are stored. A Blocks container is
+// described by its selected definitions, which are shared and compared on
+// their own, so a shape never expands the block graph.
 func fieldShape(field schema.Field, self schema.StableID, collectionMapping map[schema.StableID]schema.StableID) string {
 	var detail strings.Builder
 	fmt.Fprintf(&detail, "%s|required=%t|unique=%t", field.Type, field.Required, field.Unique)
@@ -154,7 +202,7 @@ func fieldShape(field schema.Field, self schema.StableID, collectionMapping map[
 		var targetIDs []string
 		for _, target := range relationshipTargets(field.Relationship) {
 			id := target.CollectionID
-			if id == self {
+			if id == self && self != "" {
 				targetIDs = append(targetIDs, "$self")
 				continue
 			}
@@ -170,7 +218,7 @@ func fieldShape(field schema.Field, self schema.StableID, collectionMapping map[
 	}
 	if field.Upload != nil {
 		id := field.Upload.CollectionID
-		if id == self {
+		if id == self && self != "" {
 			id = "$self"
 		} else if mapped := collectionMapping[id]; mapped != "" {
 			id = mapped
@@ -186,14 +234,9 @@ func fieldShape(field schema.Field, self schema.StableID, collectionMapping map[
 		detail.WriteString("|nested={" + strings.Join(children, ",") + "}")
 	}
 	if field.Blocks != nil {
-		for _, block := range field.Blocks.ResolvedTypes() {
-			children := make([]string, len(block.ResolvedFields()))
-			for index, child := range block.ResolvedFields() {
-				children[index] = fieldShape(child, self, collectionMapping)
-			}
-			sort.Strings(children)
-			detail.WriteString("|block=" + block.Slug + "{" + strings.Join(children, ",") + "}")
-		}
+		slugs := append([]string(nil), field.Blocks.BlockReferences...)
+		sort.Strings(slugs)
+		detail.WriteString("|blocks=" + strings.Join(slugs, ","))
 	}
 	if field.Plugin != nil {
 		detail.WriteString("|plugin=" + field.Plugin.Key + ":" + string(field.Plugin.Config))
@@ -275,71 +318,22 @@ func pairFields(beforeFields, afterFields []schema.Field, beforeCollectionID, af
 	}
 	immediate := append([]FieldPair(nil), pairs...)
 	for _, pair := range immediate {
-		descendants, complete := pairFieldDescendants(pair.Before, pair.After, beforeCollectionID, afterCollectionID, collectionMapping)
+		if pair.Before.Nested == nil || pair.After.Nested == nil {
+			continue
+		}
+		children, complete := pairFields(pair.Before.Nested.ResolvedFields(), pair.After.Nested.ResolvedFields(), beforeCollectionID, afterCollectionID, collectionMapping)
 		if !complete {
 			return nil, false
 		}
-		pairs = append(pairs, descendants...)
+		pairs = append(pairs, children...)
 	}
 	sort.Slice(pairs, func(left, right int) bool { return pairs[left].Before.Name < pairs[right].Before.Name })
 	return pairs, true
 }
 
-func pairFieldDescendants(before, after schema.Field, beforeCollectionID, afterCollectionID schema.StableID, collectionMapping map[schema.StableID]schema.StableID) ([]FieldPair, bool) {
-	var pairs []FieldPair
-	if before.Nested != nil || after.Nested != nil {
-		if before.Nested == nil || after.Nested == nil {
-			return nil, false
-		}
-		children, complete := pairFields(before.Nested.ResolvedFields(), after.Nested.ResolvedFields(), beforeCollectionID, afterCollectionID, collectionMapping)
-		if !complete {
-			return nil, false
-		}
-		pairs = append(pairs, children...)
-	}
-	if before.Blocks != nil || after.Blocks != nil {
-		if before.Blocks == nil || after.Blocks == nil || len(before.Blocks.ResolvedTypes()) != len(after.Blocks.ResolvedTypes()) {
-			return nil, false
-		}
-		afterBlocks := make(map[string]schema.BlockType, len(after.Blocks.ResolvedTypes()))
-		for _, block := range after.Blocks.ResolvedTypes() {
-			afterBlocks[block.Slug] = block
-		}
-		for _, block := range before.Blocks.ResolvedTypes() {
-			matched, exists := afterBlocks[block.Slug]
-			if !exists {
-				return nil, false
-			}
-			children, complete := pairFields(block.ResolvedFields(), matched.ResolvedFields(), beforeCollectionID, afterCollectionID, collectionMapping)
-			if !complete {
-				return nil, false
-			}
-			pairs = append(pairs, children...)
-		}
-	}
-	beforeEmbedded, afterEmbedded := schema.EmbeddedBlocks(before), schema.EmbeddedBlocks(after)
-	if len(beforeEmbedded) != len(afterEmbedded) {
-		return nil, false
-	}
-	for i, container := range beforeEmbedded {
-		if container.Name != afterEmbedded[i].Name {
-			return nil, false
-		}
-		children, complete := pairFieldDescendants(container, afterEmbedded[i], beforeCollectionID, afterCollectionID, collectionMapping)
-		if !complete {
-			return nil, false
-		}
-		pairs = append(pairs, children...)
-	}
-
-	return pairs, true
-}
-
-func fieldRenameCandidates(before, after schema.Collection, collectionMapping map[schema.StableID]schema.StableID) []RenameCandidate {
-	return fieldRenameCandidatesWithin(before, after, before.Fields, after.Fields, collectionMapping)
-}
-
-func fieldRenameCandidatesWithin(before, after schema.Collection, beforeFields, afterFields []schema.Field, collectionMapping map[schema.StableID]schema.StableID) []RenameCandidate {
+// fieldRenameCandidatesWithin compares one field list of a collection, or of
+// the block definition named by block, and its groups and arrays.
+func fieldRenameCandidatesWithin(before, after schema.Collection, block string, beforeFields, afterFields []schema.Field, collectionMapping map[schema.StableID]schema.StableID) []RenameCandidate {
 	beforeByID := make(map[schema.StableID]schema.Field, len(beforeFields))
 	afterByID := make(map[schema.StableID]schema.Field, len(afterFields))
 	for _, field := range beforeFields {
@@ -362,6 +356,10 @@ func fieldRenameCandidatesWithin(before, after schema.Collection, beforeFields, 
 			addedByShape[shape] = append(addedByShape[shape], field)
 		}
 	}
+	kind := RenameField
+	if block != "" {
+		kind = RenameBlockField
+	}
 	var candidates []RenameCandidate
 	for shape, removed := range removedByShape {
 		added := addedByShape[shape]
@@ -370,28 +368,14 @@ func fieldRenameCandidatesWithin(before, after schema.Collection, beforeFields, 
 		}
 		beforeField, afterField := removed[0], added[0]
 		candidates = append(candidates, RenameCandidate{
-			Kind: RenameField, BeforeCollection: before, AfterCollection: after,
+			Kind: kind, BeforeCollection: before, AfterCollection: after, Block: block,
 			BeforeField: &beforeField, AfterField: &afterField,
 		})
 	}
 	for id, beforeField := range beforeByID {
 		afterField, exists := afterByID[id]
-		if !exists {
-			continue
-		}
-		if beforeField.Nested != nil && afterField.Nested != nil {
-			candidates = append(candidates, fieldRenameCandidatesWithin(before, after, beforeField.Nested.ResolvedFields(), afterField.Nested.ResolvedFields(), collectionMapping)...)
-		}
-		if beforeField.Blocks != nil && afterField.Blocks != nil {
-			afterBlocks := make(map[string]schema.BlockType, len(afterField.Blocks.ResolvedTypes()))
-			for _, block := range afterField.Blocks.ResolvedTypes() {
-				afterBlocks[block.Slug] = block
-			}
-			for _, block := range beforeField.Blocks.ResolvedTypes() {
-				if matched, exists := afterBlocks[block.Slug]; exists {
-					candidates = append(candidates, fieldRenameCandidatesWithin(before, after, block.ResolvedFields(), matched.ResolvedFields(), collectionMapping)...)
-				}
-			}
+		if exists && beforeField.Nested != nil && afterField.Nested != nil {
+			candidates = append(candidates, fieldRenameCandidatesWithin(before, after, block, beforeField.Nested.ResolvedFields(), afterField.Nested.ResolvedFields(), collectionMapping)...)
 		}
 	}
 	return candidates

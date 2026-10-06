@@ -10,11 +10,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/riducms/ridu/internal/membership"
 	operationengine "github.com/riducms/ridu/internal/operation"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
+	"github.com/riducms/ridu/store"
 )
 
 // adminCollectionList serves browser reads independently of build metadata and
@@ -35,13 +37,10 @@ func (api *API) adminCollectionList(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	identity := api.resolveAdminPreparedIdentity(request).identity
-	snapshot := api.config.Manifest.Snapshot()
-	if api.config.ManifestForRequest != nil {
-		snapshot, err = api.config.ManifestForRequest(request.Context(), identity)
-		if err != nil {
-			api.writeError(writer, requestID, err)
-			return
-		}
+	snapshot, _, err := api.presentedManifest(request.Context(), identity)
+	if err != nil {
+		api.writeError(writer, requestID, err)
+		return
 	}
 	collection := adminCollection(snapshot, slug)
 	if collection == nil {
@@ -183,7 +182,7 @@ func (api *API) readCollectionPage(ctx context.Context, slug string, identity *A
 	result, err := api.config.Engine.Execute(ctx, operationengine.Request{
 		Operation: operation.Read, Collection: slug, Filter: options.filter,
 		Draft: options.draft,
-		Page:  options.page, Limit: options.limit, Actor: identityActor(identity), ActorCollection: identityCollection(identity), Sort: options.sort,
+		Page:  options.page, Limit: options.limit, SkipTotal: options.skipTotal, Actor: identityActor(identity), ActorCollection: identityCollection(identity), Sort: options.sort,
 		Select: options.selectFields, OutputFields: options.outputFields, Populate: options.populate, TrashOnly: options.trashOnly,
 		IncludeAccess: options.includeAccess, Locale: options.locale, FallbackLocales: options.fallbackLocales,
 		DisableFallback: options.disableFallback, AllLocales: options.allLocales,
@@ -192,17 +191,11 @@ func (api *API) readCollectionPage(ctx context.Context, slug string, identity *A
 		return protocol.CollectionPageEnvelope[json.RawMessage]{}, err
 	}
 	page := result.Page
-	totalPages := 0
-	if page.Total > 0 {
-		totalPages = (page.Total + page.Limit - 1) / page.Limit
-	}
 	docs := make([]json.RawMessage, len(page.Documents))
 	for index, document := range page.Documents {
 		docs[index] = documentJSON(document)
 	}
-	value := protocol.CollectionPageEnvelope[json.RawMessage]{Docs: docs, Pagination: protocol.Pagination{
-		Page: page.Page, Limit: page.Limit, TotalDocs: page.Total, TotalPages: totalPages, HasNextPage: page.Page < totalPages, HasPrevPage: page.Page > 1,
-	}}
+	value := protocol.CollectionPageEnvelope[json.RawMessage]{Docs: docs, Pagination: paginationJSON(*page)}
 	if options.includeAccess {
 		value.Access = protocol.CollectionPageAccess{Collection: accessCapabilitiesJSON(result.PageAccess.Collection), Documents: map[string]protocol.AccessCapabilitiesEnvelope{}}
 		for id, access := range result.PageAccess.Documents {
@@ -222,7 +215,19 @@ func (api *API) readCollectionCount(ctx context.Context, slug string, identity *
 	if err != nil {
 		return 0, err
 	}
-	return result.Page.Total, nil
+	return *result.Page.Total, nil
+}
+
+// paginationJSON reports totals only for a counted page; HasNextPage comes
+// from the adapter in both modes.
+func paginationJSON(page store.Page) protocol.Pagination {
+	pagination := protocol.Pagination{Page: page.Page, Limit: page.Limit, HasNextPage: page.HasNextPage, HasPrevPage: page.Page > 1}
+	if page.Total != nil {
+		total := *page.Total
+		totalPages := (total + page.Limit - 1) / page.Limit
+		pagination.TotalDocs, pagination.TotalPages = &total, &totalPages
+	}
+	return pagination
 }
 
 func validListLimit(value int) bool { return value == 10 || value == 25 || value == 50 || value == 100 }
@@ -268,7 +273,7 @@ func (api *API) adminListWhere(snapshot schema.Snapshot, slug string, values url
 		Operator string `json:"operator"`
 		Value    any    `json:"value"`
 	}
-	filterFields := adminFilterableFields(collection.Fields, false)
+	var filterFields []schema.Field
 	for _, name := range []string{"id", "createdAt", "updatedAt", "_status"} {
 		if name == "_status" && collection.Versions == nil {
 			continue
@@ -289,11 +294,19 @@ func (api *API) adminListWhere(snapshot schema.Snapshot, slug string, values url
 			conditions := make([]map[string]any, 0, len(group))
 			for _, filter := range group {
 				field := adminFieldByPath(filterFields, filter.Field)
+				if field == nil {
+					field = adminFilterableField(collection.Fields, filter.Field)
+				}
 				if field == nil || !adminFilterOperatorAllowed(*field, filter.Operator) {
 					continue
 				}
 				value, valid := adminFilterValue(*field, filter.Operator, filter.Value)
 				if !valid {
+					continue
+				}
+				if filter.Operator == "notIn" {
+					// The query language negates membership rather than naming its opposite.
+					conditions = append(conditions, map[string]any{"not": map[string]any{filter.Field: map[string]any{"in": value}}})
 					continue
 				}
 				conditions = append(conditions, map[string]any{filter.Field: map[string]any{filter.Operator: value}})
@@ -338,42 +351,62 @@ func adminFieldByPath(fields []schema.Field, path string) *schema.Field {
 	return nil
 }
 
-func adminFilterableFields(fields []schema.Field, inheritedRestricted bool) []schema.Field {
-	result := make([]schema.Field, 0, len(fields))
-	for _, field := range fields {
-		// A restricted container makes every descendant path restricted even when
-		// the leaf itself does not repeat QueryRestricted in the manifest.
-		restricted := inheritedRestricted || field.QueryRestricted
-		switch field.Type {
-		case schema.FieldTypeGroup, schema.FieldTypeArray:
-			if field.Nested != nil {
-				result = append(result, adminFilterableFields(field.Nested.Fields, restricted)...)
+// adminFilterableField resolves a list filter's field from its canonical path
+// through groups, arrays and block variants, creating placement views only
+// along that path. A restricted container makes every descendant path
+// restricted even when the leaf itself does not repeat QueryRestricted.
+func adminFilterableField(fields []schema.Field, path string) *schema.Field {
+	segments := strings.Split(path, ".")
+	restricted := false
+	for index := 0; index < len(segments); {
+		var found *schema.Field
+		for candidate := range fields {
+			if fields[candidate].Name == segments[index] {
+				found = &fields[candidate]
+				break
 			}
-			continue
-		case schema.FieldTypeBlocks:
-			if field.Blocks != nil {
-				for _, block := range field.Blocks.ResolvedTypes() {
-					result = append(result, adminFilterableFields(block.Fields, restricted)...)
+		}
+		if found == nil {
+			return nil
+		}
+		restricted = restricted || found.QueryRestricted
+		index++
+		switch {
+		case found.Type == schema.FieldTypeGroup || found.Type == schema.FieldTypeArray:
+			if found.Nested == nil || index == len(segments) {
+				return nil
+			}
+			fields = found.Nested.ResolvedFields()
+		case found.Type == schema.FieldTypeBlocks:
+			if found.Blocks == nil || index == len(segments) {
+				return nil
+			}
+			fields = nil
+			for _, block := range found.Blocks.ResolvedTypes() {
+				if block.Slug == segments[index] {
+					fields = block.ResolvedFields()
 				}
 			}
-			continue
+			index++
+		case index < len(segments) || restricted || found.Virtual != nil || found.Join != nil || found.Plugin != nil || found.Type == schema.FieldTypeUI || found.Type == schema.FieldTypeJSON || found.Type == schema.FieldTypePoint || found.Type == schema.FieldTypeCode:
+			return nil
+		default:
+			return found
 		}
-		if restricted || field.Virtual != nil || field.Join != nil || field.Plugin != nil || field.Type == schema.FieldTypeUI || field.Type == schema.FieldTypeJSON || field.Type == schema.FieldTypePoint || field.Type == schema.FieldTypeCode {
-			continue
-		}
-		result = append(result, field)
 	}
-	return result
+	return nil
 }
 
+// adminFilterOperatorAllowed mirrors the admin's operator menu. Lists, has-many
+// fields and polymorphic relationships offer membership only.
 func adminFilterOperatorAllowed(field schema.Field, operator string) bool {
 	var allowed []string
-	switch field.Type {
-	case schema.FieldTypeTextList, schema.FieldTypeNumberList:
-		allowed = []string{"in", "exists"}
-	case schema.FieldTypeNumber, schema.FieldTypeDate:
+	switch {
+	case membership.KindOf(field) != membership.None:
+		allowed = []string{"in", "notIn", "exists"}
+	case field.Type == schema.FieldTypeNumber || field.Type == schema.FieldTypeDate:
 		allowed = []string{"equals", "notEquals", "greaterThan", "greaterThanEqual", "lessThan", "lessThanEqual", "exists"}
-	case schema.FieldTypeText, schema.FieldTypeTextarea, schema.FieldTypeEmail:
+	case field.Type == schema.FieldTypeText || field.Type == schema.FieldTypeTextarea || field.Type == schema.FieldTypeEmail:
 		allowed = []string{"like", "equals", "notEquals", "contains", "exists"}
 	default:
 		allowed = []string{"equals", "notEquals", "exists"}
@@ -381,7 +414,51 @@ func adminFilterOperatorAllowed(field schema.Field, operator string) bool {
 	return containsString(allowed, operator)
 }
 
+// adminFilterCandidates reads the candidates of a membership condition: one
+// string or a list of them. Number lists compare numbers, and a polymorphic
+// relationship's candidate "collection:id" becomes a {relationTo, id}
+// reference; collection slugs never contain a colon.
+func adminFilterCandidates(field schema.Field, raw any) ([]any, bool) {
+	var items []any
+	switch typed := raw.(type) {
+	case string:
+		items = []any{typed}
+	case []any:
+		items = typed
+	default:
+		return nil, false
+	}
+	kind := membership.KindOf(field)
+	candidates := make([]any, 0, len(items))
+	for _, item := range items {
+		text, ok := item.(string)
+		if !ok || text == "" {
+			return nil, false
+		}
+		switch kind {
+		case membership.Numbers:
+			number, err := adminJavaScriptNumber(text)
+			if err != nil || math.IsInf(number, 0) || math.IsNaN(number) {
+				return nil, false
+			}
+			candidates = append(candidates, number)
+		case membership.References:
+			relationTo, id, found := strings.Cut(text, ":")
+			if !found || relationTo == "" || id == "" {
+				return nil, false
+			}
+			candidates = append(candidates, map[string]any{"relationTo": relationTo, "id": id})
+		default:
+			candidates = append(candidates, text)
+		}
+	}
+	return candidates, len(candidates) > 0
+}
+
 func adminFilterValue(field schema.Field, operator string, raw any) (any, bool) {
+	if operator == "in" || operator == "notIn" {
+		return adminFilterCandidates(field, raw)
+	}
 	value := ""
 	switch typed := raw.(type) {
 	case string:
@@ -401,11 +478,11 @@ func adminFilterValue(field schema.Field, operator string, raw any) (any, bool) 
 	if operator == "exists" {
 		return value != "false", true
 	}
-	if value == "" && field.Type != schema.FieldTypeTextList {
+	if value == "" {
 		return nil, false
 	}
 	var normalized any = value
-	if field.Type == schema.FieldTypeNumber || field.Type == schema.FieldTypeNumberList {
+	if field.Type == schema.FieldTypeNumber {
 		number, err := adminJavaScriptNumber(value)
 		if err != nil || math.IsInf(number, 0) || math.IsNaN(number) {
 			return nil, false
@@ -413,9 +490,6 @@ func adminFilterValue(field schema.Field, operator string, raw any) (any, bool) 
 		normalized = number
 	} else if field.Type == schema.FieldTypeCheckbox {
 		normalized = value == "true"
-	}
-	if operator == "in" {
-		return []any{normalized}, true
 	}
 	return normalized, true
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/riducms/ridu/internal/population"
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -12,19 +13,18 @@ import (
 
 func TestMapAtPathTraversesLocalizedGroupsArraysAndBlocks(t *testing.T) {
 	person := schema.RelationshipField{CollectionID: "people", CollectionSlug: "people"}
-	fields := []schema.Field{{
-		Name: "sections", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{{
-			Name: "content", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Slug: "quote", Fields: []schema.Field{{
-					Name: "credit", Path: mustPath(t, "sections", "content", "quote", "credit"), Type: schema.FieldTypeGroup,
-					Nested: &schema.NestedField{Fields: []schema.Field{{
-						Name: "author", Path: mustPath(t, "sections", "content", "quote", "credit", "author"), Type: schema.FieldTypeRelationship,
-						Localized: true, Relationship: &person,
-					}}},
-				}},
-			}}},
+	quoteBlock := schema.BlockType{Slug: "quote", TypeName: "Quote", Fields: []schema.Field{{
+		Name: "credit", Path: mustPath(t, "credit"), Type: schema.FieldTypeGroup,
+		Nested: &schema.NestedField{Fields: []schema.Field{{
+			Name: "author", Path: mustPath(t, "credit", "author"), Type: schema.FieldTypeRelationship,
+			Localized: true, Relationship: &person,
 		}}},
-	}}
+	}}}
+	fields := schematest.Bind(t, "pages", []schema.BlockType{quoteBlock}, schema.Field{
+		Name: "sections", Path: mustPath(t, "sections"), Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{{
+			Name: "content", Path: mustPath(t, "sections", "content"), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"quote"}},
+		}}},
+	})
 	values := store.Values{"sections": store.List(
 		store.Object(store.Values{"content": store.List(
 			store.Object(store.Values{"blockType": store.String("quote"), "credit": store.Object(store.Values{
@@ -76,12 +76,14 @@ func TestMapAtPathAllLocalesVisitsStableLocaleOrder(t *testing.T) {
 
 func TestReferenceFieldsAndFieldAtPathIncludeBlockDiscriminator(t *testing.T) {
 	reference := schema.Field{
-		Name: "asset", Path: mustPath(t, "layout", "hero", "asset"), Type: schema.FieldTypeUpload,
+		ID: "block-hero-asset", Name: "asset", Path: mustPath(t, "asset"), Type: schema.FieldTypeUpload,
 		Upload: &schema.UploadField{CollectionID: "media", CollectionSlug: "media"},
 	}
-	fields := []schema.Field{{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{reference}}}}}}
-	found, ok := population.FieldAtPath(fields, reference.Path)
-	if !ok || found.ID != reference.ID || found.Path.String() != "layout.hero.asset" {
+	hero := schema.BlockType{Slug: "hero", TypeName: "Hero", Fields: []schema.Field{reference}}
+	fields := schematest.Bind(t, "pages", []schema.BlockType{hero}, schema.Field{ID: "pages-layout", Name: "layout", Path: mustPath(t, "layout"), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"hero"}}})
+	// FieldAtPath resolves configuration: the block's shared definition field.
+	found, ok := population.FieldAtPath(fields, mustPath(t, "layout", "hero", "asset"))
+	if !ok || found.ID != reference.ID || found.Path.String() != "asset" {
 		t.Fatalf("field = %#v, found=%v", found, ok)
 	}
 	references := population.ReferenceFields(fields)

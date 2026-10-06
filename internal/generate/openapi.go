@@ -51,7 +51,7 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	generator := openAPIBlockGenerator{blocks: catalog, draftReadFields: catalog.DraftReadFields(snapshot)}
+	generator := openAPIBlockGenerator{blocks: catalog, draftReadFields: catalog.DraftReadFields(snapshot), localized: localizationUse{}}
 	document := openAPIDocument{
 		BlockRegistry: snapshot.Blocks,
 		OpenAPI:       "3.1.0",
@@ -85,7 +85,7 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 	for _, collection := range snapshot.Collections {
 		slug := string(collection.Slug)
 		name := string(collection.ID)
-		localeParameters := localizationParameters(snapshot.Application.Localization, collection.Fields)
+		localeParameters := localizationParameters(snapshot.Application.Localization, generator.localized, collection.Fields)
 		document.Paths["/api/collections/"+slug+"/validate"] = map[string]any{"post": liveValidationOperation(name, snapshot.Application.Localization, false)}
 		listSpec := operationSpec("List "+collection.Labels.Plural, "list"+name, "200")
 		listSpec["parameters"] = append(collectionListParameters(collection), localeParameters...)
@@ -376,7 +376,7 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 	}
 	for _, global := range snapshot.Globals {
 		slug, name := string(global.Slug), string(global.ID)
-		localeParameters := localizationParameters(snapshot.Application.Localization, global.Fields)
+		localeParameters := localizationParameters(snapshot.Application.Localization, generator.localized, global.Fields)
 		document.Paths["/api/globals/"+slug+"/validate"] = map[string]any{"post": liveValidationOperation(name, snapshot.Application.Localization, true)}
 		readSpec := operationSpec("Read "+global.Labels.Singular, "read"+name, "200")
 		readSpec["parameters"] = append(append(resourceReadParameters(), readDraftParameters(global)...), localeParameters...)
@@ -638,6 +638,11 @@ func collectionListParameters(collection schema.Collection) []map[string]any {
 			"schema":      map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "default": 10},
 		},
 		{
+			"name": "pagination", "in": "query", "required": false,
+			"description": "Set false to skip counting every match: pagination omits totalDocs and totalPages, and hasNextPage stays exact.",
+			"schema":      map[string]any{"type": "boolean", "default": true},
+		},
+		{
 			"name": "where", "in": "query", "required": false,
 			"description": "JSON-encoded document filter combined atomically with collection access rules.",
 			"schema":      map[string]any{"type": "string"},
@@ -677,8 +682,8 @@ func resourceReadParameters() []map[string]any {
 	)
 }
 
-func localizationParameters(settings *schema.LocalizationSettings, fields []schema.Field) []map[string]any {
-	if settings == nil || !fieldsUseLocalization(fields) {
+func localizationParameters(settings *schema.LocalizationSettings, localized localizationUse, fields []schema.Field) []map[string]any {
+	if settings == nil || !localized.fields(fields) {
 		return nil
 	}
 	locales := make([]string, 0, len(settings.Locales)+1)
@@ -700,16 +705,38 @@ func localizationParameters(settings *schema.LocalizationSettings, fields []sche
 	}
 }
 
-func fieldsUseLocalization(fields []schema.Field) bool {
+// localizationUse memoizes whether field lists contain a localized field. A
+// shared block definition is one slice at every placement, so each list is
+// inspected once rather than once per path through the block graph.
+type localizationUse map[*schema.Field]bool
+
+func (use localizationUse) fields(fields []schema.Field) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	if known, ok := use[&fields[0]]; ok {
+		return known
+	}
+	result := false
 	for _, field := range fields {
-		if field.Localized {
-			return true
-		}
-		if fieldsUseLocalization(schema.ChildFields(field)) {
-			return true
+		if use.field(field) {
+			result = true
+			break
 		}
 	}
-	return false
+	use[&fields[0]] = result
+	return result
+}
+
+func (use localizationUse) field(field schema.Field) bool {
+	if field.Localized {
+		return true
+	}
+	found := false
+	schema.EachDefinitionChildList(field, func(children []schema.Field) {
+		found = found || use.fields(children)
+	})
+	return found
 }
 
 func restoreVersionParameters() []map[string]any {
@@ -793,15 +820,16 @@ type openAPIBlockGenerator struct {
 	update          bool
 	draft           bool
 	draftReadFields map[schema.StableID]bool
+	localized       localizationUse
 }
 
 func openAPIFieldSchema(field schema.Field, pluginTypes map[string]json.RawMessage) (map[string]any, error) {
-	return (openAPIBlockGenerator{}).fieldSchema(field, pluginTypes)
+	return (openAPIBlockGenerator{localized: localizationUse{}}).fieldSchema(field, pluginTypes)
 }
 
 func (generator openAPIBlockGenerator) fieldSchema(field schema.Field, pluginTypes map[string]json.RawMessage) (map[string]any, error) {
 	single, err := generator.fieldSchemaForLocaleMode(field, pluginTypes, false)
-	if err != nil || generator.input || !fieldsUseLocalization([]schema.Field{field}) {
+	if err != nil || generator.input || !generator.localized.field(field) {
 		return single, err
 	}
 	all, err := generator.fieldSchemaForLocaleMode(field, pluginTypes, true)
@@ -959,9 +987,9 @@ func (generator openAPIBlockGenerator) fieldSchemaForLocaleMode(field schema.Fie
 		if field.Blocks == nil {
 			return nil, fmt.Errorf("field %s lacks block metadata", field.Name)
 		}
-		variants := make([]any, 0, len(field.Blocks.ResolvedTypes()))
-		mapping := make(map[string]string, len(field.Blocks.ResolvedTypes()))
-		for index, block := range field.Blocks.ResolvedTypes() {
+		variants := make([]any, 0, len(field.Blocks.Definitions()))
+		mapping := make(map[string]string, len(field.Blocks.Definitions()))
+		for index, block := range field.Blocks.Definitions() {
 			if generator.blocks != nil {
 				name := generator.blocks.Fields[field.ID].Variants[index]
 				if generator.input {
@@ -1286,18 +1314,6 @@ func (generator openAPIBlockGenerator) addBlockSchemas(schemas map[string]openAP
 	return nil
 }
 
-func containsBlockFields(fields []schema.Field) bool {
-	for _, field := range fields {
-		if field.Blocks != nil || len(schema.EmbeddedBlocks(field)) > 0 {
-			return true
-		}
-		if containsBlockFields(schema.ChildFields(field)) {
-			return true
-		}
-	}
-	return false
-}
-
 func addUploadGrantSchemas(schemas map[string]openAPISchema) {
 	schemas["UploadGrantsRequest"] = openAPISchema{
 		Type: "object", Required: []string{"items"},
@@ -1345,9 +1361,10 @@ func addTransportSchemas(schemas map[string]openAPISchema) {
 	}, Required: []string{"totalDocs"}}
 	schemas["Pagination"] = openAPISchema{Type: "object", Properties: map[string]any{
 		"page": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"},
-		"totalDocs": map[string]any{"type": "integer"}, "totalPages": map[string]any{"type": "integer"},
+		"totalDocs":   map[string]any{"type": "integer", "description": "Exact number of matching documents; omitted when the list set pagination=false."},
+		"totalPages":  map[string]any{"type": "integer", "description": "Number of pages at this limit; omitted when the list set pagination=false."},
 		"hasNextPage": map[string]any{"type": "boolean"}, "hasPrevPage": map[string]any{"type": "boolean"},
-	}, Required: []string{"page", "limit", "totalDocs", "totalPages", "hasNextPage", "hasPrevPage"}}
+	}, Required: []string{"page", "limit", "hasNextPage", "hasPrevPage"}}
 	schemas["ValidationIssue"] = openAPISchema{
 		Type: "object", Properties: map[string]any{
 			"code":         map[string]any{"type": "string"},

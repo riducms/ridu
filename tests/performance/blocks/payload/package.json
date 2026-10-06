@@ -1,0 +1,28 @@
+{
+	"name": "@riducms/payload-blocks-benchmark",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"packageManager": "bun@1.4.0",
+	"scripts": {
+		"build": "next build",
+		"check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@payloadcms/db-mongodb": "3.87.0",
+		"@payloadcms/db-postgres": "3.87.0",
+		"@payloadcms/next": "3.87.0",
+		"@payloadcms/ui": "3.87.0",
+		"graphql": "16.11.0",
+		"next": "16.2.6",
+		"payload": "3.87.0",
+		"react": "19.2.6",
+		"react-dom": "19.2.6"
+	},
+	"devDependencies": {
+		"@types/node": "22.19.9",
+		"@types/react": "19.2.14",
+		"@types/react-dom": "19.2.3",
+		"typescript": "5.7.3"
+	}
+}

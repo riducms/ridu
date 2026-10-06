@@ -1,0 +1,29 @@
+@layer ridu.components {
+	.ridu-filter-field-picker__name {
+		display: flex;
+		flex: 1;
+		gap: 0.3em;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+	}
+	// A long search trail yields its space before the matched label does.
+	.ridu-filter-field-picker__trail {
+		flex: 0 1 auto;
+		min-width: 2em;
+		overflow: hidden;
+		color: var(--foreground-muted);
+		text-overflow: ellipsis;
+	}
+	.ridu-filter-field-picker__label {
+		flex: 0 0 auto;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.ridu-filter-field-picker__status {
+		padding: 10px 14px;
+		color: var(--foreground-muted);
+		font-size: 12px;
+	}
+}

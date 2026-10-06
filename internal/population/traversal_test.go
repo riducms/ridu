@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/riducms/ridu/internal/population"
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -93,9 +94,8 @@ func TestVisitAtPathDoesNotFallbackAfterSelectingMalformedContainer(t *testing.T
 }
 
 func TestVisitAtPathRetainsSnapshotsAndSkipsUnmatchedRows(t *testing.T) {
-	fields := []schema.Field{{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-		Slug: "card", Fields: []schema.Field{{Name: "payload", Type: schema.FieldTypeGroup}},
-	}}}}}
+	card := schema.BlockType{Slug: "card", TypeName: "Card", Fields: []schema.Field{{Name: "payload", Path: mustPath(t, "payload"), Type: schema.FieldTypeGroup}}}
+	fields := schematest.Bind(t, "pages", []schema.BlockType{card}, schema.Field{Name: "layout", Path: mustPath(t, "layout"), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"card"}}})
 	payload := func(title string) store.Value { return store.Object(store.Values{"title": store.String(title)}) }
 	block := func(kind, title string) store.Value {
 		return store.Object(store.Values{"blockType": store.String(kind), "payload": payload(title)})
@@ -133,7 +133,7 @@ func TestVisitAtPathRetainsSnapshotsAndSkipsUnmatchedRows(t *testing.T) {
 }
 
 func TestVisitAndMapEmbeddedPathPreserveStreamingErrors(t *testing.T) {
-	field, node := embeddedPopulationFixture()
+	field, node := embeddedPopulationFixture(t)
 	path := mustPath(t, "content", "cards", "widget", "card", "author")
 	for _, invalid := range []bool{false, true} {
 		t.Run(map[bool]string{false: "valid", true: "later malformed node"}[invalid], func(t *testing.T) {
@@ -218,13 +218,12 @@ func TestMapPopulatedDocumentsKeepsDetachedCallbackAndUnpopulatedBranches(t *tes
 	}
 }
 
-func embeddedPopulationFixture() (schema.Field, func(string, string) store.Value) {
-	field := schema.Field{Name: "content", Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{EmbeddedTrees: []schema.EmbeddedTree{{
+func embeddedPopulationFixture(t *testing.T) (schema.Field, func(string, string) store.Value) {
+	card := schema.BlockType{Slug: "card", TypeName: "Card", Fields: []schema.Field{{Name: "author", Path: mustPath(t, "author"), Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{CollectionID: "people", CollectionSlug: "people"}}}}
+	field := schematest.Bind(t, "pages", []schema.BlockType{card}, schema.Field{Name: "content", Path: mustPath(t, "content"), Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{EmbeddedTrees: []schema.EmbeddedTree{{
 		Version: 1, Key: "cards", Root: []string{"outline"}, Children: "items", Tag: "kind",
-		Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", Types: []schema.BlockType{{
-			Slug: "card", Fields: []schema.Field{{Name: "author", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{CollectionID: "people", CollectionSlug: "people"}}},
-		}}}},
-	}}}}
+		Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", BlockReferences: []string{"card"}}},
+	}}}})[0]
 	return field, func(key, author string) store.Value {
 		return store.Object(store.Values{"kind": store.String("widget"), "content": store.Object(store.Values{
 			"schema": store.String("card"), "uid": store.String(key), "author": store.String(author),

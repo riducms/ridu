@@ -1,0 +1,109 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	// Loaded with the picker's panel; the trigger's own rules stay in filter-field-picker.scss.
+	.ridu-popover.ridu-filter-field-picker {
+		gap: 0;
+		width: max(var(--bits-popover-anchor-width), 280px);
+		max-width: calc(100vw - 32px);
+		padding: 0;
+	}
+	.ridu-filter-field-picker__search {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding-inline: 10px;
+		border-bottom: 1px solid var(--control-border);
+		color: var(--foreground-muted);
+
+		svg {
+			flex-shrink: 0;
+		}
+
+		.ridu-command__input {
+			block-size: 40px;
+			font-size: 13px;
+		}
+	}
+	.ridu-filter-field-picker__level {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+		padding: 6px 10px 6px 6px;
+		border-bottom: 1px solid var(--control-border);
+		color: var(--foreground-muted);
+		font-size: 12px;
+
+		span {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+	.ridu-filter-field-picker__back {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 26px;
+		height: 26px;
+		border: 0;
+		border-radius: 3px;
+		padding: 0;
+		background: none;
+		color: var(--foreground);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--control-surface-hover);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline(2px);
+		}
+
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	.ridu-command__list.ridu-filter-field-picker__list {
+		max-block-size: min(320px, var(--bits-popover-content-available-height, 320px));
+		padding: 5px;
+	}
+	.ridu-command__item.ridu-filter-field-picker__option {
+		gap: 8px;
+		min-block-size: 34px;
+		padding-block: 7px;
+		color: var(--foreground);
+		font-size: 13px;
+	}
+	.ridu-filter-field-picker__kind {
+		color: var(--foreground-muted);
+	}
+	.ridu-filter-field-picker__kind {
+		flex-shrink: 0;
+		font-size: 12px;
+	}
+	.ridu-filter-field-picker__open,
+	.ridu-filter-field-picker__check {
+		flex-shrink: 0;
+		width: 14px;
+		height: 14px;
+	}
+	.ridu-filter-field-picker__open {
+		color: var(--foreground-muted);
+	}
+	[dir="rtl"] .ridu-filter-field-picker__open,
+	[dir="rtl"] .ridu-filter-field-picker__back svg {
+		transform: scaleX(-1);
+	}
+	.ridu-filter-field-picker__message {
+		margin: 0;
+		padding: 10px 14px;
+		border-top: 1px solid var(--control-border);
+		color: var(--foreground-muted);
+		font-size: 12px;
+	}
+}

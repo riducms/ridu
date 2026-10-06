@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riducms/ridu/internal/membership"
 	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/querypath"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -45,28 +47,13 @@ const (
 	mongoTimestampScalar
 )
 
-type mongoRepeatedKind uint8
-
-const (
-	mongoNotRepeated mongoRepeatedKind = iota
-	mongoRepeatedSelect
-	mongoRepeatedArray
-	mongoRepeatedBlocks
-)
-
 type mongoPredicatePath struct {
-	storagePath        string
-	primitiveList      *schema.Field
-	objectAncestors    []string
-	localePaths        []string
-	kind               mongoScalarKind
-	alwaysPresent      bool
-	repeated           mongoRepeatedKind
-	repeatedRoot       schema.Field
-	rowPath            string
-	rowObjectAncestors []string
-	blockType          string
-	allowedBlockTypes  []string
+	storagePath     string
+	primitiveList   *schema.Field
+	objectAncestors []string
+	localePaths     []string
+	kind            mongoScalarKind
+	alwaysPresent   bool
 }
 
 type mongoSortPlan struct {
@@ -79,7 +66,7 @@ type mongoSortPlan struct {
 // filter. Filter and Access are deliberately siblings in the same $and so an
 // adapter cannot authorize a broader read and post-filter it afterward.
 func requestPredicate(request store.Request, requireID bool) (bson.D, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return nil, err
 	}
 	predicates := make([]bson.D, 0, 7)
@@ -288,10 +275,17 @@ func compileMongoNode(collection schema.Collection, node query.Node, role string
 		if err := validateMongoComparison(*node.Comparison); err != nil {
 			return nil, fmt.Errorf("MongoDB %s comparison: %w", role, err)
 		}
-		resolved, err := resolveMongoPredicatePath(collection, node.Comparison.Path, role, scope)
+		nested, isNested, err := resolveMongoNestedPath(collection, node.Comparison.Path, role, scope)
+		if err == nil && isNested {
+			return compileMongoNestedComparison(nested, *node.Comparison)
+		}
+		var resolved mongoPredicatePath
+		if err == nil {
+			resolved, err = resolveMongoPredicatePath(collection, node.Comparison.Path, role, scope)
+		}
 		if err != nil {
 			if role == "filter" {
-				return nil, primitivefield.UnsupportedPath(collection.Fields, node.Comparison.Path, err)
+				return nil, querypath.Unsupported(node.Comparison.Path, err)
 			}
 			return nil, err
 		}
@@ -300,9 +294,6 @@ func compileMongoNode(collection schema.Collection, node query.Node, role string
 		}
 		if len(resolved.localePaths) != 0 {
 			return compileMongoLocalizedComparison(resolved, *node.Comparison)
-		}
-		if resolved.repeated != mongoNotRepeated {
-			return compileMongoRepeatedComparison(resolved, *node.Comparison)
 		}
 		return compileMongoComparison(resolved, *node.Comparison)
 	case query.ExpressionAnd, query.ExpressionOr:
@@ -387,163 +378,38 @@ func validateMongoComparison(comparison query.Comparison) error {
 	return nil
 }
 
-func compileMongoRepeatedComparison(path mongoPredicatePath, comparison query.Comparison) (bson.D, error) {
-	shape := mongoRepeatedShapePredicate(path)
-	if path.repeated == mongoRepeatedSelect {
-		return mongoAnd([]bson.D{shape, compileMongoRepeatedSelectComparison(path, comparison)}), nil
-	}
+// mongoRowShape selects how much of each row a stored-shape description of a
+// repeated field covers. MongoDB's $jsonSchema has no shared definitions, so
+// describing the rows of rows would inline every block placement: a block that
+// may contain other blocks expands into each path it can reach, which is
+// exponential in nesting depth and reached tens of megabytes for ordinary
+// layout builders. Descriptions therefore follow the declared definitions,
+// never their placements: a filter on a repeated path guards the rows it
+// compares to their own fields, and the decoder-free envelope guards rows by
+// identity alone.
+type mongoRowShape uint8
 
-	presence := mongoRepeatedElementMatch(path, mongoWithObjectAncestors(
-		mongoRepeatedRowScalarPath(path),
-		bson.D{{Key: path.rowPath, Value: bson.D{{Key: "$exists", Value: true}}}},
-	))
-	explicitNull := mongoRepeatedElementMatch(path, mongoWithObjectAncestors(
-		mongoRepeatedRowScalarPath(path),
-		mongoExactNullPredicate(path.rowPath),
-	))
-	equalNull := mongoOr([]bson.D{
-		bson.D{{Key: "$nor", Value: bson.A{presence}}},
-		explicitNull,
-	})
+const (
+	// mongoRowFields describes each row's own declared fields. A repeated
+	// field among them is described with mongoRowIdentity.
+	mongoRowFields mongoRowShape = iota
+	// mongoRowIdentity describes only each row's identity: an object with a
+	// non-blank row key and, for blocks, a declared discriminator. Its
+	// content is validated by the strict decoder, like an opaque JSON value.
+	mongoRowIdentity
+)
 
-	switch comparison.Operator {
-	case query.OperatorExists:
-		want, _ := comparison.Value.BooleanValue()
-		nonNull := mongoRepeatedElementMatch(path, mongoWithObjectAncestors(
-			mongoRepeatedRowScalarPath(path),
-			mongoNonNullPredicate(path.rowPath),
-		))
-		if !want {
-			nonNull = bson.D{{Key: "$nor", Value: bson.A{nonNull}}}
-		}
-		return mongoAnd([]bson.D{shape, nonNull}), nil
-	case query.OperatorEqual, query.OperatorNotEqual:
-		if comparison.Value.Kind() == query.ValueNull {
-			predicate := equalNull
-			if comparison.Operator == query.OperatorNotEqual {
-				predicate = bson.D{{Key: "$nor", Value: bson.A{equalNull}}}
-			}
-			return mongoAnd([]bson.D{shape, predicate}), nil
-		}
-		rowPath := mongoRepeatedRowScalarPath(path)
-		equal, compatible, err := compileMongoEquality(rowPath, comparison.Value)
-		if err != nil {
-			return nil, err
-		}
-		if !compatible {
-			return mongoAnd([]bson.D{shape, mongoConstant(comparison.Operator == query.OperatorNotEqual)}), nil
-		}
-		matched := mongoRepeatedElementMatch(path, equal)
-		if comparison.Operator == query.OperatorNotEqual {
-			matched = bson.D{{Key: "$nor", Value: bson.A{matched}}}
-		}
-		return mongoAnd([]bson.D{shape, matched}), nil
-	case query.OperatorIn:
-		matches := make([]bson.D, 0, len(comparison.Value.Values()))
-		includesNull := false
-		for _, value := range comparison.Value.Values() {
-			if value.Kind() == query.ValueNull {
-				includesNull = true
-				matches = append(matches, explicitNull)
-				continue
-			}
-			equal, compatible, err := compileMongoEquality(mongoRepeatedRowScalarPath(path), value)
-			if err != nil {
-				return nil, err
-			}
-			if compatible {
-				matches = append(matches, mongoRepeatedElementMatch(path, equal))
-			}
-		}
-		matched := mongoOr(matches)
-		if includesNull {
-			matched = mongoOr([]bson.D{
-				bson.D{{Key: "$nor", Value: bson.A{presence}}},
-				matched,
-			})
-		}
-		return mongoAnd([]bson.D{shape, matched}), nil
-	default:
-		rowComparison := comparison
-		compiled, err := compileMongoComparison(mongoRepeatedRowScalarPath(path), rowComparison)
-		if err != nil {
-			return nil, err
-		}
-		return mongoAnd([]bson.D{shape, mongoRepeatedElementMatch(path, compiled)}), nil
-	}
-}
-
-func compileMongoRepeatedSelectComparison(path mongoPredicatePath, comparison query.Comparison) bson.D {
-	switch comparison.Operator {
-	case query.OperatorExists:
-		want, _ := comparison.Value.BooleanValue()
-		if want {
-			return mongoArrayTypePredicate(path.storagePath)
-		}
-		return mongoNullPredicate(path.storagePath)
-	case query.OperatorEqual:
-		if comparison.Value.Kind() == query.ValueNull {
-			return mongoNullPredicate(path.storagePath)
-		}
-		return mongoConstant(false)
-	case query.OperatorNotEqual:
-		if comparison.Value.Kind() == query.ValueNull {
-			return mongoArrayTypePredicate(path.storagePath)
-		}
-		return mongoConstant(true)
-	case query.OperatorContains:
-		text, _ := comparison.Value.StringValue()
-		return bson.D{{Key: path.storagePath, Value: bson.D{{Key: "$elemMatch", Value: bson.D{
-			{Key: "$type", Value: "string"},
-			{Key: "$eq", Value: text},
-		}}}}}
-	case query.OperatorIn:
-		for _, value := range comparison.Value.Values() {
-			if value.Kind() == query.ValueNull {
-				return mongoNullPredicate(path.storagePath)
-			}
-		}
-		return mongoConstant(false)
-	default:
-		return mongoConstant(false)
-	}
-}
-
-func mongoRepeatedRowScalarPath(path mongoPredicatePath) mongoPredicatePath {
-	return mongoPredicatePath{
-		storagePath:     path.rowPath,
-		objectAncestors: append([]string(nil), path.rowObjectAncestors...),
-		kind:            path.kind,
-	}
-}
-
-func mongoRepeatedElementMatch(path mongoPredicatePath, predicate bson.D) bson.D {
-	predicates := make([]bson.D, 0, 2)
-	if path.blockType != "" {
-		predicates = append(predicates, mongoAnd([]bson.D{
-			mongoTypeGuard("blockType", "string"),
-			{{Key: "blockType", Value: bson.D{{Key: "$eq", Value: path.blockType}}}},
-		}))
-	}
-	predicates = append(predicates, predicate)
-	return bson.D{{Key: path.storagePath, Value: bson.D{{Key: "$elemMatch", Value: mongoAnd(predicates)}}}}
-}
-
-func mongoRepeatedShapePredicate(path mongoPredicatePath) bson.D {
-	guards := []bson.D{mongoRepeatedJSONSchemaPredicate(path)}
-	if path.repeated == mongoRepeatedArray || path.repeated == mongoRepeatedBlocks {
-		guards = append(guards, mongoRepeatedRowKeyUniquenessPredicate(path))
-	}
-	return mongoAnd(guards)
-}
-
-// mongoCollectionEnvelopePredicate mirrors the structurally declared authored
-// values envelope enforced by decodeCollectionDocumentForLocales. Opaque JSON
-// and plugin values are recursively checked on adapter writes and strict reads,
-// while this predicate can guard only their BSON root type. It is kept separate
-// from requestPredicate because ordinary full-document reads must continue to
-// surface strict decoder failures instead of hiding corruption as absence.
-// Decoder-free reads compose this guard into their database query.
+// mongoCollectionEnvelopePredicate mirrors the root of the authored values
+// envelope enforced by decodeCollectionDocumentForLocales: the values object
+// and its groups exactly, and each repeated field's array, row bound and row
+// identity (see mongoRowIdentity). Row content, like opaque JSON and plugin
+// values, is checked completely on adapter writes and strict reads only: the
+// server evaluates this guard on every document a count or selection scans,
+// and describing block rows made that milliseconds per document. The
+// predicate is kept separate from requestPredicate because ordinary
+// full-document reads must continue to surface strict decoder failures instead
+// of hiding corruption as absence. Decoder-free reads compose this guard into
+// their database query.
 func mongoCollectionEnvelopePredicate(collection schema.Collection, locales []schema.LocaleCode) (bson.D, error) {
 	if len(locales) != 0 {
 		if _, err := mongoConfiguredLocales(locales); err != nil {
@@ -552,35 +418,23 @@ func mongoCollectionEnvelopePredicate(collection schema.Collection, locales []sc
 	}
 	guards := []bson.D{{{Key: "$jsonSchema", Value: mongoJSONSchemaAtPath(
 		[]string{"values"},
-		mongoCollectionObjectJSONSchema(collection.Fields, false, "", locales),
+		mongoCollectionObjectJSONSchema(collection.Fields, false, "", locales, mongoRowIdentity),
 		true,
 	)}}}
-	guards = append(guards, bson.D{{Key: "$expr", Value: mongoObjectKeyUniquenessExpression("$values", collection.Fields)}})
+	guards = append(guards, bson.D{{Key: "$expr", Value: mongoObjectKeyUniquenessExpression("$values", collection.Fields, mongoRowIdentity)}})
 	guards = append(guards, mongoRelationshipIDLengthPredicates(collection.Fields, mongoAuthoredValuesPath)...)
 	for _, field := range collection.Fields {
-		if field.Category == schema.FieldCategoryPresentation {
+		if field.Category == schema.FieldCategoryPresentation || field.Type != schema.FieldTypeArray && field.Type != schema.FieldTypeBlocks {
 			continue
 		}
-		kind := mongoNotRepeated
-		switch field.Type {
-		case schema.FieldTypeArray:
-			kind = mongoRepeatedArray
-		case schema.FieldTypeBlocks:
-			kind = mongoRepeatedBlocks
-		}
-		if kind == mongoNotRepeated {
-			continue
-		}
-		guards = append(guards, mongoRepeatedRowKeyUniquenessPredicate(mongoPredicatePath{
-			storagePath:  mongoAuthoredValuesPath + field.Name,
-			repeated:     kind,
-			repeatedRoot: field,
-		}))
+		guards = append(guards, mongoRepeatedRowKeyUniquenessPredicate(mongoAuthoredValuesPath+field.Name))
 	}
 	return mongoAnd(guards), nil
 }
 
-func mongoObjectKeyUniquenessExpression(value string, fields []schema.Field) bson.D {
+// mongoObjectKeyUniquenessExpression rejects duplicate keys in the object at
+// value and in the declared objects below it, to the depth rows selects.
+func mongoObjectKeyUniquenessExpression(value string, fields []schema.Field, rows mongoRowShape) bson.D {
 	conditions := bson.A{mongoObjectOwnKeyUniquenessExpression(value)}
 	for _, field := range fields {
 		if field.Category == schema.FieldCategoryPresentation {
@@ -589,22 +443,20 @@ func mongoObjectKeyUniquenessExpression(value string, fields []schema.Field) bso
 		fieldValue := value + "." + field.Name
 		switch {
 		case field.Localized:
-			conditions = append(conditions, mongoObjectKeyUniquenessExpression(fieldValue, nil))
+			conditions = append(conditions, mongoObjectKeyUniquenessExpression(fieldValue, nil, rows))
 		case field.Type == schema.FieldTypeGroup:
-			conditions = append(conditions, mongoObjectKeyUniquenessExpression(fieldValue, field.Nested.ResolvedFields()))
-		case field.Type == schema.FieldTypeArray:
-			conditions = append(conditions, mongoRepeatedObjectKeyUniquenessExpression(fieldValue, field.Nested.ResolvedFields()))
-		case field.Type == schema.FieldTypeBlocks:
-			var blockFields []schema.Field
-			for _, block := range field.Blocks.ResolvedTypes() {
-				blockFields = append(blockFields, block.ResolvedFields()...)
+			conditions = append(conditions, mongoObjectKeyUniquenessExpression(fieldValue, field.Nested.ResolvedFields(), rows))
+		case field.Type == schema.FieldTypeArray, field.Type == schema.FieldTypeBlocks:
+			var rowFields []schema.Field
+			if rows == mongoRowFields {
+				rowFields = mongoRepeatedRowFields(field)
 			}
-			conditions = append(conditions, mongoRepeatedObjectKeyUniquenessExpression(fieldValue, blockFields))
+			conditions = append(conditions, mongoRepeatedObjectKeyUniquenessExpression(fieldValue, rowFields))
 		case field.Type == schema.FieldTypeRelationship && field.Relationship != nil && field.Relationship.Polymorphic:
 			if field.Relationship.HasMany {
 				conditions = append(conditions, mongoRepeatedObjectKeyUniquenessExpression(fieldValue, nil))
 			} else {
-				conditions = append(conditions, mongoObjectKeyUniquenessExpression(fieldValue, nil))
+				conditions = append(conditions, mongoObjectKeyUniquenessExpression(fieldValue, nil, rows))
 			}
 		}
 	}
@@ -630,16 +482,36 @@ func mongoObjectOwnKeyUniquenessExpression(value string) bson.D {
 	}}}
 }
 
-func mongoRepeatedObjectKeyUniquenessExpression(value string, fields []schema.Field) bson.D {
+// mongoRepeatedObjectKeyUniquenessExpression checks each row's own keys and
+// the declared row fields; repeated fields among those are checked only to
+// their rows' own keys.
+func mongoRepeatedObjectKeyUniquenessExpression(value string, rowFields []schema.Field) bson.D {
 	return bson.D{{Key: "$cond", Value: bson.A{
 		bson.D{{Key: "$eq", Value: bson.A{bson.D{{Key: "$type", Value: value}}, "array"}}},
 		bson.D{{Key: "$allElementsTrue", Value: bson.A{bson.D{{Key: "$map", Value: bson.D{
 			{Key: "input", Value: value},
 			{Key: "as", Value: "riduObject"},
-			{Key: "in", Value: mongoObjectKeyUniquenessExpression("$$riduObject", fields)},
+			{Key: "in", Value: mongoObjectKeyUniquenessExpression("$$riduObject", rowFields, mongoRowIdentity)},
 		}}}}}},
 		true,
 	}}}
+}
+
+// mongoRepeatedRowFields returns the fields a row of an array or blocks field
+// may declare: the array's fields, or every allowed block type's fields.
+func mongoRepeatedRowFields(field schema.Field) []schema.Field {
+	switch {
+	case field.Type == schema.FieldTypeArray && field.Nested != nil:
+		return field.Nested.ResolvedFields()
+	case field.Type == schema.FieldTypeBlocks && field.Blocks != nil:
+		var fields []schema.Field
+		for _, block := range field.Blocks.ResolvedTypes() {
+			fields = append(fields, block.ResolvedFields()...)
+		}
+		return fields
+	default:
+		return nil
+	}
 }
 
 func mongoRelationshipIDLengthPredicates(fields []schema.Field, prefix string) []bson.D {
@@ -690,15 +562,6 @@ func mongoRelationshipIDLengthExpression(value any) bson.D {
 	}}}
 }
 
-func mongoRepeatedJSONSchemaPredicate(path mongoPredicatePath) bson.D {
-	segments := strings.Split(path.storagePath, ".")
-	return bson.D{{Key: "$jsonSchema", Value: mongoJSONSchemaAtPath(
-		segments,
-		mongoRepeatedRootJSONSchema(path.repeatedRoot, nil),
-		path.repeatedRoot.Required,
-	)}}
-}
-
 func mongoJSONSchemaAtPath(segments []string, leaf bson.D, leafRequired bool) bson.D {
 	result := bson.D{
 		{Key: "bsonType", Value: "object"},
@@ -717,10 +580,12 @@ func mongoJSONSchemaAtPath(segments []string, leaf bson.D, leafRequired bool) bs
 	return result
 }
 
-func mongoRepeatedRootJSONSchema(root schema.Field, locales []schema.LocaleCode) bson.D {
+// mongoRepeatedRootJSONSchema describes a repeated field's stored array and,
+// as rows selects, either each row's own declared fields or only its identity.
+func mongoRepeatedRootJSONSchema(root schema.Field, locales []schema.LocaleCode, rows mongoRowShape) bson.D {
 	var item bson.D
-	switch root.Type {
-	case schema.FieldTypeSelect:
+	switch {
+	case root.Type == schema.FieldTypeSelect:
 		options := make(bson.A, len(root.Select.Options))
 		for index, option := range root.Select.Options {
 			options[index] = option.Value
@@ -729,36 +594,38 @@ func mongoRepeatedRootJSONSchema(root schema.Field, locales []schema.LocaleCode)
 			{Key: "bsonType", Value: "string"},
 			{Key: "enum", Value: options},
 		}
-	case schema.FieldTypeArray:
-		item = mongoCollectionObjectJSONSchema(root.Nested.ResolvedFields(), true, "", locales)
-	case schema.FieldTypeBlocks:
+	case root.Type == schema.FieldTypeArray && rows == mongoRowFields:
+		item = mongoCollectionObjectJSONSchema(root.Nested.ResolvedFields(), true, "", locales, mongoRowIdentity)
+	case root.Type == schema.FieldTypeArray:
+		item = mongoRowIdentityJSONSchema(nil)
+	case root.Type == schema.FieldTypeBlocks && rows == mongoRowFields:
 		blockSchemas := make(bson.A, len(root.Blocks.ResolvedTypes()))
 		for index, block := range root.Blocks.ResolvedTypes() {
-			blockSchemas[index] = mongoCollectionObjectJSONSchema(block.ResolvedFields(), true, block.Slug, locales)
+			blockSchemas[index] = mongoCollectionObjectJSONSchema(block.ResolvedFields(), true, block.Slug, locales, mongoRowIdentity)
 		}
-		item = bson.D{{Key: "oneOf", Value: blockSchemas}}
+		// Each variant requires its own blockType, so a row matches at most
+		// one: anyOf states the same shape as oneOf, and MongoDB stops at the
+		// matching variant instead of validating every one.
+		item = bson.D{{Key: "anyOf", Value: blockSchemas}}
+	case root.Type == schema.FieldTypeBlocks:
+		slugs := make(bson.A, len(root.Blocks.ResolvedTypes()))
+		for index, block := range root.Blocks.ResolvedTypes() {
+			slugs[index] = block.Slug
+		}
+		item = mongoRowIdentityJSONSchema(slugs)
 	}
 
-	arrayType := any("array")
-	if !root.Required {
-		arrayType = bson.A{"array", "null"}
-	}
+	return mongoRepeatedArrayJSONSchema(root, item)
+}
+
+// mongoRepeatedArrayJSONSchema describes a repeated field's stored array whose
+// items match item.
+func mongoRepeatedArrayJSONSchema(root schema.Field, item bson.D) bson.D {
+	// Requiredness and minimum row counts are completeness rules: drafts and
+	// documents saved before a field became required may lack them.
 	result := bson.D{
-		{Key: "bsonType", Value: arrayType},
+		{Key: "bsonType", Value: bson.A{"array", "null"}},
 		{Key: "items", Value: item},
-	}
-	minimum := 0
-	if root.Required {
-		minimum = 1
-	}
-	if root.Type == schema.FieldTypeArray && root.Nested.MinRows > minimum {
-		minimum = root.Nested.MinRows
-	}
-	if root.Type == schema.FieldTypeBlocks && root.Blocks.MinRows > minimum {
-		minimum = root.Blocks.MinRows
-	}
-	if minimum > 0 {
-		result = append(result, bson.E{Key: "minItems", Value: minimum})
 	}
 	if root.Type == schema.FieldTypeArray && root.Nested.MaxRows > 0 {
 		result = append(result, bson.E{Key: "maxItems", Value: root.Nested.MaxRows})
@@ -772,14 +639,38 @@ func mongoRepeatedRootJSONSchema(root schema.Field, locales []schema.LocaleCode)
 	return result
 }
 
-func mongoCollectionObjectJSONSchema(fields []schema.Field, row bool, blockType string, locales []schema.LocaleCode) bson.D {
+// mongoRowIdentityJSONSchema describes a row by its identity alone. Block rows
+// must name one of blockTypes; a nil blockTypes describes array rows.
+func mongoRowIdentityJSONSchema(blockTypes bson.A) bson.D {
+	properties := bson.D{{Key: "_key", Value: mongoRowKeyJSONSchema()}}
+	result := bson.D{{Key: "bsonType", Value: "object"}}
+	if blockTypes == nil {
+		return append(result, bson.E{Key: "properties", Value: properties})
+	}
+	properties = append(properties, bson.E{Key: "blockType", Value: bson.D{
+		{Key: "bsonType", Value: "string"},
+		{Key: "enum", Value: blockTypes},
+	}})
+	return append(result,
+		bson.E{Key: "properties", Value: properties},
+		bson.E{Key: "required", Value: bson.A{"blockType"}},
+	)
+}
+
+func mongoRowKeyJSONSchema() bson.D {
+	return bson.D{
+		{Key: "bsonType", Value: "string"},
+		{Key: "pattern", Value: mongoNonBlankKeyPattern},
+	}
+}
+
+// mongoCollectionObjectJSONSchema describes an object's declared fields; rows
+// selects how repeated fields among them describe their rows.
+func mongoCollectionObjectJSONSchema(fields []schema.Field, row bool, blockType string, locales []schema.LocaleCode, rows mongoRowShape) bson.D {
 	properties := make(bson.D, 0, len(fields)+2)
 	required := make(bson.A, 0, len(fields)+1)
 	if row {
-		properties = append(properties, bson.E{Key: "_key", Value: bson.D{
-			{Key: "bsonType", Value: "string"},
-			{Key: "pattern", Value: mongoNonBlankKeyPattern},
-		}})
+		properties = append(properties, bson.E{Key: "_key", Value: mongoRowKeyJSONSchema()})
 	}
 	if blockType != "" {
 		properties = append(properties, bson.E{Key: "blockType", Value: bson.D{
@@ -788,14 +679,13 @@ func mongoCollectionObjectJSONSchema(fields []schema.Field, row bool, blockType 
 		}})
 		required = append(required, "blockType")
 	}
+	// A stored object may omit any authored field; only the block
+	// discriminator identifies its shape.
 	for _, field := range fields {
 		if field.Category == schema.FieldCategoryPresentation {
 			continue
 		}
-		properties = append(properties, bson.E{Key: field.Name, Value: mongoCollectionFieldJSONSchema(field, locales)})
-		if field.Required {
-			required = append(required, field.Name)
-		}
+		properties = append(properties, bson.E{Key: field.Name, Value: mongoCollectionFieldJSONSchema(field, locales, rows)})
 	}
 	result := bson.D{
 		{Key: "bsonType", Value: "object"},
@@ -808,51 +698,47 @@ func mongoCollectionObjectJSONSchema(fields []schema.Field, row bool, blockType 
 	return result
 }
 
-func mongoCollectionFieldJSONSchema(field schema.Field, locales []schema.LocaleCode) bson.D {
+// mongoCollectionFieldJSONSchema describes one stored field; rows selects how
+// a repeated field, or one nested in a group, describes its rows.
+func mongoCollectionFieldJSONSchema(field schema.Field, locales []schema.LocaleCode, rows mongoRowShape) bson.D {
 	if field.Localized {
-		return mongoLocalizedFieldJSONSchema(field, locales)
+		return mongoLocalizedFieldJSONSchema(field, locales, rows)
 	}
 	if primitivefield.IsList(field) {
 		return mongoPrimitiveListJSONSchema(field)
 	}
 	if field.Type == schema.FieldTypeGroup {
-		result := mongoCollectionObjectJSONSchema(field.Nested.ResolvedFields(), false, "", locales)
-		if !field.Required {
-			result[0].Value = bson.A{"object", "null"}
-		}
+		result := mongoCollectionObjectJSONSchema(field.Nested.ResolvedFields(), false, "", locales, rows)
+		result[0].Value = bson.A{"object", "null"}
 		return result
 	}
 	if field.Type == schema.FieldTypeSelect && field.Select != nil && field.Select.HasMany ||
 		field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks {
-		return mongoRepeatedRootJSONSchema(field, locales)
+		return mongoRepeatedRootJSONSchema(field, locales, rows)
 	}
 	if field.Type == schema.FieldTypeRelationship || field.Type == schema.FieldTypeUpload {
 		return mongoRelationshipFieldJSONSchema(field)
 	}
 	if mongoUploadSizesField(field) {
-		typeValue := any("object")
-		if !field.Required {
-			typeValue = bson.A{"object", "null"}
-		}
 		return bson.D{
-			{Key: "bsonType", Value: typeValue},
+			{Key: "bsonType", Value: bson.A{"object", "null"}},
 			{Key: "maxProperties", Value: maxMongoUploadImageSizes},
 			{Key: "additionalProperties", Value: bson.D{{Key: "bsonType", Value: "object"}}},
 		}
 	}
 	if field.Type == schema.FieldTypeJSON || field.Type == schema.FieldTypePlugin {
-		return mongoJSONFieldJSONSchema(!field.Required)
+		return mongoJSONFieldJSONSchema()
 	}
 	if field.Type == schema.FieldTypePoint {
-		return mongoPointFieldJSONSchema(!field.Required)
+		return mongoPointFieldJSONSchema()
 	}
-	return mongoScalarFieldJSONSchema(field, !field.Required)
+	return mongoScalarFieldJSONSchema(field, true)
 }
 
-func mongoLocalizedFieldJSONSchema(field schema.Field, locales []schema.LocaleCode) bson.D {
+func mongoLocalizedFieldJSONSchema(field schema.Field, locales []schema.LocaleCode, rows mongoRowShape) bson.D {
 	unlocalized := field
 	unlocalized.Localized = false
-	valueSchema := mongoNullableJSONSchema(mongoCollectionFieldJSONSchema(unlocalized, locales))
+	valueSchema := mongoNullableJSONSchema(mongoCollectionFieldJSONSchema(unlocalized, locales, rows))
 	result := bson.D{{Key: "bsonType", Value: "object"}, {Key: "additionalProperties", Value: false}}
 	if len(locales) == 0 {
 		return append(result, bson.E{Key: "patternProperties", Value: bson.D{{Key: mongoLocaleCodePattern, Value: valueSchema}}})
@@ -909,27 +795,17 @@ func mongoRelationshipFieldJSONSchema(field schema.Field) bson.D {
 			{Key: "required", Value: bson.A{"relationTo", "id"}},
 		}
 	} else {
-		item = mongoDocumentIDJSONSchema(!field.Required && !relationship.HasMany)
+		item = mongoDocumentIDJSONSchema(!relationship.HasMany)
 	}
 	if !relationship.HasMany {
-		if !field.Required {
-			item[0].Value = bson.A{item[0].Value, "null"}
-		}
+		item[0].Value = bson.A{item[0].Value, "null"}
 		return item
 	}
-	typeValue := any("array")
-	if !field.Required {
-		typeValue = bson.A{"array", "null"}
-	}
-	result := bson.D{
-		{Key: "bsonType", Value: typeValue},
+	return bson.D{
+		{Key: "bsonType", Value: bson.A{"array", "null"}},
 		{Key: "items", Value: item},
 		{Key: "maxItems", Value: maxMongoDocumentReferences},
 	}
-	if field.Required {
-		result = append(result, bson.E{Key: "minItems", Value: 1})
-	}
-	return result
 }
 
 func mongoDocumentIDJSONSchema(allowEmpty bool) bson.D {
@@ -944,13 +820,9 @@ func mongoDocumentIDJSONSchema(allowEmpty bool) bson.D {
 	}
 }
 
-func mongoPointFieldJSONSchema(nullable bool) bson.D {
-	typeValue := any("array")
-	if nullable {
-		typeValue = bson.A{"array", "null"}
-	}
+func mongoPointFieldJSONSchema() bson.D {
 	return bson.D{
-		{Key: "bsonType", Value: typeValue},
+		{Key: "bsonType", Value: bson.A{"array", "null"}},
 		{Key: "items", Value: bson.A{
 			bson.D{
 				{Key: "bsonType", Value: "double"},
@@ -1000,9 +872,7 @@ func mongoScalarFieldJSONSchema(field schema.Field, nullable bool) bson.D {
 		for _, option := range field.Select.Options {
 			options = append(options, option.Value)
 		}
-		if !field.Required {
-			options = append(options, "")
-		}
+		options = append(options, "")
 		if nullable {
 			options = append(options, nil)
 		}
@@ -1011,18 +881,22 @@ func mongoScalarFieldJSONSchema(field schema.Field, nullable bool) bson.D {
 	return result
 }
 
-func mongoJSONFieldJSONSchema(nullable bool) bson.D {
+func mongoJSONFieldJSONSchema() bson.D {
 	// Arbitrary JSON cannot be described recursively without duplicating the
 	// store.Value codec. Guard the root vocabulary here; adapter writes and reads
 	// still validate every nested value through encodeValue and decodeValue.
-	types := bson.A{"object", "array", "string", "double", "bool"}
-	if nullable {
-		types = append(types, "null")
-	}
-	return bson.D{{Key: "bsonType", Value: types}}
+	return bson.D{{Key: "bsonType", Value: bson.A{"object", "array", "string", "double", "bool", "null"}}}
 }
 
-func mongoRepeatedRowKeyUniquenessPredicate(path mongoPredicatePath) bson.D {
+// mongoRepeatedRowKeyUniquenessPredicate requires unique row keys in the
+// array or blocks list stored at storagePath.
+func mongoRepeatedRowKeyUniquenessPredicate(storagePath string) bson.D {
+	return bson.D{{Key: "$expr", Value: mongoUniqueRowKeysExpression("$" + storagePath)}}
+}
+
+// mongoUniqueRowKeysExpression is true unless list, an aggregation expression,
+// is an array whose rows repeat a string _key.
+func mongoUniqueRowKeysExpression(list string) bson.D {
 	typeExpression := bson.D{{Key: "$type", Value: "$$riduRepeated"}}
 	keys := bson.D{{Key: "$map", Value: bson.D{
 		{Key: "input", Value: bson.D{{Key: "$filter", Value: bson.D{
@@ -1035,8 +909,8 @@ func mongoRepeatedRowKeyUniquenessPredicate(path mongoPredicatePath) bson.D {
 		{Key: "as", Value: "riduRow"},
 		{Key: "in", Value: "$$riduRow._key"},
 	}}}
-	return bson.D{{Key: "$expr", Value: bson.D{{Key: "$let", Value: bson.D{
-		{Key: "vars", Value: bson.D{{Key: "riduRepeated", Value: "$" + path.storagePath}}},
+	return bson.D{{Key: "$let", Value: bson.D{
+		{Key: "vars", Value: bson.D{{Key: "riduRepeated", Value: list}}},
 		{Key: "in", Value: bson.D{{Key: "$cond", Value: bson.A{
 			bson.D{{Key: "$eq", Value: bson.A{typeExpression, "array"}}},
 			bson.D{{Key: "$let", Value: bson.D{
@@ -1048,11 +922,7 @@ func mongoRepeatedRowKeyUniquenessPredicate(path mongoPredicatePath) bson.D {
 			}}},
 			true,
 		}}}},
-	}}}}}
-}
-
-func mongoArrayTypePredicate(path string) bson.D {
-	return bson.D{{Key: path, Value: bson.D{{Key: "$type", Value: "array"}}}}
+	}}}
 }
 
 func mongoOr(predicates []bson.D) bson.D {
@@ -1211,6 +1081,10 @@ func mongoNodeObjectShapeGuards(collection schema.Collection, node query.Node, r
 	var collect func(query.Node) error
 	collect = func(candidate query.Node) error {
 		if candidate.Comparison != nil {
+			// A nested path's shape guard already describes its ancestors.
+			if _, nested, err := resolveMongoNestedPath(collection, candidate.Comparison.Path, role, scope); err != nil || nested {
+				return err
+			}
 			resolved, err := resolveMongoPredicatePath(collection, candidate.Comparison.Path, role, scope)
 			if err != nil {
 				return err
@@ -1245,6 +1119,18 @@ func mongoNodeRepeatedShapeGuards(collection schema.Collection, node query.Node,
 	var collect func(query.Node) error
 	collect = func(candidate query.Node) error {
 		if candidate.Comparison != nil {
+			nested, isNested, err := resolveMongoNestedPath(collection, candidate.Comparison.Path, role, scope)
+			if err != nil {
+				return err
+			}
+			if isNested {
+				key := "nested:" + nested.base + nested.path.String()
+				if _, duplicate := seen[key]; !duplicate {
+					seen[key] = struct{}{}
+					guards = append(guards, mongoNestedShapePredicate(nested))
+				}
+				return nil
+			}
 			resolved, err := resolveMongoPredicatePath(collection, candidate.Comparison.Path, role, scope)
 			if err != nil {
 				return err
@@ -1254,22 +1140,6 @@ func mongoNodeRepeatedShapeGuards(collection schema.Collection, node query.Node,
 				if _, duplicate := seen[key]; !duplicate {
 					seen[key] = struct{}{}
 					guards = append(guards, mongoPrimitiveListShape(resolved))
-				}
-			}
-			if resolved.repeated != mongoNotRepeated {
-				key := fmt.Sprintf(
-					"%d:%s:%s:%s:%s:%s:%s",
-					resolved.repeated,
-					resolved.storagePath,
-					resolved.repeatedRoot.ID,
-					resolved.rowPath,
-					strings.Join(resolved.rowObjectAncestors, "\x00"),
-					resolved.blockType,
-					strings.Join(resolved.allowedBlockTypes, "\x00"),
-				)
-				if _, duplicate := seen[key]; !duplicate {
-					seen[key] = struct{}{}
-					guards = append(guards, mongoRepeatedShapePredicate(resolved))
 				}
 			}
 		}
@@ -1351,7 +1221,7 @@ func resolveMongoPredicatePath(collection schema.Collection, path query.Path, ro
 		return mongoPredicatePath{}, fmt.Errorf("MongoDB %s field %q is not in collection %q", role, path.String(), collection.Slug)
 	}
 	if field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks || field.Type == schema.FieldTypeSelect && field.Select != nil && field.Select.HasMany {
-		return resolveMongoRepeatedPredicatePath(collection, field, path, role, scope)
+		return resolveMongoRepeatedPredicatePath(collection, field, path, role)
 	}
 	storageSegments := []string{segments[0]}
 	objectAncestors := make([]string, 0, len(segments)-1)
@@ -1460,106 +1330,19 @@ func resolveMongoUploadSizePredicatePath(
 	}, nil
 }
 
+// resolveMongoRepeatedPredicatePath rejects a path whose root field holds
+// many values. Filters through or at arrays, blocks and has-many selects
+// resolve as nested paths first; no other role has a single value there.
 func resolveMongoRepeatedPredicatePath(
 	collection schema.Collection,
 	root schema.Field,
 	path query.Path,
 	role string,
-	scope mongoPredicateScope,
 ) (mongoPredicatePath, error) {
-	segments := path.Segments()
-	if root.Localized {
-		return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q uses a localized repeated field", role, path.String())
-	}
 	if !mongoRepeatedPredicateRole(role) {
 		return mongoPredicatePath{}, fmt.Errorf("MongoDB %s does not support repeated path %q", role, path.String())
 	}
-	resolved := mongoPredicatePath{
-		storagePath:  scope.path(mongoAuthoredValuesPath + root.Name),
-		repeatedRoot: root,
-	}
-	if root.Type == schema.FieldTypeSelect {
-		if root.Select == nil || !root.Select.HasMany || len(segments) != 1 {
-			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q is not a top-level has-many select", role, path.String())
-		}
-		resolved.kind = mongoStringScalar
-		resolved.repeated = mongoRepeatedSelect
-		return resolved, nil
-	}
-
-	var (
-		field        schema.Field
-		found        bool
-		segmentIndex int
-		rowSegments  []string
-	)
-	switch root.Type {
-	case schema.FieldTypeArray:
-		if root.Nested == nil || len(segments) < 2 {
-			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q must select a scalar field inside array %q", role, path.String(), root.Name)
-		}
-		resolved.repeated = mongoRepeatedArray
-		segmentIndex = 1
-		field, found = mongoFieldNamed(root.Nested.ResolvedFields(), segments[segmentIndex])
-	case schema.FieldTypeBlocks:
-		if root.Blocks == nil || len(segments) < 3 {
-			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q must select a block type and scalar field inside blocks %q", role, path.String(), root.Name)
-		}
-		resolved.repeated = mongoRepeatedBlocks
-		resolved.blockType = segments[1]
-		resolved.allowedBlockTypes = make([]string, len(root.Blocks.ResolvedTypes()))
-		var block schema.BlockType
-		for index, candidate := range root.Blocks.ResolvedTypes() {
-			resolved.allowedBlockTypes[index] = candidate.Slug
-			if candidate.Slug == resolved.blockType {
-				block = candidate
-				found = true
-			}
-		}
-		if !found {
-			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s block type %q is not in field %q", role, resolved.blockType, root.Name)
-		}
-		segmentIndex = 2
-		field, found = mongoFieldNamed(block.ResolvedFields(), segments[segmentIndex])
-	default:
-		return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q is not a supported repeated field", role, path.String())
-	}
-	if !found {
-		return mongoPredicatePath{}, fmt.Errorf("MongoDB %s field %q is not in collection %q", role, path.String(), collection.Slug)
-	}
-
-	for {
-		rowSegments = append(rowSegments, field.Name)
-		if field.Localized {
-			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q contains localized field %q inside a repeated field", role, path.String(), field.Name)
-		}
-		if field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks || mongoFieldHasMany(field) {
-			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q traverses repeated field %q inside another repeated field", role, path.String(), field.Name)
-		}
-		if field.Type == schema.FieldTypeRelationship || field.Type == schema.FieldTypeUpload {
-			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q traverses a relationship or upload inside a repeated field", role, path.String())
-		}
-		if segmentIndex == len(segments)-1 {
-			break
-		}
-		if field.Type != schema.FieldTypeGroup || field.Nested == nil {
-			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s field %q inside repeated path %q is not a group", role, field.Name, path.String())
-		}
-		resolved.rowObjectAncestors = append(resolved.rowObjectAncestors, strings.Join(rowSegments, "."))
-		segmentIndex++
-		field, found = mongoFieldNamed(field.Nested.ResolvedFields(), segments[segmentIndex])
-		if !found {
-			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s field %q is not in collection %q", role, path.String(), collection.Slug)
-		}
-	}
-
-	kind, supported := mongoScalarFieldKind(field)
-	if !supported {
-		return mongoPredicatePath{}, fmt.Errorf("MongoDB %s repeated path %q ends at unsupported non-scalar field type %q", role, path.String(), field.Type)
-	}
-	resolved.kind = kind
-	resolved.rowPath = strings.Join(rowSegments, ".")
-	return resolved, nil
+	return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q reaches the repeated field %q of collection %q outside a nested path", role, path.String(), root.Name, collection.Slug)
 }
 
 func mongoRepeatedPredicateRole(role string) bool {

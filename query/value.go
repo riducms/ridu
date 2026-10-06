@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-// ValueKind identifies the concrete scalar or list represented by a Value.
+// ValueKind identifies the concrete scalar, reference, or list represented by
+// a Value.
 type ValueKind string
 
 const (
@@ -17,6 +18,9 @@ const (
 	ValueBoolean ValueKind = "boolean"
 	ValueNull    ValueKind = "null"
 	ValueList    ValueKind = "list"
+	// ValueReference names one document among a polymorphic relationship's
+	// target collections, in the relationship's {relationTo, id} value shape.
+	ValueReference ValueKind = "reference"
 )
 
 // Value is an immutable query operand. Explicit constructors prevent arbitrary
@@ -27,11 +31,13 @@ type Value struct {
 	number  float64
 	boolean bool
 	items   []Value
+	// relationTo is a reference's collection slug; text holds its document ID.
+	relationTo string
 }
 
 // Operand is a value compared with a field: a string, boolean, integer, or
 // float, including named types such as a string enum, or a Value built with
-// String, Number, Boolean, Null, or List.
+// String, Number, Boolean, Null, Reference, or List.
 type Operand interface {
 	~string | ~bool | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64 | Value
 }
@@ -108,6 +114,13 @@ func Boolean(value bool) Value { return Value{kind: ValueBoolean, boolean: value
 // Null constructs a null operand.
 func Null() Value { return Value{kind: ValueNull} }
 
+// Reference constructs a polymorphic relationship candidate: document id in
+// collection relationTo. It equals a stored {relationTo, id} reference, as in
+// In("subjects", Reference("posts", postID)).
+func Reference(relationTo, id string) Value {
+	return Value{kind: ValueReference, relationTo: relationTo, text: id}
+}
+
 // List constructs a copied list operand.
 func List(values ...Value) Value {
 	return Value{kind: ValueList, items: cloneValues(values)}
@@ -143,6 +156,15 @@ func (value Value) BooleanValue() (bool, bool) {
 	return value.boolean, value.kind == ValueBoolean
 }
 
+// ReferenceValue returns the collection slug, document ID, and true when this
+// is a reference operand.
+func (value Value) ReferenceValue() (relationTo, id string, ok bool) {
+	if value.kind != ValueReference {
+		return "", "", false
+	}
+	return value.relationTo, value.text, true
+}
+
 // Values returns a deep copy for a list operand.
 func (value Value) Values() []Value {
 	return cloneValues(value.items)
@@ -160,6 +182,11 @@ func (value Value) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	case ValueList:
 		return json.Marshal(value.items)
+	case ValueReference:
+		return json.Marshal(struct {
+			RelationTo string `json:"relationTo"`
+			ID         string `json:"id"`
+		}{value.relationTo, value.text})
 	default:
 		return nil, fmt.Errorf("cannot marshal query value with kind %q", value.kind)
 	}

@@ -11,8 +11,8 @@ test("a public non-Lexical plugin hosts ordinary fields through the parent form"
 			title: "Embedded schema contract",
 			body: {
 				outline: [
-					{ kind: "widget", items: null, content: { schema: "card", title: "Editable" } },
-					{ kind: "widget", content: { schema: "card", title: "Protected", locked: true } },
+					{ kind: "widget", items: null, content: { schema: "outline-card", title: "Editable" } },
+					{ kind: "widget", content: { schema: "outline-card", title: "Protected", locked: true } },
 				],
 			},
 		},
@@ -74,7 +74,7 @@ test("the embedded host enforces parent denial when the plugin omits readOnly", 
 				outline: [
 					{
 						kind: "widget",
-						content: { schema: "card", title: "Parent protected card" },
+						content: { schema: "outline-card", title: "Parent protected card" },
 					},
 				],
 			},

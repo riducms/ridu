@@ -3,6 +3,7 @@ import {
 	isRecord,
 	bindSchemaManifest,
 	isPageEnvelope,
+	isUncountedPageEnvelope,
 	isAdminCollectionListData,
 	type AdminCollectionListDataV1,
 	isValidationIssue,
@@ -21,6 +22,8 @@ import {
 	type DeleteEnvelope,
 	type CountEnvelope,
 	type PageEnvelope,
+	type Pagination,
+	type UncountedPagination,
 	type LogoutEnvelope,
 	type SchemaManifest,
 	type ScheduledPublication,
@@ -861,6 +864,8 @@ class FetchClient<
 		const query = new URLSearchParams();
 		if (options?.page !== undefined) query.set("page", String(options.page));
 		if (options?.limit !== undefined) query.set("limit", String(options.limit));
+		const counted = options?.pagination !== false;
+		if (!counted) query.set("pagination", "false");
 		if (options?.depth !== undefined) query.set("depth", String(options.depth));
 		if (options?.where !== undefined) query.set("where", JSON.stringify(options.where));
 		if (options?.select !== undefined) query.set("select", JSON.stringify(options.select));
@@ -876,14 +881,21 @@ class FetchClient<
 			{ method: "GET" },
 			options
 		);
-		if (!isPageEnvelope<CollectionQueryResult<Config, Slug, Options>>(body)) {
+		// The requested mode fixes the page type, so the decoder requires exactly that metadata.
+		if (counted ? !isPageEnvelope(body) : !isUncountedPageEnvelope(body)) {
 			throw invalidSuccessEnvelope("page");
 		}
+		const page = body as PageEnvelope<
+			CollectionQueryResult<Config, Slug, Options>,
+			Pagination | UncountedPagination
+		>;
 		if (options?.includeAccess !== true) {
-			return body as CollectionListResult<CollectionQueryResult<Config, Slug, Options>, Options>;
+			return page as CollectionListResult<CollectionQueryResult<Config, Slug, Options>, Options>;
 		}
-		const page = collectionPageFromEnvelope(body);
-		return page as CollectionListResult<CollectionQueryResult<Config, Slug, Options>, Options>;
+		return collectionPageFromEnvelope(page) as CollectionListResult<
+			CollectionQueryResult<Config, Slug, Options>,
+			Options
+		>;
 	}
 
 	async count<Slug extends CollectionSlug<Config>>(
@@ -1904,9 +1916,9 @@ function accessCapabilitiesFromEnvelope(value: unknown): AccessCapabilitiesEnvel
 	return value;
 }
 
-function collectionPageFromEnvelope<Document>(
-	value: PageEnvelope<Document>
-): CollectionPageEnvelope<Document> {
+function collectionPageFromEnvelope<Document, Metadata extends Pagination | UncountedPagination>(
+	value: PageEnvelope<Document, Metadata>
+): CollectionPageEnvelope<Document, Metadata> {
 	const access = Reflect.get(value, "access");
 	if (!isRecord(access)) throw invalidSuccessEnvelope("collection page access");
 	const collection = accessCapabilitiesFromEnvelope(access.collection);

@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
+	"github.com/riducms/ridu/internal/blockrename"
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
@@ -74,6 +76,16 @@ func (backend *Store) applyMongoMigrationTransactionPhase(
 			}
 		case ridumigration.StepRetireResources:
 			if err := backend.retireMongoMigrationResources(ctx, transaction, step.resourceIDs); err != nil {
+				return fmt.Errorf("apply MongoDB migration %s step %s/%s: %w", file.Name, step.phaseID, step.stepID, err)
+			}
+		case ridumigration.StepAuditRequiredValues:
+			sessionContext, leave, err := transaction.enter(ctx, false)
+			if err != nil {
+				return err
+			}
+			err = backend.auditMongoRequiredValues(sessionContext, step.requirements, false)
+			leave()
+			if err != nil {
 				return fmt.Errorf("apply MongoDB migration %s step %s/%s: %w", file.Name, step.phaseID, step.stepID, err)
 			}
 		default:
@@ -325,6 +337,9 @@ func (backend *Store) executeMongoMigrationRename(ctx context.Context, transacti
 	if plan.before == nil {
 		return fmt.Errorf("MongoDB content rename has no before manifest")
 	}
+	if intent.Block != "" {
+		return backend.executeMongoBlockFieldRename(ctx, transaction, plan, intent)
+	}
 	beforeBySlug := mongoSemanticCollectionsBySlug(plan.before.Snapshot().Collections)
 	afterBySlug := mongoSemanticCollectionsBySlug(plan.after.Snapshot().Collections)
 	beforeResource, beforeOK := beforeBySlug[intent.CollectionBefore]
@@ -355,6 +370,100 @@ func (backend *Store) executeMongoMigrationRename(ctx context.Context, transacti
 		}
 	}
 	return nil
+}
+
+// executeMongoBlockFieldRename moves a block field's content in every stored
+// block of its definition: in each resource that places the block, in its
+// working, published and version documents. Resource renames and the renames
+// of definitions that place this one already ran, so the after schema finds
+// every block.
+func (backend *Store) executeMongoBlockFieldRename(ctx context.Context, transaction *documentTransaction, plan mongoDBArtifactReplayPlan, intent ridumigration.Rename) error {
+	after := plan.after.Snapshot()
+	rename, err := blockrename.New(after, intent, false)
+	if err != nil {
+		return err
+	}
+	sessionContext, leave, err := transaction.enter(ctx, true)
+	if err != nil {
+		return err
+	}
+	defer leave()
+	for _, resource := range append(append([]schema.Collection(nil), after.Collections...), after.Globals...) {
+		if !rename.Applies(resource) {
+			continue
+		}
+		rewrite := func(values store.Values) (store.Values, bool, error) {
+			return rename.Values(resource.Fields, values)
+		}
+		collections := []struct {
+			name    string
+			version bool
+		}{{name: physicalCollectionName(resource.ID)}}
+		if resource.Versions != nil {
+			collections = append(collections, struct {
+				name    string
+				version bool
+			}{name: physicalPublishedCollectionName(resource.ID)})
+		}
+		if resource.Versions != nil || resource.Capabilities.Versions {
+			collections = append(collections, struct {
+				name    string
+				version bool
+			}{name: physicalVersionCollectionName(resource.ID), version: true})
+		}
+		for _, target := range collections {
+			if err := rewriteMongoDocumentValues(sessionContext, backend.database.Collection(target.name), target.version, rewrite); err != nil {
+				return fmt.Errorf("rename block %s field %s in %s: %w", intent.Block, intent.FieldBefore, resource.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
+// rewriteMongoDocumentValues rewrites the values of every document, or of
+// every version snapshot, in one MongoDB collection.
+func rewriteMongoDocumentValues(ctx context.Context, collection *mongo.Collection, version bool, rewrite func(store.Values) (store.Values, bool, error)) error {
+	cursor, err := collection.Find(ctx, bson.D{})
+	if err != nil {
+		return translateMongoError(ctx, err)
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		raw := cursor.Current
+		documentRaw := raw
+		prefix := ""
+		if version {
+			var ok bool
+			documentRaw, ok = raw.Lookup(mongoVersionSnapshotPath).DocumentOK()
+			if !ok {
+				return fmt.Errorf("stored MongoDB version has an invalid snapshot")
+			}
+			prefix = mongoVersionSnapshotPath + "."
+		}
+		document, err := decodeDocument(documentRaw)
+		if err != nil {
+			return err
+		}
+		values, changed, err := rewrite(document.Values)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			continue
+		}
+		encoded, err := encodeValues(values)
+		if err != nil {
+			return err
+		}
+		id, ok := raw.Lookup("_id").StringValueOK()
+		if !ok {
+			return fmt.Errorf("stored MongoDB migration document has invalid identity")
+		}
+		if _, err := collection.UpdateOne(ctx, bson.D{{Key: "_id", Value: id}}, bson.D{{Key: "$set", Value: bson.D{{Key: prefix + "values", Value: encoded}}}}); err != nil {
+			return translateMongoError(ctx, err)
+		}
+	}
+	return translateMongoError(ctx, cursor.Err())
 }
 
 type mongoDBMigrationFieldSchemas struct {
@@ -449,9 +558,9 @@ func rewriteMongoDocumentCollection(ctx context.Context, collection *mongo.Colle
 	return translateMongoError(ctx, cursor.Err())
 }
 
+// mongoDBFieldRenameContainer is a group or array above a renamed field.
 type mongoDBFieldRenameContainer struct {
-	field    schema.Field
-	blockKey string
+	field schema.Field
 }
 
 func renameMongoStoreFieldsBySchema(values store.Values, schemas mongoDBMigrationFieldSchemas, pairs []ridumigration.FieldRename) (bool, error) {
@@ -571,18 +680,12 @@ func findMongoDBFieldRenameTraversal(fields []schema.Field, path string, parents
 		if field.Path.String() == path {
 			return append([]mongoDBFieldRenameContainer(nil), parents...), true
 		}
-		if field.Nested != nil {
+		// A resource field rename never reaches into a block definition,
+		// whose own fields block field renames move.
+		if field.Nested != nil && strings.HasPrefix(path, field.Path.String()+".") {
 			next := appendMongoDBFieldRenameContainer(parents, mongoDBFieldRenameContainer{field: field})
 			if containers, found := findMongoDBFieldRenameTraversal(field.Nested.ResolvedFields(), path, next); found {
 				return containers, true
-			}
-		}
-		if field.Blocks != nil {
-			for _, block := range field.Blocks.ResolvedTypes() {
-				next := appendMongoDBFieldRenameContainer(parents, mongoDBFieldRenameContainer{field: field, blockKey: block.Slug})
-				if containers, found := findMongoDBFieldRenameTraversal(block.ResolvedFields(), path, next); found {
-					return containers, true
-				}
 			}
 		}
 	}
@@ -670,33 +773,6 @@ func renameMongoStoreFieldInsideContainer(value store.Value, container mongoDBFi
 		for index, item := range items {
 			object, valid := item.CopyObject()
 			if !valid {
-				continue
-			}
-			itemChanged, err := renameMongoStoreFieldInContainers(object, remaining, source, destination)
-			if err != nil {
-				return value, false, err
-			}
-			if itemChanged {
-				items[index] = store.Object(object)
-				changed = true
-			}
-		}
-		if changed {
-			return store.List(items...), true, nil
-		}
-	case schema.FieldTypeBlocks:
-		items, valid := value.CopyList()
-		if !valid {
-			return value, false, nil
-		}
-		changed := false
-		for index, item := range items {
-			object, valid := item.CopyObject()
-			if !valid {
-				continue
-			}
-			blockType, _ := object["blockType"].StringValue()
-			if blockType != container.blockKey {
 				continue
 			}
 			itemChanged, err := renameMongoStoreFieldInContainers(object, remaining, source, destination)
@@ -858,19 +934,17 @@ func rewriteMongoCollectionReferenceFieldValue(field schema.Field, value store.V
 				continue
 			}
 			blockType, _ := object["blockType"].StringValue()
-			for _, block := range field.Blocks.ResolvedTypes() {
-				if block.Slug != blockType {
-					continue
-				}
-				fieldChanged, err := rewriteMongoCollectionReferences(block.ResolvedFields(), object, before, after)
-				if err != nil {
-					return value, false, err
-				}
-				if fieldChanged {
-					items[index] = store.Object(object)
-					changed = true
-				}
-				break
+			block, found := field.Blocks.Definition(blockType)
+			if !found {
+				continue
+			}
+			fieldChanged, err := rewriteMongoCollectionReferences(block.ResolvedFields(), object, before, after)
+			if err != nil {
+				return value, false, err
+			}
+			if fieldChanged {
+				items[index] = store.Object(object)
+				changed = true
 			}
 		}
 		if changed {
@@ -972,6 +1046,7 @@ func (backend *Store) retireMongoMigrationResources(ctx context.Context, transac
 		filter     bson.D
 	}{
 		{mongoReferenceCollectionName, bson.D{{Key: "$or", Value: bson.A{bson.D{{Key: "ownerCollection", Value: bson.D{{Key: "$in", Value: values}}}}, bson.D{{Key: "targetCollection", Value: bson.D{{Key: "$in", Value: values}}}}}}}},
+		{mongoReferenceFenceCollectionName, bson.D{{Key: "collection", Value: bson.D{{Key: "$in", Value: values}}}}},
 		{mongoAuthCredentialCollectionName, bson.D{{Key: "collection", Value: bson.D{{Key: "$in", Value: values}}}}},
 		{mongoAuthSessionCollectionName, bson.D{{Key: "collection", Value: bson.D{{Key: "$in", Value: values}}}}},
 		{mongoAuthTokenCollectionName, bson.D{{Key: "collection", Value: bson.D{{Key: "$in", Value: values}}}}},
@@ -1017,6 +1092,10 @@ func (backend *Store) rewriteMongoMigrationFrameworkState(ctx context.Context, t
 		if _, err := backend.database.Collection(update.collection).UpdateMany(sessionContext, update.filter, bson.D{{Key: "$set", Value: update.set}}); err != nil {
 			return translateMongoError(sessionContext, err)
 		}
+	}
+	// Shared fences are lock state that saves recreate under the new identity.
+	if _, err := backend.database.Collection(mongoReferenceFenceCollectionName).DeleteMany(sessionContext, bson.D{{Key: "collection", Value: string(before)}}); err != nil {
+		return translateMongoError(sessionContext, err)
 	}
 	return backend.rewriteMongoIdentityDerivedState(sessionContext, before, after)
 }

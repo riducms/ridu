@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riducms/ridu/internal/blockrename"
 	"github.com/riducms/ridu/internal/migrationartifact"
+	"github.com/riducms/ridu/internal/schematest"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -83,38 +85,38 @@ func TestRenameMongoStoreFieldBySchemaHandlesLocalizedRepeatedAndRecursiveContai
 	text := func(name string, pathValue query.Path) schema.Field {
 		return schema.Field{Name: name, Path: pathValue, Type: schema.FieldTypeText}
 	}
-	before := []schema.Field{
-		{
+	// Each schema places its own feature definition, whose paths are relative.
+	feature := func(caption string) []schema.BlockType {
+		return []schema.BlockType{{Slug: "feature", TypeName: "Feature", Fields: []schema.Field{text(caption, path(caption))}}}
+	}
+	before := schematest.Bind(t, "posts", feature("oldCaption"),
+		schema.Field{
 			Name: "meta", Path: path("meta"), Type: schema.FieldTypeGroup, Localized: true,
 			Nested: &schema.NestedField{Fields: []schema.Field{text("oldTitle", path("meta", "oldTitle"))}},
 		},
-		{
+		schema.Field{
 			Name: "rows", Path: path("rows"), Type: schema.FieldTypeArray, Localized: true,
 			Nested: &schema.NestedField{Fields: []schema.Field{text("oldLabel", path("rows", "oldLabel"))}},
 		},
-		{
+		schema.Field{
 			Name: "layout", Path: path("layout"), Type: schema.FieldTypeBlocks, Localized: true,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "feature", Fields: []schema.Field{
-				text("oldCaption", path("layout", "feature", "oldCaption")),
-			}}}},
+			Blocks: &schema.BlocksField{BlockReferences: []string{"feature"}},
 		},
-	}
-	after := []schema.Field{
-		{
+	)
+	after := schematest.Bind(t, "posts", feature("caption"),
+		schema.Field{
 			Name: "content", Path: path("content"), Type: schema.FieldTypeGroup, Localized: true,
 			Nested: &schema.NestedField{Fields: []schema.Field{text("heading", path("content", "heading"))}},
 		},
-		{
+		schema.Field{
 			Name: "rows", Path: path("rows"), Type: schema.FieldTypeArray, Localized: true,
 			Nested: &schema.NestedField{Fields: []schema.Field{text("label", path("rows", "label"))}},
 		},
-		{
+		schema.Field{
 			Name: "layout", Path: path("layout"), Type: schema.FieldTypeBlocks, Localized: true,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "feature", Fields: []schema.Field{
-				text("caption", path("layout", "feature", "caption")),
-			}}}},
+			Blocks: &schema.BlocksField{BlockReferences: []string{"feature"}},
 		},
-	}
+	)
 	schemas := mongoDBMigrationFieldSchemas{before: before, after: after}
 	values := store.Values{
 		"meta": store.Object(store.Values{
@@ -136,7 +138,6 @@ func TestRenameMongoStoreFieldBySchemaHandlesLocalizedRepeatedAndRecursiveContai
 		{Before: "meta", After: "content"},
 		{Before: "meta.oldTitle", After: "content.heading"},
 		{Before: "rows.oldLabel", After: "rows.label"},
-		{Before: "layout.feature.oldCaption", After: "layout.feature.caption"},
 	}
 	for _, pair := range pairs {
 		changed, err := renameMongoStoreFieldBySchema(values, schemas, pair)
@@ -147,6 +148,18 @@ func TestRenameMongoStoreFieldBySchemaHandlesLocalizedRepeatedAndRecursiveContai
 			t.Fatalf("rename %s -> %s did not change data", pair.Before, pair.After)
 		}
 	}
+	// A block's field is renamed once in its shared definition, wherever the
+	// block is stored: here in each translation of a localized container.
+	blockRename, err := blockrename.New(schema.Snapshot{Collections: []schema.Collection{{ID: "posts", Slug: "posts", Fields: after}}},
+		ridumigration.Rename{Block: "feature", FieldBefore: "oldCaption", FieldAfter: "caption"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamedBlocks, changed, err := blockRename.Values(after, values)
+	if err != nil || !changed {
+		t.Fatalf("block field rename = %t, %v", changed, err)
+	}
+	values = renamedBlocks
 	content, _ := values["content"].CopyObject()
 	englishContent, _ := content["en"].CopyObject()
 	rows, _ := values["rows"].CopyObject()
@@ -315,15 +328,15 @@ func TestRewriteMongoPolymorphicRelationshipSlugsFollowsImmutableFieldShapes(t *
 			}}},
 		},
 		{
-			Name: "layout", Type: schema.FieldTypeBlocks,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Slug: "feature", Fields: []schema.Field{
-					polymorphic("subject", false, false),
-					{Name: "relationTo", Type: schema.FieldTypeText},
-				},
-			}}},
+			Name: "layout", Path: query.Field("layout"), Type: schema.FieldTypeBlocks,
+			Blocks: &schema.BlocksField{BlockReferences: []string{"feature"}},
 		},
 	}
+	subject := polymorphic("subject", false, false)
+	subject.Path = query.Field("subject")
+	fields = schematest.Bind(t, "posts", []schema.BlockType{{Slug: "feature", TypeName: "Feature", Fields: []schema.Field{
+		subject, {Name: "relationTo", Path: query.Field("relationTo"), Type: schema.FieldTypeText},
+	}}}, fields...)
 	reference := func(collection, id string) store.Value {
 		return store.Object(store.Values{"relationTo": store.String(collection), "id": store.String(id)})
 	}
@@ -729,7 +742,8 @@ func TestMongoDBTransformRequiresChecksumRegistrationAndDestructiveReview(t *tes
 	}
 	afterSnapshot := before.Snapshot()
 	field := &afterSnapshot.Collections[0].Fields[0]
-	field.Required = true
+	untitled := "Untitled"
+	field.Default = &untitled
 	after := schema.NewManifest(afterSnapshot)
 	descriptor := ridumigration.DataTransformDescriptor{Name: "backfill-title", Checksum: strings.Repeat("b", 64)}
 	options := ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}

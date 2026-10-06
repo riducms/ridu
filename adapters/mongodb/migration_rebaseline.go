@@ -171,7 +171,7 @@ func (backend *Store) ReplaceBaseline(ctx context.Context, directory string, opt
 func mongoDBBlockingStep(file migrationartifact.File) string {
 	for _, phase := range file.Artifact.Phases {
 		for _, step := range phase.Steps {
-			if mongoDBMaintenanceStep(step.Kind) {
+			if mongoDBRunnerOnlyStep(step.Kind) {
 				return string(step.Kind)
 			}
 		}

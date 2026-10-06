@@ -67,8 +67,8 @@ func logicalGrouping(t *testing.T, factory Factory) {
 		t.Fatal(err)
 	}
 	expect("filtered list under an Or access rule", names(page.Documents), "ben-l1")
-	if page.Total != 1 {
-		t.Fatalf("filtered total = %d, want 1", page.Total)
+	if *page.Total != 1 {
+		t.Fatalf("filtered total = %d, want 1", *page.Total)
 	}
 
 	handler := app.Handler(ridu.HandlerOptions{})

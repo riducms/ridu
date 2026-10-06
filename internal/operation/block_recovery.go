@@ -96,7 +96,7 @@ func unknownBlockRecoveryError(fields []schema.Field, values store.Values, canon
 				kind, _ := row.Get("blockType").StringValue()
 				var block *schema.BlockType
 				if valid && field.Blocks != nil {
-					block = findBlock(field.Blocks.ResolvedTypes(), kind)
+					block = findBlock(field.Blocks.Definitions(), kind)
 				}
 				if block == nil {
 					issues.add(schema.Issue{Code: "unknown_block_schema", Path: rowPath + ".blockType", Message: "Restore the missing block schema or migrate the stored document before using it."})

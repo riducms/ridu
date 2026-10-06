@@ -460,7 +460,7 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 				}
 				blockTypeValue, exists := item.Lookup("blockType")
 				blockKey, valid := blockTypeValue.StringValue()
-				block := findBlock(field.Blocks.ResolvedTypes(), blockKey)
+				block := findBlock(field.Blocks.Definitions(), blockKey)
 				if !exists || !valid || block == nil {
 					issues.add(schema.Issue{Code: "invalid_block", Path: itemPath + ".blockType", Message: "block type is not allowed"})
 					replaceValidationItem(value, &validatedItems, index, store.Value{})

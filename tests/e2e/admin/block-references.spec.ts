@@ -16,14 +16,14 @@ for (const mode of ["inline", "reference"] as const) {
 				layout: [
 					{
 						_key: "a",
-						blockType: "card",
+						blockType: "registry-card",
 						visibility: "visible",
 						secret: "Readable",
 						controlled: "Editable",
 					},
 					{
 						_key: "b",
-						blockType: "card",
+						blockType: "registry-card",
 						visibility: "hidden",
 						secret: "Redacted",
 						controlled: "Protected",
@@ -79,7 +79,7 @@ for (const mode of ["inline", "reference"] as const) {
 			(issue: { code: string }) => issue.code === "controlled_value"
 		);
 		expect(issue.path).toBe("layout.0.controlled");
-		expect(JSON.parse(issue.target)).toEqual(expect.arrayContaining(["card", "a"]));
+		expect(JSON.parse(issue.target)).toEqual(expect.arrayContaining(["registry-card", "a"]));
 		await layout.getByRole("button", { name: /1 Error:.*Controlled/i }).click();
 		await expect(page.locator('input[name="layout.0.controlled"]')).toBeFocused();
 		// Server admission uses the candidate root even when the client presents an editable control.
@@ -107,20 +107,107 @@ for (const mode of ["inline", "reference"] as const) {
 	});
 }
 
+test("collection filters reach registered block fields through nested block paths", async ({
+	page,
+}) => {
+	await loginAsEditor(page);
+	const errors = observePageErrors(page);
+	const marker = `filter-${Date.now().toString(36)}`;
+	for (const [suffix, caption, note] of [
+		["alpha", "Alpha caption", "Deep alpha"],
+		["beta", "Beta caption", "Deep beta"],
+	] as const) {
+		const response = await page.request.post("/api/collections/reference-pages", {
+			data: {
+				tenant: `${marker}-${suffix}`,
+				layout: [
+					{
+						_key: "card",
+						blockType: "registry-card",
+						visibility: "visible",
+						details: { caption },
+						children: [{ _key: "note", blockType: "registry-note", text: note }],
+					},
+				],
+			},
+		});
+		expect(response.ok(), await response.text()).toBe(true);
+	}
+	const alpha = page.getByText(`${marker}-alpha`, { exact: true });
+	const beta = page.getByText(`${marker}-beta`, { exact: true });
+	const urlFilters = () => JSON.parse(new URL(page.url()).searchParams.get("filters") ?? "[]");
+
+	await page.goto("/admin/collections/reference-pages");
+	await expect(alpha).toBeVisible();
+	await page.getByRole("button", { name: /Filters/ }).click();
+	await page.getByRole("button", { name: "Add filter", exact: true }).click();
+	const field = page.getByLabel("Filter field", { exact: true });
+	await field.click();
+	await page.getByRole("option", { name: "Layout Blocks", exact: true }).click();
+	await page.getByRole("option", { name: "Card Block", exact: true }).click();
+	await expect(page.getByRole("option", { name: "Children Blocks", exact: true })).toBeVisible();
+	// The read-protected definition field is not queryable at any placement.
+	await expect(page.getByRole("option", { name: "Secret", exact: true })).toHaveCount(0);
+	await page.getByRole("option", { name: "Details Group", exact: true }).click();
+	await page.getByRole("option", { name: "Caption", exact: true }).click();
+	await expect(field).toContainText("Layout > Card > Details > Caption");
+	await page.getByLabel("Filter value", { exact: true }).fill("Alpha caption");
+	await expect.poll(urlFilters).toEqual([
+		[
+			{
+				field: "layout.registry-card.details.caption",
+				operator: "equals",
+				value: "Alpha caption",
+			},
+		],
+	]);
+	await expect(beta).toHaveCount(0);
+	await expect(alpha).toBeVisible();
+
+	// Search from the block's level reaches the nested definition at its concrete path.
+	await field.click();
+	await page.getByRole("button", { name: "Back to Layout > Card", exact: true }).click();
+	await page.getByRole("combobox", { name: "Search fields", exact: true }).fill("text");
+	await page.getByRole("option", { name: "Children > Note > Text", exact: true }).click();
+	await expect(field).toContainText("Layout > Card > Children > Note > Text");
+	await page.getByLabel("Filter value", { exact: true }).fill("Deep beta");
+	await expect.poll(urlFilters).toEqual([
+		[
+			{
+				field: "layout.registry-card.children.registry-note.text",
+				operator: "equals",
+				value: "Deep beta",
+			},
+		],
+	]);
+	await expect(alpha).toHaveCount(0);
+	await expect(beta).toBeVisible();
+
+	await page.reload();
+	await expect(beta).toBeVisible();
+	await expect(alpha).toHaveCount(0);
+	await page.getByRole("button", { name: /Filters/ }).click();
+	await expect(page.getByLabel("Filter field", { exact: true })).toContainText(
+		"Layout > Card > Children > Note > Text"
+	);
+	expect(errors.pageErrors).toEqual([]);
+	expect(errors.consoleErrors).toEqual([]);
+});
+
 test("schema response shares the registered definition across collections and rich text", async ({
 	page,
 }) => {
 	await loginAsEditor(page);
 	const { schema } = await (await page.request.get("/api/schema")).json();
-	expect(schema.blocks.filter((b: { slug: string }) => b.slug === "card")).toHaveLength(1);
+	expect(schema.blocks.filter((b: { slug: string }) => b.slug === "registry-card")).toHaveLength(1);
 	const pages = schema.collections.find((c: { slug: string }) => c.slug === "reference-pages");
 	expect(pages.fields.find((f: { name: string }) => f.name === "layout").blocks).toEqual({
-		blockReferences: ["card"],
+		blockReferences: ["registry-card"],
 	});
 	expect(
 		pages.fields.find((f: { name: string }) => f.name === "body").plugin.embeddedTrees[0].cases[0]
 			.blockReferences
-	).toEqual(["card"]);
+	).toEqual(["registry-card"]);
 });
 
 for (const mode of ["inline", "reference"] as const) {

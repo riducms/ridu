@@ -210,13 +210,14 @@ func TestAdminInitialRuntimeUsesValidatedURLLocaleForCapabilities(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := &API{config: Config{
-		Engine: engine,
-		Manifest: schema.NewManifest(schema.Snapshot{
-			Version:     schema.CurrentVersion,
-			Application: schema.Application{Name: "localized", Localization: &schema.LocalizationSettings{DefaultLocale: "en", Locales: []schema.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}}}},
-			Collections: []schema.Collection{collection}, Plugins: []schema.Plugin{},
-		}),
+	snapshot := schema.Snapshot{
+		Version:     schema.CurrentVersion,
+		Application: schema.Application{Name: "localized", Localization: &schema.LocalizationSettings{DefaultLocale: "en", Locales: []schema.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}}}},
+		Collections: []schema.Collection{collection}, Plugins: []schema.Plugin{},
+	}
+	api := &API{manifest: snapshot, config: Config{
+		Engine:   engine,
+		Manifest: schema.NewManifest(snapshot),
 		GetPreference: func(context.Context, *AuthIdentity, string) (json.RawMessage, error) {
 			return json.RawMessage(`{"locale":"removed"}`), nil
 		},
@@ -464,7 +465,7 @@ func TestAdminInitialColdRuntimePanicReturnsHTMLFallback(t *testing.T) {
 		Manifest: schema.NewManifest(schema.Snapshot{
 			Version: schema.CurrentVersion, Application: schema.Application{Name: "panic"}, Plugins: []schema.Plugin{},
 		}),
-		ManifestForRequest: func(context.Context, *AuthIdentity) (schema.Snapshot, error) {
+		LocalizationForRequest: func(context.Context, *AuthIdentity) (*schema.LocalizationSettings, error) {
 			panic("runtime panic")
 		},
 		RequestError: func(RequestErrorEvent) { requestErrors++ },
@@ -836,9 +837,7 @@ func TestAdminInitialNavigationReusesRuntimeButResolvesLocaleAndCapabilities(t *
 		t.Fatal(err)
 	}
 	assets["ridu-admin-bootstrap.json"].Data = encoded
-	handler := New(Config{AdminAssets: assets, Engine: engine, Manifest: schema.NewManifest(snapshot),
-		ManifestForRequest: func(context.Context, *AuthIdentity) (schema.Snapshot, error) { return snapshot, nil },
-	})
+	handler := New(Config{AdminAssets: assets, Engine: engine, Manifest: schema.NewManifest(snapshot)})
 	readState := func(path, contextKey, accept string) (protocol.AdminPreparedRouteStateV1, int) {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodGet, path, nil)
@@ -874,7 +873,9 @@ func TestAdminInitialNavigationReusesRuntimeButResolvesLocaleAndCapabilities(t *
 	if fallback.Outcome != protocol.AdminPreparedRouteFallback || fallback.Runtime != nil || fallback.Navigation == nil || fallback.Route != nil {
 		t.Fatalf("fallback state: %#v", fallback)
 	}
+	// A changed manifest belongs to a new server process; its context differs.
 	snapshot.Application.Name = "changed manifest"
+	handler = New(Config{AdminAssets: assets, Engine: engine, Manifest: schema.NewManifest(snapshot)})
 	reload, _ := readState("/admin/collections/posts?locale=en", initial.ContextKey, protocol.AdminPreparedRouteStateMediaType)
 	if reload.Outcome != protocol.AdminPreparedRouteReload || reload.Runtime != nil || reload.Navigation != nil || reload.Route != nil {
 		t.Fatalf("manifest change did not reload: %#v", reload)

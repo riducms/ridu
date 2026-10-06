@@ -1,5 +1,5 @@
 import { createAdminI18n } from "@riducms/translations";
-import type { SchemaEmbeddedTree, SchemaField } from "@riducms/protocol";
+import type { SchemaBlockType, SchemaEmbeddedTree, SchemaField } from "@riducms/protocol";
 import { FormController } from "@admin/core/forms/form-controller.svelte";
 import {
 	createEmbeddedSchemaDraft,
@@ -8,10 +8,13 @@ import {
 import { PluginFieldBinding } from "@admin/core/forms/plugin-field-binding";
 import { guardPluginAuthoring } from "@admin/core/forms/plugin-field-authoring";
 
+import { bindBlockField, blockDefinition } from "../block-manifest";
+
+/** A field of the `card` definition, with its definition-relative path and ID. */
 export const title: SchemaField = {
-	id: "title",
+	id: "block-card-title",
 	name: "title",
-	path: "body.title",
+	path: "title",
 	type: "text",
 	category: "scalar",
 	required: true,
@@ -20,7 +23,13 @@ export const title: SchemaField = {
 	text: {},
 };
 
-export function tree(fields: SchemaField[]): SchemaEmbeddedTree {
+/** A registry definition labelled as a card, with definition-relative field paths. */
+export function card(fields: SchemaField[], slug = "card"): SchemaBlockType {
+	return blockDefinition(slug, fields, { singular: "Card", plural: "Cards" });
+}
+
+/** An embedded tree whose `widget` case selects the `slug` definition. */
+export function tree(slug = "card"): SchemaEmbeddedTree {
 	return {
 		version: 1,
 		key: "widgets",
@@ -33,17 +42,22 @@ export function tree(fields: SchemaField[]): SchemaEmbeddedTree {
 				payload: "content",
 				discriminator: "schema",
 				identity: "uid",
-				types: [{ slug: "card", labels: { singular: "Card", plural: "Cards" }, fields }],
+				blockReferences: [slug],
 			},
 		],
 	};
 }
 
+/**
+ * Binds a `body` plugin field whose widgets select the `card` definition with
+ * `fields`; `blocks` adds further definitions that those fields select.
+ */
 export function draftFixture(
 	fields = [title],
-	payload: Record<string, unknown> = { title: "Original" }
+	payload: Record<string, unknown> = { title: "Original" },
+	blocks: SchemaBlockType[] = []
 ) {
-	const schema: SchemaField = {
+	const schema: SchemaField = bindBlockField([card(fields), ...blocks], {
 		id: "body",
 		name: "body",
 		path: "body",
@@ -52,8 +66,8 @@ export function draftFixture(
 		required: false,
 		unique: false,
 		admin: { label: "Body" },
-		plugin: { key: "outline", config: {}, embeddedTrees: [tree(fields)] },
-	};
+		plugin: { key: "outline", config: {}, embeddedTrees: [tree()] },
+	} satisfies SchemaField);
 	const form = new FormController();
 	form.reset(
 		{ body: { outline: [{ kind: "widget", content: { ...payload, schema: "card", uid: "a" } }] } },

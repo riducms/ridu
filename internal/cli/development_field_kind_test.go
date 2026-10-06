@@ -21,6 +21,7 @@ import (
 	"github.com/riducms/ridu/plugins/richtext"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func fieldKindConfig(t *testing.T, body field.Node) core.Config {
@@ -220,7 +221,7 @@ func TestDevelopmentFieldKindsProtectSnapshotOnlyValuesAcrossAdapters(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: fieldKindResource(t, before, "posts"), ID: id}, Values: store.Values{"body": store.Null()}}); err != nil {
+			if _, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: fieldKindResource(t, before, "posts"), ID: id}, Values: store.Values{"body": store.Null()}}); err != nil {
 				t.Fatal(err)
 			}
 			if err := transaction.Commit(ctx); err != nil {
@@ -509,7 +510,7 @@ func TestDevelopmentFieldKindsRefuseEmbeddedPayloadClear(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "clearing is unavailable") || !strings.Contains(err.Error(), "restore the previous embedded field kind") {
 		t.Fatalf("embedded change = %v\n%s", err, printed.String())
 	}
-	if stops != 0 || !strings.Contains(printed.String(), "posts.body embedded field blocks.block.callout.level changes from text to number; 1 current documents and 2 version snapshots") || strings.Contains(printed.String(), "Choose clear") {
+	if stops != 0 || !strings.Contains(printed.String(), "posts.body embedded field callout.level changes from text to number; 1 current documents and 2 version snapshots") || strings.Contains(printed.String(), "Choose clear") {
 		t.Fatalf("embedded change prompt: stops=%d\n%s", stops, printed.String())
 	}
 	if _, err := synchronizeDevelopmentSchema(ctx, projectfile.DatabaseSQLite, "", path, true, true, developmentPreparation{manifest: after}, newCLIOutput(io.Discard, io.Discard, cliOutputOptions{})); err == nil || !strings.Contains(err.Error(), "RIDU_FIELD_KIND_CHANGE_REQUIRES_TRANSFORM") {

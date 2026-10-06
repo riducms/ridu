@@ -24,10 +24,20 @@
 		if (readOnly) return;
 		binding.set(decodeOutline({ ...(record(value) ? value : {}), outline: next }));
 	}
+	// Each placement selects its own card definition from the block registry.
+	const cardSlug = $derived(
+		field.plugin?.embeddedTrees
+			?.find((tree) => tree.key === "widgets")
+			?.cases.find((candidate) => candidate.tagValue === "widget")?.blockReferences?.[0]
+	);
 	function add() {
+		if (cardSlug === undefined) return;
 		replace([
 			...nodes,
-			{ kind: "widget", content: { schema: "card", uid: crypto.randomUUID(), title: "New card" } },
+			{
+				kind: "widget",
+				content: { schema: cardSlug, uid: crypto.randomUUID(), title: "New card" },
+			},
 		]);
 	}
 	function reverse() {

@@ -55,6 +55,10 @@ Values returned from the store are detached snapshots. A string relationship val
 when that path is explicitly populated, it becomes a `store.Populated` document value. See
 [Querying data](./querying.md) for expressions, selection, sorting, and bounded population.
 
+A `store.Page` always has an exact `HasNextPage`. `Total` points to the exact match count. With
+`SkipTotal: true`, which is the Go form of `pagination: false`, `Total` is nil and no adapter runs a
+count.
+
 ## Pass the caller {#actors}
 
 `Actor` in the final options argument is the authenticated document supplied
@@ -120,7 +124,7 @@ positional; optional controls go in one final named options value. History revis
 | Type                   | Controls                                                                                                                                                    |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FindOptions`          | `Select`, relationship `Populate`, computed/join `OutputFields`, draft visibility, exact actor identity or `System`, trash-only mode, and locale projection |
-| `ListOptions`          | All find controls plus `Where`, one-based `Page`, `Limit`, and ordered `Sort`                                                                               |
+| `ListOptions`          | All find controls plus `Where`, one-based `Page`, `Limit`, ordered `Sort`, and `SkipTotal`                                                                  |
 | `MutationOptions`      | Exact actor identity or `System`, optimistic `ExpectedRevision`, returned population/output fields, draft status, and write locale                          |
 | `CapabilityOptions`    | Candidate `Data`, exact actor identity, trash mode, and locale for a side-effect-free permission summary                                                    |
 | `BulkOptions`          | Exact actor identity or `System`, and locale controls for bulk actions and empty-trash                                                                      |

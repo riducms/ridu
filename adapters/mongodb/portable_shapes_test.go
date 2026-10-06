@@ -30,7 +30,7 @@ func TestMongoPortablePointShapesValidateSchemaAndProjection(t *testing.T) {
 			"fr": store.Null(),
 		}),
 	}
-	if err := validateCompleteValuesForLocales(collection, valid, locales); err != nil {
+	if err := validateStoredValuesForLocales(collection, valid, locales); err != nil {
 		t.Fatalf("portable point values rejected: %v", err)
 	}
 
@@ -45,7 +45,7 @@ func TestMongoPortablePointShapesValidateSchemaAndProjection(t *testing.T) {
 	}
 	for _, path := range [][]string{{"location"}, {"details", "focus"}} {
 		resolved := mongoPortableShapeField(t, collection.Fields, path...)
-		if got := mongoCollectionFieldJSONSchema(*resolved, locales); !reflect.DeepEqual(got, pointSchema) {
+		if got := mongoCollectionFieldJSONSchema(*resolved, locales, mongoRowFields); !reflect.DeepEqual(got, pointSchema) {
 			t.Fatalf("point schema for %q = %#v, want %#v", strings.Join(path, "."), got, pointSchema)
 		}
 	}
@@ -58,7 +58,7 @@ func TestMongoPortablePointShapesValidateSchemaAndProjection(t *testing.T) {
 			{Key: "fr", Value: pointSchema},
 		}},
 	}
-	if got := mongoCollectionFieldJSONSchema(*localizedPoint, locales); !reflect.DeepEqual(got, wantLocalizedSchema) {
+	if got := mongoCollectionFieldJSONSchema(*localizedPoint, locales, mongoRowFields); !reflect.DeepEqual(got, wantLocalizedSchema) {
 		t.Fatalf("localized point schema = %#v, want %#v", got, wantLocalizedSchema)
 	}
 
@@ -148,7 +148,7 @@ func TestMongoPortablePointShapesValidateSchemaAndProjection(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			values := store.CloneValues(valid)
 			test.mutate(values)
-			if err := validateCompleteValuesForLocales(collection, values, locales); err == nil || !strings.Contains(err.Error(), test.want) {
+			if err := validateStoredValuesForLocales(collection, values, locales); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("point validation error = %v, want containing %q", err, test.want)
 			}
 		})
@@ -166,7 +166,7 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 	}
 
 	valid := mongoPortableReferenceValues()
-	if err := validateCompleteValuesForLocales(collection, valid, locales); err != nil {
+	if err := validateStoredValuesForLocales(collection, valid, locales); err != nil {
 		t.Fatalf("portable reference values rejected: %v", err)
 	}
 
@@ -272,7 +272,7 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 		t.Run(test.name, func(t *testing.T) {
 			values := store.CloneValues(valid)
 			test.mutate(values)
-			if err := validateCompleteValuesForLocales(collection, values, locales); err == nil || !strings.Contains(err.Error(), test.want) {
+			if err := validateStoredValuesForLocales(collection, values, locales); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("portable reference validation error = %v, want containing %q", err, test.want)
 			}
 		})
@@ -280,26 +280,31 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 
 	envelopeTests := []struct {
 		name   string
-		mutate func(*schema.Collection)
+		mutate func(*schema.Collection, []schema.BlockType)
 		want   string
 	}{
 		{
 			name: "nested relationship still requires contract",
-			mutate: func(candidate *schema.Collection) {
+			mutate: func(candidate *schema.Collection, _ []schema.BlockType) {
 				mongoPortableShapeField(t, candidate.Fields, "content", "rows", "reviewers").Relationship = nil
 			},
 			want: `relationship field "content.rows.reviewers" does not have a relationship contract`,
 		},
 		{
+			// Block fields are validated once per definition and named by it.
 			name: "block upload still requires contract",
-			mutate: func(candidate *schema.Collection) {
-				mongoPortableShapeField(t, candidate.Fields, "layout", "feature", "assets").Upload = nil
+			mutate: func(_ *schema.Collection, blocks []schema.BlockType) {
+				for index := range blocks {
+					if blocks[index].Slug == "feature" {
+						mongoPortableShapeField(t, blocks[index].Fields, "assets").Upload = nil
+					}
+				}
 			},
-			want: `upload field "layout.feature.assets" does not have an upload contract`,
+			want: `upload field "block feature: assets" does not have an upload contract`,
 		},
 		{
 			name: "repeated descendants remain non-indexable",
-			mutate: func(candidate *schema.Collection) {
+			mutate: func(candidate *schema.Collection, _ []schema.BlockType) {
 				mongoPortableShapeField(t, candidate.Fields, "content", "rows", "localizedReviewer").Index = true
 			},
 			want: `does not support indexes on field "content.rows.localizedReviewer" inside a repeated field`,
@@ -307,8 +312,10 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 	}
 	for _, test := range envelopeTests {
 		t.Run(test.name, func(t *testing.T) {
-			candidate := mongoPortableShapeCollection(t)
-			test.mutate(&candidate)
+			snapshot := mongoPortableShapeManifest(t).Snapshot()
+			candidate := mongoPortableShapeEntries(t, snapshot)
+			test.mutate(&candidate, snapshot.Blocks)
+			candidate = mongoPortableShapeEntries(t, schema.NewManifest(snapshot).Snapshot())
 			if err := validateCollectionEnvelope(candidate); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("portable reference envelope error = %v, want containing %q", err, test.want)
 			}
@@ -317,6 +324,11 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 }
 
 func mongoPortableShapeCollection(t *testing.T) schema.Collection {
+	t.Helper()
+	return mongoPortableShapeEntries(t, mongoPortableShapeManifest(t).Snapshot())
+}
+
+func mongoPortableShapeManifest(t *testing.T) schema.Manifest {
 	t.Helper()
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "MongoDB portable document shapes",
@@ -346,7 +358,13 @@ func mongoPortableShapeCollection(t *testing.T) schema.Collection {
 	if err != nil {
 		t.Fatalf("resolve portable MongoDB shape fixture: %v", err)
 	}
-	for _, collection := range manifest.Snapshot().Collections {
+	return manifest
+}
+
+// mongoPortableShapeEntries returns the entries collection of snapshot.
+func mongoPortableShapeEntries(t *testing.T, snapshot schema.Snapshot) schema.Collection {
+	t.Helper()
+	for _, collection := range snapshot.Collections {
 		if collection.Slug == "entries" {
 			return collection
 		}

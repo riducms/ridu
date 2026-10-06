@@ -34,8 +34,11 @@ export interface ScalarWhere<Value> {
 
 export type TimestampWhere = Omit<ScalarWhere<string>, "contains" | "like">;
 
-export interface MultiSelectWhere<Value extends string> {
-	contains?: Value;
+/** Item membership for lists, multi-selects, reference lists and polymorphic relationships; wrap `in` in `not` to exclude. */
+export interface MembershipWhere<Value> {
+	in?: readonly Value[];
+	equals?: null;
+	notEquals?: null;
 	exists?: boolean;
 }
 
@@ -83,8 +86,6 @@ export interface UsersPopulationSelect {
 }
 
 export type UsersPopulate = Record<string, never>;
-
-export type UsersPopulateOutput = Record<string, never>;
 
 export type UsersValidationPath = "email";
 
@@ -135,8 +136,6 @@ export interface PostsPopulationSelect {
 
 export type PostsPopulate = Record<string, never>;
 
-export type PostsPopulateOutput = Record<string, never>;
-
 export type PostsValidationPath = "title" | "readingMinutes";
 
 export interface RiduConfig {
@@ -155,7 +154,6 @@ export interface RiduConfig {
 			where: UsersWhere;
 			select: UsersSelect;
 			populate: UsersPopulate;
-			populateOutput: UsersPopulateOutput;
 			validationPath: UsersValidationPath;
 		};
 		"posts": {
@@ -171,7 +169,6 @@ export interface RiduConfig {
 			where: PostsWhere;
 			select: PostsSelect;
 			populate: PostsPopulate;
-			populateOutput: PostsPopulateOutput;
 			validationPath: PostsValidationPath;
 		};
 	};

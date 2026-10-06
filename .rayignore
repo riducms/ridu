@@ -5,6 +5,7 @@ node_modules/
 dist/
 .svelte-kit/
 .vite/
+.next/
 coverage/
 playwright-report/
 test-results/

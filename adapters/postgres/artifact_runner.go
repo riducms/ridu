@@ -16,10 +16,12 @@ import (
 	atlaspostgres "ariga.io/atlas/sql/postgres"
 	atlasschema "ariga.io/atlas/sql/schema"
 	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/riducms/ridu/internal/blockrename"
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
+	"github.com/riducms/ridu/store"
 )
 
 const migrationLockID int64 = 795552720260
@@ -404,6 +406,12 @@ func validatePostgresResourceRetirementTopology(artifact ridumigration.Artifact)
 				if err := json.Unmarshal(step.Payload, &payload); err != nil {
 					return fmt.Errorf("decode content rename: %w", err)
 				}
+				if payload.Rename.Block != "" {
+					if err := bindBlockReferenceShapeRename(&fieldMapping, *artifact.Before, artifact.After, payload.Rename); err != nil {
+						return err
+					}
+					continue
+				}
 				before, beforeFound := collectionBySlug(artifact.Before.Collections, payload.Rename.CollectionBefore)
 				after, afterFound := collectionBySlug(artifact.After.Collections, payload.Rename.CollectionAfter)
 				if !beforeFound || !afterFound {
@@ -446,24 +454,30 @@ func validatePostgresResourceRetirementTopology(artifact ridumigration.Artifact)
 					if existing, duplicate := renameTargets[after.ID]; duplicate {
 						return fmt.Errorf("collection rename target %s is mapped more than once (first source %s)", after.ID, existing)
 					}
-					beforeTable, afterTable := collectionTable(before.ID), collectionTable(after.ID)
-					physicalRenames := 0
-					for physicalPhaseIndex, physicalSteps := range physicalByPhase {
-						for _, physical := range physicalSteps {
-							if isRenameTableStatement(physical.sql, beforeTable, afterTable) {
-								if physicalPhaseIndex != phaseIndex || physical.stepIndex >= stepIndex {
-									return fmt.Errorf("collection rename %s -> %s has a matching physical table rename outside its preceding transaction lineage", before.ID, after.ID)
+					tables := [][2]string{{collectionTable(before.ID), collectionTable(after.ID)}}
+					if before.Versions != nil && after.Versions != nil {
+						tables = append(tables, [2]string{publishedCollectionTable(before.ID), publishedCollectionTable(after.ID)})
+					}
+					for _, table := range tables {
+						beforeTable, afterTable := table[0], table[1]
+						physicalRenames := 0
+						for physicalPhaseIndex, physicalSteps := range physicalByPhase {
+							for _, physical := range physicalSteps {
+								if isRenameTableStatement(physical.sql, beforeTable, afterTable) {
+									if physicalPhaseIndex != phaseIndex || physical.stepIndex >= stepIndex {
+										return fmt.Errorf("collection rename %s -> %s has a matching physical table rename outside its preceding transaction lineage", before.ID, after.ID)
+									}
+									physicalRenames++
+									continue
 								}
-								physicalRenames++
-								continue
-							}
-							if sqlReplacesRenameTableIdentity(physical.sql, beforeTable, afterTable) {
-								return fmt.Errorf("collection rename %s -> %s has an additional source/target table data or identity mutation outside its matching physical rename", before.ID, after.ID)
+								if sqlReplacesRenameTableIdentity(physical.sql, beforeTable, afterTable) {
+									return fmt.Errorf("collection rename %s -> %s has an additional source/target table data or identity mutation outside its matching physical rename", before.ID, after.ID)
+								}
 							}
 						}
-					}
-					if physicalRenames != 1 {
-						return fmt.Errorf("collection rename %s -> %s requires exactly one matching physical table rename earlier in the same transaction phase", before.ID, after.ID)
+						if physicalRenames != 1 {
+							return fmt.Errorf("collection rename %s -> %s requires exactly one matching physical table rename of %s earlier in the same transaction phase", before.ID, after.ID, beforeTable)
+						}
 					}
 					mapping.collections[before.ID] = after.ID
 					renameTargets[after.ID] = before.ID
@@ -603,16 +617,46 @@ func bindReferenceShapeFieldRename(
 	return nil
 }
 
+// schemaFieldByPath finds a field of a resource or block definition by its
+// canonical path among its own fields, groups and arrays. Block definitions
+// own their fields' paths, so a path never enters one.
 func schemaFieldByPath(fields []schema.Field, path string) (schema.Field, bool) {
 	for _, field := range fields {
 		if field.Path.String() == path {
 			return field, true
 		}
-		if found, exists := schemaFieldByPath(schema.ChildFields(field), path); exists {
-			return found, true
+		if field.Nested != nil && strings.HasPrefix(path, field.Path.String()+".") {
+			return schemaFieldByPath(field.Nested.ResolvedFields(), path)
 		}
 	}
 	return schema.Field{}, false
+}
+
+// bindBlockReferenceShapeRename binds a confirmed block field rename's
+// definition-relative identities for the reference-shape comparison.
+func bindBlockReferenceShapeRename(shape *referenceShapeMapping, before, after schema.Snapshot, intent ridumigration.Rename) error {
+	beforeBlock, beforeFound := blockTemplate(before, intent.Block)
+	afterBlock, afterFound := blockTemplate(after, intent.Block)
+	if !beforeFound || !afterFound {
+		return fmt.Errorf("block field content rename addresses absent block %q", intent.Block)
+	}
+	beforeField, beforeExists := schemaFieldByPath(beforeBlock.Fields, intent.FieldBefore)
+	afterField, afterExists := schemaFieldByPath(afterBlock.Fields, intent.FieldAfter)
+	if !beforeExists || !afterExists {
+		return fmt.Errorf("block field content rename addresses absent field %s.%s -> %s.%s", intent.Block, intent.FieldBefore, intent.Block, intent.FieldAfter)
+	}
+	return shape.add(definitionOwner(intent.Block), beforeField, afterField)
+}
+
+// blockTemplate returns a snapshot's registered definition of slug, with
+// definition-relative paths and IDs.
+func blockTemplate(snapshot schema.Snapshot, slug string) (schema.BlockType, bool) {
+	for _, block := range snapshot.Blocks {
+		if block.Slug == slug {
+			return block, true
+		}
+	}
+	return schema.BlockType{}, false
 }
 
 func postgresResourceIDExists(snapshot schema.Snapshot, id schema.StableID) bool {
@@ -918,6 +962,9 @@ func applyContentRename(ctx context.Context, transaction *sql.Tx, artifact ridum
 	if artifact.Before == nil {
 		return fmt.Errorf("content rename requires a before manifest")
 	}
+	if intent.Block != "" {
+		return applyBlockContentRename(ctx, transaction, artifact, intent)
+	}
 	beforeCollection, ok := collectionBySlug(artifact.Before.Collections, intent.CollectionBefore)
 	if !ok {
 		return fmt.Errorf("before collection %q is absent", intent.CollectionBefore)
@@ -940,13 +987,15 @@ func applyContentRename(ctx context.Context, transaction *sql.Tx, artifact ridum
 			if !found {
 				return fmt.Errorf("after field %q is absent", afterPath[0])
 			}
-			if err := rewriteJSONColumn(ctx, transaction, collectionTable(afterCollection.ID), fieldColumn(afterTop.ID), func(value any) (bool, error) {
-				if jsonRenameCollision(value, beforePath[1:], afterPath[len(afterPath)-1]) {
-					return false, fmt.Errorf("field rename %s to %s would overwrite existing content", rename.Before, rename.After)
+			for _, table := range documentTables(afterCollection, afterCollection.ID) {
+				if err := rewriteJSONColumn(ctx, transaction, table, fieldColumn(afterTop.ID), func(value any) (bool, error) {
+					if jsonRenameCollision(value, beforePath[1:], afterPath[len(afterPath)-1]) {
+						return false, fmt.Errorf("field rename %s to %s would overwrite existing content", rename.Before, rename.After)
+					}
+					return renameJSONKey(value, beforePath[1:], afterPath[len(afterPath)-1]), nil
+				}); err != nil {
+					return err
 				}
-				return renameJSONKey(value, beforePath[1:], afterPath[len(afterPath)-1]), nil
-			}); err != nil {
-				return err
 			}
 		}
 	}
@@ -960,7 +1009,7 @@ func applyContentRename(ctx context.Context, transaction *sql.Tx, artifact ridum
 		}
 	}
 	if collectionIdentityRename && beforeCollection.ID != afterCollection.ID {
-		for _, table := range []string{"ridu_auth_credentials", "ridu_auth_sessions", "ridu_auth_tokens", "ridu_auth_api_keys", "ridu_preferences", "ridu_versions", "ridu_published_documents", "ridu_document_locks"} {
+		for _, table := range []string{"ridu_auth_credentials", "ridu_auth_sessions", "ridu_auth_tokens", "ridu_auth_api_keys", "ridu_preferences", "ridu_versions", "ridu_document_locks"} {
 			exists, err := transactionTableExists(ctx, transaction, table)
 			if err != nil {
 				return err
@@ -979,6 +1028,136 @@ func applyContentRename(ctx context.Context, transaction *sql.Tx, artifact ridum
 			}
 		}
 		if err := rewriteDurableTaskCollectionIDs(ctx, transaction, string(beforeCollection.ID), string(afterCollection.ID)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// applyBlockContentRename moves a block field's content in every stored block
+// of its definition: in each resource that places the block, in the JSON
+// columns that can hold it and in every retained version snapshot. Resource
+// renames and the renames of definitions that place this one already ran, so
+// the after schema finds every block.
+func applyBlockContentRename(ctx context.Context, transaction *sql.Tx, artifact ridumigration.Artifact, intent ridumigration.Rename) error {
+	rename, err := blockrename.New(artifact.After, intent, false)
+	if err != nil {
+		return err
+	}
+	var locales []schema.LocaleCode
+	if localization := artifact.After.Application.Localization; localization != nil {
+		locales = localization.LocaleCodes()
+	}
+	for _, resource := range append(append([]schema.Collection(nil), artifact.After.Collections...), artifact.After.Globals...) {
+		roots := rename.Roots(resource)
+		if len(roots) == 0 {
+			continue
+		}
+		for _, table := range documentTables(resource, resource.ID) {
+			exists, err := transactionTableExists(ctx, transaction, table)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				continue
+			}
+			for _, root := range roots {
+				columns := map[string]schema.LocaleCode{fieldColumn(root.ID): ""}
+				if root.Localized {
+					columns = make(map[string]schema.LocaleCode, len(locales))
+					for _, locale := range locales {
+						columns[localizedFieldColumn(root.ID, locale)] = locale
+					}
+				}
+				for column, locale := range columns {
+					// A column the migration adds later holds no content yet.
+					present, err := transactionColumnExists(ctx, transaction, table, column)
+					if err != nil {
+						return err
+					}
+					if !present {
+						continue
+					}
+					if err := rewriteStoredJSONColumn(ctx, transaction, table, column, func(value store.Value) (store.Value, bool, error) {
+						return rename.Field(root, value, locale)
+					}); err != nil {
+						return fmt.Errorf("rename block %s field %s in %s: %w", intent.Block, intent.FieldBefore, resource.Slug, err)
+					}
+				}
+			}
+		}
+		exists, err := transactionTableExists(ctx, transaction, "ridu_versions")
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		if err := rewriteJSONRows(ctx, transaction,
+			`SELECT document_id, revision, snapshot FROM ridu_versions WHERE collection_id = $1 FOR UPDATE`, []any{resource.ID},
+			func(_ string, _ int, encoded []byte) (bool, []byte, error) {
+				var document store.Document
+				if err := json.Unmarshal(encoded, &document); err != nil {
+					return false, nil, err
+				}
+				values, changed, err := rename.Values(resource.Fields, document.Values)
+				if err != nil || !changed {
+					return false, nil, err
+				}
+				document.Values = values
+				updated, err := json.Marshal(document)
+				return true, updated, err
+			},
+			`UPDATE ridu_versions SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, resource.ID,
+		); err != nil {
+			return fmt.Errorf("rename block %s field %s in %s version snapshots: %w", intent.Block, intent.FieldBefore, resource.Slug, err)
+		}
+	}
+	return nil
+}
+
+// rewriteStoredJSONColumn rewrites one JSON column's non-null values.
+func rewriteStoredJSONColumn(ctx context.Context, transaction *sql.Tx, table, column string, transform func(store.Value) (store.Value, bool, error)) error {
+	rows, err := transaction.QueryContext(ctx, fmt.Sprintf("SELECT id, %s FROM %s WHERE %s IS NOT NULL FOR UPDATE", quote(column), quote(table), quote(column)))
+	if err != nil {
+		return err
+	}
+	type update struct {
+		id    string
+		value []byte
+	}
+	var updates []update
+	for rows.Next() {
+		var id string
+		var encoded []byte
+		if err := rows.Scan(&id, &encoded); err != nil {
+			rows.Close()
+			return err
+		}
+		var value store.Value
+		if err := value.UnmarshalJSON(encoded); err != nil {
+			rows.Close()
+			return err
+		}
+		updated, changed, err := transform(value)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		if changed {
+			encoded, err := updated.MarshalJSON()
+			if err != nil {
+				rows.Close()
+				return err
+			}
+			updates = append(updates, update{id: id, value: encoded})
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, item := range updates {
+		if _, err := transaction.ExecContext(ctx, fmt.Sprintf("UPDATE %s SET %s = $1 WHERE id = $2", quote(table), quote(column)), item.value, item.id); err != nil {
 			return err
 		}
 	}
@@ -1126,42 +1305,37 @@ func optionalJSONString(input map[string]json.RawMessage, key string) (string, b
 	return *value, true, nil
 }
 
+// rewriteVersionSnapshots renames field keys in retained version history.
+// Working and live content are typed columns keyed by stable field IDs; only
+// history snapshots are keyed by field name.
 func rewriteVersionSnapshots(ctx context.Context, transaction *sql.Tx, collectionID schema.StableID, renames []ridumigration.FieldRename) error {
-	for _, table := range []string{"ridu_versions", "ridu_published_documents"} {
-		exists, err := transactionTableExists(ctx, transaction, table)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			continue
-		}
-		if err := rewriteJSONRows(ctx, transaction,
-			fmt.Sprintf(`SELECT document_id, revision, snapshot FROM %s WHERE collection_id = $1 FOR UPDATE`, quote(table)), []any{collectionID},
-			func(key1 string, key2 int, encoded []byte) (bool, []byte, error) {
-				var document map[string]any
-				if err := json.Unmarshal(encoded, &document); err != nil {
-					return false, nil, err
-				}
-				values, _ := document["Values"].(map[string]any)
-				changed := false
-				for _, rename := range renames {
-					if jsonRenameCollision(values, strings.Split(rename.Before, "."), lastPathSegment(rename.After)) {
-						return false, nil, fmt.Errorf("version snapshot field rename %s to %s would overwrite existing content", rename.Before, rename.After)
-					}
-					changed = renameJSONKey(values, strings.Split(rename.Before, "."), lastPathSegment(rename.After)) || changed
-				}
-				if !changed {
-					return false, nil, nil
-				}
-				updated, err := json.Marshal(document)
-				return true, updated, err
-			},
-			fmt.Sprintf(`UPDATE %s SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, quote(table)), collectionID,
-		); err != nil {
-			return err
-		}
+	exists, err := transactionTableExists(ctx, transaction, "ridu_versions")
+	if err != nil || !exists {
+		return err
 	}
-	return nil
+	return rewriteJSONRows(ctx, transaction,
+		`SELECT document_id, revision, snapshot FROM ridu_versions WHERE collection_id = $1 FOR UPDATE`, []any{collectionID},
+		func(key1 string, key2 int, encoded []byte) (bool, []byte, error) {
+			var document map[string]any
+			if err := json.Unmarshal(encoded, &document); err != nil {
+				return false, nil, err
+			}
+			values, _ := document["Values"].(map[string]any)
+			changed := false
+			for _, rename := range renames {
+				if jsonRenameCollision(values, strings.Split(rename.Before, "."), lastPathSegment(rename.After)) {
+					return false, nil, fmt.Errorf("version snapshot field rename %s to %s would overwrite existing content", rename.Before, rename.After)
+				}
+				changed = renameJSONKey(values, strings.Split(rename.Before, "."), lastPathSegment(rename.After)) || changed
+			}
+			if !changed {
+				return false, nil, nil
+			}
+			updated, err := json.Marshal(document)
+			return true, updated, err
+		},
+		`UPDATE ridu_versions SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, collectionID,
+	)
 }
 
 func rewriteCollectionReferences(ctx context.Context, transaction *sql.Tx, artifact ridumigration.Artifact, before, after schema.CollectionSlug) error {
@@ -1182,48 +1356,50 @@ func rewriteCollectionReferences(ctx context.Context, transaction *sql.Tx, artif
 			if snapshotIndex == 0 {
 				physicalOwnerID = aliases.owner(owner.ID)
 			}
-			table := collectionTable(physicalOwnerID)
-			exists, err := transactionTableExists(ctx, transaction, table)
-			if err != nil || !exists {
+			// A versioned owner's live table shares the working columns.
+			for _, table := range []string{collectionTable(physicalOwnerID), publishedCollectionTable(physicalOwnerID)} {
+				exists, err := transactionTableExists(ctx, transaction, table)
 				if err != nil {
 					return err
 				}
-				continue
-			}
-			for _, field := range owner.Fields {
-				if columnType(field) != "jsonb" || !fieldContainsCollectionReferences(field) {
+				if !exists {
 					continue
 				}
-				physicalRootID := field.ID
-				if snapshotIndex == 0 {
-					physicalRootID = aliases.root(owner.ID, field.ID)
-				}
-				columns := []string{fieldColumn(physicalRootID)}
-				if field.Localized {
-					columns = nil
-					if snapshot.Application.Localization != nil {
-						for _, locale := range snapshot.Application.Localization.LocaleCodes() {
-							columns = append(columns, localizedFieldColumn(physicalRootID, locale))
-						}
-					}
-				}
-				for _, column := range columns {
-					exists, err := transactionColumnExists(ctx, transaction, table, column)
-					if err != nil {
-						return err
-					}
-					if !exists {
-						// Semantic rewrites precede ordinary additive Atlas SQL. A
-						// newly added or already-renamed root has no value here.
+				for _, field := range owner.Fields {
+					if columnType(field) != "jsonb" || !fieldContainsCollectionReferences(field) {
 						continue
 					}
-					if err := rewriteJSONColumn(ctx, transaction, table, column, func(value any) (bool, error) {
-						if err := validateEmbeddedJSON(field, value, true); err != nil {
-							return false, err
+					physicalRootID := field.ID
+					if snapshotIndex == 0 {
+						physicalRootID = aliases.root(owner.ID, field.ID)
+					}
+					columns := []string{fieldColumn(physicalRootID)}
+					if field.Localized {
+						columns = nil
+						if snapshot.Application.Localization != nil {
+							for _, locale := range snapshot.Application.Localization.LocaleCodes() {
+								columns = append(columns, localizedFieldColumn(physicalRootID, locale))
+							}
 						}
-						return rewriteFieldCollectionReferences(value, field, true, string(before), string(after))
-					}); err != nil {
-						return err
+					}
+					for _, column := range columns {
+						exists, err := transactionColumnExists(ctx, transaction, table, column)
+						if err != nil {
+							return err
+						}
+						if !exists {
+							// Semantic rewrites precede ordinary additive Atlas SQL. A
+							// newly added or already-renamed root has no value here.
+							continue
+						}
+						if err := rewriteJSONColumn(ctx, transaction, table, column, func(value any) (bool, error) {
+							if err := validateEmbeddedJSON(field, value, true); err != nil {
+								return false, err
+							}
+							return rewriteFieldCollectionReferences(value, field, true, string(before), string(after))
+						}); err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -1275,12 +1451,7 @@ func rewriteAllVersionReferences(
 			}
 		}
 	}
-	for _, table := range []string{"ridu_versions", "ridu_published_documents"} {
-		if err := rewriteSnapshotReferencesInTable(ctx, transaction, table, ownerSchemas, before, after); err != nil {
-			return err
-		}
-	}
-	return nil
+	return rewriteSnapshotReferencesInTable(ctx, transaction, "ridu_versions", ownerSchemas, before, after)
 }
 
 func rewriteSnapshotReferencesInTable(ctx context.Context, transaction *sql.Tx, table string, ownerSchemas map[schema.StableID][][]schema.Field, before, after string) error {
@@ -1461,13 +1632,10 @@ func renameJSONKey(value any, path []string, destination string) bool {
 			current[destination] = original
 			return true
 		}
+		// A collection field path never enters a block: block field renames
+		// move a definition's fields with their own executor.
 		if child, exists := current[path[0]]; exists {
 			return renameJSONKey(child, path[1:], destination)
-		}
-		// Canonical block paths contain the block key, while stored block
-		// objects identify it through blockType rather than another wrapper.
-		if blockType, _ := current["blockType"].(string); blockType == path[0] {
-			return renameJSONKey(current, path[1:], destination)
 		}
 		return false
 	default:
@@ -1494,9 +1662,6 @@ func jsonRenameCollision(value any, path []string, destination string) bool {
 		}
 		if child, exists := current[path[0]]; exists {
 			return jsonRenameCollision(child, path[1:], destination)
-		}
-		if blockType, _ := current["blockType"].(string); blockType == path[0] {
-			return jsonRenameCollision(current, path[1:], destination)
 		}
 	}
 	return false
@@ -1622,37 +1787,34 @@ func rewriteFieldCollectionReferences(value any, field schema.Field, currentRoot
 				continue
 			}
 			blockType, _ := object["blockType"].(string)
-			for _, block := range field.Blocks.ResolvedTypes() {
-				if block.Slug != blockType {
-					continue
-				}
-				for _, child := range block.ResolvedFields() {
-					candidate, exists := object[child.Name]
-					if exists {
-						fieldChanged, err := rewriteFieldCollectionReferences(candidate, child, false, before, after)
-						if err != nil {
-							return false, err
-						}
-						changed = fieldChanged || changed
+			block, found := field.Blocks.Definition(blockType)
+			if !found {
+				continue
+			}
+			for _, child := range block.ResolvedFields() {
+				candidate, exists := object[child.Name]
+				if exists {
+					fieldChanged, err := rewriteFieldCollectionReferences(candidate, child, false, before, after)
+					if err != nil {
+						return false, err
 					}
+					changed = fieldChanged || changed
 				}
-				break
 			}
 		}
 	}
 	return changed, nil
 }
 
+// fieldContainsCollectionReferences inspects each block definition beneath
+// field once, however often the block graph places it.
 func fieldContainsCollectionReferences(field schema.Field) bool {
-	if field.Relationship != nil && field.Relationship.Polymorphic || field.Plugin != nil && len(field.Plugin.ReferenceKeys) != 0 {
-		return true
-	}
-	for _, child := range schema.ChildFields(field) {
-		if fieldContainsCollectionReferences(child) {
-			return true
-		}
-	}
-	return false
+	found := false
+	schema.WalkDefinitionFields(func(candidate schema.Field) bool {
+		found = candidate.Relationship != nil && candidate.Relationship.Polymorphic || candidate.Plugin != nil && len(candidate.Plugin.ReferenceKeys) != 0
+		return !found
+	}, []schema.Field{field})
+	return found
 }
 
 func collectionBySlug(collections []schema.Collection, slug schema.CollectionSlug) (schema.Collection, bool) {

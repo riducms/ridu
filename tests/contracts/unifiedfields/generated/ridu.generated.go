@@ -2753,8 +2753,8 @@ func (rows *UnifiedArticlesBodyBlocksBlock) UnmarshalJSON(data []byte) error {
 			return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlock", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
-			var value UnifiedArticlesBodyBlocksBlockCard
+		case "unified-card":
+			var value UnifiedCard
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlock", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -2770,7 +2770,7 @@ func (rows *UnifiedArticlesBodyBlocksBlock) UnmarshalJSON(data []byte) error {
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesBodyBlocksBlockCard) isUnifiedArticlesBodyBlocksBlockBlock() {}
+func (*UnifiedCard) isUnifiedArticlesBodyBlocksBlockBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -2793,8 +2793,8 @@ func (rows *UnifiedArticlesBodyBlocksBlock) Retain() (UnifiedArticlesBodyBlocksB
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *UnifiedArticlesBodyBlocksBlockCard:
-			retained[index] = &UnifiedArticlesBodyBlocksBlockCardUpdate{Key: key}
+		case *UnifiedCard:
+			retained[index] = &UnifiedCardUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlock", Reason: "unsupported retained block variant"}, index)
 		}
@@ -2886,8 +2886,8 @@ func (rows *UnifiedArticlesBodyBlocksBlockInput) UnmarshalJSON(data []byte) erro
 			return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockInput", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
-			var value UnifiedArticlesBodyBlocksBlockCardInput
+		case "unified-card":
+			var value UnifiedCardInput
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockInput", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -2903,7 +2903,7 @@ func (rows *UnifiedArticlesBodyBlocksBlockInput) UnmarshalJSON(data []byte) erro
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesBodyBlocksBlockCardInput) isUnifiedArticlesBodyBlocksBlockInputBlock() {}
+func (*UnifiedCardInput) isUnifiedArticlesBodyBlocksBlockInputBlock() {}
 
 // UnifiedArticlesBodyBlocksBlockUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
 // Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
@@ -2981,15 +2981,15 @@ func (rows *UnifiedArticlesBodyBlocksBlockUpdate) UnmarshalJSON(data []byte) err
 			return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockUpdate", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
+		case "unified-card":
 			if header.Key == "" {
-				var value UnifiedArticlesBodyBlocksBlockCardInput
+				var value UnifiedCardInput
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed new variant", Err: err}, index)
 				}
 				decoded[index] = &value
 			} else {
-				var value UnifiedArticlesBodyBlocksBlockCardUpdate
+				var value UnifiedCardUpdate
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed keyed update", Err: err}, index)
 				}
@@ -3006,8 +3006,8 @@ func (rows *UnifiedArticlesBodyBlocksBlockUpdate) UnmarshalJSON(data []byte) err
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesBodyBlocksBlockCardUpdate) isUnifiedArticlesBodyBlocksBlockUpdateBlock() {}
-func (*UnifiedArticlesBodyBlocksBlockCardInput) isUnifiedArticlesBodyBlocksBlockUpdateBlock()  {}
+func (*UnifiedCardUpdate) isUnifiedArticlesBodyBlocksBlockUpdateBlock() {}
+func (*UnifiedCardInput) isUnifiedArticlesBodyBlocksBlockUpdateBlock()  {}
 
 // UnifiedArticlesBodyBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type UnifiedArticlesBodyBlocksBlockAllLocalesBlock interface {
@@ -3083,8 +3083,8 @@ func (rows *UnifiedArticlesBodyBlocksBlockAllLocales) UnmarshalJSON(data []byte)
 			return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockAllLocales", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
-			var value UnifiedArticlesBodyBlocksBlockCardAllLocales
+		case "unified-card":
+			var value UnifiedCardAllLocales
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockAllLocales", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -3100,8 +3100,7 @@ func (rows *UnifiedArticlesBodyBlocksBlockAllLocales) UnmarshalJSON(data []byte)
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesBodyBlocksBlockCardAllLocales) isUnifiedArticlesBodyBlocksBlockAllLocalesBlock() {
-}
+func (*UnifiedCardAllLocales) isUnifiedArticlesBodyBlocksBlockAllLocalesBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -3124,8 +3123,8 @@ func (rows *UnifiedArticlesBodyBlocksBlockAllLocales) Retain() (UnifiedArticlesB
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *UnifiedArticlesBodyBlocksBlockCardAllLocales:
-			retained[index] = &UnifiedArticlesBodyBlocksBlockCardUpdate{Key: key}
+		case *UnifiedCardAllLocales:
+			retained[index] = &UnifiedCardUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockAllLocales", Reason: "unsupported retained block variant"}, index)
 		}
@@ -3219,8 +3218,8 @@ func (rows *UnifiedArticlesBodyBlocksBlockAllLocalesValue) UnmarshalJSON(data []
 			return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockAllLocalesValue", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
-			var value UnifiedArticlesBodyBlocksBlockCardAllLocalesValue
+		case "unified-card":
+			var value UnifiedCardAllLocalesValue
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockAllLocalesValue", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -3236,8 +3235,7 @@ func (rows *UnifiedArticlesBodyBlocksBlockAllLocalesValue) UnmarshalJSON(data []
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) isUnifiedArticlesBodyBlocksBlockAllLocalesValueBlock() {
-}
+func (*UnifiedCardAllLocalesValue) isUnifiedArticlesBodyBlocksBlockAllLocalesValueBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -3260,8 +3258,8 @@ func (rows *UnifiedArticlesBodyBlocksBlockAllLocalesValue) Retain() (UnifiedArti
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *UnifiedArticlesBodyBlocksBlockCardAllLocalesValue:
-			retained[index] = &UnifiedArticlesBodyBlocksBlockCardUpdate{Key: key}
+		case *UnifiedCardAllLocalesValue:
+			retained[index] = &UnifiedCardUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockAllLocalesValue", Reason: "unsupported retained block variant"}, index)
 		}
@@ -3323,14 +3321,14 @@ func (rows *UnifiedArticlesContent) UnmarshalJSON(data []byte) error {
 			return blockRowError(ContractError{Container: "UnifiedArticlesContent", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
-			var value UnifiedArticlesContentCard
+		case "unified-card":
+			var value UnifiedCard
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesContent", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
 			decoded[index] = &value
-		case "note":
-			var value UnifiedArticlesContentNote
+		case "unified-note":
+			var value UnifiedNote
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesContent", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -3346,8 +3344,8 @@ func (rows *UnifiedArticlesContent) UnmarshalJSON(data []byte) error {
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesContentCard) isUnifiedArticlesContentBlock() {}
-func (*UnifiedArticlesContentNote) isUnifiedArticlesContentBlock() {}
+func (*UnifiedCard) isUnifiedArticlesContentBlock() {}
+func (*UnifiedNote) isUnifiedArticlesContentBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -3370,10 +3368,10 @@ func (rows *UnifiedArticlesContent) Retain() (UnifiedArticlesContentUpdate, erro
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *UnifiedArticlesContentCard:
-			retained[index] = &UnifiedArticlesContentCardUpdate{Key: key}
-		case *UnifiedArticlesContentNote:
-			retained[index] = &UnifiedArticlesContentNoteUpdate{Key: key}
+		case *UnifiedCard:
+			retained[index] = &UnifiedCardUpdate{Key: key}
+		case *UnifiedNote:
+			retained[index] = &UnifiedNoteUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesContent", Reason: "unsupported retained block variant"}, index)
 		}
@@ -3424,14 +3422,14 @@ func (rows *UnifiedArticlesContentInput) UnmarshalJSON(data []byte) error {
 			return blockRowError(ContractError{Container: "UnifiedArticlesContentInput", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
-			var value UnifiedArticlesContentCardInput
+		case "unified-card":
+			var value UnifiedCardInput
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesContentInput", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
 			decoded[index] = &value
-		case "note":
-			var value UnifiedArticlesContentNoteInput
+		case "unified-note":
+			var value UnifiedNoteInput
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesContentInput", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -3447,8 +3445,8 @@ func (rows *UnifiedArticlesContentInput) UnmarshalJSON(data []byte) error {
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesContentCardInput) isUnifiedArticlesContentInputBlock() {}
-func (*UnifiedArticlesContentNoteInput) isUnifiedArticlesContentInputBlock() {}
+func (*UnifiedCardInput) isUnifiedArticlesContentInputBlock() {}
+func (*UnifiedNoteInput) isUnifiedArticlesContentInputBlock() {}
 
 // UnifiedArticlesContentUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
 // Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
@@ -3496,29 +3494,29 @@ func (rows *UnifiedArticlesContentUpdate) UnmarshalJSON(data []byte) error {
 			return blockRowError(ContractError{Container: "UnifiedArticlesContentUpdate", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
+		case "unified-card":
 			if header.Key == "" {
-				var value UnifiedArticlesContentCardInput
+				var value UnifiedCardInput
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "UnifiedArticlesContentUpdate", Discriminator: header.Type, Reason: "malformed new variant", Err: err}, index)
 				}
 				decoded[index] = &value
 			} else {
-				var value UnifiedArticlesContentCardUpdate
+				var value UnifiedCardUpdate
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "UnifiedArticlesContentUpdate", Discriminator: header.Type, Reason: "malformed keyed update", Err: err}, index)
 				}
 				decoded[index] = &value
 			}
-		case "note":
+		case "unified-note":
 			if header.Key == "" {
-				var value UnifiedArticlesContentNoteInput
+				var value UnifiedNoteInput
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "UnifiedArticlesContentUpdate", Discriminator: header.Type, Reason: "malformed new variant", Err: err}, index)
 				}
 				decoded[index] = &value
 			} else {
-				var value UnifiedArticlesContentNoteUpdate
+				var value UnifiedNoteUpdate
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "UnifiedArticlesContentUpdate", Discriminator: header.Type, Reason: "malformed keyed update", Err: err}, index)
 				}
@@ -3535,10 +3533,10 @@ func (rows *UnifiedArticlesContentUpdate) UnmarshalJSON(data []byte) error {
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesContentCardUpdate) isUnifiedArticlesContentUpdateBlock() {}
-func (*UnifiedArticlesContentCardInput) isUnifiedArticlesContentUpdateBlock()  {}
-func (*UnifiedArticlesContentNoteUpdate) isUnifiedArticlesContentUpdateBlock() {}
-func (*UnifiedArticlesContentNoteInput) isUnifiedArticlesContentUpdateBlock()  {}
+func (*UnifiedCardUpdate) isUnifiedArticlesContentUpdateBlock() {}
+func (*UnifiedCardInput) isUnifiedArticlesContentUpdateBlock()  {}
+func (*UnifiedNoteUpdate) isUnifiedArticlesContentUpdateBlock() {}
+func (*UnifiedNoteInput) isUnifiedArticlesContentUpdateBlock()  {}
 
 // UnifiedArticlesContentAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type UnifiedArticlesContentAllLocalesBlock interface {
@@ -3584,14 +3582,14 @@ func (rows *UnifiedArticlesContentAllLocales) UnmarshalJSON(data []byte) error {
 			return blockRowError(ContractError{Container: "UnifiedArticlesContentAllLocales", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
-			var value UnifiedArticlesContentCardAllLocales
+		case "unified-card":
+			var value UnifiedCardAllLocales
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesContentAllLocales", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
 			decoded[index] = &value
-		case "note":
-			var value UnifiedArticlesContentNoteAllLocales
+		case "unified-note":
+			var value UnifiedNoteAllLocales
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesContentAllLocales", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -3607,8 +3605,8 @@ func (rows *UnifiedArticlesContentAllLocales) UnmarshalJSON(data []byte) error {
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesContentCardAllLocales) isUnifiedArticlesContentAllLocalesBlock() {}
-func (*UnifiedArticlesContentNoteAllLocales) isUnifiedArticlesContentAllLocalesBlock() {}
+func (*UnifiedCardAllLocales) isUnifiedArticlesContentAllLocalesBlock() {}
+func (*UnifiedNoteAllLocales) isUnifiedArticlesContentAllLocalesBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -3631,10 +3629,10 @@ func (rows *UnifiedArticlesContentAllLocales) Retain() (UnifiedArticlesContentUp
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *UnifiedArticlesContentCardAllLocales:
-			retained[index] = &UnifiedArticlesContentCardUpdate{Key: key}
-		case *UnifiedArticlesContentNoteAllLocales:
-			retained[index] = &UnifiedArticlesContentNoteUpdate{Key: key}
+		case *UnifiedCardAllLocales:
+			retained[index] = &UnifiedCardUpdate{Key: key}
+		case *UnifiedNoteAllLocales:
+			retained[index] = &UnifiedNoteUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentAllLocales", Reason: "unsupported retained block variant"}, index)
 		}
@@ -3687,14 +3685,14 @@ func (rows *UnifiedArticlesContentAllLocalesValue) UnmarshalJSON(data []byte) er
 			return blockRowError(ContractError{Container: "UnifiedArticlesContentAllLocalesValue", Reason: "malformed discriminator", Err: err}, index)
 		}
 		switch header.Type {
-		case "card":
-			var value UnifiedArticlesContentCardAllLocalesValue
+		case "unified-card":
+			var value UnifiedCardAllLocalesValue
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesContentAllLocalesValue", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
 			decoded[index] = &value
-		case "note":
-			var value UnifiedArticlesContentNoteAllLocalesValue
+		case "unified-note":
+			var value UnifiedNoteAllLocalesValue
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "UnifiedArticlesContentAllLocalesValue", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -3710,8 +3708,8 @@ func (rows *UnifiedArticlesContentAllLocalesValue) UnmarshalJSON(data []byte) er
 	*rows = decoded
 	return nil
 }
-func (*UnifiedArticlesContentCardAllLocalesValue) isUnifiedArticlesContentAllLocalesValueBlock() {}
-func (*UnifiedArticlesContentNoteAllLocalesValue) isUnifiedArticlesContentAllLocalesValueBlock() {}
+func (*UnifiedCardAllLocalesValue) isUnifiedArticlesContentAllLocalesValueBlock() {}
+func (*UnifiedNoteAllLocalesValue) isUnifiedArticlesContentAllLocalesValueBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -3734,10 +3732,10 @@ func (rows *UnifiedArticlesContentAllLocalesValue) Retain() (UnifiedArticlesCont
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *UnifiedArticlesContentCardAllLocalesValue:
-			retained[index] = &UnifiedArticlesContentCardUpdate{Key: key}
-		case *UnifiedArticlesContentNoteAllLocalesValue:
-			retained[index] = &UnifiedArticlesContentNoteUpdate{Key: key}
+		case *UnifiedCardAllLocalesValue:
+			retained[index] = &UnifiedCardUpdate{Key: key}
+		case *UnifiedNoteAllLocalesValue:
+			retained[index] = &UnifiedNoteUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentAllLocalesValue", Reason: "unsupported retained block variant"}, index)
 		}
@@ -3745,13 +3743,13 @@ func (rows *UnifiedArticlesContentAllLocalesValue) Retain() (UnifiedArticlesCont
 	return retained, nil
 }
 
-// UnifiedArticlesBodyBlocksBlockCardBlockType is the immutable stored discriminator.
-const UnifiedArticlesBodyBlocksBlockCardBlockType = "card"
+// UnifiedCardBlockType is the immutable stored discriminator.
+const UnifiedCardBlockType = "unified-card"
 
-// UnifiedArticlesBodyBlocksBlockCard is a generated block. Use *UnifiedArticlesBodyBlocksBlockCard in block lists and type switches.
+// UnifiedCard is a generated block. Use *UnifiedCard in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-// Create with UnifiedArticlesBodyBlocksBlockCardInput. To edit, retain the read list and modify its UnifiedArticlesBodyBlocksBlockCardUpdate pointers.
-type UnifiedArticlesBodyBlocksBlockCard struct {
+// Create with UnifiedCardInput. To edit, retain the read list and modify its UnifiedCardUpdate pointers.
+type UnifiedCard struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -3761,14 +3759,14 @@ type UnifiedArticlesBodyBlocksBlockCard struct {
 	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Accent *BlockOptional[string] `json:"accent,omitempty"`
 	// Products: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Products *BlockOptional[UnifiedArticlesBodyBlocksBlockCardProducts] `json:"products,omitempty"`
+	Products *BlockOptional[UnifiedCardProducts] `json:"products,omitempty"`
 	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesBodyBlocksBlockCard) BlockType() string { return "card" }
-func (value UnifiedArticlesBodyBlocksBlockCard) MarshalJSON() ([]byte, error) {
+func (*UnifiedCard) BlockType() string { return "unified-card" }
+func (value UnifiedCard) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -3778,42 +3776,42 @@ func (value UnifiedArticlesBodyBlocksBlockCard) MarshalJSON() ([]byte, error) {
 		Products  json.RawMessage `json:"products,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "card"
+	encoded.BlockType = "unified-card"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCard", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCard", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
 	if value.Sku != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCard", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCard", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
 	if value.Accent != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCard", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCard", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	if value.Products != nil {
-		data, err := (func(value *UnifiedArticlesBodyBlocksBlockCardProducts) ([]byte, error) {
-			return encodeBlockPointer(value, encodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProducts])
+		data, err := (func(value *UnifiedCardProducts) ([]byte, error) {
+			return encodeBlockPointer(value, encodeBlockValue[UnifiedCardProducts])
 		})(value.Products.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCard", Path: "products", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCard", Path: "products", Reason: "invalid value", Err: err})
 		}
 		encoded.Products = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCard", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCard", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -3821,14 +3819,14 @@ func (value UnifiedArticlesBodyBlocksBlockCard) MarshalJSON() ([]byte, error) {
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesBodyBlocksBlockCard) BlockKey() string {
+func (value *UnifiedCard) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesBodyBlocksBlockCard) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCard
+func (value *UnifiedCard) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCard
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -3838,8 +3836,8 @@ func (value *UnifiedArticlesBodyBlocksBlockCard) UnmarshalJSON(data []byte) erro
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCard", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-card" {
+		return newContractError(ContractError{Container: "UnifiedCard", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -3898,11 +3896,11 @@ func (value *UnifiedArticlesBodyBlocksBlockCard) UnmarshalJSON(data []byte) erro
 				return blockFieldError("products", "invalid value", err)
 			}
 		} else {
-			child, err := decodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProducts](raw)
+			child, err := decodeBlockValue[UnifiedCardProducts](raw)
 			if err != nil {
 				return blockFieldError("products", "invalid value", err)
 			}
-			decoded.Products = &BlockOptional[UnifiedArticlesBodyBlocksBlockCardProducts]{Value: &child}
+			decoded.Products = &BlockOptional[UnifiedCardProducts]{Value: &child}
 		}
 	}
 	if raw, ok := fields["blockName"]; ok {
@@ -3928,19 +3926,19 @@ func (value *UnifiedArticlesBodyBlocksBlockCard) UnmarshalJSON(data []byte) erro
 		decoded.Accent = &BlockOptional[string]{}
 	}
 	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = &BlockOptional[UnifiedArticlesBodyBlocksBlockCardProducts]{}
+		decoded.Products = &BlockOptional[UnifiedCardProducts]{}
 	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCard(decoded)
+	*value = UnifiedCard(decoded)
 	return nil
 }
 
-// UnifiedArticlesBodyBlocksBlockCardInput is a generated block. Use *UnifiedArticlesBodyBlocksBlockCardInput in block lists and type switches.
+// UnifiedCardInput is a generated block. Use *UnifiedCardInput in block lists and type switches.
 // Input supplies a new occurrence's required fields. An empty Key requests a server-assigned key.
-// Read this block as UnifiedArticlesBodyBlocksBlockCard; edit an existing occurrence with UnifiedArticlesBodyBlocksBlockCardUpdate.
-type UnifiedArticlesBodyBlocksBlockCardInput struct {
+// Read this block as UnifiedCard; edit an existing occurrence with UnifiedCardUpdate.
+type UnifiedCardInput struct {
 	// Key identifies this occurrence; omit it for a new server-assigned identity.
 	Key string `json:"_key,omitempty"`
 	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -3950,14 +3948,14 @@ type UnifiedArticlesBodyBlocksBlockCardInput struct {
 	// Accent: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Accent *core.Input[string] `json:"accent,omitempty"`
 	// Products: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Products *core.Input[[]UnifiedArticlesBodyBlocksBlockCardProductsRowInput] `json:"products,omitempty"`
+	Products *core.Input[[]UnifiedCardProductsRowInput] `json:"products,omitempty"`
 	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	BlockName *core.Input[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesBodyBlocksBlockCardInput) BlockType() string { return "card" }
-func (value UnifiedArticlesBodyBlocksBlockCardInput) MarshalJSON() ([]byte, error) {
+func (*UnifiedCardInput) BlockType() string { return "unified-card" }
+func (value UnifiedCardInput) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key,omitempty"`
@@ -3967,7 +3965,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardInput) MarshalJSON() ([]byte, erro
 		Products  json.RawMessage `json:"products,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "card"
+	encoded.BlockType = "unified-card"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		child, present := value.Label.Get()
@@ -3977,7 +3975,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardInput) MarshalJSON() ([]byte, erro
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardInput", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardInput", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
@@ -3989,7 +3987,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardInput) MarshalJSON() ([]byte, erro
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardInput", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardInput", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
@@ -4001,7 +3999,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardInput) MarshalJSON() ([]byte, erro
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardInput", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardInput", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
@@ -4010,12 +4008,12 @@ func (value UnifiedArticlesBodyBlocksBlockCardInput) MarshalJSON() ([]byte, erro
 		data := []byte("null")
 		var err error
 		if present {
-			data, err = (func(value []UnifiedArticlesBodyBlocksBlockCardProductsRowInput) ([]byte, error) {
-				return encodeBlockSlice(value, encodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsRowInput])
+			data, err = (func(value []UnifiedCardProductsRowInput) ([]byte, error) {
+				return encodeBlockSlice(value, encodeBlockValue[UnifiedCardProductsRowInput])
 			})(child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardInput", Path: "products", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardInput", Path: "products", Reason: "invalid value", Err: err})
 		}
 		encoded.Products = data
 	}
@@ -4027,7 +4025,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardInput) MarshalJSON() ([]byte, erro
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardInput", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardInput", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -4035,14 +4033,14 @@ func (value UnifiedArticlesBodyBlocksBlockCardInput) MarshalJSON() ([]byte, erro
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesBodyBlocksBlockCardInput) BlockKey() string {
+func (value *UnifiedCardInput) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesBodyBlocksBlockCardInput) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCardInput
+func (value *UnifiedCardInput) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCardInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4052,8 +4050,8 @@ func (value *UnifiedArticlesBodyBlocksBlockCardInput) UnmarshalJSON(data []byte)
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCardInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-card" {
+		return newContractError(ContractError{Container: "UnifiedCardInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
@@ -4098,10 +4096,10 @@ func (value *UnifiedArticlesBodyBlocksBlockCardInput) UnmarshalJSON(data []byte)
 	}
 	if raw, ok := fields["products"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Products = core.Null[[]UnifiedArticlesBodyBlocksBlockCardProductsRowInput]()
+			decoded.Products = core.Null[[]UnifiedCardProductsRowInput]()
 		} else {
-			child, err := (func(data []byte) ([]UnifiedArticlesBodyBlocksBlockCardProductsRowInput, error) {
-				return decodeBlockSlice(data, decodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsRowInput])
+			child, err := (func(data []byte) ([]UnifiedCardProductsRowInput, error) {
+				return decodeBlockSlice(data, decodeBlockValue[UnifiedCardProductsRowInput])
 			})(raw)
 			if err != nil {
 				return blockFieldError("products", "invalid value", err)
@@ -4130,7 +4128,7 @@ func (value *UnifiedArticlesBodyBlocksBlockCardInput) UnmarshalJSON(data []byte)
 		decoded.Accent = core.Null[string]()
 	}
 	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = core.Null[[]UnifiedArticlesBodyBlocksBlockCardProductsRowInput]()
+		decoded.Products = core.Null[[]UnifiedCardProductsRowInput]()
 	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = core.Null[string]()
@@ -4142,15 +4140,15 @@ func (value *UnifiedArticlesBodyBlocksBlockCardInput) UnmarshalJSON(data []byte)
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCardInput(decoded)
+	*value = UnifiedCardInput(decoded)
 	return nil
 }
 
-// UnifiedArticlesBodyBlocksBlockCardUpdate is a generated block. Use *UnifiedArticlesBodyBlocksBlockCardUpdate in block lists and type switches.
+// UnifiedCardUpdate is a generated block. Use *UnifiedCardUpdate in block lists and type switches.
 // Update retains an existing occurrence by Key. Omitted children remain unchanged.
 // The engine verifies that the key belongs to an existing occurrence of this variant.
-// Start with the read list's Retain method; use UnifiedArticlesBodyBlocksBlockCardInput for additions.
-type UnifiedArticlesBodyBlocksBlockCardUpdate struct {
+// Start with the read list's Retain method; use UnifiedCardInput for additions.
+type UnifiedCardUpdate struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -4160,16 +4158,16 @@ type UnifiedArticlesBodyBlocksBlockCardUpdate struct {
 	// Accent: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Accent *core.Input[string] `json:"accent,omitempty"`
 	// Products: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Products *core.Input[UnifiedArticlesBodyBlocksBlockCardProductsUpdate] `json:"products,omitempty"`
+	Products *core.Input[UnifiedCardProductsUpdate] `json:"products,omitempty"`
 	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	BlockName *core.Input[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesBodyBlocksBlockCardUpdate) BlockType() string { return "card" }
-func (value UnifiedArticlesBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, error) {
+func (*UnifiedCardUpdate) BlockType() string { return "unified-card" }
+func (value UnifiedCardUpdate) MarshalJSON() ([]byte, error) {
 	if strings.TrimSpace(value.Key) == "" {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardUpdate", Path: "_key", Reason: "keyed update requires an identity"})
+		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardUpdate", Path: "_key", Reason: "keyed update requires an identity"})
 	}
 	var encoded struct {
 		BlockType string          `json:"blockType"`
@@ -4180,7 +4178,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, err
 		Products  json.RawMessage `json:"products,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "card"
+	encoded.BlockType = "unified-card"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		child, present := value.Label.Get()
@@ -4190,7 +4188,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, err
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardUpdate", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardUpdate", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
@@ -4202,7 +4200,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, err
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardUpdate", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardUpdate", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
@@ -4214,7 +4212,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, err
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardUpdate", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardUpdate", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
@@ -4223,10 +4221,10 @@ func (value UnifiedArticlesBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, err
 		data := []byte("null")
 		var err error
 		if present {
-			data, err = encodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsUpdate](child)
+			data, err = encodeBlockValue[UnifiedCardProductsUpdate](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardUpdate", Path: "products", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardUpdate", Path: "products", Reason: "invalid value", Err: err})
 		}
 		encoded.Products = data
 	}
@@ -4238,7 +4236,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, err
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardUpdate", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardUpdate", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -4246,14 +4244,14 @@ func (value UnifiedArticlesBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, err
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesBodyBlocksBlockCardUpdate) BlockKey() string {
+func (value *UnifiedCardUpdate) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesBodyBlocksBlockCardUpdate) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCardUpdate
+func (value *UnifiedCardUpdate) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCardUpdate
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4263,8 +4261,8 @@ func (value *UnifiedArticlesBodyBlocksBlockCardUpdate) UnmarshalJSON(data []byte
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCardUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-card" {
+		return newContractError(ContractError{Container: "UnifiedCardUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -4313,9 +4311,9 @@ func (value *UnifiedArticlesBodyBlocksBlockCardUpdate) UnmarshalJSON(data []byte
 	}
 	if raw, ok := fields["products"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Products = core.Null[UnifiedArticlesBodyBlocksBlockCardProductsUpdate]()
+			decoded.Products = core.Null[UnifiedCardProductsUpdate]()
 		} else {
-			child, err := decodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsUpdate](raw)
+			child, err := decodeBlockValue[UnifiedCardProductsUpdate](raw)
 			if err != nil {
 				return blockFieldError("products", "invalid value", err)
 			}
@@ -4343,7 +4341,7 @@ func (value *UnifiedArticlesBodyBlocksBlockCardUpdate) UnmarshalJSON(data []byte
 		decoded.Accent = core.Null[string]()
 	}
 	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = core.Null[UnifiedArticlesBodyBlocksBlockCardProductsUpdate]()
+		decoded.Products = core.Null[UnifiedCardProductsUpdate]()
 	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = core.Null[string]()
@@ -4355,13 +4353,13 @@ func (value *UnifiedArticlesBodyBlocksBlockCardUpdate) UnmarshalJSON(data []byte
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCardUpdate(decoded)
+	*value = UnifiedCardUpdate(decoded)
 	return nil
 }
 
-// UnifiedArticlesBodyBlocksBlockCardAllLocales is a generated block. Use *UnifiedArticlesBodyBlocksBlockCardAllLocales in block lists and type switches.
+// UnifiedCardAllLocales is a generated block. Use *UnifiedCardAllLocales in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-type UnifiedArticlesBodyBlocksBlockCardAllLocales struct {
+type UnifiedCardAllLocales struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -4371,14 +4369,14 @@ type UnifiedArticlesBodyBlocksBlockCardAllLocales struct {
 	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Accent *BlockOptional[string] `json:"accent,omitempty"`
 	// Products: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Products *BlockOptional[UnifiedArticlesBodyBlocksBlockCardProductsAllLocales] `json:"products,omitempty"`
+	Products *BlockOptional[UnifiedCardProductsAllLocales] `json:"products,omitempty"`
 	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesBodyBlocksBlockCardAllLocales) BlockType() string { return "card" }
-func (value UnifiedArticlesBodyBlocksBlockCardAllLocales) MarshalJSON() ([]byte, error) {
+func (*UnifiedCardAllLocales) BlockType() string { return "unified-card" }
+func (value UnifiedCardAllLocales) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -4388,42 +4386,42 @@ func (value UnifiedArticlesBodyBlocksBlockCardAllLocales) MarshalJSON() ([]byte,
 		Products  json.RawMessage `json:"products,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "card"
+	encoded.BlockType = "unified-card"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocales", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocales", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
 	if value.Sku != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocales", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocales", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
 	if value.Accent != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocales", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocales", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	if value.Products != nil {
-		data, err := (func(value *UnifiedArticlesBodyBlocksBlockCardProductsAllLocales) ([]byte, error) {
-			return encodeBlockPointer(value, encodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsAllLocales])
+		data, err := (func(value *UnifiedCardProductsAllLocales) ([]byte, error) {
+			return encodeBlockPointer(value, encodeBlockValue[UnifiedCardProductsAllLocales])
 		})(value.Products.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocales", Path: "products", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocales", Path: "products", Reason: "invalid value", Err: err})
 		}
 		encoded.Products = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -4431,14 +4429,14 @@ func (value UnifiedArticlesBodyBlocksBlockCardAllLocales) MarshalJSON() ([]byte,
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesBodyBlocksBlockCardAllLocales) BlockKey() string {
+func (value *UnifiedCardAllLocales) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesBodyBlocksBlockCardAllLocales) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCardAllLocales
+func (value *UnifiedCardAllLocales) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCardAllLocales
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4448,8 +4446,8 @@ func (value *UnifiedArticlesBodyBlocksBlockCardAllLocales) UnmarshalJSON(data []
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCardAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-card" {
+		return newContractError(ContractError{Container: "UnifiedCardAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -4508,11 +4506,11 @@ func (value *UnifiedArticlesBodyBlocksBlockCardAllLocales) UnmarshalJSON(data []
 				return blockFieldError("products", "invalid value", err)
 			}
 		} else {
-			child, err := decodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsAllLocales](raw)
+			child, err := decodeBlockValue[UnifiedCardProductsAllLocales](raw)
 			if err != nil {
 				return blockFieldError("products", "invalid value", err)
 			}
-			decoded.Products = &BlockOptional[UnifiedArticlesBodyBlocksBlockCardProductsAllLocales]{Value: &child}
+			decoded.Products = &BlockOptional[UnifiedCardProductsAllLocales]{Value: &child}
 		}
 	}
 	if raw, ok := fields["blockName"]; ok {
@@ -4538,18 +4536,18 @@ func (value *UnifiedArticlesBodyBlocksBlockCardAllLocales) UnmarshalJSON(data []
 		decoded.Accent = &BlockOptional[string]{}
 	}
 	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = &BlockOptional[UnifiedArticlesBodyBlocksBlockCardProductsAllLocales]{}
+		decoded.Products = &BlockOptional[UnifiedCardProductsAllLocales]{}
 	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCardAllLocales(decoded)
+	*value = UnifiedCardAllLocales(decoded)
 	return nil
 }
 
-// UnifiedArticlesBodyBlocksBlockCardAllLocalesValue is a generated block. Use *UnifiedArticlesBodyBlocksBlockCardAllLocalesValue in block lists and type switches.
+// UnifiedCardAllLocalesValue is a generated block. Use *UnifiedCardAllLocalesValue in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-type UnifiedArticlesBodyBlocksBlockCardAllLocalesValue struct {
+type UnifiedCardAllLocalesValue struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -4559,14 +4557,14 @@ type UnifiedArticlesBodyBlocksBlockCardAllLocalesValue struct {
 	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Accent *BlockOptional[string] `json:"accent,omitempty"`
 	// Products: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Products *BlockOptional[UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue] `json:"products,omitempty"`
+	Products *BlockOptional[UnifiedCardProductsAllLocalesValue] `json:"products,omitempty"`
 	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) BlockType() string { return "card" }
-func (value UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) MarshalJSON() ([]byte, error) {
+func (*UnifiedCardAllLocalesValue) BlockType() string { return "unified-card" }
+func (value UnifiedCardAllLocalesValue) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -4576,42 +4574,42 @@ func (value UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) MarshalJSON() ([]
 		Products  json.RawMessage `json:"products,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "card"
+	encoded.BlockType = "unified-card"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocalesValue", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocalesValue", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
 	if value.Sku != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocalesValue", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocalesValue", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
 	if value.Accent != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocalesValue", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocalesValue", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	if value.Products != nil {
-		data, err := (func(value *UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue) ([]byte, error) {
-			return encodeBlockPointer(value, encodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue])
+		data, err := (func(value *UnifiedCardProductsAllLocalesValue) ([]byte, error) {
+			return encodeBlockPointer(value, encodeBlockValue[UnifiedCardProductsAllLocalesValue])
 		})(value.Products.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocalesValue", Path: "products", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocalesValue", Path: "products", Reason: "invalid value", Err: err})
 		}
 		encoded.Products = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -4619,14 +4617,14 @@ func (value UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) MarshalJSON() ([]
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) BlockKey() string {
+func (value *UnifiedCardAllLocalesValue) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCardAllLocalesValue
+func (value *UnifiedCardAllLocalesValue) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCardAllLocalesValue
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4636,8 +4634,8 @@ func (value *UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) UnmarshalJSON(da
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCardAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-card" {
+		return newContractError(ContractError{Container: "UnifiedCardAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -4696,11 +4694,11 @@ func (value *UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) UnmarshalJSON(da
 				return blockFieldError("products", "invalid value", err)
 			}
 		} else {
-			child, err := decodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue](raw)
+			child, err := decodeBlockValue[UnifiedCardProductsAllLocalesValue](raw)
 			if err != nil {
 				return blockFieldError("products", "invalid value", err)
 			}
-			decoded.Products = &BlockOptional[UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue]{Value: &child}
+			decoded.Products = &BlockOptional[UnifiedCardProductsAllLocalesValue]{Value: &child}
 		}
 	}
 	if raw, ok := fields["blockName"]; ok {
@@ -4726,84 +4724,62 @@ func (value *UnifiedArticlesBodyBlocksBlockCardAllLocalesValue) UnmarshalJSON(da
 		decoded.Accent = &BlockOptional[string]{}
 	}
 	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = &BlockOptional[UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue]{}
+		decoded.Products = &BlockOptional[UnifiedCardProductsAllLocalesValue]{}
 	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCardAllLocalesValue(decoded)
+	*value = UnifiedCardAllLocalesValue(decoded)
 	return nil
 }
 
-// UnifiedArticlesContentCardBlockType is the immutable stored discriminator.
-const UnifiedArticlesContentCardBlockType = "card"
+// UnifiedNoteBlockType is the immutable stored discriminator.
+const UnifiedNoteBlockType = "unified-note"
 
-// UnifiedArticlesContentCard is a generated block. Use *UnifiedArticlesContentCard in block lists and type switches.
+// UnifiedNote is a generated block. Use *UnifiedNote in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-// Create with UnifiedArticlesContentCardInput. To edit, retain the read list and modify its UnifiedArticlesContentCardUpdate pointers.
-type UnifiedArticlesContentCard struct {
+// Create with UnifiedNoteInput. To edit, retain the read list and modify its UnifiedNoteUpdate pointers.
+type UnifiedNote struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Label *BlockOptional[string] `json:"label,omitempty"`
-	// Sku: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sku *BlockOptional[string] `json:"sku,omitempty"`
 	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Accent *BlockOptional[string] `json:"accent,omitempty"`
-	// Products: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Products *BlockOptional[UnifiedArticlesContentCardProducts] `json:"products,omitempty"`
 	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentCard) BlockType() string { return "card" }
-func (value UnifiedArticlesContentCard) MarshalJSON() ([]byte, error) {
+func (*UnifiedNote) BlockType() string { return "unified-note" }
+func (value UnifiedNote) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
 		Label     json.RawMessage `json:"label,omitempty"`
-		Sku       json.RawMessage `json:"sku,omitempty"`
 		Accent    json.RawMessage `json:"accent,omitempty"`
-		Products  json.RawMessage `json:"products,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "card"
+	encoded.BlockType = "unified-note"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCard", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNote", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
-	}
-	if value.Sku != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCard", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
 	}
 	if value.Accent != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCard", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNote", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
-	}
-	if value.Products != nil {
-		data, err := (func(value *UnifiedArticlesContentCardProducts) ([]byte, error) {
-			return encodeBlockPointer(value, encodeBlockValue[UnifiedArticlesContentCardProducts])
-		})(value.Products.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCard", Path: "products", Reason: "invalid value", Err: err})
-		}
-		encoded.Products = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCard", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNote", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -4811,14 +4787,14 @@ func (value UnifiedArticlesContentCard) MarshalJSON() ([]byte, error) {
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentCard) BlockKey() string {
+func (value *UnifiedNote) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesContentCard) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCard
+func (value *UnifiedNote) UnmarshalJSON(data []byte) error {
+	type payload UnifiedNote
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4828,8 +4804,8 @@ func (value *UnifiedArticlesContentCard) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentCard", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-note" {
+		return newContractError(ContractError{Container: "UnifiedNote", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -4856,19 +4832,6 @@ func (value *UnifiedArticlesContentCard) UnmarshalJSON(data []byte) error {
 			decoded.Label = &BlockOptional[string]{Value: &child}
 		}
 	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sku); err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = &BlockOptional[string]{Value: &child}
-		}
-	}
 	if raw, ok := fields["accent"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			if err := json.Unmarshal(raw, &decoded.Accent); err != nil {
@@ -4880,19 +4843,6 @@ func (value *UnifiedArticlesContentCard) UnmarshalJSON(data []byte) error {
 				return blockFieldError("accent", "invalid value", err)
 			}
 			decoded.Accent = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["products"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Products); err != nil {
-				return blockFieldError("products", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[UnifiedArticlesContentCardProducts](raw)
-			if err != nil {
-				return blockFieldError("products", "invalid value", err)
-			}
-			decoded.Products = &BlockOptional[UnifiedArticlesContentCardProducts]{Value: &child}
 		}
 	}
 	if raw, ok := fields["blockName"]; ok {
@@ -4911,962 +4861,20 @@ func (value *UnifiedArticlesContentCard) UnmarshalJSON(data []byte) error {
 	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Label = &BlockOptional[string]{}
 	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = &BlockOptional[string]{}
-	}
 	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Accent = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = &BlockOptional[UnifiedArticlesContentCardProducts]{}
 	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = UnifiedArticlesContentCard(decoded)
+	*value = UnifiedNote(decoded)
 	return nil
 }
 
-// UnifiedArticlesContentCardInput is a generated block. Use *UnifiedArticlesContentCardInput in block lists and type switches.
+// UnifiedNoteInput is a generated block. Use *UnifiedNoteInput in block lists and type switches.
 // Input supplies a new occurrence's required fields. An empty Key requests a server-assigned key.
-// Read this block as UnifiedArticlesContentCard; edit an existing occurrence with UnifiedArticlesContentCardUpdate.
-type UnifiedArticlesContentCardInput struct {
-	// Key identifies this occurrence; omit it for a new server-assigned identity.
-	Key string `json:"_key,omitempty"`
-	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Label *core.Input[string] `json:"label,omitempty"`
-	// Sku: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Sku *core.Input[string] `json:"sku,omitempty"`
-	// Accent: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Accent *core.Input[string] `json:"accent,omitempty"`
-	// Products: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Products *core.Input[[]UnifiedArticlesContentCardProductsRowInput] `json:"products,omitempty"`
-	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	BlockName *core.Input[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentCardInput) BlockType() string { return "card" }
-func (value UnifiedArticlesContentCardInput) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key,omitempty"`
-		Label     json.RawMessage `json:"label,omitempty"`
-		Sku       json.RawMessage `json:"sku,omitempty"`
-		Accent    json.RawMessage `json:"accent,omitempty"`
-		Products  json.RawMessage `json:"products,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Label != nil {
-		child, present := value.Label.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardInput", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Sku != nil {
-		child, present := value.Sku.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardInput", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
-	}
-	if value.Accent != nil {
-		child, present := value.Accent.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardInput", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	if value.Products != nil {
-		child, present := value.Products.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = (func(value []UnifiedArticlesContentCardProductsRowInput) ([]byte, error) {
-				return encodeBlockSlice(value, encodeBlockValue[UnifiedArticlesContentCardProductsRowInput])
-			})(child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardInput", Path: "products", Reason: "invalid value", Err: err})
-		}
-		encoded.Products = data
-	}
-	if value.BlockName != nil {
-		child, present := value.BlockName.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardInput", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentCardInput) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *UnifiedArticlesContentCardInput) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCardInput
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentCardInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-		if strings.TrimSpace(decoded.Key) == "" {
-			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Label = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = core.Set(child)
-		}
-	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Sku = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = core.Set(child)
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Accent = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = core.Set(child)
-		}
-	}
-	if raw, ok := fields["products"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Products = core.Null[[]UnifiedArticlesContentCardProductsRowInput]()
-		} else {
-			child, err := (func(data []byte) ([]UnifiedArticlesContentCardProductsRowInput, error) {
-				return decodeBlockSlice(data, decodeBlockValue[UnifiedArticlesContentCardProductsRowInput])
-			})(raw)
-			if err != nil {
-				return blockFieldError("products", "invalid value", err)
-			}
-			decoded.Products = core.Set(child)
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.BlockName = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = core.Set(child)
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = core.Null[string]()
-	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = core.Null[string]()
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = core.Null[string]()
-	}
-	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = core.Null[[]UnifiedArticlesContentCardProductsRowInput]()
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = core.Null[string]()
-	}
-	for name := range fields {
-		switch name {
-		case "_key", "blockType", "label", "sku", "accent", "products", "blockName":
-		default:
-			return blockFieldError(name, "unknown input field", nil)
-		}
-	}
-	*value = UnifiedArticlesContentCardInput(decoded)
-	return nil
-}
-
-// UnifiedArticlesContentCardUpdate is a generated block. Use *UnifiedArticlesContentCardUpdate in block lists and type switches.
-// Update retains an existing occurrence by Key. Omitted children remain unchanged.
-// The engine verifies that the key belongs to an existing occurrence of this variant.
-// Start with the read list's Retain method; use UnifiedArticlesContentCardInput for additions.
-type UnifiedArticlesContentCardUpdate struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Label *core.Input[string] `json:"label,omitempty"`
-	// Sku: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Sku *core.Input[string] `json:"sku,omitempty"`
-	// Accent: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Accent *core.Input[string] `json:"accent,omitempty"`
-	// Products: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Products *core.Input[UnifiedArticlesContentCardProductsUpdate] `json:"products,omitempty"`
-	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	BlockName *core.Input[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentCardUpdate) BlockType() string { return "card" }
-func (value UnifiedArticlesContentCardUpdate) MarshalJSON() ([]byte, error) {
-	if strings.TrimSpace(value.Key) == "" {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardUpdate", Path: "_key", Reason: "keyed update requires an identity"})
-	}
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Label     json.RawMessage `json:"label,omitempty"`
-		Sku       json.RawMessage `json:"sku,omitempty"`
-		Accent    json.RawMessage `json:"accent,omitempty"`
-		Products  json.RawMessage `json:"products,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Label != nil {
-		child, present := value.Label.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardUpdate", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Sku != nil {
-		child, present := value.Sku.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardUpdate", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
-	}
-	if value.Accent != nil {
-		child, present := value.Accent.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardUpdate", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	if value.Products != nil {
-		child, present := value.Products.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[UnifiedArticlesContentCardProductsUpdate](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardUpdate", Path: "products", Reason: "invalid value", Err: err})
-		}
-		encoded.Products = data
-	}
-	if value.BlockName != nil {
-		child, present := value.BlockName.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardUpdate", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentCardUpdate) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *UnifiedArticlesContentCardUpdate) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCardUpdate
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentCardUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Label = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = core.Set(child)
-		}
-	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Sku = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = core.Set(child)
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Accent = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = core.Set(child)
-		}
-	}
-	if raw, ok := fields["products"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Products = core.Null[UnifiedArticlesContentCardProductsUpdate]()
-		} else {
-			child, err := decodeBlockValue[UnifiedArticlesContentCardProductsUpdate](raw)
-			if err != nil {
-				return blockFieldError("products", "invalid value", err)
-			}
-			decoded.Products = core.Set(child)
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.BlockName = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = core.Set(child)
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = core.Null[string]()
-	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = core.Null[string]()
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = core.Null[string]()
-	}
-	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = core.Null[UnifiedArticlesContentCardProductsUpdate]()
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = core.Null[string]()
-	}
-	for name := range fields {
-		switch name {
-		case "_key", "blockType", "label", "sku", "accent", "products", "blockName":
-		default:
-			return blockFieldError(name, "unknown input field", nil)
-		}
-	}
-	*value = UnifiedArticlesContentCardUpdate(decoded)
-	return nil
-}
-
-// UnifiedArticlesContentCardAllLocales is a generated block. Use *UnifiedArticlesContentCardAllLocales in block lists and type switches.
-// Authored children may be omitted by access rules or projection, even when required on create.
-type UnifiedArticlesContentCardAllLocales struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Label *BlockOptional[string] `json:"label,omitempty"`
-	// Sku: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sku *BlockOptional[string] `json:"sku,omitempty"`
-	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Accent *BlockOptional[string] `json:"accent,omitempty"`
-	// Products: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Products *BlockOptional[UnifiedArticlesContentCardProductsAllLocales] `json:"products,omitempty"`
-	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentCardAllLocales) BlockType() string { return "card" }
-func (value UnifiedArticlesContentCardAllLocales) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Label     json.RawMessage `json:"label,omitempty"`
-		Sku       json.RawMessage `json:"sku,omitempty"`
-		Accent    json.RawMessage `json:"accent,omitempty"`
-		Products  json.RawMessage `json:"products,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Label != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocales", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Sku != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocales", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
-	}
-	if value.Accent != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocales", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	if value.Products != nil {
-		data, err := (func(value *UnifiedArticlesContentCardProductsAllLocales) ([]byte, error) {
-			return encodeBlockPointer(value, encodeBlockValue[UnifiedArticlesContentCardProductsAllLocales])
-		})(value.Products.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocales", Path: "products", Reason: "invalid value", Err: err})
-		}
-		encoded.Products = data
-	}
-	if value.BlockName != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentCardAllLocales) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *UnifiedArticlesContentCardAllLocales) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCardAllLocales
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentCardAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Label); err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sku); err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Accent); err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["products"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Products); err != nil {
-				return blockFieldError("products", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[UnifiedArticlesContentCardProductsAllLocales](raw)
-			if err != nil {
-				return blockFieldError("products", "invalid value", err)
-			}
-			decoded.Products = &BlockOptional[UnifiedArticlesContentCardProductsAllLocales]{Value: &child}
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = &BlockOptional[UnifiedArticlesContentCardProductsAllLocales]{}
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = &BlockOptional[string]{}
-	}
-	*value = UnifiedArticlesContentCardAllLocales(decoded)
-	return nil
-}
-
-// UnifiedArticlesContentCardAllLocalesValue is a generated block. Use *UnifiedArticlesContentCardAllLocalesValue in block lists and type switches.
-// Authored children may be omitted by access rules or projection, even when required on create.
-type UnifiedArticlesContentCardAllLocalesValue struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Label *BlockOptional[string] `json:"label,omitempty"`
-	// Sku: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sku *BlockOptional[string] `json:"sku,omitempty"`
-	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Accent *BlockOptional[string] `json:"accent,omitempty"`
-	// Products: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Products *BlockOptional[UnifiedArticlesContentCardProductsAllLocalesValue] `json:"products,omitempty"`
-	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentCardAllLocalesValue) BlockType() string { return "card" }
-func (value UnifiedArticlesContentCardAllLocalesValue) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Label     json.RawMessage `json:"label,omitempty"`
-		Sku       json.RawMessage `json:"sku,omitempty"`
-		Accent    json.RawMessage `json:"accent,omitempty"`
-		Products  json.RawMessage `json:"products,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Label != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocalesValue", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Sku != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocalesValue", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
-	}
-	if value.Accent != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocalesValue", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	if value.Products != nil {
-		data, err := (func(value *UnifiedArticlesContentCardProductsAllLocalesValue) ([]byte, error) {
-			return encodeBlockPointer(value, encodeBlockValue[UnifiedArticlesContentCardProductsAllLocalesValue])
-		})(value.Products.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocalesValue", Path: "products", Reason: "invalid value", Err: err})
-		}
-		encoded.Products = data
-	}
-	if value.BlockName != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentCardAllLocalesValue) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *UnifiedArticlesContentCardAllLocalesValue) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCardAllLocalesValue
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentCardAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Label); err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sku); err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Accent); err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["products"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Products); err != nil {
-				return blockFieldError("products", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[UnifiedArticlesContentCardProductsAllLocalesValue](raw)
-			if err != nil {
-				return blockFieldError("products", "invalid value", err)
-			}
-			decoded.Products = &BlockOptional[UnifiedArticlesContentCardProductsAllLocalesValue]{Value: &child}
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["products"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Products = &BlockOptional[UnifiedArticlesContentCardProductsAllLocalesValue]{}
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = &BlockOptional[string]{}
-	}
-	*value = UnifiedArticlesContentCardAllLocalesValue(decoded)
-	return nil
-}
-
-// UnifiedArticlesContentNoteBlockType is the immutable stored discriminator.
-const UnifiedArticlesContentNoteBlockType = "note"
-
-// UnifiedArticlesContentNote is a generated block. Use *UnifiedArticlesContentNote in block lists and type switches.
-// Authored children may be omitted by access rules or projection, even when required on create.
-// Create with UnifiedArticlesContentNoteInput. To edit, retain the read list and modify its UnifiedArticlesContentNoteUpdate pointers.
-type UnifiedArticlesContentNote struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Label *BlockOptional[string] `json:"label,omitempty"`
-	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Accent *BlockOptional[string] `json:"accent,omitempty"`
-	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentNote) BlockType() string { return "note" }
-func (value UnifiedArticlesContentNote) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Label     json.RawMessage `json:"label,omitempty"`
-		Accent    json.RawMessage `json:"accent,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "note"
-	encoded.Key = value.Key
-	if value.Label != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNote", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Accent != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNote", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	if value.BlockName != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNote", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentNote) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *UnifiedArticlesContentNote) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentNote
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "note" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentNote", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Label); err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Accent); err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = &BlockOptional[string]{}
-	}
-	*value = UnifiedArticlesContentNote(decoded)
-	return nil
-}
-
-// UnifiedArticlesContentNoteInput is a generated block. Use *UnifiedArticlesContentNoteInput in block lists and type switches.
-// Input supplies a new occurrence's required fields. An empty Key requests a server-assigned key.
-// Read this block as UnifiedArticlesContentNote; edit an existing occurrence with UnifiedArticlesContentNoteUpdate.
-type UnifiedArticlesContentNoteInput struct {
+// Read this block as UnifiedNote; edit an existing occurrence with UnifiedNoteUpdate.
+type UnifiedNoteInput struct {
 	// Key identifies this occurrence; omit it for a new server-assigned identity.
 	Key string `json:"_key,omitempty"`
 	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -5878,8 +4886,8 @@ type UnifiedArticlesContentNoteInput struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentNoteInput) BlockType() string { return "note" }
-func (value UnifiedArticlesContentNoteInput) MarshalJSON() ([]byte, error) {
+func (*UnifiedNoteInput) BlockType() string { return "unified-note" }
+func (value UnifiedNoteInput) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key,omitempty"`
@@ -5887,7 +4895,7 @@ func (value UnifiedArticlesContentNoteInput) MarshalJSON() ([]byte, error) {
 		Accent    json.RawMessage `json:"accent,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "note"
+	encoded.BlockType = "unified-note"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		child, present := value.Label.Get()
@@ -5897,7 +4905,7 @@ func (value UnifiedArticlesContentNoteInput) MarshalJSON() ([]byte, error) {
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteInput", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteInput", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
@@ -5909,7 +4917,7 @@ func (value UnifiedArticlesContentNoteInput) MarshalJSON() ([]byte, error) {
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteInput", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteInput", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
@@ -5921,7 +4929,7 @@ func (value UnifiedArticlesContentNoteInput) MarshalJSON() ([]byte, error) {
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteInput", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteInput", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -5929,14 +4937,14 @@ func (value UnifiedArticlesContentNoteInput) MarshalJSON() ([]byte, error) {
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentNoteInput) BlockKey() string {
+func (value *UnifiedNoteInput) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesContentNoteInput) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentNoteInput
+func (value *UnifiedNoteInput) UnmarshalJSON(data []byte) error {
+	type payload UnifiedNoteInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -5946,8 +4954,8 @@ func (value *UnifiedArticlesContentNoteInput) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "note" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentNoteInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-note" {
+		return newContractError(ContractError{Container: "UnifiedNoteInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
@@ -6006,15 +5014,15 @@ func (value *UnifiedArticlesContentNoteInput) UnmarshalJSON(data []byte) error {
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = UnifiedArticlesContentNoteInput(decoded)
+	*value = UnifiedNoteInput(decoded)
 	return nil
 }
 
-// UnifiedArticlesContentNoteUpdate is a generated block. Use *UnifiedArticlesContentNoteUpdate in block lists and type switches.
+// UnifiedNoteUpdate is a generated block. Use *UnifiedNoteUpdate in block lists and type switches.
 // Update retains an existing occurrence by Key. Omitted children remain unchanged.
 // The engine verifies that the key belongs to an existing occurrence of this variant.
-// Start with the read list's Retain method; use UnifiedArticlesContentNoteInput for additions.
-type UnifiedArticlesContentNoteUpdate struct {
+// Start with the read list's Retain method; use UnifiedNoteInput for additions.
+type UnifiedNoteUpdate struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -6026,10 +5034,10 @@ type UnifiedArticlesContentNoteUpdate struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentNoteUpdate) BlockType() string { return "note" }
-func (value UnifiedArticlesContentNoteUpdate) MarshalJSON() ([]byte, error) {
+func (*UnifiedNoteUpdate) BlockType() string { return "unified-note" }
+func (value UnifiedNoteUpdate) MarshalJSON() ([]byte, error) {
 	if strings.TrimSpace(value.Key) == "" {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteUpdate", Path: "_key", Reason: "keyed update requires an identity"})
+		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteUpdate", Path: "_key", Reason: "keyed update requires an identity"})
 	}
 	var encoded struct {
 		BlockType string          `json:"blockType"`
@@ -6038,7 +5046,7 @@ func (value UnifiedArticlesContentNoteUpdate) MarshalJSON() ([]byte, error) {
 		Accent    json.RawMessage `json:"accent,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "note"
+	encoded.BlockType = "unified-note"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		child, present := value.Label.Get()
@@ -6048,7 +5056,7 @@ func (value UnifiedArticlesContentNoteUpdate) MarshalJSON() ([]byte, error) {
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteUpdate", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteUpdate", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
@@ -6060,7 +5068,7 @@ func (value UnifiedArticlesContentNoteUpdate) MarshalJSON() ([]byte, error) {
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteUpdate", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteUpdate", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
@@ -6072,7 +5080,7 @@ func (value UnifiedArticlesContentNoteUpdate) MarshalJSON() ([]byte, error) {
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteUpdate", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteUpdate", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -6080,14 +5088,14 @@ func (value UnifiedArticlesContentNoteUpdate) MarshalJSON() ([]byte, error) {
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentNoteUpdate) BlockKey() string {
+func (value *UnifiedNoteUpdate) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesContentNoteUpdate) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentNoteUpdate
+func (value *UnifiedNoteUpdate) UnmarshalJSON(data []byte) error {
+	type payload UnifiedNoteUpdate
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -6097,8 +5105,8 @@ func (value *UnifiedArticlesContentNoteUpdate) UnmarshalJSON(data []byte) error 
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "note" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentNoteUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-note" {
+		return newContractError(ContractError{Container: "UnifiedNoteUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -6161,13 +5169,13 @@ func (value *UnifiedArticlesContentNoteUpdate) UnmarshalJSON(data []byte) error 
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = UnifiedArticlesContentNoteUpdate(decoded)
+	*value = UnifiedNoteUpdate(decoded)
 	return nil
 }
 
-// UnifiedArticlesContentNoteAllLocales is a generated block. Use *UnifiedArticlesContentNoteAllLocales in block lists and type switches.
+// UnifiedNoteAllLocales is a generated block. Use *UnifiedNoteAllLocales in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-type UnifiedArticlesContentNoteAllLocales struct {
+type UnifiedNoteAllLocales struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -6179,8 +5187,8 @@ type UnifiedArticlesContentNoteAllLocales struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentNoteAllLocales) BlockType() string { return "note" }
-func (value UnifiedArticlesContentNoteAllLocales) MarshalJSON() ([]byte, error) {
+func (*UnifiedNoteAllLocales) BlockType() string { return "unified-note" }
+func (value UnifiedNoteAllLocales) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -6188,26 +5196,26 @@ func (value UnifiedArticlesContentNoteAllLocales) MarshalJSON() ([]byte, error) 
 		Accent    json.RawMessage `json:"accent,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "note"
+	encoded.BlockType = "unified-note"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteAllLocales", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteAllLocales", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
 	if value.Accent != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteAllLocales", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteAllLocales", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -6215,14 +5223,14 @@ func (value UnifiedArticlesContentNoteAllLocales) MarshalJSON() ([]byte, error) 
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentNoteAllLocales) BlockKey() string {
+func (value *UnifiedNoteAllLocales) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesContentNoteAllLocales) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentNoteAllLocales
+func (value *UnifiedNoteAllLocales) UnmarshalJSON(data []byte) error {
+	type payload UnifiedNoteAllLocales
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -6232,8 +5240,8 @@ func (value *UnifiedArticlesContentNoteAllLocales) UnmarshalJSON(data []byte) er
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "note" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentNoteAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-note" {
+		return newContractError(ContractError{Container: "UnifiedNoteAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -6295,13 +5303,13 @@ func (value *UnifiedArticlesContentNoteAllLocales) UnmarshalJSON(data []byte) er
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = UnifiedArticlesContentNoteAllLocales(decoded)
+	*value = UnifiedNoteAllLocales(decoded)
 	return nil
 }
 
-// UnifiedArticlesContentNoteAllLocalesValue is a generated block. Use *UnifiedArticlesContentNoteAllLocalesValue in block lists and type switches.
+// UnifiedNoteAllLocalesValue is a generated block. Use *UnifiedNoteAllLocalesValue in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-type UnifiedArticlesContentNoteAllLocalesValue struct {
+type UnifiedNoteAllLocalesValue struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -6313,8 +5321,8 @@ type UnifiedArticlesContentNoteAllLocalesValue struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*UnifiedArticlesContentNoteAllLocalesValue) BlockType() string { return "note" }
-func (value UnifiedArticlesContentNoteAllLocalesValue) MarshalJSON() ([]byte, error) {
+func (*UnifiedNoteAllLocalesValue) BlockType() string { return "unified-note" }
+func (value UnifiedNoteAllLocalesValue) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -6322,26 +5330,26 @@ func (value UnifiedArticlesContentNoteAllLocalesValue) MarshalJSON() ([]byte, er
 		Accent    json.RawMessage `json:"accent,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "note"
+	encoded.BlockType = "unified-note"
 	encoded.Key = value.Key
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteAllLocalesValue", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteAllLocalesValue", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
 	if value.Accent != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteAllLocalesValue", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteAllLocalesValue", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentNoteAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedNoteAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -6349,14 +5357,14 @@ func (value UnifiedArticlesContentNoteAllLocalesValue) MarshalJSON() ([]byte, er
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *UnifiedArticlesContentNoteAllLocalesValue) BlockKey() string {
+func (value *UnifiedNoteAllLocalesValue) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *UnifiedArticlesContentNoteAllLocalesValue) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentNoteAllLocalesValue
+func (value *UnifiedNoteAllLocalesValue) UnmarshalJSON(data []byte) error {
+	type payload UnifiedNoteAllLocalesValue
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -6366,8 +5374,8 @@ func (value *UnifiedArticlesContentNoteAllLocalesValue) UnmarshalJSON(data []byt
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "note" {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentNoteAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "unified-note" {
+		return newContractError(ContractError{Container: "UnifiedNoteAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -6429,11 +5437,11 @@ func (value *UnifiedArticlesContentNoteAllLocalesValue) UnmarshalJSON(data []byt
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = UnifiedArticlesContentNoteAllLocalesValue(decoded)
+	*value = UnifiedNoteAllLocalesValue(decoded)
 	return nil
 }
 
-type UnifiedArticlesBodyBlocksBlockCardProductsRow struct {
+type UnifiedCardProductsRow struct {
 	Key string `json:"_key"`
 	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Label *BlockOptional[string] `json:"label,omitempty"`
@@ -6444,13 +5452,13 @@ type UnifiedArticlesBodyBlocksBlockCardProductsRow struct {
 }
 
 // RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRow) RowKey() string {
+func (value *UnifiedCardProductsRow) RowKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value UnifiedArticlesBodyBlocksBlockCardProductsRow) MarshalJSON() ([]byte, error) {
+func (value UnifiedCardProductsRow) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		Key    string          `json:"_key,omitempty"`
 		Label  json.RawMessage `json:"label,omitempty"`
@@ -6461,28 +5469,28 @@ func (value UnifiedArticlesBodyBlocksBlockCardProductsRow) MarshalJSON() ([]byte
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRow", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRow", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
 	if value.Sku != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRow", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRow", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
 	if value.Accent != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRow", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRow", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	return json.Marshal(encoded)
 }
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRow) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCardProductsRow
+func (value *UnifiedCardProductsRow) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCardProductsRow
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -6544,11 +5552,11 @@ func (value *UnifiedArticlesBodyBlocksBlockCardProductsRow) UnmarshalJSON(data [
 	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Accent = &BlockOptional[string]{}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCardProductsRow(decoded)
+	*value = UnifiedCardProductsRow(decoded)
 	return nil
 }
 
-type UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales struct {
+type UnifiedCardProductsRowAllLocales struct {
 	Key string `json:"_key"`
 	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Label *BlockOptional[string] `json:"label,omitempty"`
@@ -6559,13 +5567,13 @@ type UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales struct {
 }
 
 // RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales) RowKey() string {
+func (value *UnifiedCardProductsRowAllLocales) RowKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales) MarshalJSON() ([]byte, error) {
+func (value UnifiedCardProductsRowAllLocales) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		Key    string          `json:"_key,omitempty"`
 		Label  json.RawMessage `json:"label,omitempty"`
@@ -6576,28 +5584,28 @@ func (value UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales) MarshalJSON
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowAllLocales", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
 	if value.Sku != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowAllLocales", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
 	if value.Accent != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowAllLocales", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	return json.Marshal(encoded)
 }
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales
+func (value *UnifiedCardProductsRowAllLocales) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCardProductsRowAllLocales
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -6659,11 +5667,11 @@ func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales) UnmarshalJ
 	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Accent = &BlockOptional[string]{}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales(decoded)
+	*value = UnifiedCardProductsRowAllLocales(decoded)
 	return nil
 }
 
-type UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue struct {
+type UnifiedCardProductsRowAllLocalesValue struct {
 	Key string `json:"_key"`
 	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Label *BlockOptional[string] `json:"label,omitempty"`
@@ -6674,13 +5682,13 @@ type UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue struct {
 }
 
 // RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue) RowKey() string {
+func (value *UnifiedCardProductsRowAllLocalesValue) RowKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue) MarshalJSON() ([]byte, error) {
+func (value UnifiedCardProductsRowAllLocalesValue) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		Key    string          `json:"_key,omitempty"`
 		Label  json.RawMessage `json:"label,omitempty"`
@@ -6691,28 +5699,28 @@ func (value UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue) Marsha
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowAllLocalesValue", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
 	if value.Sku != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowAllLocalesValue", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
 	if value.Accent != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowAllLocalesValue", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	return json.Marshal(encoded)
 }
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue
+func (value *UnifiedCardProductsRowAllLocalesValue) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCardProductsRowAllLocalesValue
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -6774,11 +5782,11 @@ func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue) Unmar
 	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Accent = &BlockOptional[string]{}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue(decoded)
+	*value = UnifiedCardProductsRowAllLocalesValue(decoded)
 	return nil
 }
 
-type UnifiedArticlesBodyBlocksBlockCardProductsRowInput struct {
+type UnifiedCardProductsRowInput struct {
 	Key string `json:"_key,omitempty"`
 	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Label *core.Input[string] `json:"label,omitempty"`
@@ -6789,13 +5797,13 @@ type UnifiedArticlesBodyBlocksBlockCardProductsRowInput struct {
 }
 
 // RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowInput) RowKey() string {
+func (value *UnifiedCardProductsRowInput) RowKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value UnifiedArticlesBodyBlocksBlockCardProductsRowInput) MarshalJSON() ([]byte, error) {
+func (value UnifiedCardProductsRowInput) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		Key    string          `json:"_key,omitempty"`
 		Label  json.RawMessage `json:"label,omitempty"`
@@ -6811,7 +5819,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardProductsRowInput) MarshalJSON() ([
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowInput", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowInput", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
@@ -6823,7 +5831,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardProductsRowInput) MarshalJSON() ([
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowInput", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowInput", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
@@ -6835,14 +5843,14 @@ func (value UnifiedArticlesBodyBlocksBlockCardProductsRowInput) MarshalJSON() ([
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowInput", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowInput", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	return json.Marshal(encoded)
 }
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowInput) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCardProductsRowInput
+func (value *UnifiedCardProductsRowInput) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCardProductsRowInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -6908,11 +5916,11 @@ func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowInput) UnmarshalJSON(d
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCardProductsRowInput(decoded)
+	*value = UnifiedCardProductsRowInput(decoded)
 	return nil
 }
 
-type UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate struct {
+type UnifiedCardProductsRowUpdate struct {
 	Key string `json:"_key,omitempty"`
 	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Label *core.Input[string] `json:"label,omitempty"`
@@ -6923,15 +5931,15 @@ type UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate struct {
 }
 
 // RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate) RowKey() string {
+func (value *UnifiedCardProductsRowUpdate) RowKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate) MarshalJSON() ([]byte, error) {
+func (value UnifiedCardProductsRowUpdate) MarshalJSON() ([]byte, error) {
 	if strings.TrimSpace(value.Key) == "" {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate", Path: "_key", Reason: "keyed update requires an identity"})
+		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowUpdate", Path: "_key", Reason: "keyed update requires an identity"})
 	}
 	var encoded struct {
 		Key    string          `json:"_key,omitempty"`
@@ -6948,7 +5956,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate) MarshalJSON() (
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate", Path: "label", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowUpdate", Path: "label", Reason: "invalid value", Err: err})
 		}
 		encoded.Label = data
 	}
@@ -6960,7 +5968,7 @@ func (value UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate) MarshalJSON() (
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate", Path: "sku", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowUpdate", Path: "sku", Reason: "invalid value", Err: err})
 		}
 		encoded.Sku = data
 	}
@@ -6972,14 +5980,14 @@ func (value UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate) MarshalJSON() (
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate", Path: "accent", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsRowUpdate", Path: "accent", Reason: "invalid value", Err: err})
 		}
 		encoded.Accent = data
 	}
 	return json.Marshal(encoded)
 }
-func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate
+func (value *UnifiedCardProductsRowUpdate) UnmarshalJSON(data []byte) error {
+	type payload UnifiedCardProductsRowUpdate
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -7049,642 +6057,20 @@ func (value *UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate) UnmarshalJSON(
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate(decoded)
+	*value = UnifiedCardProductsRowUpdate(decoded)
 	return nil
 }
 
-type UnifiedArticlesContentCardProductsRow struct {
-	Key string `json:"_key"`
-	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Label *BlockOptional[string] `json:"label,omitempty"`
-	// Sku: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sku *BlockOptional[string] `json:"sku,omitempty"`
-	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Accent *BlockOptional[string] `json:"accent,omitempty"`
-}
-
-// RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesContentCardProductsRow) RowKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value UnifiedArticlesContentCardProductsRow) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		Key    string          `json:"_key,omitempty"`
-		Label  json.RawMessage `json:"label,omitempty"`
-		Sku    json.RawMessage `json:"sku,omitempty"`
-		Accent json.RawMessage `json:"accent,omitempty"`
-	}
-	encoded.Key = value.Key
-	if value.Label != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRow", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Sku != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRow", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
-	}
-	if value.Accent != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRow", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	return json.Marshal(encoded)
-}
-func (value *UnifiedArticlesContentCardProductsRow) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCardProductsRow
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	if fields == nil {
-		return fmt.Errorf("expected an object")
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Label); err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sku); err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Accent); err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = &BlockOptional[string]{}
-	}
-	*value = UnifiedArticlesContentCardProductsRow(decoded)
-	return nil
-}
-
-type UnifiedArticlesContentCardProductsRowAllLocales struct {
-	Key string `json:"_key"`
-	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Label *BlockOptional[string] `json:"label,omitempty"`
-	// Sku: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sku *BlockOptional[string] `json:"sku,omitempty"`
-	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Accent *BlockOptional[string] `json:"accent,omitempty"`
-}
-
-// RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesContentCardProductsRowAllLocales) RowKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value UnifiedArticlesContentCardProductsRowAllLocales) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		Key    string          `json:"_key,omitempty"`
-		Label  json.RawMessage `json:"label,omitempty"`
-		Sku    json.RawMessage `json:"sku,omitempty"`
-		Accent json.RawMessage `json:"accent,omitempty"`
-	}
-	encoded.Key = value.Key
-	if value.Label != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowAllLocales", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Sku != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowAllLocales", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
-	}
-	if value.Accent != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowAllLocales", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	return json.Marshal(encoded)
-}
-func (value *UnifiedArticlesContentCardProductsRowAllLocales) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCardProductsRowAllLocales
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	if fields == nil {
-		return fmt.Errorf("expected an object")
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Label); err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sku); err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Accent); err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = &BlockOptional[string]{}
-	}
-	*value = UnifiedArticlesContentCardProductsRowAllLocales(decoded)
-	return nil
-}
-
-type UnifiedArticlesContentCardProductsRowAllLocalesValue struct {
-	Key string `json:"_key"`
-	// Label: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Label *BlockOptional[string] `json:"label,omitempty"`
-	// Sku: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sku *BlockOptional[string] `json:"sku,omitempty"`
-	// Accent: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Accent *BlockOptional[string] `json:"accent,omitempty"`
-}
-
-// RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesContentCardProductsRowAllLocalesValue) RowKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value UnifiedArticlesContentCardProductsRowAllLocalesValue) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		Key    string          `json:"_key,omitempty"`
-		Label  json.RawMessage `json:"label,omitempty"`
-		Sku    json.RawMessage `json:"sku,omitempty"`
-		Accent json.RawMessage `json:"accent,omitempty"`
-	}
-	encoded.Key = value.Key
-	if value.Label != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowAllLocalesValue", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Sku != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Sku.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowAllLocalesValue", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
-	}
-	if value.Accent != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Accent.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowAllLocalesValue", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	return json.Marshal(encoded)
-}
-func (value *UnifiedArticlesContentCardProductsRowAllLocalesValue) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCardProductsRowAllLocalesValue
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	if fields == nil {
-		return fmt.Errorf("expected an object")
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Label); err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sku); err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Accent); err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = &BlockOptional[string]{}
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = &BlockOptional[string]{}
-	}
-	*value = UnifiedArticlesContentCardProductsRowAllLocalesValue(decoded)
-	return nil
-}
-
-type UnifiedArticlesContentCardProductsRowInput struct {
-	Key string `json:"_key,omitempty"`
-	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Label *core.Input[string] `json:"label,omitempty"`
-	// Sku: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Sku *core.Input[string] `json:"sku,omitempty"`
-	// Accent: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Accent *core.Input[string] `json:"accent,omitempty"`
-}
-
-// RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesContentCardProductsRowInput) RowKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value UnifiedArticlesContentCardProductsRowInput) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		Key    string          `json:"_key,omitempty"`
-		Label  json.RawMessage `json:"label,omitempty"`
-		Sku    json.RawMessage `json:"sku,omitempty"`
-		Accent json.RawMessage `json:"accent,omitempty"`
-	}
-	encoded.Key = value.Key
-	if value.Label != nil {
-		child, present := value.Label.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowInput", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Sku != nil {
-		child, present := value.Sku.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowInput", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
-	}
-	if value.Accent != nil {
-		child, present := value.Accent.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowInput", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	return json.Marshal(encoded)
-}
-func (value *UnifiedArticlesContentCardProductsRowInput) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCardProductsRowInput
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	if fields == nil {
-		return fmt.Errorf("expected an object")
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-		if strings.TrimSpace(decoded.Key) == "" {
-			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Label = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = core.Set(child)
-		}
-	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Sku = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = core.Set(child)
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Accent = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = core.Set(child)
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = core.Null[string]()
-	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = core.Null[string]()
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = core.Null[string]()
-	}
-	for name := range fields {
-		switch name {
-		case "_key", "label", "sku", "accent":
-		default:
-			return blockFieldError(name, "unknown input field", nil)
-		}
-	}
-	*value = UnifiedArticlesContentCardProductsRowInput(decoded)
-	return nil
-}
-
-type UnifiedArticlesContentCardProductsRowUpdate struct {
-	Key string `json:"_key,omitempty"`
-	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Label *core.Input[string] `json:"label,omitempty"`
-	// Sku: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Sku *core.Input[string] `json:"sku,omitempty"`
-	// Accent: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Accent *core.Input[string] `json:"accent,omitempty"`
-}
-
-// RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
-func (value *UnifiedArticlesContentCardProductsRowUpdate) RowKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value UnifiedArticlesContentCardProductsRowUpdate) MarshalJSON() ([]byte, error) {
-	if strings.TrimSpace(value.Key) == "" {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowUpdate", Path: "_key", Reason: "keyed update requires an identity"})
-	}
-	var encoded struct {
-		Key    string          `json:"_key,omitempty"`
-		Label  json.RawMessage `json:"label,omitempty"`
-		Sku    json.RawMessage `json:"sku,omitempty"`
-		Accent json.RawMessage `json:"accent,omitempty"`
-	}
-	encoded.Key = value.Key
-	if value.Label != nil {
-		child, present := value.Label.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowUpdate", Path: "label", Reason: "invalid value", Err: err})
-		}
-		encoded.Label = data
-	}
-	if value.Sku != nil {
-		child, present := value.Sku.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowUpdate", Path: "sku", Reason: "invalid value", Err: err})
-		}
-		encoded.Sku = data
-	}
-	if value.Accent != nil {
-		child, present := value.Accent.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsRowUpdate", Path: "accent", Reason: "invalid value", Err: err})
-		}
-		encoded.Accent = data
-	}
-	return json.Marshal(encoded)
-}
-func (value *UnifiedArticlesContentCardProductsRowUpdate) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticlesContentCardProductsRowUpdate
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	if fields == nil {
-		return fmt.Errorf("expected an object")
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "keyed array update requires an identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Label = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("label", "invalid value", err)
-			}
-			decoded.Label = core.Set(child)
-		}
-	}
-	if raw, ok := fields["sku"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Sku = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("sku", "invalid value", err)
-			}
-			decoded.Sku = core.Set(child)
-		}
-	}
-	if raw, ok := fields["accent"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Accent = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("accent", "invalid value", err)
-			}
-			decoded.Accent = core.Set(child)
-		}
-	}
-	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Label = core.Null[string]()
-	}
-	if raw, ok := fields["sku"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sku = core.Null[string]()
-	}
-	if raw, ok := fields["accent"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Accent = core.Null[string]()
-	}
-	for name := range fields {
-		switch name {
-		case "_key", "label", "sku", "accent":
-		default:
-			return blockFieldError(name, "unknown input field", nil)
-		}
-	}
-	*value = UnifiedArticlesContentCardProductsRowUpdate(decoded)
-	return nil
-}
-
-// UnifiedArticlesBodyBlocksBlockCardProductsUpdateRow admits new input and retained update pointers. RowKey exposes identity without a type assertion.
-type UnifiedArticlesBodyBlocksBlockCardProductsUpdateRow interface {
-	isUnifiedArticlesBodyBlocksBlockCardProductsUpdateRow()
+// UnifiedCardProductsUpdateRow admits new input and retained update pointers. RowKey exposes identity without a type assertion.
+type UnifiedCardProductsUpdateRow interface {
+	isUnifiedCardProductsUpdateRow()
 	RowKey() string
 }
-type UnifiedArticlesBodyBlocksBlockCardProductsUpdate []UnifiedArticlesBodyBlocksBlockCardProductsUpdateRow
+type UnifiedCardProductsUpdate []UnifiedCardProductsUpdateRow
 
-func (*UnifiedArticlesBodyBlocksBlockCardProductsRowInput) isUnifiedArticlesBodyBlocksBlockCardProductsUpdateRow() {
-}
-func (*UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate) isUnifiedArticlesBodyBlocksBlockCardProductsUpdateRow() {
-}
-func (rows UnifiedArticlesBodyBlocksBlockCardProductsUpdate) MarshalJSON() ([]byte, error) {
+func (*UnifiedCardProductsRowInput) isUnifiedCardProductsUpdateRow()  {}
+func (*UnifiedCardProductsRowUpdate) isUnifiedCardProductsUpdateRow() {}
+func (rows UnifiedCardProductsUpdate) MarshalJSON() ([]byte, error) {
 	if rows == nil {
 		return []byte("null"), nil
 	}
@@ -7695,13 +6081,13 @@ func (rows UnifiedArticlesBodyBlocksBlockCardProductsUpdate) MarshalJSON() ([]by
 			return nil, blockRowError(ContractError{Operation: "encode", Reason: "invalid array item", Err: err}, i)
 		}
 		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsUpdate", Reason: "nil array row is not allowed"}, i)
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "UnifiedCardProductsUpdate", Reason: "nil array row is not allowed"}, i)
 		}
 		encoded[i] = data
 	}
 	return json.Marshal(encoded)
 }
-func (rows *UnifiedArticlesBodyBlocksBlockCardProductsUpdate) UnmarshalJSON(data []byte) error {
+func (rows *UnifiedCardProductsUpdate) UnmarshalJSON(data []byte) error {
 	var raw []json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
@@ -7710,22 +6096,22 @@ func (rows *UnifiedArticlesBodyBlocksBlockCardProductsUpdate) UnmarshalJSON(data
 		*rows = nil
 		return nil
 	}
-	decoded := make(UnifiedArticlesBodyBlocksBlockCardProductsUpdate, len(raw))
+	decoded := make(UnifiedCardProductsUpdate, len(raw))
 	for i, data := range raw {
 		header, err := decodeBlockHeader(data, false)
 		if err != nil {
 			return blockRowError(ContractError{Reason: "invalid array header", Err: err}, i)
 		}
 		if header.Key == "" {
-			var value UnifiedArticlesBodyBlocksBlockCardProductsRowInput
+			var value UnifiedCardProductsRowInput
 			if err := json.Unmarshal(data, &value); err != nil {
-				return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCardProductsUpdate", Reason: "invalid array item", Err: err}, i)
+				return blockRowError(ContractError{Container: "UnifiedCardProductsUpdate", Reason: "invalid array item", Err: err}, i)
 			}
 			decoded[i] = &value
 		} else {
-			var value UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate
+			var value UnifiedCardProductsRowUpdate
 			if err := json.Unmarshal(data, &value); err != nil {
-				return blockRowError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCardProductsUpdate", Reason: "invalid array item", Err: err}, i)
+				return blockRowError(ContractError{Container: "UnifiedCardProductsUpdate", Reason: "invalid array item", Err: err}, i)
 			}
 			decoded[i] = &value
 		}
@@ -7734,81 +6120,22 @@ func (rows *UnifiedArticlesBodyBlocksBlockCardProductsUpdate) UnmarshalJSON(data
 	return nil
 }
 
-// UnifiedArticlesContentCardProductsUpdateRow admits new input and retained update pointers. RowKey exposes identity without a type assertion.
-type UnifiedArticlesContentCardProductsUpdateRow interface {
-	isUnifiedArticlesContentCardProductsUpdateRow()
-	RowKey() string
-}
-type UnifiedArticlesContentCardProductsUpdate []UnifiedArticlesContentCardProductsUpdateRow
+// UnifiedCardProducts contains concrete array rows. Use Retain before editing existing rows.
+type UnifiedCardProducts []UnifiedCardProductsRow
 
-func (*UnifiedArticlesContentCardProductsRowInput) isUnifiedArticlesContentCardProductsUpdateRow()  {}
-func (*UnifiedArticlesContentCardProductsRowUpdate) isUnifiedArticlesContentCardProductsUpdateRow() {}
-func (rows UnifiedArticlesContentCardProductsUpdate) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for i, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Reason: "invalid array item", Err: err}, i)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsUpdate", Reason: "nil array row is not allowed"}, i)
-		}
-		encoded[i] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *UnifiedArticlesContentCardProductsUpdate) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(UnifiedArticlesContentCardProductsUpdate, len(raw))
-	for i, data := range raw {
-		header, err := decodeBlockHeader(data, false)
-		if err != nil {
-			return blockRowError(ContractError{Reason: "invalid array header", Err: err}, i)
-		}
-		if header.Key == "" {
-			var value UnifiedArticlesContentCardProductsRowInput
-			if err := json.Unmarshal(data, &value); err != nil {
-				return blockRowError(ContractError{Container: "UnifiedArticlesContentCardProductsUpdate", Reason: "invalid array item", Err: err}, i)
-			}
-			decoded[i] = &value
-		} else {
-			var value UnifiedArticlesContentCardProductsRowUpdate
-			if err := json.Unmarshal(data, &value); err != nil {
-				return blockRowError(ContractError{Container: "UnifiedArticlesContentCardProductsUpdate", Reason: "invalid array item", Err: err}, i)
-			}
-			decoded[i] = &value
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// UnifiedArticlesBodyBlocksBlockCardProducts contains concrete array rows. Use Retain before editing existing rows.
-type UnifiedArticlesBodyBlocksBlockCardProducts []UnifiedArticlesBodyBlocksBlockCardProductsRow
-
-func (rows UnifiedArticlesBodyBlocksBlockCardProducts) MarshalJSON() ([]byte, error) {
-	data, err := encodeBlockSlice([]UnifiedArticlesBodyBlocksBlockCardProductsRow(rows), encodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsRow])
+func (rows UnifiedCardProducts) MarshalJSON() ([]byte, error) {
+	data, err := encodeBlockSlice([]UnifiedCardProductsRow(rows), encodeBlockValue[UnifiedCardProductsRow])
 	if err != nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProducts", Reason: "invalid array", Err: err})
+		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProducts", Reason: "invalid array", Err: err})
 	}
 	return data, nil
 }
-func (rows *UnifiedArticlesBodyBlocksBlockCardProducts) UnmarshalJSON(data []byte) error {
-	decoded, err := decodeBlockSlice(data, decodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsRow])
+func (rows *UnifiedCardProducts) UnmarshalJSON(data []byte) error {
+	decoded, err := decodeBlockSlice(data, decodeBlockValue[UnifiedCardProductsRow])
 	if err != nil {
-		return newContractError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCardProducts", Reason: "invalid array", Err: err})
+		return newContractError(ContractError{Container: "UnifiedCardProducts", Reason: "invalid array", Err: err})
 	}
-	*rows = UnifiedArticlesBodyBlocksBlockCardProducts(decoded)
+	*rows = UnifiedCardProducts(decoded)
 	return nil
 }
 
@@ -7817,41 +6144,41 @@ func (rows *UnifiedArticlesBodyBlocksBlockCardProducts) UnmarshalJSON(data []byt
 // or explicitly remove/reorder rows. Save with a revision check.
 // Nil lists, empty keys and duplicate keys fail without returning a partial list.
 // An explicitly empty list produces an empty update list.
-func (rows UnifiedArticlesBodyBlocksBlockCardProducts) Retain() (UnifiedArticlesBodyBlocksBlockCardProductsUpdate, error) {
+func (rows UnifiedCardProducts) Retain() (UnifiedCardProductsUpdate, error) {
 	if rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockCardProducts", Reason: "cannot retain an absent or null array"})
+		return nil, newContractError(ContractError{Operation: "retain", Container: "UnifiedCardProducts", Reason: "cannot retain an absent or null array"})
 	}
-	retained := make(UnifiedArticlesBodyBlocksBlockCardProductsUpdate, len(rows))
+	retained := make(UnifiedCardProductsUpdate, len(rows))
 	seen := make(map[string]bool, len(rows))
 	for index, row := range rows {
 		if strings.TrimSpace(row.Key) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockCardProducts", Path: "_key", Reason: "retained array row requires a nonempty identity"}, index)
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedCardProducts", Path: "_key", Reason: "retained array row requires a nonempty identity"}, index)
 		}
 		if seen[row.Key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockCardProducts", Path: "_key", Reason: "duplicate retained array identity"}, index)
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedCardProducts", Path: "_key", Reason: "duplicate retained array identity"}, index)
 		}
 		seen[row.Key] = true
-		retained[index] = &UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate{Key: row.Key}
+		retained[index] = &UnifiedCardProductsRowUpdate{Key: row.Key}
 	}
 	return retained, nil
 }
 
-// UnifiedArticlesBodyBlocksBlockCardProductsAllLocales contains concrete array rows. Use Retain before editing existing rows.
-type UnifiedArticlesBodyBlocksBlockCardProductsAllLocales []UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales
+// UnifiedCardProductsAllLocales contains concrete array rows. Use Retain before editing existing rows.
+type UnifiedCardProductsAllLocales []UnifiedCardProductsRowAllLocales
 
-func (rows UnifiedArticlesBodyBlocksBlockCardProductsAllLocales) MarshalJSON() ([]byte, error) {
-	data, err := encodeBlockSlice([]UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales(rows), encodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales])
+func (rows UnifiedCardProductsAllLocales) MarshalJSON() ([]byte, error) {
+	data, err := encodeBlockSlice([]UnifiedCardProductsRowAllLocales(rows), encodeBlockValue[UnifiedCardProductsRowAllLocales])
 	if err != nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocales", Reason: "invalid array", Err: err})
+		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsAllLocales", Reason: "invalid array", Err: err})
 	}
 	return data, nil
 }
-func (rows *UnifiedArticlesBodyBlocksBlockCardProductsAllLocales) UnmarshalJSON(data []byte) error {
-	decoded, err := decodeBlockSlice(data, decodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocales])
+func (rows *UnifiedCardProductsAllLocales) UnmarshalJSON(data []byte) error {
+	decoded, err := decodeBlockSlice(data, decodeBlockValue[UnifiedCardProductsRowAllLocales])
 	if err != nil {
-		return newContractError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocales", Reason: "invalid array", Err: err})
+		return newContractError(ContractError{Container: "UnifiedCardProductsAllLocales", Reason: "invalid array", Err: err})
 	}
-	*rows = UnifiedArticlesBodyBlocksBlockCardProductsAllLocales(decoded)
+	*rows = UnifiedCardProductsAllLocales(decoded)
 	return nil
 }
 
@@ -7860,41 +6187,41 @@ func (rows *UnifiedArticlesBodyBlocksBlockCardProductsAllLocales) UnmarshalJSON(
 // or explicitly remove/reorder rows. Save with a revision check.
 // Nil lists, empty keys and duplicate keys fail without returning a partial list.
 // An explicitly empty list produces an empty update list.
-func (rows UnifiedArticlesBodyBlocksBlockCardProductsAllLocales) Retain() (UnifiedArticlesBodyBlocksBlockCardProductsUpdate, error) {
+func (rows UnifiedCardProductsAllLocales) Retain() (UnifiedCardProductsUpdate, error) {
 	if rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocales", Reason: "cannot retain an absent or null array"})
+		return nil, newContractError(ContractError{Operation: "retain", Container: "UnifiedCardProductsAllLocales", Reason: "cannot retain an absent or null array"})
 	}
-	retained := make(UnifiedArticlesBodyBlocksBlockCardProductsUpdate, len(rows))
+	retained := make(UnifiedCardProductsUpdate, len(rows))
 	seen := make(map[string]bool, len(rows))
 	for index, row := range rows {
 		if strings.TrimSpace(row.Key) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocales", Path: "_key", Reason: "retained array row requires a nonempty identity"}, index)
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedCardProductsAllLocales", Path: "_key", Reason: "retained array row requires a nonempty identity"}, index)
 		}
 		if seen[row.Key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocales", Path: "_key", Reason: "duplicate retained array identity"}, index)
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedCardProductsAllLocales", Path: "_key", Reason: "duplicate retained array identity"}, index)
 		}
 		seen[row.Key] = true
-		retained[index] = &UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate{Key: row.Key}
+		retained[index] = &UnifiedCardProductsRowUpdate{Key: row.Key}
 	}
 	return retained, nil
 }
 
-// UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue contains concrete array rows. Use Retain before editing existing rows.
-type UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue []UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue
+// UnifiedCardProductsAllLocalesValue contains concrete array rows. Use Retain before editing existing rows.
+type UnifiedCardProductsAllLocalesValue []UnifiedCardProductsRowAllLocalesValue
 
-func (rows UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue) MarshalJSON() ([]byte, error) {
-	data, err := encodeBlockSlice([]UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue(rows), encodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue])
+func (rows UnifiedCardProductsAllLocalesValue) MarshalJSON() ([]byte, error) {
+	data, err := encodeBlockSlice([]UnifiedCardProductsRowAllLocalesValue(rows), encodeBlockValue[UnifiedCardProductsRowAllLocalesValue])
 	if err != nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue", Reason: "invalid array", Err: err})
+		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedCardProductsAllLocalesValue", Reason: "invalid array", Err: err})
 	}
 	return data, nil
 }
-func (rows *UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue) UnmarshalJSON(data []byte) error {
-	decoded, err := decodeBlockSlice(data, decodeBlockValue[UnifiedArticlesBodyBlocksBlockCardProductsRowAllLocalesValue])
+func (rows *UnifiedCardProductsAllLocalesValue) UnmarshalJSON(data []byte) error {
+	decoded, err := decodeBlockSlice(data, decodeBlockValue[UnifiedCardProductsRowAllLocalesValue])
 	if err != nil {
-		return newContractError(ContractError{Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue", Reason: "invalid array", Err: err})
+		return newContractError(ContractError{Container: "UnifiedCardProductsAllLocalesValue", Reason: "invalid array", Err: err})
 	}
-	*rows = UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue(decoded)
+	*rows = UnifiedCardProductsAllLocalesValue(decoded)
 	return nil
 }
 
@@ -7903,150 +6230,21 @@ func (rows *UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue) Unmarshal
 // or explicitly remove/reorder rows. Save with a revision check.
 // Nil lists, empty keys and duplicate keys fail without returning a partial list.
 // An explicitly empty list produces an empty update list.
-func (rows UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue) Retain() (UnifiedArticlesBodyBlocksBlockCardProductsUpdate, error) {
+func (rows UnifiedCardProductsAllLocalesValue) Retain() (UnifiedCardProductsUpdate, error) {
 	if rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue", Reason: "cannot retain an absent or null array"})
+		return nil, newContractError(ContractError{Operation: "retain", Container: "UnifiedCardProductsAllLocalesValue", Reason: "cannot retain an absent or null array"})
 	}
-	retained := make(UnifiedArticlesBodyBlocksBlockCardProductsUpdate, len(rows))
+	retained := make(UnifiedCardProductsUpdate, len(rows))
 	seen := make(map[string]bool, len(rows))
 	for index, row := range rows {
 		if strings.TrimSpace(row.Key) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue", Path: "_key", Reason: "retained array row requires a nonempty identity"}, index)
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedCardProductsAllLocalesValue", Path: "_key", Reason: "retained array row requires a nonempty identity"}, index)
 		}
 		if seen[row.Key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesBodyBlocksBlockCardProductsAllLocalesValue", Path: "_key", Reason: "duplicate retained array identity"}, index)
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedCardProductsAllLocalesValue", Path: "_key", Reason: "duplicate retained array identity"}, index)
 		}
 		seen[row.Key] = true
-		retained[index] = &UnifiedArticlesBodyBlocksBlockCardProductsRowUpdate{Key: row.Key}
-	}
-	return retained, nil
-}
-
-// UnifiedArticlesContentCardProducts contains concrete array rows. Use Retain before editing existing rows.
-type UnifiedArticlesContentCardProducts []UnifiedArticlesContentCardProductsRow
-
-func (rows UnifiedArticlesContentCardProducts) MarshalJSON() ([]byte, error) {
-	data, err := encodeBlockSlice([]UnifiedArticlesContentCardProductsRow(rows), encodeBlockValue[UnifiedArticlesContentCardProductsRow])
-	if err != nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProducts", Reason: "invalid array", Err: err})
-	}
-	return data, nil
-}
-func (rows *UnifiedArticlesContentCardProducts) UnmarshalJSON(data []byte) error {
-	decoded, err := decodeBlockSlice(data, decodeBlockValue[UnifiedArticlesContentCardProductsRow])
-	if err != nil {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentCardProducts", Reason: "invalid array", Err: err})
-	}
-	*rows = UnifiedArticlesContentCardProducts(decoded)
-	return nil
-}
-
-// Retain creates fresh key-only update pointers in the same order.
-// It copies no authored fields. Edit the pointers, append new input pointers,
-// or explicitly remove/reorder rows. Save with a revision check.
-// Nil lists, empty keys and duplicate keys fail without returning a partial list.
-// An explicitly empty list produces an empty update list.
-func (rows UnifiedArticlesContentCardProducts) Retain() (UnifiedArticlesContentCardProductsUpdate, error) {
-	if rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentCardProducts", Reason: "cannot retain an absent or null array"})
-	}
-	retained := make(UnifiedArticlesContentCardProductsUpdate, len(rows))
-	seen := make(map[string]bool, len(rows))
-	for index, row := range rows {
-		if strings.TrimSpace(row.Key) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentCardProducts", Path: "_key", Reason: "retained array row requires a nonempty identity"}, index)
-		}
-		if seen[row.Key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentCardProducts", Path: "_key", Reason: "duplicate retained array identity"}, index)
-		}
-		seen[row.Key] = true
-		retained[index] = &UnifiedArticlesContentCardProductsRowUpdate{Key: row.Key}
-	}
-	return retained, nil
-}
-
-// UnifiedArticlesContentCardProductsAllLocales contains concrete array rows. Use Retain before editing existing rows.
-type UnifiedArticlesContentCardProductsAllLocales []UnifiedArticlesContentCardProductsRowAllLocales
-
-func (rows UnifiedArticlesContentCardProductsAllLocales) MarshalJSON() ([]byte, error) {
-	data, err := encodeBlockSlice([]UnifiedArticlesContentCardProductsRowAllLocales(rows), encodeBlockValue[UnifiedArticlesContentCardProductsRowAllLocales])
-	if err != nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsAllLocales", Reason: "invalid array", Err: err})
-	}
-	return data, nil
-}
-func (rows *UnifiedArticlesContentCardProductsAllLocales) UnmarshalJSON(data []byte) error {
-	decoded, err := decodeBlockSlice(data, decodeBlockValue[UnifiedArticlesContentCardProductsRowAllLocales])
-	if err != nil {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentCardProductsAllLocales", Reason: "invalid array", Err: err})
-	}
-	*rows = UnifiedArticlesContentCardProductsAllLocales(decoded)
-	return nil
-}
-
-// Retain creates fresh key-only update pointers in the same order.
-// It copies no authored fields. Edit the pointers, append new input pointers,
-// or explicitly remove/reorder rows. Save with a revision check.
-// Nil lists, empty keys and duplicate keys fail without returning a partial list.
-// An explicitly empty list produces an empty update list.
-func (rows UnifiedArticlesContentCardProductsAllLocales) Retain() (UnifiedArticlesContentCardProductsUpdate, error) {
-	if rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentCardProductsAllLocales", Reason: "cannot retain an absent or null array"})
-	}
-	retained := make(UnifiedArticlesContentCardProductsUpdate, len(rows))
-	seen := make(map[string]bool, len(rows))
-	for index, row := range rows {
-		if strings.TrimSpace(row.Key) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentCardProductsAllLocales", Path: "_key", Reason: "retained array row requires a nonempty identity"}, index)
-		}
-		if seen[row.Key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentCardProductsAllLocales", Path: "_key", Reason: "duplicate retained array identity"}, index)
-		}
-		seen[row.Key] = true
-		retained[index] = &UnifiedArticlesContentCardProductsRowUpdate{Key: row.Key}
-	}
-	return retained, nil
-}
-
-// UnifiedArticlesContentCardProductsAllLocalesValue contains concrete array rows. Use Retain before editing existing rows.
-type UnifiedArticlesContentCardProductsAllLocalesValue []UnifiedArticlesContentCardProductsRowAllLocalesValue
-
-func (rows UnifiedArticlesContentCardProductsAllLocalesValue) MarshalJSON() ([]byte, error) {
-	data, err := encodeBlockSlice([]UnifiedArticlesContentCardProductsRowAllLocalesValue(rows), encodeBlockValue[UnifiedArticlesContentCardProductsRowAllLocalesValue])
-	if err != nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "UnifiedArticlesContentCardProductsAllLocalesValue", Reason: "invalid array", Err: err})
-	}
-	return data, nil
-}
-func (rows *UnifiedArticlesContentCardProductsAllLocalesValue) UnmarshalJSON(data []byte) error {
-	decoded, err := decodeBlockSlice(data, decodeBlockValue[UnifiedArticlesContentCardProductsRowAllLocalesValue])
-	if err != nil {
-		return newContractError(ContractError{Container: "UnifiedArticlesContentCardProductsAllLocalesValue", Reason: "invalid array", Err: err})
-	}
-	*rows = UnifiedArticlesContentCardProductsAllLocalesValue(decoded)
-	return nil
-}
-
-// Retain creates fresh key-only update pointers in the same order.
-// It copies no authored fields. Edit the pointers, append new input pointers,
-// or explicitly remove/reorder rows. Save with a revision check.
-// Nil lists, empty keys and duplicate keys fail without returning a partial list.
-// An explicitly empty list produces an empty update list.
-func (rows UnifiedArticlesContentCardProductsAllLocalesValue) Retain() (UnifiedArticlesContentCardProductsUpdate, error) {
-	if rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentCardProductsAllLocalesValue", Reason: "cannot retain an absent or null array"})
-	}
-	retained := make(UnifiedArticlesContentCardProductsUpdate, len(rows))
-	seen := make(map[string]bool, len(rows))
-	for index, row := range rows {
-		if strings.TrimSpace(row.Key) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentCardProductsAllLocalesValue", Path: "_key", Reason: "retained array row requires a nonempty identity"}, index)
-		}
-		if seen[row.Key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "UnifiedArticlesContentCardProductsAllLocalesValue", Path: "_key", Reason: "duplicate retained array identity"}, index)
-		}
-		seen[row.Key] = true
-		retained[index] = &UnifiedArticlesContentCardProductsRowUpdate{Key: row.Key}
+		retained[index] = &UnifiedCardProductsRowUpdate{Key: row.Key}
 	}
 	return retained, nil
 }

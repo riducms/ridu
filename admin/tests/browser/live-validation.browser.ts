@@ -10,7 +10,8 @@ import { RiduError } from "@riducms/sdk";
 import { FormController } from "@admin/core/forms/form-controller.svelte";
 import { FieldEditorBinding } from "@admin/core/forms/field-editor-binding";
 import { indexFieldValues } from "@admin/core/forms/form-issue-correlation";
-import { draftFixture, title, tree } from "./draft-fixture";
+import { bindBlockField, blockDefinition } from "../block-manifest";
+import { card, draftFixture, title, tree } from "./draft-fixture";
 import { createEmbeddedSchemaDraft } from "@admin/core/forms/embedded-schema-draft.svelte";
 import { createAdminI18n } from "@riducms/translations";
 
@@ -260,25 +261,15 @@ for (const kind of ["array", "blocks"] as const)
 			type: kind,
 			liveValidation: true,
 			nested: { fields: [sku, links] },
-			...(kind === "blocks"
-				? {
-						blocks: {
-							types: [
-								{
-									slug: "card",
-									labels: { singular: "Card", plural: "Cards" },
-									fields: [sku, links],
-								},
-								{
-									slug: "note",
-									labels: { singular: "Note", plural: "Notes" },
-									fields: [sku, links],
-								},
-							],
-						},
-					}
-				: {}),
+			...(kind === "blocks" ? { blocks: { blockReferences: ["card", "note"] } } : {}),
 		};
+		bindBlockField(
+			[
+				blockDefinition("card", [sku, links], { singular: "Card", plural: "Cards" }),
+				blockDefinition("note", [sku, links], { singular: "Note", plural: "Notes" }),
+			],
+			field
+		);
 		const first = {
 			_key: "A",
 			...(kind === "blocks" ? { blockType: "card" } : {}),
@@ -368,7 +359,15 @@ it("generic embedded forms send declared scopes, rebase issues and cancel/reopen
 			{
 				path: "title",
 				status: "checked",
-				issues: [{ path: "title", target: '["title"]', code: "title", message: "Embedded issue" }],
+				issues: [
+					{
+						path: "title",
+						// Targets name fields by their placement's stable ID.
+						target: '["pages-body-widgets-widget-card-title"]',
+						code: "title",
+						message: "Embedded issue",
+					},
+				],
 			},
 		],
 	});
@@ -420,22 +419,22 @@ it("nested detached forms propagate root edits and use a declared selector chain
 		...title,
 		id: "nested",
 		name: "nested",
-		path: "body.nested",
+		path: "nested",
 		type: "plugin",
 		category: "plugin",
 		required: false,
-		plugin: {
-			key: "outline",
-			config: {},
-			embeddedTrees: [tree([{ ...title, liveValidation: true }])],
-		},
+		plugin: { key: "outline", config: {}, embeddedTrees: [tree("note")] },
 	};
-	const fixture = draftFixture([title, nested], {
-		title: "Outer",
-		nested: {
-			outline: [{ kind: "widget", content: { schema: "card", uid: "inner", title: "Inner" } }],
+	const fixture = draftFixture(
+		[title, nested],
+		{
+			title: "Outer",
+			nested: {
+				outline: [{ kind: "widget", content: { schema: "note", uid: "inner", title: "Inner" } }],
+			},
 		},
-	});
+		[card([{ ...title, liveValidation: true }], "note")]
+	);
 	const requests: {
 		input: LiveValidationRequest;
 		signal: AbortSignal;
@@ -462,7 +461,7 @@ it("nested detached forms propagate root edits and use a declared selector chain
 		{ field: "nested", identity: "inner" },
 	]);
 	expect(requests[0]!.input.embedded?.[1]?.data).toEqual({
-		schema: "card",
+		schema: "note",
 		uid: "inner",
 		title: "Bad",
 	});
@@ -475,7 +474,14 @@ it("nested detached forms propagate root edits and use a declared selector chain
 			{
 				path: "title",
 				status: "checked",
-				issues: [{ path: "title", target: '["title"]', code: "title", message: "Nested feedback" }],
+				issues: [
+					{
+						path: "title",
+						target: '["pages-body-widgets-widget-card-nested-widgets-widget-note-title"]',
+						code: "title",
+						message: "Nested feedback",
+					},
+				],
 			},
 		],
 	});
@@ -534,14 +540,12 @@ for (const transition of [
 			type: "blocks",
 			category: "nested",
 			liveValidation: false,
-			blocks: {
-				types: ["card", "note"].map((slug) => ({
-					slug,
-					labels: { singular: slug, plural: slug },
-					fields: [sku],
-				})),
-			},
+			blocks: { blockReferences: ["card", "note"] },
 		};
+		bindBlockField(
+			["card", "note"].map((slug) => blockDefinition(slug, [sku])),
+			field
+		);
 		const row = { _key: "A", blockType: "card", sku: "bad" };
 		const { form, requests } = setup([field], { content: [row] });
 		form.set("content.0.sku", "invalid");
@@ -673,15 +677,15 @@ it("marks advisory validation as draft-mode for draft-capable editing", async ()
 });
 
 it("skips an unavailable embedded structure without rejecting an unowned promise", () => {
-	const plugin: SchemaField = {
+	const plugin = bindBlockField([card([title])], {
 		...sku,
 		id: "body",
 		name: "body",
 		path: "body",
 		type: "plugin",
 		category: "plugin",
-		plugin: { key: "outline", config: {}, embeddedTrees: [tree([title])] },
-	};
+		plugin: { key: "outline", config: {}, embeddedTrees: [tree()] },
+	});
 	const { form, requests } = setup([sku, plugin], { sku: "A-1", body: { outline: "malformed" } });
 	form.set("sku", "bad");
 	form.liveValidation.flush("sku");
@@ -726,14 +730,9 @@ for (const kind of ["array", "blocks"] as const)
 			liveValidation: false,
 			...(kind === "array"
 				? { nested: { fields: [json] } }
-				: {
-						blocks: {
-							types: [
-								{ slug: "card", labels: { singular: "Card", plural: "Cards" }, fields: [json] },
-							],
-						},
-					}),
+				: { blocks: { blockReferences: ["card"] } }),
 		};
+		bindBlockField([blockDefinition("card", [json], { singular: "Card", plural: "Cards" })], rows);
 		const values = ["A", "B"].map((_key) => ({
 			_key,
 			...(kind === "blocks" ? { blockType: "card" } : {}),
@@ -799,14 +798,12 @@ it("unfinished input leases are removed with their row and do not attach to a re
 		type: "blocks",
 		category: "nested",
 		liveValidation: false,
-		blocks: {
-			types: ["card", "note"].map((slug) => ({
-				slug,
-				labels: { singular: slug, plural: slug },
-				fields: [json],
-			})),
-		},
+		blocks: { blockReferences: ["card", "note"] },
 	};
+	bindBlockField(
+		["card", "note"].map((slug) => blockDefinition(slug, [json])),
+		rows
+	);
 	const row = { _key: "A", blockType: "card", details: {} };
 	const { form, requests } = setup([sku, rows], { sku: "A-1", rows: [row] });
 	form.set("sku", "bad");

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -51,7 +52,7 @@ func TestProjectionReusesUnaffectedBranchesAndPreservesLocaleSemantics(t *testin
 	if !reflect.DeepEqual(document.Values["group"], canonical) || !reflect.DeepEqual(document.LocalizationSources, map[string]schema.LocaleCode{"stale": "de"}) || !reflect.DeepEqual(document.Values["unknown"], store.String("root")) {
 		t.Fatal("projection mutated its input snapshot")
 	}
-	_, visible, changed := projectValueAt(plain, rows, selection, "plain", map[string]schema.LocaleCode{})
+	_, visible, changed := projectValueAt(plain, rows, selection, "plain", &localeSources{})
 	if !visible || changed {
 		t.Fatal("ordinary branch unnecessarily transformed")
 	}
@@ -154,7 +155,7 @@ func TestSparseNoOpMergeKeepsOpaqueAndEmbeddedPathsConservative(t *testing.T) {
 		{"group without schema", schema.Field{Type: schema.FieldTypeGroup}, store.Object(store.Values{})},
 		{"list", schema.Field{Type: schema.FieldTypeArray}, store.List()},
 		{"populated document", schema.Field{}, store.Populated(store.Document{})},
-		{"embedded envelope", immutableEmbeddedField(false), store.Object(store.Values{"outline": store.List(store.String("invalid node"))})},
+		{"embedded envelope", immutableEmbeddedField(t, false), store.Object(store.Values{"outline": store.List(store.String("invalid node"))})},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if same, _ := unchangedValuePatch(test.field, test.value, test.value); same {
@@ -220,12 +221,12 @@ func TestStorageProjectionKeepsFilteringAndAllLocaleValidation(t *testing.T) {
 		t.Fatal("selected-locale wrapping lost explicit null or unknown nested value")
 	}
 	all := Selection{All: true, Configured: []schema.LocaleCode{"en"}}
-	_, changed, err := storageValue(field, selected["rows"], all)
+	_, changed, err := storageValue(field, selected["rows"], all, field.Name)
 	if err != nil || changed {
 		t.Fatalf("valid all-locales branch changed=%v error=%v", changed, err)
 	}
 	bad := store.List(store.Object(store.Values{"title": store.Object(store.Values{"de": store.String("unknown")})}))
-	if _, _, err := storageValue(field, bad, all); err == nil {
+	if _, _, err := storageValue(field, bad, all, field.Name); err == nil {
 		t.Fatal("all-locales validation skipped unknown locale")
 	}
 	original, _ := input["rows"].ListItem(0)
@@ -234,8 +235,10 @@ func TestStorageProjectionKeepsFilteringAndAllLocaleValidation(t *testing.T) {
 	}
 }
 
-func immutableEmbeddedField(localized bool) schema.Field {
-	return schema.Field{Name: "body", Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "cards", Root: []string{"outline"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", Types: []schema.BlockType{{Slug: "card", Fields: []schema.Field{{Name: "title", Localized: localized}}}}}}}}}}
+func immutableEmbeddedField(t testing.TB, localized bool) schema.Field {
+	card := schema.BlockType{Slug: "card", TypeName: "Card", Fields: []schema.Field{{Name: "title", Localized: localized}}}
+	body := schema.Field{Name: "body", Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "cards", Root: []string{"outline"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", BlockReferences: []string{"card"}}}}}}}
+	return schematest.Bind(t, "pages", []schema.BlockType{card}, body)[0]
 }
 
 func immutableEmbeddedNode(key string, values store.Values) store.Value {
@@ -245,12 +248,12 @@ func immutableEmbeddedNode(key string, values store.Values) store.Value {
 }
 
 func TestLocalizationStillAdmitsUnlocalizedEmbeddedBranches(t *testing.T) {
-	field := immutableEmbeddedField(false)
+	field := immutableEmbeddedField(t, false)
 	bad := store.Object(store.Values{"outline": store.List(store.String("invalid node"))})
-	if _, _, err := storageValue(field, bad, Selection{Locale: "en"}); err == nil {
+	if _, _, err := storageValue(field, bad, Selection{Locale: "en"}, field.Name); err == nil {
 		t.Fatal("unlocalized embedded branch escaped write validation")
 	}
-	if _, visible, _ := projectValueAt(field, bad, Selection{Locale: "en"}, "body", map[string]schema.LocaleCode{}); visible {
+	if _, visible, _ := projectValueAt(field, bad, Selection{Locale: "en"}, "body", &localeSources{}); visible {
 		t.Fatal("invalid embedded branch escaped projection validation")
 	}
 	issues := CopyLocaleIssues([]schema.Field{field}, store.Values{"body": bad})
@@ -258,7 +261,7 @@ func TestLocalizationStillAdmitsUnlocalizedEmbeddedBranches(t *testing.T) {
 		t.Fatalf("embedded issues = %#v", issues)
 	}
 	valid := store.Object(store.Values{"outline": store.List(immutableEmbeddedNode("one", store.Values{"title": store.String("shared")}))})
-	if _, changed, err := storageValue(field, valid, Selection{Locale: "en"}); err != nil || changed {
+	if _, changed, err := storageValue(field, valid, Selection{Locale: "en"}, field.Name); err != nil || changed {
 		t.Fatalf("valid unlocalized embedded branch changed=%v error=%v", changed, err)
 	}
 }
@@ -294,7 +297,7 @@ func TestStorageMergeCompletesOnlyOmittedMembersByStableIdentity(t *testing.T) {
 		t.Fatal("complete patch rebuilt despite requiring no omitted members")
 	}
 
-	embeddedField := immutableEmbeddedField(true)
+	embeddedField := immutableEmbeddedField(t, true)
 	before := store.Object(store.Values{"outline": store.List(
 		immutableEmbeddedNode("one", store.Values{"title": store.Object(store.Values{"en": store.String("one"), "fr": store.String("un")}), "summary": store.String("keep one")}),
 		immutableEmbeddedNode("two", store.Values{"title": store.Object(store.Values{"en": store.String("two")}), "summary": store.String("keep two")}),

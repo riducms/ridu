@@ -1,6 +1,7 @@
 import { documentLabel } from "@admin/features/documents/document-title";
 import { untrack } from "svelte";
 import { RiduError } from "@riducms/sdk";
+import { blockFieldCapabilities } from "@riducms/protocol";
 import type {
 	AccessCapabilitiesEnvelope,
 	AdminCollectionListDataV1,
@@ -207,7 +208,9 @@ export class CollectionListController {
 	canReadField = (path: string, id?: string) => {
 		const access = id === undefined ? this.#collectionAccess : this.#documentAccess[id];
 		if (access?.operations.read !== true) return false;
-		return access.fields[path]?.read !== false;
+		const field =
+			access.fields[path] ?? blockFieldCapabilities(access, this.#collection?.fields ?? [], path);
+		return field?.read !== false;
 	};
 
 	get error() {

@@ -29,11 +29,7 @@ func TestPostgresDevelopmentFieldClearPreservesReplacementRequiredness(t *testin
 				return manifest
 			}
 			before, after := resolve(field.Text("body").Required()), resolve(field.Number("body").Required(required))
-			plan, err := backend.Plan(ctx, before)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := backend.ApplyPlan(ctx, plan); err != nil {
+			if err := backend.SyncDevelopmentSchema(ctx, before); err != nil {
 				t.Fatal(err)
 			}
 			collection := before.Snapshot().Collections[0]
@@ -54,7 +50,9 @@ func TestPostgresDevelopmentFieldClearPreservesReplacementRequiredness(t *testin
 				t.Fatal(err)
 			}
 			reports, err := backend.ReviewDevelopmentFieldKinds(ctx, before, after)
-			if err != nil || reports[0].Documents != 1 || reports[0].Snapshots != 2 {
+			// The working and live rows are one logical document; the version
+			// is the only retained snapshot.
+			if err != nil || reports[0].Documents != 1 || reports[0].Snapshots != 1 {
 				t.Fatalf("stored recovery counts: %#v, %v", reports, err)
 			}
 			err = backend.ClearDevelopmentFieldKinds(ctx, before, after, reports)
@@ -69,8 +67,8 @@ func TestPostgresDevelopmentFieldClearPreservesReplacementRequiredness(t *testin
 			if required {
 				readManifest = before
 			}
-			if plan, err := backend.Plan(ctx, readManifest); err != nil || len(plan) != 0 {
-				t.Fatalf("clear changed the wrong physical schema: %#v, %v", plan, err)
+			if err := backend.VerifySchema(ctx, readManifest); err != nil {
+				t.Fatalf("clear changed the wrong physical schema: %v", err)
 			}
 			read, err := backend.BeginSnapshot(ctx)
 			if err != nil {

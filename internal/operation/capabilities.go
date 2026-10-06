@@ -50,9 +50,19 @@ type FieldCapabilities struct {
 	Update bool
 }
 
+// AccessCapabilities is the evaluated access of an actor and optional
+// document or input snapshot.
 type AccessCapabilities struct {
 	Operations OperationCapabilities
-	Fields     map[string]FieldCapabilities
+	// Fields holds field capabilities by runtime path for each located value,
+	// and by canonical path for each resource field and each block placement
+	// with located values.
+	Fields map[string]FieldCapabilities
+	// BlockFields holds, by block slug and definition-relative path, the
+	// capabilities of a block definition's field at a placement without
+	// located values, such as a row the client has yet to add. It is
+	// evaluated once per definition field rather than once per placement.
+	BlockFields map[string]map[string]FieldCapabilities
 }
 
 // Capabilities evaluates access without running validation, hooks, mutations,
@@ -101,7 +111,7 @@ func (engine *Engine) Capabilities(ctx context.Context, request CapabilitiesRequ
 		operationContext.Operation = operation.Read
 		readDecision, accessError := authorize(collection, operationContext)
 		if accessError != nil {
-			return AccessCapabilities{}, capabilityAccessError("read access rule failed", accessError)
+			return AccessCapabilities{}, accessRuleError("read access rule failed", accessError)
 		}
 		if readDecision.Kind == Deny {
 		} else {
@@ -160,7 +170,7 @@ func (engine *Engine) PublicationTarget(ctx context.Context, request Capabilitie
 	}
 	decision, accessError := authorize(collection, operationContext)
 	if accessError != nil {
-		return store.Document{}, capabilityAccessError("publication access rule failed", accessError)
+		return store.Document{}, accessRuleError("publication access rule failed", accessError)
 	}
 	if decision.Kind == Deny {
 		return store.Document{}, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
@@ -229,7 +239,7 @@ func (engine *Engine) MutatePublicationTarget(ctx context.Context, request Capab
 	}
 	decision, accessError := authorize(collection, operationContext)
 	if accessError != nil {
-		return capabilityAccessError("publication access rule failed", accessError)
+		return accessRuleError("publication access rule failed", accessError)
 	}
 	if decision.Kind == Deny {
 		return &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
@@ -248,6 +258,8 @@ func (engine *Engine) MutatePublicationTarget(ctx context.Context, request Capab
 	if mutationError := mutation(transactionContext, state.transaction, collection.Schema, document); mutationError != nil {
 		return translateStoreError(mutationError)
 	}
+	// The callback holds the raw transaction, so treat the target as written.
+	state.writes.record(store.DocumentReference{CollectionID: collection.Schema.ID, DocumentID: document.ID})
 	if !ownsTransaction {
 		return nil
 	}
@@ -265,11 +277,12 @@ func (engine *Engine) capabilitiesInTransaction(transaction store.Transaction, c
 	if operationContext.ID != "" && document == nil && !collection.Schema.Capabilities.Global && !hasDocumentCapability(operations) {
 		return AccessCapabilities{}, &Error{Code: "not_found", Status: 404, Message: "document was not found"}
 	}
-	fields, err := fieldCapabilities(collection, operationContext, document, operations)
+	capabilities, err := fieldCapabilities(collection, operationContext, document, operations)
 	if err != nil {
 		return AccessCapabilities{}, err
 	}
-	return AccessCapabilities{Operations: operations, Fields: fields}, nil
+	capabilities.Operations = operations
+	return capabilities, nil
 }
 
 func (engine *Engine) collectionPageAccess(transaction store.Transaction, collection Collection, base Context, page store.Page, readDecision Decision, deletion store.DeletionMode, trashOnly, publishedOnly bool, selection localization.Selection) (*CollectionPageAccess, error) {
@@ -311,7 +324,7 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 		operationContext.Original = cloneDocumentPointer(document)
 		decision, err := authorize(collection, operationContext)
 		if err != nil {
-			return false, capabilityAccessError("access rule failed", err)
+			return false, accessRuleError("access rule failed", err)
 		}
 		if decision.Kind == Deny || (kind == operation.Create || kind == operation.Admin) && decision.Kind == Where {
 			return false, nil
@@ -474,8 +487,15 @@ func hasDocumentCapability(operations OperationCapabilities) bool {
 		operations.Publish || operations.Unpublish || operations.RestoreDeleted || operations.DeletePermanent || operations.Unlock
 }
 
-func fieldCapabilities(collection Collection, base Context, document *store.Document, operations OperationCapabilities) (map[string]FieldCapabilities, error) {
-	result := make(map[string]FieldCapabilities, len(collection.Bindings))
+// fieldCapabilities evaluates the field access rules of every ruled binding at
+// each of its locations. A resource's own field also has an entry at its
+// canonical path: the conjunction of its locations, or a schema-level
+// fallback without any. A block definition's field has a conjunction entry at
+// each placement with locations and one fallback for every other placement,
+// in BlockFields, so the result follows the document and the definitions
+// rather than every placement of the schema.
+func fieldCapabilities(collection Collection, base Context, document *store.Document, operations OperationCapabilities) (AccessCapabilities, error) {
+	result := AccessCapabilities{Fields: make(map[string]FieldCapabilities, len(collection.Bindings))}
 	data := store.CloneValues(base.Data)
 	if len(data) == 0 && document != nil {
 		data = store.CloneValues(document.Values)
@@ -486,43 +506,87 @@ func fieldCapabilities(collection Collection, base Context, document *store.Docu
 	bound := base
 	bound.Data, bound.Document = data, nil
 	bound.Original = document
-	for _, binding := range collection.Bindings {
+	dataRoot := lazyObject{values: data}
+	var documentRoot lazyObject
+	if document != nil {
+		documentRoot.values = document.Values
+	}
+	views := callbackViews{}
+	paths := collection.runtimePlan().bindingPaths
+	ruled := func(index int) bool {
+		rules := collection.Bindings[index].Access
+		return rules.Read != nil || rules.Create != nil || rules.Update != nil
+	}
+	// One walk of each snapshot finds every ruled binding's locations.
+	dataLocations := lazyBindingLocations{collection: collection, root: &dataRoot, allLocales: base.AllLocales, includeMissing: true, want: ruled}
+	documentLocations := lazyBindingLocations{collection: collection, root: &documentRoot, allLocales: base.AllLocales, includeMissing: true, want: ruled}
+	// fallback evaluates a binding's rules without a concrete row or object
+	// occurrence. Existing admin capability contracts still need it. Do not
+	// fabricate a repeated identity or borrow root values as siblings.
+	fallback := func(index int, path string) (FieldCapabilities, error) {
+		binding := collection.Bindings[index]
+		ctx := bound
+		ctx.bound = boundField{field: &collection.Bindings[index].Field}
+		ctx.RuntimePath, ctx.SchemaOccurrenceID = path, binding.ID
+		ctx.Siblings, ctx.Prior = store.Value{}, store.Value{}
+		return evaluateBoundFieldCapabilities(binding.Access, ctx, operations)
+	}
+	for index, binding := range collection.Bindings {
 		rules := binding.Access
-		if rules.Read == nil && rules.Create == nil && rules.Update == nil {
+		if !ruled(index) {
 			continue
 		}
-		path := binding.Field.Path.String()
-		locations := fieldLocationsAtPath(collection.Schema.Fields, data, path, base.AllLocales, true)
+		locations := dataLocations.get(index)
 		previous := map[string]fieldLocation{}
 		if document != nil {
-			previous = indexFieldLocations(fieldLocationsAtPath(collection.Schema.Fields, document.Values, path, base.AllLocales, true))
+			previous = indexFieldLocations(documentLocations.get(index))
 		}
-		canonical := FieldCapabilities{Read: true, Create: true, Update: true}
-		if len(locations) == 0 {
-			// There is no concrete row/object occurrence yet. Existing admin
-			// capability contracts still need a schema-level fallback. Do not
-			// fabricate a repeated identity or borrow root values as siblings.
-			fallback := bound
-			fallback.FieldPath, fallback.RuntimePath = path, path
-			fallback.SiblingData, fallback.OriginalSiblingData = nil, nil
-			var err error
-			canonical, err = evaluateBoundFieldCapabilities(rules, fallback, operations)
-			if err != nil {
-				return nil, err
-			}
-		}
+		// placements holds the conjunction of each placement's locations.
+		placements := map[string]FieldCapabilities{}
 		for _, location := range locations {
-			ctx := scopedBindingContext(bound, binding, location, previous)
+			views.root = dataRoot.value()
+			ctx := scopedBindingContext(bound, binding, location, previous, &views)
 			capability, err := evaluateBoundFieldCapabilities(rules, ctx, operations)
 			if err != nil {
-				return nil, err
+				return AccessCapabilities{}, err
 			}
-			result[location.runtimePath] = capability
+			result.Fields[location.runtimePath] = capability
+			placement := location.canonical()
+			canonical, seen := placements[placement]
+			if !seen {
+				canonical = FieldCapabilities{Read: true, Create: true, Update: true}
+			}
 			canonical.Read = canonical.Read && capability.Read
 			canonical.Create = canonical.Create && capability.Create
 			canonical.Update = canonical.Update && capability.Update
+			placements[placement] = canonical
 		}
-		result[path] = canonical
+		for path, canonical := range placements {
+			result.Fields[path] = canonical
+		}
+		if binding.Block == "" {
+			path := paths[index]
+			if _, located := placements[path]; !located {
+				canonical, err := fallback(index, path)
+				if err != nil {
+					return AccessCapabilities{}, err
+				}
+				result.Fields[path] = canonical
+			}
+			continue
+		}
+		// One fallback serves every placement of the definition's field.
+		canonical, err := fallback(index, binding.Field.Path.String())
+		if err != nil {
+			return AccessCapabilities{}, err
+		}
+		if result.BlockFields == nil {
+			result.BlockFields = map[string]map[string]FieldCapabilities{}
+		}
+		if result.BlockFields[binding.Block] == nil {
+			result.BlockFields[binding.Block] = map[string]FieldCapabilities{}
+		}
+		result.BlockFields[binding.Block][binding.Field.Path.String()] = canonical
 	}
 	return result, nil
 }
@@ -535,7 +599,7 @@ func evaluateBoundFieldCapabilities(rules FieldRules, ctx Context, operations Op
 		ctx.Operation = kind
 		allowed, err := rule(ctx)
 		if err != nil {
-			return false, capabilityAccessError("field access rule failed", err)
+			return false, accessRuleError("field access rule failed", err)
 		}
 		return allowed, nil
 	}
@@ -552,8 +616,4 @@ func evaluateBoundFieldCapabilities(rules FieldRules, ctx Context, operations Op
 		return FieldCapabilities{}, err
 	}
 	return FieldCapabilities{Read: read, Create: create, Update: update}, nil
-}
-
-func capabilityAccessError(message string, cause error) error {
-	return &Error{Code: "access_failed", Status: 500, Message: message, Cause: cause}
 }

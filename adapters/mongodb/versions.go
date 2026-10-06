@@ -38,7 +38,7 @@ func (transaction *documentTransaction) SaveVersion(ctx context.Context, collect
 		return store.Version{}, err
 	}
 	defer leave()
-	if err := validateCollectionEnvelope(collection); err != nil {
+	if err := transaction.store.validateCollectionEnvelope(collection); err != nil {
 		return store.Version{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexes(collection); err != nil {
@@ -59,7 +59,7 @@ func (transaction *documentTransaction) SaveVersion(ctx context.Context, collect
 	if err := validateMongoVersionMetadata(collection, document.Status, document.Revision); err != nil {
 		return store.Version{}, err
 	}
-	if err := validateCompleteValues(collection, document.Values); err != nil {
+	if err := validateStoredValues(collection, document.Values); err != nil {
 		return store.Version{}, err
 	}
 	snapshot, err := encodeDocument(document)
@@ -69,6 +69,18 @@ func (transaction *documentTransaction) SaveVersion(ctx context.Context, collect
 	createdAt, err := encodeTime(transaction.store.now().UTC())
 	if err != nil {
 		return store.Version{}, fmt.Errorf("encode MongoDB version timestamp: %w", err)
+	}
+	if document.Revision == 1 {
+		// Revision 1 starts a document's history: any later revision belongs
+		// to an earlier document with the same ID, which would otherwise be
+		// inherited or outrank this document's own versions when pruning.
+		// Revision 1 itself is replaced below, keeping a re-save's createdAt.
+		if _, err := transaction.versionCollection(collection).DeleteMany(sessionContext, bson.D{
+			{Key: mongoVersionOwnerPath, Value: document.ID},
+			{Key: mongoVersionRevisionPath, Value: bson.D{{Key: "$gt", Value: int64(1)}}},
+		}); err != nil {
+			return store.Version{}, translateMongoError(ctx, err)
+		}
 	}
 	id := versionID(document.ID, document.Revision)
 	filter := bson.D{
@@ -111,10 +123,10 @@ func (transaction *documentTransaction) SaveVersion(ctx context.Context, collect
 
 func (transaction *documentTransaction) pruneVersions(ctx, sessionContext context.Context, collection schema.Collection, documentID string, maximum int) error {
 	filter := bson.D{{Key: mongoVersionOwnerPath, Value: documentID}}
-	findOptions := options.Find().
-		SetSort(bson.D{{Key: mongoVersionRevisionPath, Value: -1}}).
-		SetLimit(int64(maximum + 1))
-	cursor, err := transaction.versionCollection(collection).Find(sessionContext, filter, findOptions)
+	cursor, err := mongoFind(sessionContext, transaction.versionCollection(collection), filter, mongoFindCommand{
+		sort:  bson.D{{Key: mongoVersionRevisionPath, Value: -1}},
+		limit: int64(maximum + 1),
+	})
 	if err != nil {
 		return translateMongoError(ctx, err)
 	}
@@ -157,7 +169,7 @@ func (transaction *documentTransaction) ListVersions(ctx context.Context, reques
 		return nil, err
 	}
 	defer leave()
-	if err := validateVersionRequest(request); err != nil {
+	if err := transaction.store.validateVersionRequest(request); err != nil {
 		return nil, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -170,11 +182,9 @@ func (transaction *documentTransaction) ListVersions(ctx context.Context, reques
 	if err != nil {
 		return nil, err
 	}
-	cursor, err := transaction.versionCollection(request.Collection).Find(
-		sessionContext,
-		predicate,
-		options.Find().SetSort(bson.D{{Key: mongoVersionRevisionPath, Value: -1}}),
-	)
+	cursor, err := mongoFind(sessionContext, transaction.versionCollection(request.Collection), predicate, mongoFindCommand{
+		sort: bson.D{{Key: mongoVersionRevisionPath, Value: -1}},
+	})
 	if err != nil {
 		return nil, translateMongoError(ctx, err)
 	}
@@ -202,7 +212,7 @@ func (transaction *documentTransaction) CountVersions(ctx context.Context, reque
 		return 0, err
 	}
 	defer leave()
-	if err := validateVersionRequest(request); err != nil {
+	if err := transaction.store.validateVersionRequest(request); err != nil {
 		return 0, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -247,8 +257,8 @@ func mongoVersionPredicate(request store.VersionRequest) (bson.D, error) {
 	return mongoAnd(predicates), nil
 }
 
-func validateVersionRequest(request store.VersionRequest) error {
-	if err := validateCollectionEnvelope(request.Collection); err != nil {
+func (backend *Store) validateVersionRequest(request store.VersionRequest) error {
+	if err := backend.validateCollectionEnvelope(request.Collection); err != nil {
 		return err
 	}
 	if request.Collection.Versions == nil {
@@ -268,7 +278,7 @@ func (transaction *documentTransaction) FindVersion(ctx context.Context, collect
 		return store.Version{}, err
 	}
 	defer leave()
-	if err := validateCollectionEnvelope(collection); err != nil {
+	if err := transaction.store.validateCollectionEnvelope(collection); err != nil {
 		return store.Version{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexes(collection); err != nil {
@@ -361,7 +371,7 @@ func decodeMongoVersionForLocales(raw bson.Raw, collection schema.Collection, lo
 	if len(locales) == 0 {
 		return version, nil
 	}
-	if err := validateCompleteValuesForLocales(collection, version.Snapshot.Values, locales); err != nil {
+	if err := validateStoredValuesForLocales(collection, version.Snapshot.Values, locales); err != nil {
 		return store.Version{}, fmt.Errorf("stored MongoDB version snapshot does not match configured locales for collection %q: %w", collection.ID, err)
 	}
 	return version, nil

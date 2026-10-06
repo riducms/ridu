@@ -38,8 +38,9 @@ func TestNamedBlocksExternalTypeScriptConsumer(t *testing.T) {
 	if strings.Count(string(generated), "export type Hero =") != 1 {
 		t.Fatal("reusable definition emitted more than once")
 	}
-	if !strings.Contains(string(generated), "export type HeroChildrenNote =") {
-		t.Fatal("nested unnamed variant lacks canonical parent-derived name")
+	// An inline block without a TypeName is named after its slug wherever it is declared.
+	if strings.Count(string(generated), "export type Note =") != 1 || strings.Contains(string(generated), "HeroChildrenNote") {
+		t.Fatal("nested unnamed variant lacks its slug-derived definition name")
 	}
 	root := moduleRoot(t)
 	if _, err := os.Stat(filepath.Join(root, "node_modules", "typescript", "bin", "tsc")); err != nil {
@@ -55,7 +56,7 @@ func TestNamedBlocksExternalTypeScriptConsumer(t *testing.T) {
 	defer os.RemoveAll(dir)
 	files := map[string][]byte{"generated.ts": generated, "tsconfig.json": []byte(`{"extends":"../../tsconfig.base.json","include":["*.ts"]}`), "consumer.ts": []byte(`
 import { createClient } from "./generated";
-import type { Hero, HeroInput, HeroUpdate, HeroAllLocales, PagesLayout, PagesLayoutInput, PagesLayoutUpdate, PagesAllLocales, CTA } from "./generated";
+import type { Hero, HeroInput, HeroUpdate, HeroAllLocales, PagesLayout, PagesLayoutInput, PagesLayoutUpdate, PagesAllLocales, PagesPopulate, PagesValidationPath, PagesWhere, CTA } from "./generated";
 const input: HeroInput = { blockType: "hero", heading: "Hello", settings: { wide: true }, author: "author-id", image: "asset-id", links: [{label:"Home"}], children: [{blockType:"note",body:"Nested"}] };
 const rows: PagesLayoutInput = [input, {blockType:"cta",url:"/start"}];
 const patch: HeroUpdate = {blockType:"hero",_key:"stable",subtitle:"Edited",settings:{},links:[{_key:"existing-link"}],children:[{blockType:"note",_key:"existing-note"}]};
@@ -88,11 +89,24 @@ const populatedInput: HeroInput = {...input,author:populated.author};
 const singleInAll: HeroAllLocales = {blockType:"hero",_key:"stable",heading:"Hello"};
 // @ts-expect-error a localized container already owns descendant locale values
 const doubleLocale: PagesAllLocales = {id:"page",createdAt:"now",updatedAt:"now",translated:{en:[{blockType:"hero",_key:"stable",heading:{en:"Hello"}}]}};
+const nestedWhere: PagesWhere = {"layout.hero.children.note.body":{like:"Nested"},"layout.hero.settings.wide":{equals:true},"secondary.hero.author":{in:["author-id"]},"translated.hero.links.label":{exists:true},or:[{"layout.cta.url":{equals:"/start"}},{"layout.hero.children":{exists:false}}]};
+// @ts-expect-error nested block filters keep their field operators
+const wrongNested: PagesWhere = {"layout.hero.children.note.body":{equals:1}};
+// @ts-expect-error unknown nested block fields are not queryable
+const unknownNested: PagesWhere = {"layout.hero.children.note.missing":{exists:true}};
+// @ts-expect-error block filter paths name the block slug
+const slugless: PagesWhere = {"layout.heading":{exists:true}};
+const nestedPopulate: PagesPopulate = {"layout.hero.author":true,"translated.hero.image":{select:{id:true}}};
+// @ts-expect-error population paths name relationship fields
+const notRelationship: PagesPopulate = {"layout.hero.subtitle":true};
+const issuePaths: PagesValidationPath[] = ["layout.0.heading","layout.0.heading.fr","translated.0.heading","translated.en.0.heading","layout.1.children.2.body","layout.0.blockType","layout.0.url"];
+// @ts-expect-error a localized ancestor already selects the locale of its descendants
+const doubleLocalePath: PagesValidationPath = "translated.en.0.heading.fr";
 function render(blocks: PagesLayout): string { return blocks.map(block=> { switch(block.blockType) { case "hero": return block.heading ?? ""; case "cta": return block.url ?? ""; default: {const exhaustive:never=block;return exhaustive;} } }).join(""); }
 const client = createClient({baseURL:"http://localhost:3000"});
 void client.create("pages",{layout:rows});
 void client.update("pages","page-id",{layout:mixed});
-void render([redacted,populated]);void all;void localizedAncestor;
+void render([redacted,populated]);void all;void localizedAncestor;void nestedWhere;void nestedPopulate;void issuePaths;
 `)}
 	for name, data := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {

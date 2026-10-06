@@ -10,12 +10,22 @@ import (
 	"unicode"
 
 	"github.com/riducms/ridu/internal/blocktypes"
+	"github.com/riducms/ridu/internal/membership"
 	"github.com/riducms/ridu/schema"
 )
 
 type clientGenerator struct {
 	blocks          *blocktypes.Catalog
 	draftReadFields map[schema.StableID]bool
+	collectionNames map[schema.StableID]string
+	pluginTypes     map[string]schema.PluginFieldType
+}
+
+// resourcePaths holds one resource's dotted-path contracts.
+type resourcePaths struct {
+	where      pathDefinition
+	populate   pathDefinition
+	validation []string
 }
 
 // Client generates one application's exact document and SDK binding types.
@@ -30,10 +40,8 @@ func Client(manifest schema.Manifest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	generator := clientGenerator{blocks: catalog, draftReadFields: catalog.DraftReadFields(snapshot)}
 	collectionNames := make(map[schema.StableID]string, len(snapshot.Collections)+len(snapshot.Globals))
 	usedTypeNames := make(map[string]bool, len(snapshot.Collections)+len(snapshot.Globals))
-	pluginTypes := pluginFieldTypes(snapshot.Plugins)
 	for _, collection := range snapshot.Collections {
 		name := pascal(string(collection.ID))
 		collectionNames[collection.ID] = name
@@ -46,6 +54,27 @@ func Client(manifest schema.Manifest) ([]byte, error) {
 		}
 		collectionNames[global.ID] = name
 		usedTypeNames[name] = true
+	}
+	generator := &clientGenerator{blocks: catalog, draftReadFields: catalog.DraftReadFields(snapshot), collectionNames: collectionNames, pluginTypes: pluginFieldTypes(snapshot.Plugins)}
+
+	// Resolve every resource's path contracts first: they determine which block
+	// variant contracts are emitted ahead of the resources that refer to them.
+	contracts := newPathContracts(generator)
+	validation := newValidationPaths(contracts)
+	paths := make(map[schema.StableID]resourcePaths, len(snapshot.Collections)+len(snapshot.Globals))
+	prefixed := false
+	for index, resource := range append(append([]schema.Collection{}, snapshot.Collections...), snapshot.Globals...) {
+		fields := storedFields(resource.Fields)
+		resolved := resourcePaths{populate: contracts.populateDefinition(fields), validation: validation.terms(writableFields(resource.Fields), false)}
+		// Globals have no list operation and therefore no filter contract.
+		if index < len(snapshot.Collections) {
+			resolved.where = contracts.whereDefinition(fields)
+		}
+		prefixed = prefixed || len(resolved.where.placements) != 0 || len(resolved.populate.placements) != 0
+		paths[resource.ID] = resolved
+	}
+	if contracts.err != nil {
+		return nil, contracts.err
 	}
 
 	var output bytes.Buffer
@@ -87,22 +116,27 @@ func Client(manifest schema.Manifest) ([]byte, error) {
 	output.WriteString("export interface ScalarWhere<Value> {\n")
 	output.WriteString("\tequals?: Value;\n\tnotEquals?: Value;\n\tgreaterThan?: Value;\n\tgreaterThanEqual?: Value;\n\tlessThan?: Value;\n\tlessThanEqual?: Value;\n\tcontains?: Value extends string ? string : never;\n\tlike?: Value extends string ? string : never;\n\tin?: readonly Value[];\n\texists?: boolean;\n}\n\n")
 	output.WriteString("export type TimestampWhere = Omit<ScalarWhere<string>, \"contains\" | \"like\">;\n\n")
-	output.WriteString("export interface MultiSelectWhere<Value extends string> {\n")
-	output.WriteString("\tcontains?: Value;\n\texists?: boolean;\n}\n\n")
-	if primitiveListsPresent(snapshot) {
-		output.WriteString("export interface PrimitiveListWhere<Value extends string | number> {\n")
-		output.WriteString("\tin?: readonly Value[];\n\tequals?: null;\n\tnotEquals?: null;\n\texists?: boolean;\n}\n\n")
-	}
+	// The generated client must not contain the text "any", so this avoids "has-many".
+	output.WriteString("/** Item membership for lists, multi-selects, reference lists and polymorphic relationships; wrap `in` in `not` to exclude. */\n")
+	output.WriteString("export interface MembershipWhere<Value> {\n")
+	output.WriteString("\tin?: readonly Value[];\n\tequals?: null;\n\tnotEquals?: null;\n\texists?: boolean;\n}\n\n")
 	output.WriteString("export interface ExistsWhere {\n")
 	output.WriteString("\texists?: boolean;\n}\n\n")
-	generator.writeBlockTypes(&output, collectionNames, pluginTypes, snapshot.Application.Localization != nil)
+	if prefixed {
+		output.WriteString("/** Places a nested definition's relative dotted paths under the path prefix of one placement. */\n")
+		output.WriteString("export type RiduPrefixedPaths<Prefix extends string, Paths> = {\n")
+		output.WriteString("\t[Path in keyof Paths as `${Prefix}${Path & string}`]: Paths[Path];\n};\n\n")
+	}
+	generator.writeBlockTypes(&output, snapshot.Application.Localization != nil)
+	contracts.writeVariantContracts(&output)
+	validation.write(&output)
 	for _, collection := range snapshot.Collections {
 		name := collectionNames[collection.ID]
-		generator.writeDocumentTypes(&output, name, collection, collectionNames, pluginTypes, snapshot.Application.Localization != nil, snapshot.Application.AllowIDOnCreate)
+		generator.writeDocumentTypes(&output, name, collection, paths[collection.ID], snapshot.Application.Localization != nil, snapshot.Application.AllowIDOnCreate)
 	}
 	for _, global := range snapshot.Globals {
 		name := collectionNames[global.ID]
-		generator.writeDocumentTypes(&output, name, global, collectionNames, pluginTypes, snapshot.Application.Localization != nil, false)
+		generator.writeDocumentTypes(&output, name, global, paths[global.ID], snapshot.Application.Localization != nil, false)
 	}
 
 	output.WriteString("export interface RiduConfig {\n")
@@ -133,10 +167,6 @@ func Client(manifest schema.Manifest) ([]byte, error) {
 		fmt.Fprintf(&output, "\t\t\twhere: %sWhere;\n", name)
 		fmt.Fprintf(&output, "\t\t\tselect: %sSelect;\n", name)
 		fmt.Fprintf(&output, "\t\t\tpopulate: %sPopulate;\n", name)
-		fmt.Fprintf(&output, "\t\t\tpopulateOutput: %sPopulateOutput;\n", name)
-		if snapshot.Application.Localization != nil {
-			fmt.Fprintf(&output, "\t\t\tallPopulateOutput: %sAllLocalesPopulateOutput;\n", name)
-		}
 		fmt.Fprintf(&output, "\t\t\tvalidationPath: %sValidationPath;\n", name)
 		output.WriteString("\t\t};\n")
 	}
@@ -159,10 +189,6 @@ func Client(manifest schema.Manifest) ([]byte, error) {
 			}
 			fmt.Fprintf(&output, "\t\t\tselect: %sSelect;\n", name)
 			fmt.Fprintf(&output, "\t\t\tpopulate: %sPopulate;\n", name)
-			fmt.Fprintf(&output, "\t\t\tpopulateOutput: %sPopulateOutput;\n", name)
-			if snapshot.Application.Localization != nil {
-				fmt.Fprintf(&output, "\t\t\tallPopulateOutput: %sAllLocalesPopulateOutput;\n", name)
-			}
 			fmt.Fprintf(&output, "\t\t\tvalidationPath: %sValidationPath;\n", name)
 			output.WriteString("\t\t};\n")
 		}
@@ -205,7 +231,7 @@ func adminDataType(value schema.AdminDataType, input bool) string {
 	return result
 }
 
-func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name string, collection schema.Collection, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, localized, allowIDOnCreate bool) {
+func (generator *clientGenerator) writeDocumentTypes(output *bytes.Buffer, name string, collection schema.Collection, paths resourcePaths, localized, allowIDOnCreate bool) {
 	fields := storedFields(collection.Fields)
 	inputFields := writableFields(collection.Fields)
 	readFields := outputFields(collection.Fields)
@@ -229,7 +255,7 @@ func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name s
 		output.WriteString("\t_localization?: { sources: Partial<Record<string, Locale>> };\n")
 	}
 	for _, field := range readFields {
-		fmt.Fprintf(output, "\t%s?: %s;\n", property(field.Name), generator.outputType(field, collectionNames, pluginTypes, 1))
+		fmt.Fprintf(output, "\t%s?: %s;\n", property(field.Name), generator.outputType(field, 1))
 	}
 	output.WriteString("}\n\n")
 	if localized {
@@ -250,7 +276,7 @@ func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name s
 			output.WriteString("\t_revision: number;\n")
 		}
 		for _, field := range readFields {
-			fmt.Fprintf(output, "\t%s?: %s;\n", property(field.Name), generator.allOutputType(field, collectionNames, pluginTypes, 1))
+			fmt.Fprintf(output, "\t%s?: %s;\n", property(field.Name), generator.allOutputType(field, 1))
 		}
 		output.WriteString("}\n\n")
 	}
@@ -261,13 +287,13 @@ func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name s
 	}
 	for _, field := range inputFields {
 		optional := !typescriptInputRequired(field) || typescriptFieldHasDefault(field)
-		fmt.Fprintf(output, "\t%s%s: %s;\n", property(field.Name), optionalMark(optional), generator.inputType(field, collectionNames, pluginTypes, 1))
+		fmt.Fprintf(output, "\t%s%s: %s;\n", property(field.Name), optionalMark(optional), generator.inputType(field, 1))
 	}
 	output.WriteString("}\n\n")
 
 	fmt.Fprintf(output, "export interface %sUpdate {\n", name)
 	for _, field := range inputFields {
-		fmt.Fprintf(output, "\t%s?: %s;\n", property(field.Name), generator.updateType(field, collectionNames, pluginTypes, 1))
+		fmt.Fprintf(output, "\t%s?: %s;\n", property(field.Name), generator.updateType(field, 1))
 	}
 	output.WriteString("}\n\n")
 
@@ -283,29 +309,30 @@ func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name s
 			}
 			for _, field := range inputFields {
 				if collection.Auth != nil && field.Name == collection.Auth.IdentityField {
-					fmt.Fprintf(output, "\t%s%s: %s;\n", property(field.Name), optionalMark(mode == "draftUpdate"), generator.inputType(field, collectionNames, pluginTypes, 1))
+					fmt.Fprintf(output, "\t%s%s: %s;\n", property(field.Name), optionalMark(mode == "draftUpdate"), generator.inputType(field, 1))
 				} else {
-					fmt.Fprintf(output, "\t%s?: %s;\n", property(field.Name), generator.draftInputType(field, collectionNames, pluginTypes, 1, mode))
+					fmt.Fprintf(output, "\t%s?: %s;\n", property(field.Name), generator.draftInputType(field, 1, mode))
 				}
 			}
 			output.WriteString("}\n\n")
 		}
 	}
 
-	fmt.Fprintf(output, "export interface %sWhere {\n", name)
-	fmt.Fprintf(output, "\tand?: readonly %sWhere[];\n\tor?: readonly %sWhere[];\n\tnot?: %sWhere;\n", name, name, name)
-	output.WriteString("\tid?: ScalarWhere<ID>;\n\tcreatedAt?: TimestampWhere;\n\tupdatedAt?: TimestampWhere;\n")
-	if collection.Versions != nil {
-		statusType := strconv.Quote("published")
-		if collection.Versions.Drafts {
-			statusType = strconv.Quote("draft") + " | " + statusType
+	if !collection.Capabilities.Global {
+		// Nested block filters are inherited from each variant's relative contract.
+		members := []string{
+			"and?: readonly " + name + "Where[];", "or?: readonly " + name + "Where[];", "not?: " + name + "Where;",
+			"id?: ScalarWhere<ID>;", "createdAt?: TimestampWhere;", "updatedAt?: TimestampWhere;",
 		}
-		fmt.Fprintf(output, "\t_status?: ScalarWhere<%s>;\n", statusType)
+		if collection.Versions != nil {
+			statusType := strconv.Quote("published")
+			if collection.Versions.Drafts {
+				statusType = strconv.Quote("draft") + " | " + statusType
+			}
+			members = append(members, "_status?: ScalarWhere<"+statusType+">;")
+		}
+		writePathInterface(output, name+"Where", paths.where.placements, "Where", append(members, generator.whereMembers(paths.where)...))
 	}
-	for _, candidate := range whereFields(fields, "") {
-		fmt.Fprintf(output, "\t%s?: %s;\n", property(candidate.path), generator.whereType(candidate.field, collectionNames, pluginTypes, 1))
-	}
-	output.WriteString("}\n\n")
 
 	fmt.Fprintf(output, "export interface %sSelect {\n", name)
 	output.WriteString("\tid?: boolean;\n\tcreatedAt?: boolean;\n\tupdatedAt?: boolean;\n")
@@ -345,63 +372,41 @@ func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name s
 	}
 	output.WriteString("}\n\n")
 
-	populateFields := relationshipFields(fields)
-	if len(populateFields) == 0 {
+	// Population traversal uses canonical schema paths, including array and
+	// block containers, because runtime row indexes are not schema paths.
+	if len(paths.populate.entries) == 0 && len(paths.populate.placements) == 0 {
 		fmt.Fprintf(output, "export type %sPopulate = Record<string, never>;\n\n", name)
-		fmt.Fprintf(output, "export type %sPopulateOutput = Record<string, never>;\n\n", name)
-		if localized {
-			fmt.Fprintf(output, "export type %sAllLocalesPopulateOutput = Record<string, never>;\n\n", name)
-		}
 	} else {
-		fmt.Fprintf(output, "export interface %sPopulate {\n", name)
-		for _, field := range populateFields {
-			// Population traversal uses canonical schema paths, including array and
-			// block containers, because runtime row indexes are not schema paths.
-			fmt.Fprintf(output, "\t%s?: %s;\n", property(field.Path.String()), populateType(field, collectionNames))
-		}
-		output.WriteString("}\n\n")
-		fmt.Fprintf(output, "export interface %sPopulateOutput {\n", name)
-		for _, field := range populateFields {
-			fmt.Fprintf(output, "\t%s: %s;\n", property(field.Path.String()), generator.outputType(field, collectionNames, pluginTypes, 1))
-		}
-		output.WriteString("}\n\n")
-		if localized {
-			fmt.Fprintf(output, "export interface %sAllLocalesPopulateOutput {\n", name)
-			for _, field := range populateFields {
-				fmt.Fprintf(output, "\t%s: %s;\n", property(field.Path.String()), generator.allOutputType(field, collectionNames, pluginTypes, 1))
-			}
-			output.WriteString("}\n\n")
-		}
+		writePathInterface(output, name+"Populate", paths.populate.placements, "Populate", generator.populateMembers(paths.populate))
 	}
 
-	paths := validationPaths(inputFields)
 	fmt.Fprintf(output, "export type %sValidationPath = ", name)
-	if len(paths) == 0 {
+	if len(paths.validation) == 0 {
 		output.WriteString("never;\n\n")
 	} else {
-		output.WriteString(strings.Join(paths, " | "))
+		output.WriteString(strings.Join(paths.validation, " | "))
 		output.WriteString(";\n\n")
 	}
 }
 
-func (generator clientGenerator) outputType(field schema.Field, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, depth int) string {
-	base := generator.baseType(field, collectionNames, pluginTypes, depth, "output")
+func (generator *clientGenerator) outputType(field schema.Field, depth int) string {
+	base := generator.baseType(field, depth, "output")
 	if field.Required && !generator.draftReadFields[field.ID] || field.Type == schema.FieldTypeJoin {
 		return base
 	}
 	return base + " | null"
 }
 
-func (generator clientGenerator) inputType(field schema.Field, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, depth int) string {
-	base := generator.baseType(field, collectionNames, pluginTypes, depth, "input")
+func (generator *clientGenerator) inputType(field schema.Field, depth int) string {
+	base := generator.baseType(field, depth, "input")
 	if typescriptInputRequired(field) {
 		return base
 	}
 	return base + " | null"
 }
 
-func (generator clientGenerator) updateType(field schema.Field, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, depth int) string {
-	base := generator.baseType(field, collectionNames, pluginTypes, depth, "update")
+func (generator *clientGenerator) updateType(field schema.Field, depth int) string {
+	base := generator.baseType(field, depth, "update")
 	if !typescriptInputRequired(field) {
 		base += " | null"
 	}
@@ -410,32 +415,32 @@ func (generator clientGenerator) updateType(field schema.Field, collectionNames 
 
 // Draft inputs defer editorial completeness, not codec or row identity. Walk
 // the declared field graph instead of weakening every property with DeepPartial.
-func (generator clientGenerator) draftInputType(field schema.Field, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, depth int, mode string) string {
-	return generator.baseType(field, collectionNames, pluginTypes, depth, mode) + " | null"
+func (generator *clientGenerator) draftInputType(field schema.Field, depth int, mode string) string {
+	return generator.baseType(field, depth, mode) + " | null"
 }
 
 func typescriptWriteMode(mode string) bool {
 	return mode == "input" || mode == "update" || mode == "draft" || mode == "draftUpdate"
 }
 
-func (generator clientGenerator) allOutputType(field schema.Field, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, depth int) string {
+func (generator *clientGenerator) allOutputType(field schema.Field, depth int) string {
 	if field.Localized {
 		unlocalized := field
 		unlocalized.Localized = false
-		valueType := generator.baseType(unlocalized, collectionNames, pluginTypes, depth, "allValue")
+		valueType := generator.baseType(unlocalized, depth, "allValue")
 		if !field.Required || generator.draftReadFields[field.ID] {
 			valueType += " | null"
 		}
 		return "RiduLocalizedValues<" + valueType + ">"
 	}
-	base := generator.baseType(field, collectionNames, pluginTypes, depth, "all")
+	base := generator.baseType(field, depth, "all")
 	if field.Required && !generator.draftReadFields[field.ID] || field.Type == schema.FieldTypeJoin {
 		return base
 	}
 	return base + " | null"
 }
 
-func (generator clientGenerator) baseType(field schema.Field, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, depth int, mode string) string {
+func (generator *clientGenerator) baseType(field schema.Field, depth int, mode string) string {
 	switch field.Type {
 	case schema.FieldTypeText, schema.FieldTypeCode, schema.FieldTypeTextarea, schema.FieldTypeEmail, schema.FieldTypeDate:
 		return "string"
@@ -469,7 +474,7 @@ func (generator clientGenerator) baseType(field schema.Field, collectionNames ma
 		if field.Join == nil {
 			return "never[]"
 		}
-		return "Array<" + collectionOutputName(collectionNames[field.Join.CollectionID], mode) + ">"
+		return "Array<" + collectionOutputName(generator.collectionNames[field.Join.CollectionID], mode) + ">"
 	case schema.FieldTypeSelect, schema.FieldTypeRadio:
 		if field.Select == nil || len(field.Select.Options) == 0 {
 			return "never"
@@ -493,13 +498,13 @@ func (generator clientGenerator) baseType(field schema.Field, collectionNames ma
 			for index, target := range field.Relationship.Targets {
 				value := "ID"
 				if !typescriptWriteMode(mode) {
-					value += " | " + collectionOutputName(collectionNames[target.CollectionID], mode)
+					value += " | " + collectionOutputName(generator.collectionNames[target.CollectionID], mode)
 				}
 				members[index] = "{ relationTo: " + strconv.Quote(string(target.CollectionSlug)) + "; id: " + value + " }"
 			}
 			relationshipType = strings.Join(members, " | ")
 		} else if !typescriptWriteMode(mode) {
-			relationshipType = "ID | " + collectionOutputName(collectionNames[field.Relationship.CollectionID], mode)
+			relationshipType = "ID | " + collectionOutputName(generator.collectionNames[field.Relationship.CollectionID], mode)
 		} else {
 			relationshipType = "ID"
 		}
@@ -513,7 +518,7 @@ func (generator clientGenerator) baseType(field schema.Field, collectionNames ma
 		}
 		value := "ID"
 		if !typescriptWriteMode(mode) {
-			value += " | " + collectionOutputName(collectionNames[field.Upload.CollectionID], mode)
+			value += " | " + collectionOutputName(generator.collectionNames[field.Upload.CollectionID], mode)
 		}
 		if field.Upload.HasMany {
 			return "Array<" + value + ">"
@@ -523,20 +528,20 @@ func (generator clientGenerator) baseType(field schema.Field, collectionNames ma
 		if field.Nested == nil {
 			return "never"
 		}
-		return generator.objectType(field.Nested.ResolvedFields(), collectionNames, pluginTypes, depth, mode, false)
+		return generator.objectType(field.Nested.ResolvedFields(), depth, mode, false)
 	case schema.FieldTypeArray:
 		if field.Nested == nil {
 			return "never[]"
 		}
 		if mode == "update" {
-			return "Array<" + generator.objectType(field.Nested.ResolvedFields(), collectionNames, pluginTypes, depth, "input", true) + " | " + generator.objectType(field.Nested.ResolvedFields(), collectionNames, pluginTypes, depth, "update", true) + ">"
+			return "Array<" + generator.objectType(field.Nested.ResolvedFields(), depth, "input", true) + " | " + generator.objectType(field.Nested.ResolvedFields(), depth, "update", true) + ">"
 		}
 		if mode == "draftUpdate" {
-			return "Array<" + generator.objectType(field.Nested.ResolvedFields(), collectionNames, pluginTypes, depth, "draft", true) + " | " + generator.objectType(field.Nested.ResolvedFields(), collectionNames, pluginTypes, depth, mode, true) + ">"
+			return "Array<" + generator.objectType(field.Nested.ResolvedFields(), depth, "draft", true) + " | " + generator.objectType(field.Nested.ResolvedFields(), depth, mode, true) + ">"
 		}
-		return "Array<" + generator.objectType(field.Nested.ResolvedFields(), collectionNames, pluginTypes, depth, mode, true) + ">"
+		return "Array<" + generator.objectType(field.Nested.ResolvedFields(), depth, mode, true) + ">"
 	case schema.FieldTypeBlocks:
-		if field.Blocks == nil || len(field.Blocks.ResolvedTypes()) == 0 {
+		if field.Blocks == nil || len(field.Blocks.BlockReferences) == 0 {
 			return "never[]"
 		}
 		definition := generator.blocks.Fields[field.ID]
@@ -557,7 +562,7 @@ func (generator clientGenerator) baseType(field schema.Field, collectionNames ma
 		return name
 	case schema.FieldTypePlugin:
 		if field.Plugin != nil {
-			if mapping, exists := pluginTypes[field.Plugin.Key]; exists {
+			if mapping, exists := generator.pluginTypes[field.Plugin.Key]; exists {
 				name := mapping.TypeScriptOutput
 				if typescriptWriteMode(mode) {
 					name = mapping.TypeScriptInput
@@ -566,7 +571,7 @@ func (generator clientGenerator) baseType(field schema.Field, collectionNames ma
 				if len(mapping.EmbeddedTypes) > 0 {
 					var args []string
 					for _, payload := range schema.EmbeddedTypeFields(field, mapping.EmbeddedTypes) {
-						container := generator.baseType(payload, collectionNames, pluginTypes, depth, mode)
+						container := generator.baseType(payload, depth, mode)
 						args = append(args, container+"[number]")
 					}
 					result += "<" + strings.Join(args, ", ") + ">"
@@ -587,7 +592,7 @@ func collectionOutputName(name, mode string) string {
 	return name
 }
 
-func (generator clientGenerator) objectType(fields []schema.Field, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, depth int, mode string, keyed bool) string {
+func (generator *clientGenerator) objectType(fields []schema.Field, depth int, mode string, keyed bool) string {
 	fields = modeFields(fields, mode)
 	var output strings.Builder
 	output.WriteString("{\n")
@@ -596,17 +601,17 @@ func (generator clientGenerator) objectType(fields []schema.Field, collectionNam
 	}
 	for _, child := range fields {
 		optional := mode != "input" || !typescriptInputRequired(child) || typescriptFieldHasDefault(child)
-		typeName := generator.outputType(child, collectionNames, pluginTypes, depth+1)
+		typeName := generator.outputType(child, depth+1)
 		if mode == "input" {
-			typeName = generator.inputType(child, collectionNames, pluginTypes, depth+1)
+			typeName = generator.inputType(child, depth+1)
 		} else if mode == "update" {
-			typeName = generator.updateType(child, collectionNames, pluginTypes, depth+1)
+			typeName = generator.updateType(child, depth+1)
 		} else if mode == "draft" || mode == "draftUpdate" {
-			typeName = generator.draftInputType(child, collectionNames, pluginTypes, depth+1, mode)
+			typeName = generator.draftInputType(child, depth+1, mode)
 		} else if mode == "all" {
-			typeName = generator.allOutputType(child, collectionNames, pluginTypes, depth+1)
+			typeName = generator.allOutputType(child, depth+1)
 		} else if mode == "allValue" {
-			typeName = generator.baseType(child, collectionNames, pluginTypes, depth+1, mode)
+			typeName = generator.baseType(child, depth+1, mode)
 			if (!child.Required || generator.draftReadFields[child.ID]) && child.Type != schema.FieldTypeJoin {
 				typeName += " | null"
 			}
@@ -623,73 +628,43 @@ func typescriptFieldHasDefault(field schema.Field) bool {
 		field.Text != nil && field.Text.Slug != nil
 }
 
-func (generator clientGenerator) whereType(field schema.Field, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, depth int) string {
+func (generator *clientGenerator) whereType(field schema.Field) string {
 	if field.Type == schema.FieldTypeGroup || field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks {
 		return "ExistsWhere"
+	}
+	switch membership.KindOf(field) {
+	case membership.Numbers:
+		return "MembershipWhere<number>"
+	case membership.References:
+		// A candidate has the relationship's write shape: { relationTo, id }.
+		single := field
+		relationship := *field.Relationship
+		relationship.HasMany = false
+		single.Relationship = &relationship
+		return "MembershipWhere<" + generator.baseType(single, 1, "input") + ">"
+	case membership.Strings:
+		switch field.Type {
+		case schema.FieldTypeSelect:
+			single := field
+			selectField := *field.Select
+			selectField.HasMany = false
+			single.Select = &selectField
+			return "MembershipWhere<" + generator.baseType(single, 1, "output") + ">"
+		case schema.FieldTypeTextList:
+			return "MembershipWhere<string>"
+		default:
+			return "MembershipWhere<ID>"
+		}
 	}
 	if field.Type == schema.FieldTypeRelationship || field.Type == schema.FieldTypeUpload {
 		return "ScalarWhere<ID>"
 	}
-	if field.Type == schema.FieldTypeTextList {
-		return "PrimitiveListWhere<string>"
-	}
-	if field.Type == schema.FieldTypeNumberList {
-		return "PrimitiveListWhere<number>"
-	}
-	if field.Type == schema.FieldTypeSelect && field.Select != nil && field.Select.HasMany {
-		scalar := field
-		selectField := *field.Select
-		selectField.HasMany = false
-		scalar.Select = &selectField
-		return "MultiSelectWhere<" + generator.baseType(scalar, collectionNames, pluginTypes, depth, "output") + ">"
-	}
 	if field.Type == schema.FieldTypePlugin && field.Plugin != nil {
-		if mapping, exists := pluginTypes[field.Plugin.Key]; exists && mapping.TypeScriptWhere != "" {
+		if mapping, exists := generator.pluginTypes[field.Plugin.Key]; exists && mapping.TypeScriptWhere != "" {
 			return "import(" + strconv.Quote(mapping.TypeScriptPackage) + ")." + mapping.TypeScriptWhere
 		}
 	}
-	return "ScalarWhere<" + generator.baseType(field, collectionNames, pluginTypes, depth, "output") + ">"
-}
-
-type whereField struct {
-	path  string
-	field schema.Field
-}
-
-// whereFields mirrors the REST decoder's canonical dotted-path grammar. Group,
-// array, and block containers expose their own existence comparison and act as
-// traversal nodes; their queryable descendants become separate dotted keys.
-func whereFields(fields []schema.Field, prefix string) []whereField {
-	var result []whereField
-	for _, candidate := range fields {
-		if candidate.Category == schema.FieldCategoryPresentation || candidate.QueryRestricted {
-			continue
-		}
-		path := candidate.Path.String()
-		if path == "" {
-			path = candidate.Name
-			if prefix != "" {
-				path = prefix + "." + candidate.Name
-			}
-		}
-		switch candidate.Type {
-		case schema.FieldTypeGroup, schema.FieldTypeArray:
-			result = append(result, whereField{path: path, field: candidate})
-			if candidate.Nested != nil {
-				result = append(result, whereFields(candidate.Nested.ResolvedFields(), path)...)
-			}
-		case schema.FieldTypeBlocks:
-			result = append(result, whereField{path: path, field: candidate})
-			if candidate.Blocks != nil {
-				for _, block := range candidate.Blocks.ResolvedTypes() {
-					result = append(result, whereFields(block.ResolvedFields(), path+"."+block.Slug)...)
-				}
-			}
-		default:
-			result = append(result, whereField{path: path, field: candidate})
-		}
-	}
-	return result
+	return "ScalarWhere<" + generator.baseType(field, 1, "output") + ">"
 }
 
 func pluginFieldTypes(plugins []schema.Plugin) map[string]schema.PluginFieldType {
@@ -733,88 +708,6 @@ func modeFields(fields []schema.Field, mode string) []schema.Field {
 	return storedFields(fields)
 }
 
-func validationPaths(fields []schema.Field) []string {
-	paths := make([]string, 0, len(fields))
-	seen := make(map[string]bool)
-	var add func(schema.Field, string)
-	appendPath := func(path string, template bool) {
-		var value string
-		if template {
-			value = "`" + path + "`"
-		} else {
-			value = strconv.Quote(path)
-		}
-		if !seen[value] {
-			seen[value] = true
-			paths = append(paths, value)
-		}
-	}
-	add = func(field schema.Field, prefix string) {
-		path := field.Name
-		if prefix != "" {
-			path = prefix + "." + field.Name
-		}
-		appendPath(path, strings.Contains(path, "${number}"))
-		variants := []string{path}
-		if field.Localized {
-			localizedPath := path + ".${Locale}"
-			appendPath(localizedPath, true)
-			variants = append(variants, localizedPath)
-		}
-		for _, variant := range variants {
-			switch field.Type {
-			case schema.FieldTypeGroup:
-				if field.Nested != nil {
-					for _, child := range writableFields(field.Nested.ResolvedFields()) {
-						add(child, variant)
-					}
-				}
-			case schema.FieldTypeArray:
-				row := variant + ".${number}"
-				appendPath(row, true)
-				appendPath(row+"._key", true)
-				if field.Nested != nil {
-					for _, child := range writableFields(field.Nested.ResolvedFields()) {
-						add(child, row)
-					}
-				}
-			case schema.FieldTypeBlocks:
-				row := variant + ".${number}"
-				appendPath(row, true)
-				appendPath(row+"._key", true)
-				appendPath(row+".blockType", true)
-				if field.Blocks != nil {
-					for _, block := range field.Blocks.ResolvedTypes() {
-						for _, child := range writableFields(block.ResolvedFields()) {
-							add(child, row)
-						}
-					}
-				}
-			case schema.FieldTypePlugin:
-				if field.Plugin != nil && len(field.Plugin.EmbeddedTrees) > 0 {
-					appendPath(variant+".${string}", true)
-				}
-			case schema.FieldTypeSelect:
-				if field.Select != nil && field.Select.HasMany {
-					appendPath(variant+".${number}", true)
-				}
-			case schema.FieldTypeRelationship:
-				if field.Relationship != nil && field.Relationship.HasMany {
-					appendPath(variant+".${number}", true)
-				}
-			case schema.FieldTypeUpload:
-				if field.Upload != nil && field.Upload.HasMany {
-					appendPath(variant+".${number}", true)
-				}
-			}
-		}
-	}
-	for _, field := range fields {
-		add(field, "")
-	}
-	return paths
-}
-
 func outputFields(fields []schema.Field) []schema.Field {
 	result := make([]schema.Field, 0, len(fields))
 	for _, field := range fields {
@@ -825,36 +718,24 @@ func outputFields(fields []schema.Field) []schema.Field {
 	return result
 }
 
-func populateType(field schema.Field, collectionNames map[schema.StableID]string) string {
+func (generator *clientGenerator) populateType(field schema.Field) string {
 	if field.Type == schema.FieldTypeUpload && field.Upload != nil {
-		selection := collectionNames[field.Upload.CollectionID] + "PopulationSelect"
+		selection := generator.collectionNames[field.Upload.CollectionID] + "PopulationSelect"
 		return "boolean | " + selection + " | { depth?: number; select?: " + selection + " }"
 	}
 	if field.Type == schema.FieldTypeRelationship && field.Relationship != nil {
 		var selections []string
 		if field.Relationship.Polymorphic {
 			for _, target := range field.Relationship.Targets {
-				selections = append(selections, collectionNames[target.CollectionID]+"PopulationSelect")
+				selections = append(selections, generator.collectionNames[target.CollectionID]+"PopulationSelect")
 			}
 		} else {
-			selections = append(selections, collectionNames[field.Relationship.CollectionID]+"PopulationSelect")
+			selections = append(selections, generator.collectionNames[field.Relationship.CollectionID]+"PopulationSelect")
 		}
 		selection := strings.Join(selections, " | ")
 		return "boolean | " + selection + " | { depth?: number; select?: " + selection + " }"
 	}
 	return "never"
-}
-
-func relationshipFields(fields []schema.Field) []schema.Field {
-	result := make([]schema.Field, 0)
-	for _, field := range fields {
-		if field.Type == schema.FieldTypeRelationship || field.Type == schema.FieldTypeUpload {
-			result = append(result, field)
-			continue
-		}
-		result = append(result, relationshipFields(schema.ChildFields(field))...)
-	}
-	return result
 }
 
 // compactProperty preserves ordinary discriminator formatting while quoting
@@ -901,7 +782,7 @@ func indent(depth int) string {
 }
 
 // Named variants are generated from the same resolved definitions used by Go and OpenAPI.
-func (generator clientGenerator) writeBlockTypes(output *bytes.Buffer, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, localized bool) {
+func (generator *clientGenerator) writeBlockTypes(output *bytes.Buffer, localized bool) {
 	modes := []string{"input", "update", "output"}
 	if len(generator.draftReadFields) > 0 {
 		modes = append(modes, "draft", "draftUpdate")
@@ -928,7 +809,7 @@ func (generator clientGenerator) writeBlockTypes(output *bytes.Buffer, collectio
 			if mode == "update" {
 				output.WriteString("/** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */\n")
 			}
-			body := generator.objectType(variant.Block.ResolvedFields(), collectionNames, pluginTypes, 0, mode, false)
+			body := generator.objectType(variant.Block.ResolvedFields(), 0, mode, false)
 			fmt.Fprintf(output, "export type %s = %s & { %s: %s; %s%s: string };\n\n", name, body, compactProperty(variant.Discriminator), strconv.Quote(variant.Block.Slug), compactProperty(variant.Identity), optionalMark(mode == "input" || mode == "draft"))
 		}
 	}
@@ -975,29 +856,6 @@ func (generator clientGenerator) writeBlockTypes(output *bytes.Buffer, collectio
 			fmt.Fprintf(output, "export type %s%s = Array<%sBlock%s>;\n\n", name, suffix, name, suffix)
 		}
 	}
-}
-
-func primitiveListsPresent(snapshot schema.Snapshot) bool {
-	var inspect func([]schema.Field) bool
-	inspect = func(fields []schema.Field) bool {
-		for _, field := range fields {
-			if field.Type == schema.FieldTypeTextList || field.Type == schema.FieldTypeNumberList || inspect(schema.ChildFields(field)) {
-				return true
-			}
-		}
-		return false
-	}
-	for _, collection := range snapshot.Collections {
-		if inspect(collection.Fields) {
-			return true
-		}
-	}
-	for _, global := range snapshot.Globals {
-		if inspect(global.Fields) {
-			return true
-		}
-	}
-	return false
 }
 
 func typescriptInputRequired(field schema.Field) bool {

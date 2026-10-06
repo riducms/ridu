@@ -43,9 +43,9 @@ func parentLifecycle(t *testing.T, factory Factory) {
 		}
 	}
 	created, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Release article"), "body": Document(
-		paragraph("Opening paragraph"), Block("callout", "callout", store.Values{"title": store.String("First title"), "translation": store.String("Hello"), "detail": Document(Block("cta", "inner", store.Values{"label": store.String("Nested action"), "destination": store.String(page.ID)}))}),
+		paragraph("Opening paragraph"), Block("callout", "callout", store.Values{"title": store.String("First title"), "translation": store.String("Hello"), "detail": Document(Block("action", "inner", store.Values{"label": store.String("Nested action"), "destination": store.String(page.ID)}))}),
 		Block("media", "image", store.Values{"asset": store.String(asset.ID), "caption": store.String("Mountains")}),
-		Block("cta", "action", store.Values{"label": store.String("Read page"), "destination": store.String(page.ID)}), paragraph("Closing paragraph"),
+		Block("action", "action", store.Values{"label": store.String("Read page"), "destination": store.String(page.ID)}), paragraph("Closing paragraph"),
 	)}, ridu.MutationOptions{Actor: &user, ActorCollection: "users"})
 	if err != nil {
 		t.Fatal(err)

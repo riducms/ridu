@@ -1,4 +1,4 @@
-import type { SchemaField } from "@riducms/protocol";
+import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -7,6 +7,8 @@ import {
 	fieldClipboardSignature,
 	parseFieldClipboardPayload,
 } from "@admin/fields/field-clipboard";
+
+import { bindBlockField } from "./block-manifest";
 
 function scalar(name: string, type: SchemaField["type"] = "text"): SchemaField {
 	return {
@@ -21,30 +23,33 @@ function scalar(name: string, type: SchemaField["type"] = "text"): SchemaField {
 	};
 }
 
-function blocks(childType: SchemaField["type"] = "text"): SchemaField {
+function hero(childType: SchemaField["type"]): SchemaBlockType {
+	const child = (name: string, type: SchemaField["type"] = "text"): SchemaField => ({
+		...scalar(name, type),
+		id: `block-hero-${name.replace(/([A-Z])/g, "-$1").toLowerCase()}`,
+	});
 	return {
-		...scalar("layout", "blocks"),
-		category: "nested",
-		blocks: {
-			types: [
-				{
-					slug: "hero",
-					labels: { singular: "Hero", plural: "Heroes" },
-					fields: [
-						scalar("blockName"),
-						scalar("heading", childType),
-						{ ...scalar("links", "array"), nested: { fields: [scalar("label")] } },
-						scalar("metadata", "json"),
-					],
-				},
-			],
-		},
+		slug: "hero",
+		labels: { singular: "Hero", plural: "Heroes" },
+		fields: [
+			child("blockName"),
+			child("heading", childType),
+			{ ...child("links", "array"), nested: { fields: [child("label")] } },
+			child("metadata", "json"),
+		],
 	};
 }
 
+function blocks(childType: SchemaField["type"] = "text"): SchemaField {
+	return bindBlockField([hero(childType)], {
+		...scalar("layout", "blocks"),
+		category: "nested",
+		blocks: { blockReferences: ["hero"] },
+	});
+}
+
 function richText(): SchemaField {
-	const hero = blocks().blocks!.types![0]!;
-	return {
+	return bindBlockField([hero("text")], {
 		...scalar("body", "plugin"),
 		category: "plugin",
 		plugin: {
@@ -63,13 +68,13 @@ function richText(): SchemaField {
 							payload: "fields",
 							discriminator: "blockType",
 							identity: "_key",
-							types: [hero],
+							blockReferences: ["hero"],
 						},
 					],
 				},
 			],
 		},
-	};
+	});
 }
 
 describe("field clipboard", () => {

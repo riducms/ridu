@@ -350,6 +350,11 @@ An article with an empty `metaTitle` is returned with its title in that field. F
 still use the stored, empty value. Because a list runs this hook for every document, avoid slow
 lookups here.
 
+A read hook cannot set a required field to `null` in a published or unversioned document: Ridu
+rejects that response with `invalid_field_output`. A `null` that was already stored, for example in
+a document saved before the field became required, is returned unchanged; the
+[migration that requires the field](/docs/migrations/#required-fields) checks stored documents.
+
 ## BeforeDuplicate {#before-duplicate}
 
 Runs when a document is duplicated: after Ridu copies the original and before `BeforeValidate`.

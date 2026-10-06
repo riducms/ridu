@@ -1,5 +1,5 @@
 import { documentLabel, documentTitleField } from "@admin/features/documents/document-title";
-import { resolveBlockTypes } from "@riducms/protocol";
+import { mapBlockTypes } from "@riducms/protocol";
 import type { FieldReferenceBrowserProps } from "@riducms/plugin";
 import { connectDocumentLiveValidation } from "@admin/core/forms/live-validation.svelte";
 import type { SchemaCollection, SchemaField } from "@riducms/protocol";
@@ -16,11 +16,11 @@ import { invalidFieldLabels } from "@admin/core/forms/form-validation";
 import type { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import type { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { UploadDraft } from "@admin/features/uploads/upload-draft.svelte";
+import { ListFilterFields } from "@admin/features/collections/list-filter-fields";
 import {
 	defaultListColumns,
 	listColumnFields,
 	listMetadataFields,
-	filterableFields,
 	type ListColumnSelection,
 	type ListFilterGroup,
 	type ListPageSize,
@@ -68,6 +68,16 @@ export class ReferenceBrowserWorkflow {
 	readonly displayField = $derived(
 		this.scopedFields.find((field) => field.path === documentTitleField(this.collection)?.path)
 	);
+	// An immutable schema index; its lazy lookups are invisible to readers.
+	readonly filterFields = $derived.by(() => {
+		const { i18n, manifest } = this.options.runtime;
+		return new ListFilterFields({
+			fields: this.collection.fields,
+			metadata: listMetadataFields(this.collection, i18n),
+			collections: manifest?.collections,
+			i18n,
+		});
+	});
 	readonly searchField = $derived.by(() => {
 		const field = this.collection.capabilities.upload
 			? this.collection.fields.find((field) => field.name === "filename")
@@ -159,10 +169,7 @@ export class ReferenceBrowserWorkflow {
 				search: this.query,
 				searchField: this.searchField?.path,
 				sort: this.sort,
-				where: referenceListWhere(this.listFilters, [
-					...filterableFields(this.collection.fields),
-					...listMetadataFields(this.collection, this.options.runtime.i18n),
-				]),
+				where: referenceListWhere(this.listFilters, this.filterFields),
 				includeAccess: true,
 				depth: 1,
 				filter:
@@ -795,12 +802,10 @@ function scopeField(field: SchemaField, prefix: string): SchemaField {
 		...(field.blocks === undefined
 			? {}
 			: {
-					blocks: {
-						types: resolveBlockTypes(field.blocks).map((block) => ({
-							...block,
-							fields: block.fields.map((child) => scopeField(child, `${prefix}-${block.slug}`)),
-						})),
-					},
+					blocks: mapBlockTypes(field.blocks, (block) => ({
+						...block,
+						fields: block.fields.map((child) => scopeField(child, `${prefix}-${block.slug}`)),
+					})),
 				}),
 	};
 }

@@ -1,4 +1,207 @@
 {
+  "x-ridu-blocks": [
+    {
+      "typeName": "UnifiedCard",
+      "slug": "unified-card",
+      "labels": {
+        "singular": "Card",
+        "plural": "Cards"
+      },
+      "fields": [
+        {
+          "id": "block-unified-card-label",
+          "name": "label",
+          "path": "label",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "editor": {
+              "reference": "app:text"
+            },
+            "label": "Label"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-card-sku",
+          "name": "sku",
+          "path": "sku",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "SKU"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-card-accent",
+          "name": "accent",
+          "path": "accent",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "editor": {
+              "reference": "app:capturedText",
+              "config": {
+                "capture": true
+              }
+            },
+            "label": "Accent"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-card-products",
+          "name": "products",
+          "path": "products",
+          "type": "array",
+          "category": "nested",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Products"
+          },
+          "nested": {
+            "fields": [
+              {
+                "id": "block-unified-card-products-label",
+                "name": "label",
+                "path": "products.label",
+                "type": "text",
+                "category": "scalar",
+                "required": false,
+                "unique": false,
+                "admin": {
+                  "editor": {
+                    "reference": "app:text"
+                  },
+                  "label": "Label"
+                },
+                "text": {}
+              },
+              {
+                "id": "block-unified-card-products-sku",
+                "name": "sku",
+                "path": "products.sku",
+                "type": "text",
+                "category": "scalar",
+                "required": false,
+                "unique": false,
+                "admin": {
+                  "label": "SKU"
+                },
+                "text": {}
+              },
+              {
+                "id": "block-unified-card-products-accent",
+                "name": "accent",
+                "path": "products.accent",
+                "type": "text",
+                "category": "scalar",
+                "required": false,
+                "unique": false,
+                "admin": {
+                  "editor": {
+                    "reference": "app:capturedText",
+                    "config": {
+                      "capture": true
+                    }
+                  },
+                  "label": "Accent"
+                },
+                "text": {}
+              }
+            ],
+            "rowLabelComponent": {
+              "reference": "app:unifiedRowLabel",
+              "config": {
+                "prefix": "Row"
+              }
+            }
+          }
+        },
+        {
+          "id": "block-unified-card-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "",
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        }
+      ]
+    },
+    {
+      "typeName": "UnifiedNote",
+      "slug": "unified-note",
+      "labels": {
+        "singular": "Note",
+        "plural": "Notes"
+      },
+      "fields": [
+        {
+          "id": "block-unified-note-label",
+          "name": "label",
+          "path": "label",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "editor": {
+              "reference": "app:text"
+            },
+            "label": "Label"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-note-accent",
+          "name": "accent",
+          "path": "accent",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "editor": {
+              "reference": "app:capturedText",
+              "config": {
+                "capture": true
+              }
+            },
+            "label": "Accent"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-note-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "",
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        }
+      ]
+    }
+  ],
   "openapi": "3.1.0",
   "info": {
     "title": "Unified field contracts API",
@@ -291,6 +494,16 @@
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "Set false to skip counting every match: pagination omits totalDocs and totalPages, and hasNextPage stays exact.",
+            "in": "query",
+            "name": "pagination",
+            "required": false,
+            "schema": {
+              "default": true,
+              "type": "boolean"
             }
           },
           {
@@ -945,6 +1158,16 @@
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "Set false to skip counting every match: pagination omits totalDocs and totalPages, and hasNextPage stays exact.",
+            "in": "query",
+            "name": "pagination",
+            "required": false,
+            "schema": {
+              "default": true,
+              "type": "boolean"
             }
           },
           {
@@ -1634,7 +1857,7 @@
                           ]
                         },
                         "blockType": {
-                          "const": "card",
+                          "const": "unified-card",
                           "type": "string"
                         },
                         "label": {
@@ -1789,7 +2012,7 @@
                           ]
                         },
                         "blockType": {
-                          "const": "card",
+                          "const": "unified-card",
                           "type": "string"
                         },
                         "label": {
@@ -1947,7 +2170,7 @@
                           ]
                         },
                         "blockType": {
-                          "const": "card",
+                          "const": "unified-card",
                           "type": "string"
                         },
                         "label": {
@@ -2109,7 +2332,7 @@
                               ]
                             },
                             "blockType": {
-                              "const": "card",
+                              "const": "unified-card",
                               "type": "string"
                             },
                             "label": {
@@ -2218,7 +2441,7 @@
                               ]
                             },
                             "blockType": {
-                              "const": "card",
+                              "const": "unified-card",
                               "type": "string"
                             },
                             "label": {
@@ -2659,22 +2882,22 @@
             "type": "integer"
           },
           "totalDocs": {
+            "description": "Exact number of matching documents; omitted when the list set pagination=false.",
             "type": "integer"
           },
           "totalPages": {
+            "description": "Number of pages at this limit; omitted when the list set pagination=false.",
             "type": "integer"
           }
         },
         "required": [
           "page",
           "limit",
-          "totalDocs",
-          "totalPages",
           "hasNextPage",
           "hasPrevPage"
         ]
       },
-      "UnifiedArticlesBodyBlocksBlockCard": {
+      "UnifiedCard": {
         "type": "object",
         "properties": {
           "_key": {
@@ -2703,7 +2926,7 @@
             ]
           },
           "blockType": {
-            "const": "card",
+            "const": "unified-card",
             "type": "string"
           },
           "label": {
@@ -2785,7 +3008,7 @@
           "_key"
         ]
       },
-      "UnifiedArticlesBodyBlocksBlockCardAllLocales": {
+      "UnifiedCardAllLocales": {
         "type": "object",
         "properties": {
           "_key": {
@@ -2814,7 +3037,7 @@
             ]
           },
           "blockType": {
-            "const": "card",
+            "const": "unified-card",
             "type": "string"
           },
           "label": {
@@ -2896,7 +3119,7 @@
           "_key"
         ]
       },
-      "UnifiedArticlesBodyBlocksBlockCardInput": {
+      "UnifiedCardInput": {
         "type": "object",
         "properties": {
           "_key": {
@@ -2925,7 +3148,7 @@
             ]
           },
           "blockType": {
-            "const": "card",
+            "const": "unified-card",
             "type": "string"
           },
           "label": {
@@ -3005,7 +3228,7 @@
         ],
         "additionalProperties": false
       },
-      "UnifiedArticlesBodyBlocksBlockCardUpdate": {
+      "UnifiedCardUpdate": {
         "type": "object",
         "properties": {
           "_key": {
@@ -3034,7 +3257,7 @@
             ]
           },
           "blockType": {
-            "const": "card",
+            "const": "unified-card",
             "type": "string"
           },
           "label": {
@@ -3164,7 +3387,7 @@
         "description": "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime.",
         "additionalProperties": false
       },
-      "UnifiedArticlesContentCard": {
+      "UnifiedNote": {
         "type": "object",
         "properties": {
           "_key": {
@@ -3193,497 +3416,7 @@
             ]
           },
           "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "products": {
-            "anyOf": [
-              {
-                "items": {
-                  "properties": {
-                    "_key": {
-                      "minLength": 1,
-                      "pattern": "\\S",
-                      "type": "string"
-                    },
-                    "accent": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "label": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "sku": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "_key"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sku": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "UnifiedArticlesContentCardAllLocales": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "accent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "products": {
-            "anyOf": [
-              {
-                "items": {
-                  "properties": {
-                    "_key": {
-                      "minLength": 1,
-                      "pattern": "\\S",
-                      "type": "string"
-                    },
-                    "accent": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "label": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "sku": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "_key"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sku": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ]
-      },
-      "UnifiedArticlesContentCardInput": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "accent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "products": {
-            "anyOf": [
-              {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "_key": {
-                      "minLength": 1,
-                      "pattern": "\\S",
-                      "type": "string"
-                    },
-                    "accent": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "label": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "sku": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sku": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType"
-        ],
-        "additionalProperties": false
-      },
-      "UnifiedArticlesContentCardUpdate": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "accent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "card",
-            "type": "string"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "products": {
-            "anyOf": [
-              {
-                "items": {
-                  "anyOf": [
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "_key": {
-                          "minLength": 1,
-                          "pattern": "\\S",
-                          "type": "string"
-                        },
-                        "accent": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "label": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "sku": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    },
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "_key": {
-                          "minLength": 1,
-                          "pattern": "\\S",
-                          "type": "string"
-                        },
-                        "accent": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "label": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "sku": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "_key"
-                      ],
-                      "type": "object"
-                    }
-                  ]
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sku": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "blockType",
-          "_key"
-        ],
-        "description": "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime.",
-        "additionalProperties": false
-      },
-      "UnifiedArticlesContentNote": {
-        "type": "object",
-        "properties": {
-          "_key": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
-          "accent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blockType": {
-            "const": "note",
+            "const": "unified-note",
             "type": "string"
           },
           "label": {
@@ -3702,7 +3435,7 @@
           "_key"
         ]
       },
-      "UnifiedArticlesContentNoteAllLocales": {
+      "UnifiedNoteAllLocales": {
         "type": "object",
         "properties": {
           "_key": {
@@ -3731,7 +3464,7 @@
             ]
           },
           "blockType": {
-            "const": "note",
+            "const": "unified-note",
             "type": "string"
           },
           "label": {
@@ -3750,7 +3483,7 @@
           "_key"
         ]
       },
-      "UnifiedArticlesContentNoteInput": {
+      "UnifiedNoteInput": {
         "type": "object",
         "properties": {
           "_key": {
@@ -3779,7 +3512,7 @@
             ]
           },
           "blockType": {
-            "const": "note",
+            "const": "unified-note",
             "type": "string"
           },
           "label": {
@@ -3798,7 +3531,7 @@
         ],
         "additionalProperties": false
       },
-      "UnifiedArticlesContentNoteUpdate": {
+      "UnifiedNoteUpdate": {
         "type": "object",
         "properties": {
           "_key": {
@@ -3827,7 +3560,7 @@
             ]
           },
           "blockType": {
-            "const": "note",
+            "const": "unified-note",
             "type": "string"
           },
           "label": {
@@ -4563,153 +4296,13 @@
                     "tag": "type",
                     "cases": [
                       {
+                        "blockReferences": [
+                          "unified-card"
+                        ],
                         "tagValue": "block",
                         "payload": "fields",
                         "discriminator": "blockType",
-                        "identity": "_key",
-                        "types": [
-                          {
-                            "slug": "card",
-                            "labels": {
-                              "singular": "Card",
-                              "plural": "Cards"
-                            },
-                            "fields": [
-                              {
-                                "id": "unified-articles-body-blocks-block-card-label",
-                                "name": "label",
-                                "path": "body.blocks.block.card.label",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "editor": {
-                                    "reference": "app:text"
-                                  },
-                                  "label": "Label"
-                                },
-                                "text": {}
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-sku",
-                                "name": "sku",
-                                "path": "body.blocks.block.card.sku",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "SKU"
-                                },
-                                "text": {}
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-accent",
-                                "name": "accent",
-                                "path": "body.blocks.block.card.accent",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "editor": {
-                                    "reference": "app:capturedText",
-                                    "config": {
-                                      "capture": true
-                                    }
-                                  },
-                                  "label": "Accent"
-                                },
-                                "text": {}
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-products",
-                                "name": "products",
-                                "path": "body.blocks.block.card.products",
-                                "type": "array",
-                                "category": "nested",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Products"
-                                },
-                                "nested": {
-                                  "fields": [
-                                    {
-                                      "id": "unified-articles-body-blocks-block-card-products-label",
-                                      "name": "label",
-                                      "path": "body.blocks.block.card.products.label",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "editor": {
-                                          "reference": "app:text"
-                                        },
-                                        "label": "Label"
-                                      },
-                                      "text": {}
-                                    },
-                                    {
-                                      "id": "unified-articles-body-blocks-block-card-products-sku",
-                                      "name": "sku",
-                                      "path": "body.blocks.block.card.products.sku",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "label": "SKU"
-                                      },
-                                      "text": {}
-                                    },
-                                    {
-                                      "id": "unified-articles-body-blocks-block-card-products-accent",
-                                      "name": "accent",
-                                      "path": "body.blocks.block.card.products.accent",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "editor": {
-                                          "reference": "app:capturedText",
-                                          "config": {
-                                            "capture": true
-                                          }
-                                        },
-                                        "label": "Accent"
-                                      },
-                                      "text": {}
-                                    }
-                                  ],
-                                  "rowLabelComponent": {
-                                    "reference": "app:unifiedRowLabel",
-                                    "config": {
-                                      "prefix": "Row"
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-block-name",
-                                "name": "blockName",
-                                "path": "body.blocks.block.card.blockName",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "default": "",
-                                "admin": {
-                                  "label": "Block name"
-                                },
-                                "text": {}
-                              }
-                            ]
-                          }
-                        ]
+                        "identity": "_key"
                       }
                     ]
                   }
@@ -4726,17 +4319,17 @@
                 "items": {
                   "discriminator": {
                     "mapping": {
-                      "card": "#/components/schemas/UnifiedArticlesContentCard",
-                      "note": "#/components/schemas/UnifiedArticlesContentNote"
+                      "unified-card": "#/components/schemas/UnifiedCard",
+                      "unified-note": "#/components/schemas/UnifiedNote"
                     },
                     "propertyName": "blockType"
                   },
                   "oneOf": [
                     {
-                      "$ref": "#/components/schemas/UnifiedArticlesContentCard"
+                      "$ref": "#/components/schemas/UnifiedCard"
                     },
                     {
-                      "$ref": "#/components/schemas/UnifiedArticlesContentNote"
+                      "$ref": "#/components/schemas/UnifiedNote"
                     }
                   ]
                 },
@@ -5729,153 +5322,13 @@
                     "tag": "type",
                     "cases": [
                       {
+                        "blockReferences": [
+                          "unified-card"
+                        ],
                         "tagValue": "block",
                         "payload": "fields",
                         "discriminator": "blockType",
-                        "identity": "_key",
-                        "types": [
-                          {
-                            "slug": "card",
-                            "labels": {
-                              "singular": "Card",
-                              "plural": "Cards"
-                            },
-                            "fields": [
-                              {
-                                "id": "unified-articles-body-blocks-block-card-label",
-                                "name": "label",
-                                "path": "body.blocks.block.card.label",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "editor": {
-                                    "reference": "app:text"
-                                  },
-                                  "label": "Label"
-                                },
-                                "text": {}
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-sku",
-                                "name": "sku",
-                                "path": "body.blocks.block.card.sku",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "SKU"
-                                },
-                                "text": {}
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-accent",
-                                "name": "accent",
-                                "path": "body.blocks.block.card.accent",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "editor": {
-                                    "reference": "app:capturedText",
-                                    "config": {
-                                      "capture": true
-                                    }
-                                  },
-                                  "label": "Accent"
-                                },
-                                "text": {}
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-products",
-                                "name": "products",
-                                "path": "body.blocks.block.card.products",
-                                "type": "array",
-                                "category": "nested",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Products"
-                                },
-                                "nested": {
-                                  "fields": [
-                                    {
-                                      "id": "unified-articles-body-blocks-block-card-products-label",
-                                      "name": "label",
-                                      "path": "body.blocks.block.card.products.label",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "editor": {
-                                          "reference": "app:text"
-                                        },
-                                        "label": "Label"
-                                      },
-                                      "text": {}
-                                    },
-                                    {
-                                      "id": "unified-articles-body-blocks-block-card-products-sku",
-                                      "name": "sku",
-                                      "path": "body.blocks.block.card.products.sku",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "label": "SKU"
-                                      },
-                                      "text": {}
-                                    },
-                                    {
-                                      "id": "unified-articles-body-blocks-block-card-products-accent",
-                                      "name": "accent",
-                                      "path": "body.blocks.block.card.products.accent",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "editor": {
-                                          "reference": "app:capturedText",
-                                          "config": {
-                                            "capture": true
-                                          }
-                                        },
-                                        "label": "Accent"
-                                      },
-                                      "text": {}
-                                    }
-                                  ],
-                                  "rowLabelComponent": {
-                                    "reference": "app:unifiedRowLabel",
-                                    "config": {
-                                      "prefix": "Row"
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-block-name",
-                                "name": "blockName",
-                                "path": "body.blocks.block.card.blockName",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "default": "",
-                                "admin": {
-                                  "label": "Block name"
-                                },
-                                "text": {}
-                              }
-                            ]
-                          }
-                        ]
+                        "identity": "_key"
                       }
                     ]
                   }
@@ -5892,17 +5345,17 @@
                 "items": {
                   "discriminator": {
                     "mapping": {
-                      "card": "#/components/schemas/UnifiedArticlesContentCardInput",
-                      "note": "#/components/schemas/UnifiedArticlesContentNoteInput"
+                      "unified-card": "#/components/schemas/UnifiedCardInput",
+                      "unified-note": "#/components/schemas/UnifiedNoteInput"
                     },
                     "propertyName": "blockType"
                   },
                   "oneOf": [
                     {
-                      "$ref": "#/components/schemas/UnifiedArticlesContentCardInput"
+                      "$ref": "#/components/schemas/UnifiedCardInput"
                     },
                     {
-                      "$ref": "#/components/schemas/UnifiedArticlesContentNoteInput"
+                      "$ref": "#/components/schemas/UnifiedNoteInput"
                     }
                   ]
                 },
@@ -6807,153 +6260,13 @@
                     "tag": "type",
                     "cases": [
                       {
+                        "blockReferences": [
+                          "unified-card"
+                        ],
                         "tagValue": "block",
                         "payload": "fields",
                         "discriminator": "blockType",
-                        "identity": "_key",
-                        "types": [
-                          {
-                            "slug": "card",
-                            "labels": {
-                              "singular": "Card",
-                              "plural": "Cards"
-                            },
-                            "fields": [
-                              {
-                                "id": "unified-articles-body-blocks-block-card-label",
-                                "name": "label",
-                                "path": "body.blocks.block.card.label",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "editor": {
-                                    "reference": "app:text"
-                                  },
-                                  "label": "Label"
-                                },
-                                "text": {}
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-sku",
-                                "name": "sku",
-                                "path": "body.blocks.block.card.sku",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "SKU"
-                                },
-                                "text": {}
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-accent",
-                                "name": "accent",
-                                "path": "body.blocks.block.card.accent",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "editor": {
-                                    "reference": "app:capturedText",
-                                    "config": {
-                                      "capture": true
-                                    }
-                                  },
-                                  "label": "Accent"
-                                },
-                                "text": {}
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-products",
-                                "name": "products",
-                                "path": "body.blocks.block.card.products",
-                                "type": "array",
-                                "category": "nested",
-                                "required": false,
-                                "unique": false,
-                                "admin": {
-                                  "label": "Products"
-                                },
-                                "nested": {
-                                  "fields": [
-                                    {
-                                      "id": "unified-articles-body-blocks-block-card-products-label",
-                                      "name": "label",
-                                      "path": "body.blocks.block.card.products.label",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "editor": {
-                                          "reference": "app:text"
-                                        },
-                                        "label": "Label"
-                                      },
-                                      "text": {}
-                                    },
-                                    {
-                                      "id": "unified-articles-body-blocks-block-card-products-sku",
-                                      "name": "sku",
-                                      "path": "body.blocks.block.card.products.sku",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "label": "SKU"
-                                      },
-                                      "text": {}
-                                    },
-                                    {
-                                      "id": "unified-articles-body-blocks-block-card-products-accent",
-                                      "name": "accent",
-                                      "path": "body.blocks.block.card.products.accent",
-                                      "type": "text",
-                                      "category": "scalar",
-                                      "required": false,
-                                      "unique": false,
-                                      "admin": {
-                                        "editor": {
-                                          "reference": "app:capturedText",
-                                          "config": {
-                                            "capture": true
-                                          }
-                                        },
-                                        "label": "Accent"
-                                      },
-                                      "text": {}
-                                    }
-                                  ],
-                                  "rowLabelComponent": {
-                                    "reference": "app:unifiedRowLabel",
-                                    "config": {
-                                      "prefix": "Row"
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "id": "unified-articles-body-blocks-block-card-block-name",
-                                "name": "blockName",
-                                "path": "body.blocks.block.card.blockName",
-                                "type": "text",
-                                "category": "scalar",
-                                "required": false,
-                                "unique": false,
-                                "default": "",
-                                "admin": {
-                                  "label": "Block name"
-                                },
-                                "text": {}
-                              }
-                            ]
-                          }
-                        ]
+                        "identity": "_key"
                       }
                     ]
                   }
@@ -6972,20 +6285,20 @@
                     {
                       "anyOf": [
                         {
-                          "$ref": "#/components/schemas/UnifiedArticlesContentCardInput"
+                          "$ref": "#/components/schemas/UnifiedCardInput"
                         },
                         {
-                          "$ref": "#/components/schemas/UnifiedArticlesContentCardUpdate"
+                          "$ref": "#/components/schemas/UnifiedCardUpdate"
                         }
                       ]
                     },
                     {
                       "anyOf": [
                         {
-                          "$ref": "#/components/schemas/UnifiedArticlesContentNoteInput"
+                          "$ref": "#/components/schemas/UnifiedNoteInput"
                         },
                         {
-                          "$ref": "#/components/schemas/UnifiedArticlesContentNoteUpdate"
+                          "$ref": "#/components/schemas/UnifiedNoteUpdate"
                         }
                       ]
                     }

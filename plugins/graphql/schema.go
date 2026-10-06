@@ -26,29 +26,29 @@ type resource struct {
 }
 
 type schemaBuilder struct {
-	snapshot   schema.Snapshot
-	local      *ridu.LocalAPI
-	app        *ridu.App
-	options    Options
-	json       *enginegraphql.Scalar
-	locale     *enginegraphql.Enum
-	objects    map[schema.StableID]*enginegraphql.Object
-	resources  map[schema.StableID]resource
-	unions     map[string]*enginegraphql.Union
-	enums      map[string]*enginegraphql.Enum
-	where      map[schema.StableID]*enginegraphql.InputObject
-	wherePaths map[schema.StableID]map[string]string
-	blocks     map[string]*enginegraphql.Object
-	operators  map[string]*enginegraphql.InputObject
-	types      map[string]struct{}
-	permission *enginegraphql.Object
-	adminSlug  schema.CollectionSlug
+	snapshot    schema.Snapshot
+	local       *ridu.LocalAPI
+	app         *ridu.App
+	options     Options
+	json        *enginegraphql.Scalar
+	locale      *enginegraphql.Enum
+	objects     map[schema.StableID]*enginegraphql.Object
+	resources   map[schema.StableID]resource
+	unions      map[string]*enginegraphql.Union
+	enums       map[string]*enginegraphql.Enum
+	where       map[schema.StableID]*whereNode
+	blockWheres map[string]*whereNode
+	blocks      map[string]*enginegraphql.Object
+	operators   map[string]*enginegraphql.InputObject
+	types       map[string]struct{}
+	permission  *enginegraphql.Object
+	adminSlug   schema.CollectionSlug
 }
 
 func newSchemaBuilder(snapshot schema.Snapshot, local *ridu.LocalAPI, app *ridu.App, options Options) *schemaBuilder {
 	return &schemaBuilder{
 		snapshot: snapshot, local: local, app: app, options: options, json: jsonScalar(),
-		objects: make(map[schema.StableID]*enginegraphql.Object), resources: make(map[schema.StableID]resource), unions: make(map[string]*enginegraphql.Union), enums: make(map[string]*enginegraphql.Enum), where: make(map[schema.StableID]*enginegraphql.InputObject), wherePaths: make(map[schema.StableID]map[string]string),
+		objects: make(map[schema.StableID]*enginegraphql.Object), resources: make(map[schema.StableID]resource), unions: make(map[string]*enginegraphql.Union), enums: make(map[string]*enginegraphql.Enum), where: make(map[schema.StableID]*whereNode), blockWheres: make(map[string]*whereNode),
 		blocks: make(map[string]*enginegraphql.Object), operators: make(map[string]*enginegraphql.InputObject), types: make(map[string]struct{}),
 	}
 }
@@ -103,16 +103,18 @@ func (builder *schemaBuilder) build() (enginegraphql.Schema, error) {
 		}
 	}
 	for _, block := range builder.snapshot.Blocks {
-		if err := builder.reserveType(registeredBlockTypeName(block), "block "+block.Slug); err != nil {
+		if err := builder.reserveType(blockTypeName(block), "block "+block.Slug); err != nil {
 			return enginegraphql.Schema{}, err
 		}
 	}
+	// Each block definition is validated once for the whole schema.
+	validator := graphQLFieldValidator{}
 	for index := range resources {
 		current := resources[index]
 		if !graphQLNamePattern.MatchString(current.plural) || strings.HasPrefix(current.plural, "__") {
 			return enginegraphql.Schema{}, fmt.Errorf("resource %q produces invalid GraphQL plural name %q", current.Slug, current.plural)
 		}
-		if err := validateGraphQLFields(current.Fields, true); err != nil {
+		if err := validator.fields(current.Fields, true); err != nil {
 			return enginegraphql.Schema{}, fmt.Errorf("resource %q: %w", current.Slug, err)
 		}
 		if err := builder.reserveType(current.name, "resource "+string(current.Slug)); err != nil {
@@ -479,6 +481,10 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 	listArgs := mergeArgs(enginegraphql.FieldConfigArgument{
 		"where": &enginegraphql.ArgumentConfig{Type: where}, "sort": &enginegraphql.ArgumentConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.String))},
 		"page": &enginegraphql.ArgumentConfig{Type: enginegraphql.Int}, "limit": &enginegraphql.ArgumentConfig{Type: enginegraphql.Int},
+		"pagination": &enginegraphql.ArgumentConfig{
+			Type: enginegraphql.Boolean, DefaultValue: true,
+			Description: "Set false to skip counting every match: totalDocs and totalPages are null and hasNextPage stays exact.",
+		},
 		"trash": &enginegraphql.ArgumentConfig{Type: enginegraphql.Boolean},
 	}, builder.readLocaleArgs())
 	if err := addRootField(queries, current.plural, &enginegraphql.Field{Type: enginegraphql.NewNonNull(page), Args: listArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
@@ -497,7 +503,8 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 		}
 		pageResult, err := builder.local.List(params.Context, string(current.Slug), ridu.ListOptions{
 			Where: whereExpression, Page: intArg(params.Args, "page", 1), Limit: boundedLimit(params.Args, builder.options.MaxListLimit), Sort: sorts,
-			Populate: builder.populationsFor(current.Fields, params.Info), Actor: request.actor, ActorCollection: request.actorCollection, TrashOnly: boolArg(params.Args, "trash"),
+			SkipTotal: params.Args["pagination"] == false,
+			Populate:  builder.populationsFor(current.Fields, params.Info), Actor: request.actor, ActorCollection: request.actorCollection, TrashOnly: boolArg(params.Args, "trash"),
 			OutputFields: builder.outputFieldsFor(current.Fields, params.Info),
 			Draft:        draft,
 			Locale:       localeArg(params.Args), FallbackLocales: fallbackArgs(params.Args), DisableFallback: boolArg(params.Args, "disableFallback"), AllLocales: boolArg(params.Args, "allLocales"),
@@ -524,7 +531,7 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 		if err != nil {
 			return nil, transportError(err)
 		}
-		return map[string]interface{}{"totalDocs": result.Total}, nil
+		return map[string]interface{}{"totalDocs": *result.Total}, nil
 	}}); err != nil {
 		return err
 	}
@@ -1117,8 +1124,9 @@ func (builder *schemaBuilder) joinOutputField(sourceResource resource, parent st
 			limit = field.Join.Limit
 		}
 		request := requestFromContext(params)
+		// Join pages count only when the query asks for totalDocs with count: true.
 		options := ridu.ListOptions{
-			Where: where, Page: intArg(params.Args, "page", 1), Limit: limit, Sort: sorts,
+			Where: where, Page: intArg(params.Args, "page", 1), Limit: limit, Sort: sorts, SkipTotal: !boolArg(params.Args, "count"),
 			Populate: builder.populationsFor(target.Fields, params.Info), Actor: request.actor, ActorCollection: request.actorCollection,
 			OutputFields:    builder.outputFieldsFor(target.Fields, params.Info),
 			Locale:          schema.LocaleCode(stringMapValue(source, "__riduLocale")),
@@ -1133,9 +1141,9 @@ func (builder *schemaBuilder) joinOutputField(sourceResource resource, parent st
 		for index, document := range page.Documents {
 			docs[index] = documentMapWithLocalization(document, options.Locale, options.FallbackLocales, options.DisableFallback, options.AllLocales)
 		}
-		result := map[string]interface{}{"docs": docs, "hasNextPage": page.Page*page.Limit < page.Total}
-		if boolArg(params.Args, "count") {
-			result["totalDocs"] = page.Total
+		result := map[string]interface{}{"docs": docs, "hasNextPage": page.HasNextPage}
+		if page.Total != nil {
+			result["totalDocs"] = *page.Total
 		}
 		return result, nil
 	}}
@@ -1281,16 +1289,10 @@ func (builder *schemaBuilder) blockUnion(current resource, parent string, field 
 	if existing := builder.unions[name]; existing != nil {
 		return existing
 	}
-	objects := make([]*enginegraphql.Object, 0, len(field.Blocks.ResolvedTypes()))
-	bySlug := make(map[string]*enginegraphql.Object, len(field.Blocks.ResolvedTypes()))
-	registered := len(field.Blocks.BlockReferences) > 0
-	for _, block := range field.Blocks.ResolvedTypes() {
-		var object *enginegraphql.Object
-		if registered {
-			object = builder.registeredBlockObject(current, block)
-		} else {
-			object = builder.blockObject(current, name+typeName(block.Slug), block)
-		}
+	objects := make([]*enginegraphql.Object, 0, len(field.Blocks.Definitions()))
+	bySlug := make(map[string]*enginegraphql.Object, len(field.Blocks.Definitions()))
+	for _, block := range field.Blocks.Definitions() {
+		object := builder.blockObject(current, block)
 		objects = append(objects, object)
 		bySlug[block.Slug] = object
 	}
@@ -1303,29 +1305,27 @@ func (builder *schemaBuilder) blockUnion(current resource, parent string, field 
 	return union
 }
 
-// registeredBlockObject shares one output type for each registered block. Its
-// fields are the same at every placement, and blocks cannot contain joins, the
-// only output that depends on the owning resource.
-func (builder *schemaBuilder) registeredBlockObject(current resource, block schema.BlockType) *enginegraphql.Object {
+// blockObject shares one output type for each block definition. Its fields are
+// the same at every placement, and blocks cannot contain joins, the only
+// output that depends on the owning resource.
+func (builder *schemaBuilder) blockObject(current resource, block schema.BlockType) *enginegraphql.Object {
 	if existing := builder.blocks[block.Slug]; existing != nil {
 		return existing
 	}
-	object := builder.blockObject(current, registeredBlockTypeName(block), block)
-	builder.blocks[block.Slug] = object
-	return object
-}
-
-func (builder *schemaBuilder) blockObject(current resource, name string, block schema.BlockType) *enginegraphql.Object {
-	return enginegraphql.NewObject(enginegraphql.ObjectConfig{Name: name, Fields: enginegraphql.FieldsThunk(func() enginegraphql.Fields {
+	name := blockTypeName(block)
+	object := enginegraphql.NewObject(enginegraphql.ObjectConfig{Name: name, Fields: enginegraphql.FieldsThunk(func() enginegraphql.Fields {
 		fields := builder.outputFields(current, name, block.ResolvedFields(), false)
 		fields["_key"] = &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.String)}
 		fields["blockType"] = &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.String)}
 		return fields
 	})})
+	builder.blocks[block.Slug] = object
+	return object
 }
 
-// registeredBlockTypeName names the output type a registered block shares.
-func registeredBlockTypeName(block schema.BlockType) string {
+// blockTypeName names the output type a block definition shares: its
+// generated type family name, which never depends on a placement.
+func blockTypeName(block schema.BlockType) string {
 	name := block.TypeName
 	if name == "" {
 		name = typeName(block.Slug)
@@ -1451,7 +1451,15 @@ func (builder *schemaBuilder) selectEnum(parent string, field schema.Field) *eng
 	return result
 }
 
-func validateGraphQLFields(fields []schema.Field, document bool) error {
+// graphQLFieldValidator checks that field names produce valid, distinct
+// GraphQL names. It checks each field list once; a registered block's fields
+// are the same list at every placement.
+type graphQLFieldValidator schema.FieldListSet
+
+func (validator graphQLFieldValidator) fields(fields []schema.Field, document bool) error {
+	if !schema.FieldListSet(validator).Add(fields) {
+		return nil
+	}
 	seen := make(map[string]string, len(fields)+5)
 	if document {
 		for _, name := range []string{"id", "createdAt", "updatedAt", "_status", "_revision", "_publishedRevision", "_hasDraftChanges"} {
@@ -1471,19 +1479,19 @@ func validateGraphQLFields(fields []schema.Field, document bool) error {
 		}
 		seen[name] = field.Name
 		if field.Nested != nil {
-			if err := validateGraphQLFields(field.Nested.ResolvedFields(), false); err != nil {
+			if err := validator.fields(field.Nested.ResolvedFields(), false); err != nil {
 				return err
 			}
 		}
 		if field.Blocks != nil {
-			blockNames := make(map[string]string, len(field.Blocks.ResolvedTypes()))
-			for _, block := range field.Blocks.ResolvedTypes() {
+			blockNames := make(map[string]string, len(field.Blocks.Definitions()))
+			for _, block := range field.Blocks.Definitions() {
 				blockName := typeName(block.Slug)
 				if owner, exists := blockNames[blockName]; exists {
 					return fmt.Errorf("blocks %q and %q produce duplicate GraphQL type name %q", owner, block.Slug, blockName)
 				}
 				blockNames[blockName] = block.Slug
-				if err := validateGraphQLFields(block.ResolvedFields(), false); err != nil {
+				if err := validator.fields(block.ResolvedFields(), false); err != nil {
 					return err
 				}
 			}
@@ -1500,59 +1508,6 @@ func validateGraphQLFields(fields []schema.Field, document bool) error {
 		}
 	}
 	return nil
-}
-
-func (builder *schemaBuilder) whereInput(current resource) *enginegraphql.InputObject {
-	if existing := builder.where[current.ID]; existing != nil {
-		return existing
-	}
-	candidates := flattenWhereFields(current.Fields, current.name)
-	builder.wherePaths[current.ID] = wherePaths(candidates)
-	name := current.name + "Where"
-	var input *enginegraphql.InputObject
-	input = enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMapThunk(func() enginegraphql.InputObjectConfigFieldMap {
-		result := enginegraphql.InputObjectConfigFieldMap{
-			"and": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(input))},
-			"or":  &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(input))},
-			"not": &enginegraphql.InputObjectFieldConfig{Type: input},
-			"AND": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(input))},
-			"OR":  &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(input))},
-			"NOT": &enginegraphql.InputObjectFieldConfig{Type: input},
-			"id":  &enginegraphql.InputObjectFieldConfig{Type: builder.stringOperators()},
-		}
-		for _, candidate := range candidates {
-			field := candidate.field
-			var fieldType enginegraphql.Input
-			switch field.Type {
-			case schema.FieldTypeNumber:
-				fieldType = builder.numberOperators()
-			case schema.FieldTypeTextList:
-				fieldType = builder.primitiveListOperators("RiduStringListWhere", enginegraphql.String)
-			case schema.FieldTypeNumberList:
-				fieldType = builder.primitiveListOperators("RiduNumberListWhere", enginegraphql.Float)
-			case schema.FieldTypeCheckbox:
-				fieldType = builder.booleanOperators()
-			case schema.FieldTypeSelect, schema.FieldTypeRadio:
-				option := builder.selectEnum(candidate.owner, field)
-				if field.Type == schema.FieldTypeSelect && field.Select != nil && field.Select.HasMany {
-					fieldType = builder.multiSelectOperators(option)
-				} else {
-					fieldType = builder.enumOperators(option)
-				}
-			case schema.FieldTypeText, schema.FieldTypeTextarea, schema.FieldTypeEmail, schema.FieldTypeCode, schema.FieldTypeDate, schema.FieldTypeRelationship, schema.FieldTypeUpload:
-				fieldType = builder.stringOperators()
-			}
-			if fieldType != nil {
-				result[candidate.name] = &enginegraphql.InputObjectFieldConfig{Type: fieldType}
-			}
-		}
-		// graphql-go evaluates this once; the schema must not retain every
-		// flattened field for the life of the process.
-		candidates = nil
-		return result
-	})})
-	builder.where[current.ID] = input
-	return input
 }
 
 // Filter operators depend only on the value type, so every filterable field of
@@ -1578,16 +1533,9 @@ func (builder *schemaBuilder) enumOperators(value *enginegraphql.Enum) *enginegr
 	})
 }
 
-func (builder *schemaBuilder) multiSelectOperators(value *enginegraphql.Enum) *enginegraphql.InputObject {
-	return builder.operatorInput(value.Name()+"ManyWhere", func() enginegraphql.InputObjectConfigFieldMap {
-		return enginegraphql.InputObjectConfigFieldMap{
-			"contains": &enginegraphql.InputObjectFieldConfig{Type: value},
-			"exists":   &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
-		}
-	})
-}
-
-func (builder *schemaBuilder) primitiveListOperators(name string, value enginegraphql.Input) *enginegraphql.InputObject {
+// membershipOperators filters a set-valued field: in matches any item equal
+// to a candidate, not_in matches none, and exists tests presence.
+func (builder *schemaBuilder) membershipOperators(name string, value enginegraphql.Input) *enginegraphql.InputObject {
 	return builder.operatorInput(name, func() enginegraphql.InputObjectConfigFieldMap {
 		return enginegraphql.InputObjectConfigFieldMap{
 			"in":     {Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))},
@@ -1634,7 +1582,8 @@ func (builder *schemaBuilder) pageType(current resource, object *enginegraphql.O
 	return enginegraphql.NewObject(enginegraphql.ObjectConfig{Name: current.plural + "Page", Fields: enginegraphql.Fields{
 		"docs": &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.NewList(enginegraphql.NewNonNull(object)))},
 		"page": &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.Int)}, "limit": &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.Int)},
-		"totalDocs": &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.Int)}, "totalPages": &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.Int)},
+		"totalDocs":   &enginegraphql.Field{Type: enginegraphql.Int, Description: "Exact number of matching documents; null when the query set pagination: false."},
+		"totalPages":  &enginegraphql.Field{Type: enginegraphql.Int, Description: "Number of pages at this limit; null when the query set pagination: false."},
 		"hasNextPage": &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.Boolean)}, "hasPrevPage": &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.Boolean)},
 		"nextPage": &enginegraphql.Field{Type: enginegraphql.Int}, "prevPage": &enginegraphql.Field{Type: enginegraphql.Int}, "pagingCounter": &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.Int)},
 	}})

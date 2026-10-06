@@ -180,9 +180,9 @@ const EmbeddedHarness = svelte`
 it("replacing a plugin envelope preserves nested row mounts through embedded occurrence reorder", async () => {
 	bindings.length = 0;
 	const note: SchemaField = {
-		id: "note",
+		id: "block-card-rows-note",
 		name: "note",
-		path: "body.rows.note",
+		path: "rows.note",
 		type: "plugin",
 		category: "plugin",
 		required: false,
@@ -191,9 +191,9 @@ it("replacing a plugin envelope preserves nested row mounts through embedded occ
 		plugin: { key: "note", config: {} },
 	};
 	const rows: SchemaField = {
-		id: "rows",
+		id: "block-card-rows",
 		name: "rows",
-		path: "body.rows",
+		path: "rows",
 		type: "array",
 		category: "nested",
 		required: false,

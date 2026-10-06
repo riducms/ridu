@@ -6,15 +6,14 @@ import (
 
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
-	"github.com/riducms/ridu/schema"
 )
 
 // ValidateFields checks every declared rich-text host after all resource and
 // graph transforms. Embedded children retain ordinary field
 // ownership; only the plugin envelope and finite feature configuration are checked.
 func (plugin) ValidateFields(context core.FieldGraphContext, graph field.Fields) error {
-	work := 0
-	// A registered block has the same fields wherever it is referenced.
+	// A block definition has the same fields wherever it is placed, so each is
+	// checked once.
 	checkedBlocks := map[string]bool{}
 	var walk func(field.Fields, string, int) error
 	walk = func(fields field.Fields, path string, depth int) error {
@@ -23,11 +22,7 @@ func (plugin) ValidateFields(context core.FieldGraphContext, graph field.Fields)
 		}
 		for _, node := range fields {
 			definition := field.Snapshot(node)
-			work++
 			at := path + "." + definition.Name()
-			if work > schema.MaxFieldPlacements {
-				return fmt.Errorf("%s: schema work budget exceeded", at)
-			}
 			if definition.PluginKey() == Key {
 				var settings Config
 				if err := json.Unmarshal(definition.PluginConfig(), &settings); err != nil {

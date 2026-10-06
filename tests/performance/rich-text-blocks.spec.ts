@@ -14,7 +14,7 @@ test("100 named cards keep header typing below 100 ms p95 with inline nested edi
 	test.setTimeout(60_000);
 	await loginAsEditor(page);
 	const children = Array.from({ length: 100 }, (_, index) =>
-		block(index < 20 ? "callout" : "cta", {
+		block(index < 20 ? "named-callout" : "named-cta", {
 			heading: `Content ${index}`,
 			...(index < 20
 				? {

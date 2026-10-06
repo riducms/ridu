@@ -1,3 +1,5 @@
+//go:build !postgresonly
+
 package main
 
 import (
@@ -58,7 +60,7 @@ func TestMongoFixtureResetReopensFreshStore(t *testing.T) {
 	config := ridu.Config{Name: "Mongo browser reset", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{
 		field.Text("title"),
 	}}}}
-	backend, closeBackend, err := fixtureBackend(t.Context(), config, "", "", owned)
+	backend, closeBackend, err := fixtureBackend(t.Context(), config, "", "", owned, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +78,7 @@ func TestMongoFixtureResetReopensFreshStore(t *testing.T) {
 	if err := resetMongoFixture(t.Context(), owned); err != nil {
 		t.Fatal(err)
 	}
-	backend, closeBackend, err = fixtureBackend(t.Context(), config, "", "", owned)
+	backend, closeBackend, err = fixtureBackend(t.Context(), config, "", "", owned, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +121,7 @@ func TestMongoFixtureSeedsFullAdminConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	config := fixtureConfig(storage)
-	backend, closeBackend, err := fixtureBackend(t.Context(), config, "", "", owned)
+	backend, closeBackend, err := fixtureBackend(t.Context(), config, "", "", owned, "")
 	if err != nil {
 		t.Fatal(err)
 	}

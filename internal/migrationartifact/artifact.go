@@ -268,6 +268,25 @@ func LatestManifest(directory string) (schema.Manifest, bool, error) {
 	return manifest, err == nil, err
 }
 
+// HistoryDigest returns the executable migration history digest that `ridu
+// build` links into a production server: the ordered artifact identities,
+// recorded head digest and storage schema of the newest artifact.
+func HistoryDigest(files []File) (string, error) {
+	if len(files) == 0 {
+		return "", fmt.Errorf("migration artifact history is empty")
+	}
+	identities := make([]migration.ArtifactIdentity, len(files))
+	for index, file := range files {
+		identities[index] = migration.ArtifactIdentity{Name: file.Name, Digest: file.Digest}
+	}
+	head := files[len(files)-1].Artifact
+	manifest, err := head.AfterManifest()
+	if err != nil {
+		return "", fmt.Errorf("read migration artifact history head: %w", err)
+	}
+	return migration.DigestArtifactHistory(identities, head.ToDigest, manifest)
+}
+
 // RequireCurrentHistory proves that a deployable executable manifest is the
 // exact head of a non-empty, immutable artifact history. An empty history is a
 // valid input only to migration creation; release checks and database commands

@@ -35,7 +35,7 @@ func TestBlockRegistryExactGeneratedContracts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Count(string(goSource), "type Card struct {") != 1 {
+		if strings.Count(string(goSource), "type RegistryCard struct {") != 1 {
 			t.Fatal("shared Go contract repeated")
 		}
 		ts = regexp.MustCompile(`manifest-[0-9a-f]{64}`).ReplaceAll(ts, []byte("manifest-DIGEST"))
@@ -75,8 +75,12 @@ func TestBlockRegistryExactGeneratedContracts(t *testing.T) {
 		}
 	}
 }
+
+// Inline declarations are sugar for the registry: a block declared inline at
+// many placements is recorded once, exactly as when it is registered and
+// referenced.
 func TestBlockRegistryManifestScale(t *testing.T) {
-	var sizes []int
+	var manifests [][]byte
 	for _, references := range []bool{false, true} {
 		definition := field.Block{Slug: "card", TypeName: "Card"}
 		for i := range 40 {
@@ -106,10 +110,16 @@ func TestBlockRegistryManifestScale(t *testing.T) {
 		elapsed := time.Since(start)
 		runtime.ReadMemStats(&after)
 		data, _ := manifest.Bytes()
-		sizes = append(sizes, len(data))
+		manifests = append(manifests, data)
 		t.Logf("references=%v placements=100 fields/definition=40 manifest=%dB resolution=%s allocated=%dB", references, len(data), elapsed, after.TotalAlloc-before.TotalAlloc)
+		if blocks := manifest.Snapshot().Blocks; len(blocks) != 1 || blocks[0].Slug != "card" {
+			t.Fatalf("references=%v: block registry has %d definitions", references, len(blocks))
+		}
+		if count := bytes.Count(data, []byte(`"block-card-text0"`)); count != 1 {
+			t.Fatalf("references=%v: definition field recorded %d times, want once", references, count)
+		}
 	}
-	if sizes[1] >= sizes[0]/10 {
-		t.Fatalf("registry size benefit missing: %v", sizes)
+	if !bytes.Equal(manifests[0], manifests[1]) {
+		t.Fatalf("inline and referenced placements produced different manifests (%dB, %dB)", len(manifests[0]), len(manifests[1]))
 	}
 }

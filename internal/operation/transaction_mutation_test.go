@@ -76,7 +76,7 @@ func TestTransactionMutationFailureRollsBackDocumentCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Page == nil || result.Page.Total != 0 {
+	if result.Page == nil || *result.Page.Total != 0 {
 		t.Fatalf("documents after rollback = %#v", result.Page)
 	}
 }

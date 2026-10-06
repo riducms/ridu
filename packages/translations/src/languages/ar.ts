@@ -65,6 +65,8 @@ export const arMessages = {
 	"apiReference:jsonSchema": "مخطط JSON للإضافة",
 	"apiReference:queryPage": "رقم الصفحة بدءًا من 1. الافتراضي: 1.",
 	"apiReference:queryLimit": "المستندات في الصفحة من 1 إلى 100. الافتراضي: 10.",
+	"apiReference:queryPagination":
+		"اضبطه على false لتخطي العدد الإجمالي؛ يبقى hasNextPage دقيقًا. الافتراضي: true.",
 	"apiReference:queryWhere":
 		'مرشح JSON يستخدم مسارات الحقول والمعاملات، مثل {"title":{"equals":"Hello"}}. تُقبل الحقول القابلة للاستعلام فقط.',
 	"apiReference:querySort":
@@ -121,7 +123,9 @@ export const arMessages = {
 	"collections:and": "و",
 	"collections:addAndFilter": "إضافة شرط و",
 	"collections:perPageLabel": "لكل صفحة: {count}",
-	"collections:operatorIncludesItem": "يتضمن عنصرًا",
+	"collections:operatorIsAnyOf": "أيٌّ من",
+	"collections:operatorIsNoneOf": "ليس أيًّا من",
+	"collections:filterCollection": "مجموعة التصفية",
 	"fields:listAdd": "إضافة عنصر",
 	"fields:listEmpty": "لا توجد عناصر بعد.",
 	"fields:listItem": "{label}، العنصر {number}",
@@ -438,6 +442,16 @@ export const arMessages = {
 	"collections:filteredResultLoadFailed": "لا يمكن تحميل النتيجة التي تمت تصفيتها.",
 	"collections:filterDocuments": "تصفية المستندات",
 	"collections:filterField": "حقل التصفية",
+	"collections:filterFieldsLoadFailed": "تعذّر تحميل قائمة الحقول.",
+	"collections:allFields": "كل الحقول",
+	"collections:searchFilterFields": "البحث في الحقول",
+	"collections:filterFieldBack": "العودة إلى {label}",
+	"collections:filterFieldGroup": "مجموعة",
+	"collections:filterFieldArray": "مصفوفة",
+	"collections:filterFieldBlocks": "كتل",
+	"collections:filterFieldBlock": "كتلة",
+	"collections:filterFieldMoreMatches":
+		"عرض أول {count} نتيجة مطابقة. حسّن البحث أو افتح حقلاً لعرض المزيد.",
 	"collections:filterOperator": "عامل التصفية",
 	"collections:filterSummary": "{field} {operator} {value}",
 	"collections:filterValue": "قيمة التصفية",

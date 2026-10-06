@@ -217,8 +217,8 @@ func TestMigrationImportRequiresAnExplicitDocumentID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 0 {
-		t.Fatalf("empty import ID wrote %d documents", page.Total)
+	if *page.Total != 0 {
+		t.Fatalf("empty import ID wrote %d documents", *page.Total)
 	}
 }
 

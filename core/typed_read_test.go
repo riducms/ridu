@@ -45,7 +45,7 @@ func TestTypedReadsOwnTheirLocaleShape(t *testing.T) {
 		t.Fatalf("all locales: %#v %v", all, err)
 	}
 	listed, err := core.NewTypedCollection[document, input, input, input]("pages").With(app.Local()).List(t.Context(), core.TypedListOptions{Locale: "fr", Limit: 1})
-	if err != nil || listed.Total != 1 || listed.Page != 1 || listed.Limit != 1 || len(listed.Documents) != 1 || listed.Documents[0].Title == nil || *listed.Documents[0].Title != "Bonjour" {
+	if err != nil || *listed.Total != 1 || listed.Page != 1 || listed.Limit != 1 || len(listed.Documents) != 1 || listed.Documents[0].Title == nil || *listed.Documents[0].Title != "Bonjour" {
 		t.Fatalf("single-locale list: %#v %v", listed, err)
 	}
 	allListed, err := core.NewTypedAllLocalesCollection[allDocument]("pages").With(app.Local()).List(t.Context(), core.TypedListOptions{})
@@ -59,7 +59,7 @@ func TestTypedReadsOwnTheirLocaleShape(t *testing.T) {
 	// An incompatible consumer must fail without exposing a partially decoded page.
 	bad, err := core.NewTypedCollection[allDocument, input, input, input]("pages").With(app.Local()).List(t.Context(), core.TypedListOptions{})
 	var typeError *json.UnmarshalTypeError
-	if !errors.As(err, &typeError) || !strings.Contains(err.Error(), "pages list document[0]") || bad.Documents != nil || bad.Total != 0 {
+	if !errors.As(err, &typeError) || !strings.Contains(err.Error(), "pages list document[0]") || bad.Documents != nil || bad.Total != nil {
 		t.Fatalf("decode failure: %#v %v", bad, err)
 	}
 	projected, err := core.NewTypedCollection[document, input, input, input]("pages").With(app.Local()).Find(t.Context(), created.ID, core.TypedReadOptions{Select: []query.Path{}})
@@ -116,24 +116,34 @@ func TestTypedReadListPreservesEngineFiltering(t *testing.T) {
 	}
 	reads := core.NewTypedCollection[document, input, input, input]("pages").With(app.Local())
 	result, err := reads.List(t.Context(), core.TypedListOptions{Page: 2, Limit: 1, Sort: []query.Sort{{Path: titlePath, Direction: query.Ascending}}})
-	if err != nil || result.Total != 2 || result.Page != 2 || len(result.Documents) != 1 || result.Documents[0].Title == nil || *result.Documents[0].Title != "b" || result.Documents[0].Secret != nil {
+	if err != nil || *result.Total != 2 || result.Page != 2 || result.HasNextPage || len(result.Documents) != 1 || result.Documents[0].Title == nil || *result.Documents[0].Title != "b" || result.Documents[0].Secret != nil {
 		t.Fatalf("filtered page: %#v %v", result, err)
+	}
+	// Without a total, the access-filtered pages keep their documents and an exact next-page flag.
+	for page, want := range []struct {
+		title string
+		next  bool
+	}{{title: "a", next: true}, {title: "b"}} {
+		uncounted, err := reads.List(t.Context(), core.TypedListOptions{Page: page + 1, Limit: 1, SkipTotal: true, Sort: []query.Sort{{Path: titlePath, Direction: query.Ascending}}})
+		if err != nil || uncounted.Total != nil || uncounted.HasNextPage != want.next || len(uncounted.Documents) != 1 || *uncounted.Documents[0].Title != want.title {
+			t.Fatalf("uncounted page %d: %#v %v", page+1, uncounted, err)
+		}
 	}
 	hidden, err := query.Compare(titlePath, query.OperatorEqual, query.String("hidden"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	empty, err := reads.List(t.Context(), core.TypedListOptions{Where: hidden})
-	if err != nil || empty.Total != 0 || empty.Documents == nil || len(empty.Documents) != 0 {
+	if err != nil || *empty.Total != 0 || empty.Documents == nil || len(empty.Documents) != 0 {
 		t.Fatalf("empty access intersection: %#v %v", empty, err)
 	}
 	failed, err := core.NewTypedCollection[selectiveReadDocument, input, input, input]("pages").With(app.Local()).List(t.Context(), core.TypedListOptions{Sort: []query.Sort{{Path: titlePath, Direction: query.Ascending}}})
-	if !errors.Is(err, errTypedListDocument) || !strings.Contains(err.Error(), "document[1]") || failed.Documents != nil || failed.Total != 0 {
+	if !errors.Is(err, errTypedListDocument) || !strings.Contains(err.Error(), "document[1]") || failed.Documents != nil || failed.Total != nil {
 		t.Fatalf("partial decode escaped: %#v %v", failed, err)
 	}
 	denied = true
 	rejected, err := reads.List(t.Context(), core.TypedListOptions{})
-	if err == nil || rejected.Documents != nil || rejected.Total != 0 {
+	if err == nil || rejected.Documents != nil || rejected.Total != nil {
 		t.Fatalf("denied list: %#v %v", rejected, err)
 	}
 }

@@ -86,7 +86,7 @@ func accountDeletion(t *testing.T, factory Factory) {
 		if err != nil {
 			t.Fatalf("list %s: %v", collection, err)
 		}
-		return page.Total
+		return *page.Total
 	}
 	for collection, want := range map[string]int{"learners": 1, "profiles": 1, "progress": 0, "friendships": 0, "leagues": 0, "memberships": 0, "notes": 1} {
 		if got := count(collection, false); got != want {
@@ -169,7 +169,7 @@ func cycles(t *testing.T, factory Factory) {
 		t.Fatalf("delete one side of a cascade cycle: %v", err)
 	}
 	page, err := local.List(ctx, "pairs", ridu.ListOptions{})
-	if err != nil || page.Total != 0 {
+	if err != nil || *page.Total != 0 {
 		t.Fatalf("pairs after deleting a cycle = %#v, %v", page, err)
 	}
 }

@@ -21,6 +21,7 @@ result.
 | ----------------- | --------------------------------------------------------------------------------------------------------------- |
 | `page`            | Positive integer; default `1`, maximum `1,000,000`.                                                             |
 | `limit`           | Positive integer; default `10`, maximum `100`.                                                                  |
+| `pagination`      | Exactly `true` or `false`; default `true`. `false` skips the total count. List only; `count` rejects it.        |
 | `sort`            | Repeat for each field; prefix a field with `-` for descending order.                                            |
 | `where`           | URL-encoded JSON query expression.                                                                              |
 | `select`          | URL-encoded JSON selection object.                                                                              |
@@ -82,6 +83,23 @@ transports may define their own bounded request shape in the generated OpenAPI d
 
 Delete is not a generic `204` response. Check the generated operation schema rather than assuming
 that every successful route returns the same body.
+
+A list's `pagination` object has `page`, `limit`, `hasNextPage`, `hasPrevPage`, `totalDocs`, and
+`totalPages`. With `pagination=false`, Ridu runs no count and leaves out `totalDocs` and
+`totalPages`. The other four fields are still exact; `hasNextPage` comes from reading one document
+past the page.
+
+```json title="pagination-false.json"
+{
+	"docs": [{ "id": "post_26", "title": "…" }],
+	"pagination": {
+		"page": 2,
+		"limit": 25,
+		"hasNextPage": true,
+		"hasPrevPage": true
+	}
+}
+```
 
 Every response includes `X-Request-ID`. CORS permits `Accept`, `Authorization`, `Content-Type`, and
 `If-Match` by default when the origin is allowed. Host allowlists, rate limits, timeouts, upload

@@ -13,9 +13,13 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
+// liveEntry is one field location of a live-validation snapshot: its field,
+// named by its placement, and its binding. An unbound field has a zero binding.
 type liveEntry struct {
-	binding  FieldBinding
-	location fieldLocation
+	field     schema.Field
+	binding   FieldBinding
+	location  fieldLocation
+	placement fieldPlacement
 }
 type liveScope struct {
 	collection         Collection
@@ -23,54 +27,38 @@ type liveScope struct {
 	denied             map[string]bool
 }
 
+// liveEntries lists every field location in values with its binding. One walk
+// follows the values, so the cost follows the snapshot rather than every
+// placement of the schema.
 func liveEntries(collection Collection, values store.Values) map[string]liveEntry {
 	result := map[string]liveEntry{}
-	attached := map[schema.StableID]FieldBinding{}
-	for _, binding := range collection.Bindings {
-		attached[binding.Field.ID] = binding
-	}
-	var visit func([]schema.Field)
-	visit = func(fields []schema.Field) {
-		for _, field := range fields {
-			binding, ok := attached[field.ID]
-			if !ok {
-				binding = FieldBinding{Field: field}
-			}
-			for _, location := range fieldLocationsAtPath(collection.Schema.Fields, values, field.Path.String(), false, true) {
-				result[location.runtimePath] = liveEntry{binding, location}
-			}
-			if field.Nested != nil {
-				visit(field.Nested.ResolvedFields())
-			}
-			if field.Blocks != nil {
-				for _, block := range field.Blocks.ResolvedTypes() {
-					visit(block.ResolvedFields())
-				}
-			}
-			embedded.SchemaFields(field, visit)
+	plan := collection.runtimePlan()
+	eachFieldLocation(collection, store.Object(values), false, func(location fieldLocation) {
+		placement := fieldPlacement{canonical: strings.Split(location.canonical(), "."), shared: location.shared()}
+		entry := liveEntry{field: placementField(collection.Schema.ID, *location.field, placement.canonical, placement.shared), location: location, placement: placement}
+		if bound, ok := plan.binding(location); ok {
+			entry.binding = collection.Bindings[bound]
 		}
-	}
-	visit(collection.Schema.Fields)
+		result[location.runtimePath] = entry
+	})
 	return result
 }
 
-func liveHasValidator(collection Collection, id schema.StableID) bool {
-	for _, binding := range collection.Bindings {
-		if binding.Field.ID == id && len(binding.LiveValidators) > 0 {
-			return true
-		}
-	}
-	return false
+// liveHasValidator reports whether the located field has a live validator.
+func liveHasValidator(collection Collection, location fieldLocation) bool {
+	index, bound := collection.runtimePlan().binding(location)
+	return bound && len(collection.Bindings[index].LiveValidators) > 0
 }
-func livePriorLocations(binding FieldBinding, entries map[string]liveEntry, priorTokens, currentTokens map[string]string) map[string]fieldLocation {
+
+func livePriorLocations(entry liveEntry, entries map[string]liveEntry, priorTokens, currentTokens map[string]string) map[string]fieldLocation {
 	current := map[string]bool{}
 	for _, token := range currentTokens {
 		current[token] = true
 	}
 	result := map[string]fieldLocation{}
-	for path, entry := range entries {
-		if entry.binding.Field.ID == binding.Field.ID && current[priorTokens[path]] {
-			result[entry.location.identity] = entry.location
+	for path, prior := range entries {
+		if prior.field.ID == entry.field.ID && current[priorTokens[path]] {
+			result[prior.location.identity] = prior.location
 		}
 	}
 	return result
@@ -90,8 +78,8 @@ func liveScopeViews(collection Collection, base Context, data, prior, input stor
 	result := liveScope{collection: collection, data: store.CloneValues(data), prior: store.CloneValues(prior), input: store.CloneValues(input), denied: map[string]bool{}}
 	entries := liveEntries(collection, data)
 	oldEntries := liveEntries(collection, prior)
-	oldTokens := fieldIssueTargets(collection.Schema.Fields, prior, false)
-	tokens := fieldIssueTargets(collection.Schema.Fields, data, false)
+	oldTokens := fieldIssueTargets(collection, prior, false)
+	tokens := fieldIssueTargets(collection, data, false)
 	unreadableTokens := map[string]bool{}
 	base.Data, base.Document, base.originalCanonical = data, nil, nil
 	base.Original = &store.Document{Values: prior}
@@ -102,10 +90,10 @@ func liveScopeViews(collection Collection, base Context, data, prior, input stor
 		persisted := base
 		persisted.Operation = operation.Read
 		persisted.Data = prior
-		scoped := scopedBindingContext(persisted, entry.binding, entry.location, nil)
+		scoped := scopedBindingContext(persisted, entry.binding, entry.location, nil, nil)
 		allowed, err := entry.binding.Access.Read(scoped)
 		if err != nil {
-			return result, capabilityAccessError("field read access rule failed", err)
+			return result, accessRuleError("field read access rule failed", err)
 		}
 		if !allowed {
 			unreadableTokens[oldTokens[path]] = true
@@ -113,14 +101,14 @@ func liveScopeViews(collection Collection, base Context, data, prior, input stor
 		}
 	}
 	for path, entry := range entries {
-		scoped := scopedBindingContext(base, entry.binding, entry.location, livePriorLocations(entry.binding, oldEntries, oldTokens, tokens))
+		scoped := scopedBindingContext(base, entry.binding, entry.location, livePriorLocations(entry, oldEntries, oldTokens, tokens), nil)
 		unreadable := unreadableTokens[tokens[path]]
 		if entry.binding.Access.Read != nil {
 			read := scoped
 			read.Operation = operation.Read
 			allowed, err := entry.binding.Access.Read(read)
 			if err != nil {
-				return result, capabilityAccessError("field read access rule failed", err)
+				return result, accessRuleError("field read access rule failed", err)
 			}
 			unreadable = unreadable || !allowed
 		}
@@ -136,7 +124,7 @@ func liveScopeViews(collection Collection, base Context, data, prior, input stor
 		if rule != nil {
 			allowed, err := rule(scoped)
 			if err != nil {
-				return result, capabilityAccessError("field write access rule failed", err)
+				return result, accessRuleError("field write access rule failed", err)
 			}
 			if !allowed {
 				result.denied[path] = true
@@ -151,7 +139,7 @@ func liveDescendScope(scope liveScope, base Context, selector LiveValidationEmbe
 		return scope, liveBadRequest("embedded validation requires a declared field, identity, and payload")
 	}
 	owner, ok := liveEntries(scope.collection, scope.data)[selector.Field]
-	if !ok || owner.binding.Field.Plugin == nil {
+	if !ok || owner.field.Plugin == nil {
 		return scope, liveBadRequest("embedded field is not available in this snapshot")
 	}
 	if livePathDenied(scope.denied, selector.Field) {
@@ -159,9 +147,10 @@ func liveDescendScope(scope liveScope, base Context, selector LiveValidationEmbe
 	}
 	var tree *schema.EmbeddedTree
 	var candidate *schema.EmbeddedTreeCase
-	var variant *schema.BlockType
-	for i := range owner.binding.Field.Plugin.EmbeddedTrees {
-		current := &owner.binding.Field.Plugin.EmbeddedTrees[i]
+	var variant schema.BlockType
+	found := false
+	for i := range owner.field.Plugin.EmbeddedTrees {
+		current := &owner.field.Plugin.EmbeddedTrees[i]
 		if current.Key != selector.TreeKey {
 			continue
 		}
@@ -172,17 +161,15 @@ func liveDescendScope(scope liveScope, base Context, selector LiveValidationEmbe
 				continue
 			}
 			candidate = currentCase
-			for k := range currentCase.ResolvedTypes() {
-				if currentCase.ResolvedTypes()[k].Slug == selector.VariantSlug {
-					variant = &currentCase.ResolvedTypes()[k]
-					break
-				}
-			}
+			variant, found = currentCase.Definition(selector.VariantSlug)
 		}
 	}
-	if tree == nil || candidate == nil || variant == nil {
+	if tree == nil || candidate == nil || !found {
 		return scope, liveBadRequest("embedded selector does not name a declared payload schema")
 	}
+	// The payload's fields sit beneath the owner's placement; a registered
+	// payload block is its shared definition.
+	payload := owner.placement.enter(selector.TreeKey, selector.CaseTag, selector.VariantSlug)
 	identity, identityOK := selector.Data[candidate.Identity].StringValue()
 	kind, kindOK := selector.Data[candidate.Discriminator].StringValue()
 	if !identityOK || identity != selector.Identity || !kindOK || kind != selector.VariantSlug {
@@ -192,7 +179,7 @@ func liveDescendScope(scope liveScope, base Context, selector LiveValidationEmbe
 	var occurrences []embedded.Occurrence
 	var err error
 	if !owner.location.value.IsZero() {
-		occurrences, err = embedded.Occurrences(owner.binding.Field, owner.location.value, selector.Field, nil)
+		occurrences, err = embedded.Occurrences(owner.field, owner.location.value, selector.Field, nil)
 	}
 	if err != nil {
 		return scope, liveBadRequest("embedded field structure is unavailable")
@@ -208,16 +195,16 @@ func liveDescendScope(scope liveScope, base Context, selector LiveValidationEmbe
 	prior := store.Values{}
 	if existing {
 		oldEntries := liveEntries(scope.collection, scope.prior)
-		oldTokens := fieldIssueTargets(scope.collection.Schema.Fields, scope.prior, false)
-		tokens := fieldIssueTargets(scope.collection.Schema.Fields, scope.data, false)
+		oldTokens := fieldIssueTargets(scope.collection, scope.prior, false)
+		tokens := fieldIssueTargets(scope.collection, scope.data, false)
 		for path, old := range oldEntries {
 			if old.location.value.IsZero() || old.location.value.Kind() == store.ValueNull {
 				continue
 			}
-			if old.binding.Field.ID != owner.binding.Field.ID || oldTokens[path] != tokens[selector.Field] {
+			if old.field.ID != owner.field.ID || oldTokens[path] != tokens[selector.Field] {
 				continue
 			}
-			oldOccurrences, err := embedded.Occurrences(old.binding.Field, old.location.value, path, nil)
+			oldOccurrences, err := embedded.Occurrences(old.field, old.location.value, path, nil)
 			if err != nil {
 				return scope, liveBadRequest("stored embedded structure is unavailable")
 			}
@@ -228,32 +215,9 @@ func liveDescendScope(scope liveScope, base Context, selector LiveValidationEmbe
 			}
 		}
 	}
-	collection := scope.collection
-	collection.Schema.Fields = variant.ResolvedFields()
-	var bindings []FieldBinding
-	ids := map[schema.StableID]bool{}
-	var visit func([]schema.Field)
-	visit = func(fields []schema.Field) {
-		for _, f := range fields {
-			ids[f.ID] = true
-			if f.Nested != nil {
-				visit(f.Nested.ResolvedFields())
-			}
-			if f.Blocks != nil {
-				for _, block := range f.Blocks.ResolvedTypes() {
-					visit(block.ResolvedFields())
-				}
-			}
-			embedded.SchemaFields(f, visit)
-		}
-	}
-	visit(variant.ResolvedFields())
-	for _, binding := range collection.Bindings {
-		if ids[binding.Field.ID] {
-			bindings = append(bindings, binding)
-		}
-	}
-	collection.Bindings = bindings
+	// The payload scope validates the variant's own fields and bindings: its
+	// plan locates the variant definition's bindings, never the owner's.
+	collection := scope.collection.narrowed(variant.ResolvedFields(), payload)
 	// The payload is already an exact-locale form. Convert its prior to canonical
 	// shape solely to reuse the existing retained-child update merge.
 	selection := localization.Selection{Locale: base.Locale, Chain: []schema.LocaleCode{base.Locale}, Configured: base.Locales, PreserveNull: true}
@@ -341,11 +305,8 @@ func liveValidateStructure(fields []schema.Field, values store.Values, path stri
 			}
 			if field.Blocks != nil {
 				tag, _ := object["blockType"].StringValue()
-				for _, block := range field.Blocks.ResolvedTypes() {
-					if block.Slug == tag {
-						children = block.ResolvedFields()
-						break
-					}
+				if block, found := field.Blocks.Definition(tag); found {
+					children = block.ResolvedFields()
 				}
 				if children == nil {
 					return liveBadRequest("Block row does not name a declared kind")
@@ -361,43 +322,48 @@ func liveValidateStructure(fields []schema.Field, values store.Values, path stri
 
 // Resolve only ordinary missing enclosing structures. Existing occurrences,
 // including plugin payloads, are always selected from server enumeration above.
-func liveUnavailableField(fields []schema.Field, values store.Values, parts []string) (schema.Field, bool) {
-	if len(parts) == 0 {
-		return schema.Field{}, false
-	}
-	for _, field := range fields {
-		if field.Name != parts[0] {
-			continue
+// The location names the field as its list declares it and its placement.
+func liveUnavailableField(collection Collection, values store.Values, parts []string) (fieldLocation, bool) {
+	var resolve func([]schema.Field, store.Values, []string, walkPosition) (fieldLocation, bool)
+	resolve = func(fields []schema.Field, values store.Values, parts []string, at walkPosition) (fieldLocation, bool) {
+		if len(parts) == 0 {
+			return fieldLocation{}, false
 		}
-		if len(parts) == 1 {
-			return field, true
-		}
-		value := values[field.Name]
-		if field.Nested != nil && field.Type == schema.FieldTypeGroup {
-			object, _ := value.CopyObject()
-			return liveUnavailableField(field.Nested.ResolvedFields(), object, parts[1:])
-		}
-		if field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks {
-			index, err := strconv.Atoi(parts[1])
-			row, ok := value.ListItem(index)
-			if err != nil || !ok || len(parts) < 3 {
-				return schema.Field{}, false
+		for index := range fields {
+			field := &fields[index]
+			if field.Name != parts[0] {
+				continue
 			}
-			object, _ := row.CopyObject()
-			if field.Nested != nil {
-				return liveUnavailableField(field.Nested.ResolvedFields(), object, parts[2:])
+			member := at.member(field)
+			if len(parts) == 1 {
+				return member.location(fields, store.Value{}, store.Value{}, at.runtime), true
 			}
-			if field.Blocks != nil {
-				tag, _ := object["blockType"].StringValue()
-				for _, block := range field.Blocks.ResolvedTypes() {
-					if block.Slug == tag {
-						return liveUnavailableField(block.ResolvedFields(), object, parts[2:])
+			value := values[field.Name]
+			if field.Nested != nil && field.Type == schema.FieldTypeGroup {
+				object, _ := value.CopyObject()
+				return resolve(field.Nested.ResolvedFields(), object, parts[1:], member)
+			}
+			if field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks {
+				row, err := strconv.Atoi(parts[1])
+				item, ok := value.ListItem(row)
+				if err != nil || !ok || len(parts) < 3 {
+					return fieldLocation{}, false
+				}
+				object, _ := item.CopyObject()
+				if field.Nested != nil {
+					return resolve(field.Nested.ResolvedFields(), object, parts[2:], member)
+				}
+				if field.Blocks != nil {
+					tag, _ := object["blockType"].StringValue()
+					if block, found := field.Blocks.Definition(tag); found {
+						return resolve(block.ResolvedFields(), object, parts[2:], member.enter(tag))
 					}
 				}
 			}
 		}
+		return fieldLocation{}, false
 	}
-	return schema.Field{}, false
+	return resolve(collection.Schema.Fields, values, parts, rootPosition(collection))
 }
 
 // Aggregate checks need an actual object/row list; null is not a completed

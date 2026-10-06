@@ -61,9 +61,6 @@ func validateMongoRelationshipValue(field schema.Field, value store.Value, path 
 		if !valid {
 			return fmt.Errorf("MongoDB relationship value %q must be a list", path)
 		}
-		if field.Required && len(items) == 0 {
-			return fmt.Errorf("MongoDB document is missing required field %q", path)
-		}
 		if len(items) > maxMongoDocumentReferences {
 			return fmt.Errorf("MongoDB relationship value %q exceeds %d references", path, maxMongoDocumentReferences)
 		}
@@ -78,7 +75,7 @@ func validateMongoRelationshipValue(field schema.Field, value store.Value, path 
 			if !valid {
 				return fmt.Errorf("MongoDB relationship value %q must be a document ID string", itemPath)
 			}
-			if id == "" && !field.Required && !relationship.HasMany {
+			if id == "" && !relationship.HasMany {
 				continue
 			}
 			if err := store.ValidateDocumentID(id); err != nil {

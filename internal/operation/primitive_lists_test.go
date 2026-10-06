@@ -104,7 +104,7 @@ func TestPrimitiveListIssueLocaleUsesSchemaRatherThanUserKeys(t *testing.T) {
 	collection := schema.Collection{ID: "products", Fields: []schema.Field{rows}}
 	values := store.Values{"rows": store.Object(store.Values{"fr": store.List(store.Object(store.Values{"_key": store.String("@locale"), "items": store.List(store.Null())}))})}
 	issues := []schema.Issue{{Code: "invalid_type", Path: "rows.fr.0.items", Message: "item 1 must be a string"}}
-	correlatePrimitiveListIssues(collection, values, Context{Locale: "en", AllLocales: true}, issues)
+	correlatePrimitiveListIssues(Collection{Schema: collection}, values, Context{Locale: "en", AllLocales: true}, issues)
 	if issues[0].Locale != "fr" || issues[0].FieldID != "@locale" || issues[0].Target == "" {
 		t.Fatalf("locale/field correlation=%#v", issues)
 	}

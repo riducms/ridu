@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { bindSchemaManifest, mapBlockTypes, resolveBlockTypes } from "./schema-registry.js";
+import {
+	bindSchemaManifest,
+	blockDefinitionPath,
+	mapBlockTypes,
+	resolveBlockTypes,
+} from "./schema-registry.js";
 import type {
 	SchemaBlockType,
 	SchemaCollection,
@@ -104,11 +109,24 @@ describe("compact block registry", () => {
 			"layout.card.children.leaf.title"
 		);
 	});
-	test("rejects mixed, missing, duplicate and cyclic references", () => {
-		const mixed = field("layout");
-		mixed.blocks!.types = [block()];
+	test("locates a canonical path's innermost block definition", () => {
+		const leaf = { ...block(), slug: "leaf", fields: [{ ...text(), id: "block-leaf-title" }] };
+		const card = { ...block(), fields: [field("children", ["leaf"]), text("caption")] };
+		const schema = bindSchemaManifest(manifest([field("layout", ["leaf", "card"])], [card, leaf]));
+		const fields = schema.collections[0]!.fields;
+		expect(blockDefinitionPath(fields, "layout.card.caption")).toEqual({
+			block: "card",
+			path: "caption",
+		});
+		expect(blockDefinitionPath(fields, "layout.card.children.leaf.title")).toEqual({
+			block: "leaf",
+			path: "title",
+		});
+		for (const path of ["layout", "layout.card", "layout.missing.title", "missing.card.title"])
+			expect(blockDefinitionPath(fields, path)).toBeUndefined();
+	});
+	test("rejects missing, duplicate and cyclic references", () => {
 		for (const schema of [
-			manifest([mixed]),
 			manifest([field("layout", ["missing"])]),
 			manifest([field("layout", ["card", "card"])]),
 			manifest([], [block(), block()]),
@@ -124,12 +142,8 @@ describe("compact block registry", () => {
 		const fields = Array.from({ length: 100 }, (_, i) => field(`layout${i}`));
 		const schema = manifest(fields, [definition]);
 		const compact = JSON.stringify(schema).length;
-		const expanded = JSON.stringify(
-			manifest(
-				fields.map((f) => ({ ...f, blocks: { types: [definition] } })),
-				[]
-			)
-		).length;
+		// Repeating the definition at each placement would cost at least this much.
+		const expanded = fields.length * JSON.stringify(definition).length;
 		bindSchemaManifest(schema);
 		const metadata = new Set(
 			fields.flatMap((f) => resolveBlockTypes(f.blocks)[0]!.fields.map((child) => child.text))
@@ -137,12 +151,12 @@ describe("compact block registry", () => {
 		expect(metadata.size).toBe(40);
 		expect(compact).toBeLessThan(expanded / 10);
 		console.info(
-			`100 placements × 40 fields: compact ${compact} bytes; inline ${expanded} bytes; ${metadata.size} shared text metadata nodes`
+			`100 placements × 40 fields: compact ${compact} bytes; repeated at least ${expanded} bytes; ${metadata.size} shared text metadata nodes`
 		);
 	});
-	test("bounds logical work without expanding a compact reference graph", () => {
-		// Only 36 fields on the wire, but each level doubles the placed graph.
-		const blocks = Array.from({ length: 18 }, (_, i) => ({
+	test("binds once per definition however often the graph places it", () => {
+		// Only 60 fields on the wire, but each level doubles the placed graph: 2^30 placements.
+		const blocks = Array.from({ length: 31 }, (_, i) => ({
 			...block(),
 			slug: `level-${i}`,
 			fields:
@@ -150,8 +164,11 @@ describe("compact block registry", () => {
 					? [text()]
 					: [field("left", [`level-${i - 1}`]), field("right", [`level-${i - 1}`])],
 		}));
-		expect(() => bindSchemaManifest(manifest([field("layout", ["level-17"])], blocks))).toThrow(
-			"traversal bounds"
+		const schema = bindSchemaManifest(manifest([field("layout", ["level-30"])], blocks));
+		let types = resolveBlockTypes(schema.collections[0]!.fields[0]!.blocks);
+		for (let level = 30; level > 0; level--) types = resolveBlockTypes(types[0]!.fields[1]!.blocks);
+		expect(types[0]!.fields[0]!.path).toBe(
+			`layout.${Array.from({ length: 30 }, (_, i) => `level-${30 - i}.right`).join(".")}.level-0.title`
 		);
 		const deep = Array.from({ length: 49 }, (_, i) => ({
 			...block(),
@@ -159,7 +176,7 @@ describe("compact block registry", () => {
 			fields: i === 0 ? [text()] : [field("child", [`level-${i - 1}`])],
 		}));
 		expect(() => bindSchemaManifest(manifest([field("layout", ["level-48"])], deep))).toThrow(
-			"traversal bounds"
+			"levels deep"
 		);
 	});
 });

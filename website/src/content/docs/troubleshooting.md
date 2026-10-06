@@ -140,6 +140,11 @@ an unambiguous detected rename to preserve its data. SQLite does this for fields
 SQLite collection requires a registered compiled transform. MongoDB can bind a named compiled
 transform to its immutable artifact when explicit schema-driven rewriting is required.
 
+If `up` or `ridu dev` stops with `RIDU_REQUIRED_VALUES_MISSING`, a field became required while
+stored documents have no value for it. The message lists the field, locale, document count and
+example IDs. Backfill them with a data transform, or keep the field optional; see
+[Making a field required](/docs/migrations/#required-fields).
+
 If status reports a digest mismatch, missing history, or changed applied artifact, restore the
 committed artifact that was actually applied. Migration files are immutable; do not edit applied
 PostgreSQL SQL, SQLite steps/transforms, or MongoDB plans/transforms. PostgreSQL and MongoDB

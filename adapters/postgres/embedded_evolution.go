@@ -3,87 +3,161 @@ package postgres
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
+	"github.com/riducms/ridu/internal/blockgraph"
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/schema"
 )
 
 // Atlas cannot inspect schema changes inside JSONB. Admit additive embedded
 // schemas separately; a compiled transform must validate or repair other changes.
+//
+// Each surviving resource's own fields are inspected, then each block
+// definition its stored roots keep placing, once per definition. A root that
+// loses a definition leaves that definition's embedded payloads in retained
+// JSON, as removing them would.
 func validatePostgresEmbeddedEvolution(before, after schema.Snapshot, mapping referenceShapeMapping, owners atlasIdentityMap) error {
-	targets := map[string]schema.Field{}
-	storedRoots := map[string]bool{}
-	var index func(schema.StableID, []schema.Field)
-	index = func(owner schema.StableID, fields []schema.Field) {
-		for _, field := range fields {
-			targets[referenceShapeFieldKey(owner, field.ID)] = field
-			index(owner, schema.ChildFields(field))
+	scopes := newPostgresScopes(before, after, mapping)
+	evolution := &postgresEmbeddedEvolution{mapping: mapping, owners: owners, scopes: scopes, compared: make(map[definitionComparison]error)}
+	inspected := make(map[blockgraph.Key]error)
+	embeddedBelow := make(map[blockgraph.Key]string)
+	// holdsEmbedded names an embedded field a definition places ordinarily,
+	// at any depth, or returns empty.
+	holdsEmbedded := func(keys []blockgraph.Key) string {
+		for key := range scopes.before.Closure(keys, false) {
+			name, done := embeddedBelow[key]
+			if !done {
+				fields, _ := scopes.definition(key, true)
+				for _, field := range fields {
+					if embedded.HasFields(field.field) {
+						name = key.Slug + "." + field.field.Path.String()
+						break
+					}
+				}
+				embeddedBelow[key] = name
+			}
+			if name != "" {
+				return name
+			}
 		}
+		return ""
 	}
-	for _, owner := range append(after.Collections, after.Globals...) {
-		for _, root := range owner.Fields {
+	for _, pair := range blockgraph.Survivors(scopes.before, scopes.after, owners.collections) {
+		owner := pair.Before.Resource.ID
+		storedRoots := make(map[schema.StableID]bool)
+		for _, root := range pair.After.Resource.Fields {
 			if root.Category != schema.FieldCategoryPresentation {
-				storedRoots[referenceShapeFieldKey(owner.ID, root.ID)] = true
+				storedRoots[root.ID] = true
 			}
 		}
-		index(owner.ID, owner.Fields)
-	}
-	var inspect func(schema.StableID, []schema.Field, string) error
-	inspect = func(owner schema.StableID, fields []schema.Field, changedContainer string) error {
-		for _, previous := range fields {
-			identity := mapping.field(owner, previous)
-			current, exists := targets[referenceShapeFieldKey(owners.collection(owner), identity.ID)]
-			if !exists && embedded.HasFields(previous) {
-				return fmt.Errorf("PostgreSQL embedded field %q was removed from retained JSON storage; register a compiled data transform to remove or migrate its stored payloads", previous.Path.String())
-			}
-			if exists && (embedded.HasFields(previous) || embedded.HasFields(current)) {
-				if changedContainer != "" {
-					return fmt.Errorf("PostgreSQL embedded field %q has a changed JSON container at %q; register a compiled data transform to migrate its stored layout", previous.Path.String(), changedContainer)
-				}
-				compare := postgresEmbeddedEvolution{owner: owner, mapping: mapping, owners: owners}
-				// The ordinary content rewriter handles confirmed outer-field
-				// renames. Names inside embedded payloads still need a transform.
-				if _, confirmed := mapping.fields[referenceShapeFieldKey(owner, previous.ID)]; confirmed {
-					current.Name = previous.Name
-				}
-				if err := compare.fields(previous.Path.String(), []schema.Field{previous}, []schema.Field{current}); err != nil {
-					return fmt.Errorf("PostgreSQL embedded schema: %w; register a compiled data transform that validates or repairs existing values", err)
-				}
-				continue // The comparison already visits every payload descendant.
-			}
-			container := changedContainer
-			if exists && (previous.Type != current.Type || previous.Localized != current.Localized) {
-				container = previous.Path.String()
-			}
-			if err := inspect(owner, schema.ChildFields(previous), container); err != nil {
-				return err
+		var beforeFields []postgresScopeField
+		for _, field := range postgresScopeFields(pair.Before.Resource.Fields, owner, mapping, true) {
+			// Only top-level stored fields own SQL columns. Missing descendants
+			// remain in a surviving JSON column, even when an ancestor is removed.
+			if storedRoots[mapping.field(owner, field.root).ID] {
+				beforeFields = append(beforeFields, field)
 			}
 		}
-		return nil
-	}
-	for _, owner := range append(before.Collections, before.Globals...) {
-		for _, root := range owner.Fields {
-			identity := mapping.field(owner.ID, root)
-			if !storedRoots[referenceShapeFieldKey(owners.collection(owner.ID), identity.ID)] {
-				// Only top-level stored fields own SQL columns. Missing descendants
-				// remain in a surviving JSON column, even when an ancestor is removed.
-				continue
+		afterFields := postgresScopeFields(pair.After.Resource.Fields, pair.After.Resource.ID, referenceShapeMapping{}, false)
+		if err := evolution.scope(owner, beforeFields, afterFields, false, holdsEmbedded); err != nil {
+			return err
+		}
+		var failure error
+		scopes.survivingPlacements(beforeFields, afterFields, func(_ schema.Field, key blockgraph.Key, lost bool) {
+			if failure != nil {
+				return
 			}
-			if err := inspect(owner.ID, []schema.Field{root}, ""); err != nil {
-				return err
+			if lost {
+				if name := holdsEmbedded([]blockgraph.Key{key}); name != "" {
+					failure = fmt.Errorf("PostgreSQL embedded field %q was removed from retained JSON storage; register a compiled data transform to remove or migrate its stored payloads", name)
+				}
+				return
 			}
+			err, done := inspected[key]
+			if !done {
+				beforeDefinition, _ := scopes.definition(key, true)
+				afterDefinition, _ := scopes.definition(key, false)
+				err = evolution.scope(definitionOwner(key.Slug), beforeDefinition, afterDefinition, key.Localized, holdsEmbedded)
+				inspected[key] = err
+			}
+			failure = err
+		})
+		if failure != nil {
+			return failure
 		}
 	}
 	return nil
 }
 
 type postgresEmbeddedEvolution struct {
-	owner   schema.StableID
-	mapping referenceShapeMapping
-	owners  atlasIdentityMap
+	owner    schema.StableID
+	mapping  referenceShapeMapping
+	owners   atlasIdentityMap
+	scopes   *postgresScopes
+	compared map[definitionComparison]error
 }
 
-func (e postgresEmbeddedEvolution) types(path string, before, after []schema.BlockType) error {
+// scope inspects one scope's own fields: embedded fields must survive in a
+// container whose stored layout is unchanged, and their payload schemas may
+// only evolve additively. A changed container also changes the layout of the
+// embedded fields its definitions place.
+func (e *postgresEmbeddedEvolution) scope(owner schema.StableID, before, after []postgresScopeField, localized bool, holdsEmbedded func([]blockgraph.Key) string) error {
+	targets := make(map[schema.StableID]schema.Field, len(after))
+	for _, field := range after {
+		targets[field.identity.ID] = field.field
+	}
+	// changed records, by before path, the containers above the current field
+	// whose stored type or localization changes; fields are in pre-order.
+	var changed []string
+	for _, previous := range before {
+		path := previous.field.Path.String()
+		for len(changed) != 0 && !strings.HasPrefix(path, changed[len(changed)-1]+".") {
+			changed = changed[:len(changed)-1]
+		}
+		changedContainer := ""
+		if len(changed) != 0 {
+			changedContainer = changed[len(changed)-1]
+		}
+		current, exists := targets[previous.identity.ID]
+		if !exists && embedded.HasFields(previous.field) {
+			return fmt.Errorf("PostgreSQL embedded field %q was removed from retained JSON storage; register a compiled data transform to remove or migrate its stored payloads", previous.field.Path.String())
+		}
+		if exists && (embedded.HasFields(previous.field) || embedded.HasFields(current)) {
+			if changedContainer != "" {
+				return fmt.Errorf("PostgreSQL embedded field %q has a changed JSON container at %q; register a compiled data transform to migrate its stored layout", previous.field.Path.String(), changedContainer)
+			}
+			compare := *e
+			compare.owner = owner
+			// The ordinary content rewriter handles confirmed outer-field
+			// renames. Names inside embedded payloads still need a transform.
+			if _, confirmed := e.mapping.fields[referenceShapeFieldKey(owner, previous.field.ID)]; confirmed {
+				current.Name = previous.field.Name
+			}
+			if err := compare.fields(previous.field.Path.String(), []schema.Field{previous.field}, []schema.Field{current}); err != nil {
+				return fmt.Errorf("PostgreSQL embedded schema: %w; register a compiled data transform that validates or repairs existing values", err)
+			}
+			continue
+		}
+		container := changedContainer
+		if exists && (previous.field.Type != current.Type || previous.field.Localized != current.Localized) {
+			container = path
+			if previous.field.Nested != nil {
+				changed = append(changed, path)
+			}
+		}
+		if container != "" && previous.field.Blocks != nil {
+			ordinary, _ := blockgraph.FieldSelections(previous.field, localized || previous.localized)
+			if name := holdsEmbedded(ordinary); name != "" {
+				return fmt.Errorf("PostgreSQL embedded field %q has a changed JSON container at %q; register a compiled data transform to migrate its stored layout", name, container)
+			}
+		}
+	}
+	return nil
+}
+
+// types compares an embedded case's variants, each definition once.
+func (e *postgresEmbeddedEvolution) types(path string, before, after []schema.BlockType) error {
 	byKey := map[string]schema.BlockType{}
 	for _, block := range after {
 		byKey[block.Slug] = block
@@ -93,14 +167,33 @@ func (e postgresEmbeddedEvolution) types(path string, before, after []schema.Blo
 		if !exists {
 			return fmt.Errorf("embedded variant %q at %q was removed", previous.Slug, path)
 		}
-		if err := e.fields(path+"."+previous.Slug, previous.ResolvedFields(), current.ResolvedFields()); err != nil {
+		// A shared view keeps one field slice, so the pair of slices
+		// identifies the compared views.
+		beforeFields, afterFields := previous.ResolvedFields(), current.ResolvedFields()
+		var key definitionComparison
+		if len(beforeFields) != 0 && len(afterFields) != 0 {
+			key = definitionComparison{before: &beforeFields[0], after: &afterFields[0]}
+		}
+		err, done := e.compared[key]
+		if !done || key.before == nil {
+			compare := *e
+			compare.owner = definitionOwner(previous.Slug)
+			err = compare.fields(path+"."+previous.Slug, beforeFields, afterFields)
+			e.compared[key] = err
+		}
+		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (e postgresEmbeddedEvolution) fields(path string, before, after []schema.Field) error {
+// definitionComparison identifies one compared pair of definition views.
+type definitionComparison struct {
+	before, after *schema.Field
+}
+
+func (e *postgresEmbeddedEvolution) fields(path string, before, after []schema.Field) error {
 	byID := map[schema.StableID]schema.Field{}
 	for _, field := range after {
 		byID[field.ID] = field
@@ -138,16 +231,17 @@ func (e postgresEmbeddedEvolution) fields(path string, before, after []schema.Fi
 			comparison.Nested = &nested
 		}
 		if previous.Blocks != nil && current.Blocks != nil {
-			if err := e.types(current.Path.String(), previous.Blocks.ResolvedTypes(), current.Blocks.ResolvedTypes()); err != nil {
+			if err := e.types(current.Path.String(), previous.Blocks.Definitions(), current.Blocks.Definitions()); err != nil {
 				return err
 			}
-			blocks := *comparison.Blocks
-			blocks.Types = previous.Blocks.ResolvedTypes()
-			if blocks.MinRows <= previous.Blocks.MinRows {
-				blocks.MinRows = previous.Blocks.MinRows
+			// Variants were compared above; the container keeps the prior
+			// selection and compares only its row limits.
+			blocks := *previous.Blocks
+			if current.Blocks.MinRows > previous.Blocks.MinRows {
+				blocks.MinRows = current.Blocks.MinRows
 			}
-			if blocks.MaxRows == 0 || previous.Blocks.MaxRows > 0 && blocks.MaxRows >= previous.Blocks.MaxRows {
-				blocks.MaxRows = previous.Blocks.MaxRows
+			if !(current.Blocks.MaxRows == 0 || previous.Blocks.MaxRows > 0 && current.Blocks.MaxRows >= previous.Blocks.MaxRows) {
+				blocks.MaxRows = current.Blocks.MaxRows
 			}
 			comparison.Blocks = &blocks
 		}
@@ -174,7 +268,7 @@ func (e postgresEmbeddedEvolution) fields(path string, before, after []schema.Fi
 	return nil
 }
 
-func (e postgresEmbeddedEvolution) referenceIdentity(field schema.Field, before bool) schema.Field {
+func (e *postgresEmbeddedEvolution) referenceIdentity(field schema.Field, before bool) schema.Field {
 	if field.Relationship != nil {
 		relation := *field.Relationship
 		relation.CollectionSlug = ""

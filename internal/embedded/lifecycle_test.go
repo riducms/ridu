@@ -9,24 +9,43 @@ import (
 	"github.com/riducms/ridu/internal/localization"
 	"github.com/riducms/ridu/internal/population"
 	"github.com/riducms/ridu/internal/referenceindex"
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
 
-func envelopeSchema() schema.Field {
-	path, _ := query.ParsePath("canvas.parts.widget.card.author")
-	headingPath, _ := query.ParsePath("canvas.parts.widget.card.heading")
-	children := []schema.Field{
-		{Name: "heading", Path: headingPath, Type: schema.FieldTypeText, Localized: true},
-		{ID: "author-ref", Name: "author", Path: path, Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{CollectionID: "authors", CollectionSlug: "authors", OnDelete: schema.ReferenceDeleteNullify}},
-		{Name: "opaque", Type: schema.FieldTypeJSON},
+func mustPath(raw string) query.Path {
+	path, err := query.ParsePath(raw)
+	if err != nil {
+		panic(err)
 	}
-	variant := schema.BlockType{Slug: "card", Fields: children}
-	payload := schema.EmbeddedTreeCase{TagValue: "widget", Payload: "attributes", Identity: "uid", Discriminator: "variant", Types: []schema.BlockType{variant}}
-	tree := schema.EmbeddedTree{Version: 1, Key: "parts", Root: []string{"document"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{payload}}
-	return schema.Field{Name: "canvas", Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{Key: "canvas", EmbeddedTrees: []schema.EmbeddedTree{tree}}}
+	return path
 }
+
+// cardBlock is the embedded payload definition; its paths and IDs are
+// definition-relative and every placement derives its own.
+func cardBlock() schema.BlockType {
+	return schema.BlockType{Slug: "card", TypeName: "Card", Fields: []schema.Field{
+		{ID: "block-card-heading", Name: "heading", Path: mustPath("heading"), Type: schema.FieldTypeText, Localized: true},
+		{ID: "block-card-author", Name: "author", Path: mustPath("author"), Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{CollectionID: "authors", CollectionSlug: "authors", OnDelete: schema.ReferenceDeleteNullify}},
+		{ID: "block-card-opaque", Name: "opaque", Path: mustPath("opaque"), Type: schema.FieldTypeJSON},
+	}}
+}
+
+func canvasField(path string) schema.Field {
+	payload := schema.EmbeddedTreeCase{TagValue: "widget", Payload: "attributes", Identity: "uid", Discriminator: "variant", BlockReferences: []string{"card"}}
+	tree := schema.EmbeddedTree{Version: 1, Key: "parts", Root: []string{"document"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{payload}}
+	return schema.Field{ID: schema.StableID("pages-" + path), Name: "canvas", Path: mustPath(path), Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{Key: "canvas", EmbeddedTrees: []schema.EmbeddedTree{tree}}}
+}
+
+// envelopeSchema returns the canvas field bound as a field of pages.
+func envelopeSchema(t testing.TB) schema.Field {
+	return schematest.Bind(t, "pages", []schema.BlockType{cardBlock()}, canvasField("canvas"))[0]
+}
+
+// authorPlacementID is the stable ID of the card author at its only placement.
+const authorPlacementID schema.StableID = "pages-canvas-parts-widget-card-author"
 
 func object(values store.Values) store.Value { return store.Object(values) }
 func envelope(rows ...store.Value) store.Value {
@@ -49,7 +68,7 @@ func payloads(t *testing.T, field schema.Field, value store.Value) map[string]st
 }
 
 func TestEmbeddedLocalizationUsesIdentityAcrossReorderedEnvelope(t *testing.T) {
-	field := envelopeSchema()
+	field := envelopeSchema(t)
 	fields := []schema.Field{field}
 	en := localization.Selection{Locale: "en", Chain: []schema.LocaleCode{"en"}, Configured: []schema.LocaleCode{"en", "fr"}}
 	fr := localization.Selection{Locale: "fr", Chain: []schema.LocaleCode{"fr"}, Configured: en.Configured}
@@ -98,7 +117,7 @@ func TestEmbeddedLocalizationUsesIdentityAcrossReorderedEnvelope(t *testing.T) {
 }
 
 func TestEmbeddedReferenceLifecycleAndPopulationIgnoreOpaqueLookalikes(t *testing.T) {
-	field := envelopeSchema()
+	field := envelopeSchema(t)
 	fields := []schema.Field{field}
 	collection := schema.Collection{ID: "pages", Fields: fields}
 	value := envelope(card("a", "Alpha", "author-a"))
@@ -117,10 +136,10 @@ func TestEmbeddedReferenceLifecycleAndPopulationIgnoreOpaqueLookalikes(t *testin
 	if len(entries) != 1 || entries[0].Target.DocumentID != "author-a" {
 		t.Fatalf("references=%#v", entries)
 	}
-	if got := referenceindex.ReferenceFieldIDs(field); !reflect.DeepEqual(got, []schema.StableID{"author-ref"}) {
+	if got := referenceindex.ReferenceFieldIDs(collection.ID, field); !reflect.DeepEqual(got, []schema.StableID{authorPlacementID}) {
 		t.Fatal(got)
 	}
-	reference, root, found := referenceindex.FindReferenceField(collection, "author-ref")
+	reference, root, found := referenceindex.FindReferenceField(collection, authorPlacementID)
 	if !found || root.Name != "canvas" || reference.Name != "author" {
 		t.Fatalf("schema discovery=%#v", reference)
 	}
@@ -128,7 +147,8 @@ func TestEmbeddedReferenceLifecycleAndPopulationIgnoreOpaqueLookalikes(t *testin
 		t.Fatal("missing embedded target")
 	}
 	path, _ := query.ParsePath("canvas.parts.widget.card.author")
-	if actual, found := population.FieldAtPath(fields, path); !found || actual.ID != "author-ref" {
+	// Population resolves configuration: the block's shared definition field.
+	if actual, found := population.FieldAtPath(fields, path); !found || actual.ID != "block-card-author" {
 		t.Fatal("population schema missing")
 	}
 	mapped, matched := population.MapAtPath(fields, document.Values, path, population.LocaleSelection{}, func(_ schema.Field, value store.Value) store.Value {
@@ -151,7 +171,7 @@ func TestEmbeddedReferenceLifecycleAndPopulationIgnoreOpaqueLookalikes(t *testin
 func stringValue(value store.Value) string { result, _ := value.StringValue(); return result }
 
 func TestEmbeddedIndexRejectsMalformedEnvelopeWithoutPartialResults(t *testing.T) {
-	field := envelopeSchema()
+	field := envelopeSchema(t)
 	valid := card("a", "Alpha", "author-a")
 	invalid := object(store.Values{"kind": store.String("widget"), "attributes": object(store.Values{"uid": store.String("b"), "variant": store.String("removed")})})
 	entries, err := referenceindex.Collect(schema.Collection{ID: "pages", Fields: []schema.Field{field}}, store.Document{Values: store.Values{"canvas": envelope(valid, invalid)}})
@@ -161,7 +181,7 @@ func TestEmbeddedIndexRejectsMalformedEnvelopeWithoutPartialResults(t *testing.T
 }
 
 func TestEmbeddedIndexBudgetRejectsWholeDocument(t *testing.T) {
-	field := envelopeSchema()
+	field := envelopeSchema(t)
 	nodes := make([]store.Value, embedded.MaxNodes+1)
 	for i := range nodes {
 		nodes[i] = object(store.Values{"kind": store.String("text")})
@@ -174,8 +194,9 @@ func TestEmbeddedIndexBudgetRejectsWholeDocument(t *testing.T) {
 }
 
 func TestEmbeddedWholeFieldLocalesIndexDistinctOccurrences(t *testing.T) {
-	field := envelopeSchema()
+	field := canvasField("canvas")
 	field.Localized = true
+	field = schematest.Bind(t, "pages", []schema.BlockType{cardBlock()}, field)[0]
 	value := object(store.Values{"en": envelope(card("shared", "English", "author-en")), "fr": envelope(card("shared", "French", "author-fr"))})
 	entries, err := referenceindex.Collect(schema.Collection{ID: "pages", Fields: []schema.Field{field}}, store.Document{ID: "page", Values: store.Values{"canvas": value}})
 	if err != nil || len(entries) != 2 {
@@ -191,8 +212,11 @@ func TestEmbeddedWholeFieldLocalesIndexDistinctOccurrences(t *testing.T) {
 }
 
 func TestEmbeddedIndexPreflightInsideBlocksWithRowLabelMetadata(t *testing.T) {
-	plugin := envelopeSchema()
-	wrapper := schema.Field{Name: "layout", Type: schema.FieldTypeBlocks, Nested: &schema.NestedField{Fields: []schema.Field{}}, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "panel", Fields: []schema.Field{plugin}}}}}
+	plugin := canvasField("canvas")
+	plugin.ID = "block-panel-canvas"
+	panel := schema.BlockType{Slug: "panel", TypeName: "Panel", Fields: []schema.Field{plugin}}
+	wrapper := schema.Field{ID: "pages-layout", Name: "layout", Path: mustPath("layout"), Type: schema.FieldTypeBlocks, Nested: &schema.NestedField{Fields: []schema.Field{}}, Blocks: &schema.BlocksField{BlockReferences: []string{"panel"}}}
+	wrapper = schematest.Bind(t, "pages", []schema.BlockType{panel, cardBlock()}, wrapper)[0]
 	invalid := object(store.Values{"kind": store.String("widget"), "attributes": object(store.Values{"uid": store.String("b"), "variant": store.String("removed")})})
 	row := object(store.Values{"blockType": store.String("panel"), "_key": store.String("row"), "canvas": envelope(card("a", "First", "author-a"), invalid)})
 	entries, err := referenceindex.Collect(schema.Collection{ID: "pages", Fields: []schema.Field{wrapper}}, store.Document{Values: store.Values{"layout": store.List(row)}})

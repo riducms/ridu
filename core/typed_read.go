@@ -69,6 +69,8 @@ type TypedListOptions struct {
 	Page int
 	// Limit is the maximum documents returned per page.
 	Limit int
+	// SkipTotal skips counting every match; see ListOptions.SkipTotal.
+	SkipTotal bool
 	// Sort orders results by authored field paths.
 	Sort []query.Sort
 	// TrashOnly returns deleted documents and is valid only for trash-enabled collections.
@@ -112,7 +114,7 @@ func (collection BoundTypedAllLocalesCollection[Document]) List(ctx context.Cont
 
 func listTypedDocuments[Document any](ctx context.Context, local *LocalAPI, slug string, options TypedListOptions, allLocales bool) (TypedPage[Document], error) {
 	page, err := local.List(ctx, slug, ListOptions{
-		Where: options.Where, Page: options.Page, Limit: options.Limit, Sort: options.Sort,
+		Where: options.Where, Page: options.Page, Limit: options.Limit, SkipTotal: options.SkipTotal, Sort: options.Sort,
 		Select: options.Select, Populate: options.Populate, OutputFields: options.OutputFields,
 		Draft: options.Draft, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		TrashOnly: options.TrashOnly, Locale: options.Locale, FallbackLocales: options.FallbackLocales,
@@ -128,7 +130,7 @@ func listTypedDocuments[Document any](ctx context.Context, local *LocalAPI, slug
 			return TypedPage[Document]{}, fmt.Errorf("decode %s list document[%d]: %w", slug, index, err)
 		}
 	}
-	return TypedPage[Document]{Documents: documents, Page: page.Page, Limit: page.Limit, Total: page.Total}, nil
+	return TypedPage[Document]{Documents: documents, Page: page.Page, Limit: page.Limit, Total: page.Total, HasNextPage: page.HasNextPage}, nil
 }
 
 // TypedAllLocalesGlobal binds a generated global model with localized value maps.

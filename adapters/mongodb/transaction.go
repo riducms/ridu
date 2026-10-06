@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/internal/membership"
 	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -20,6 +21,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 	"go.mongodb.org/mongo-driver/v2/mongo/writeconcern"
+	"go.mongodb.org/mongo-driver/v2/x/mongo/driver"
 )
 
 const (
@@ -46,6 +48,35 @@ type documentTransaction struct {
 	uploadLockedKeys      map[string]struct{}
 	uploadLockCleanupErr  error
 
+	// wrote records a call that may have written more than a lock fence.
+	// Until then, a transient conflict restarts the server transaction
+	// instead of failing it; see lockDocument.
+	wrote bool
+	// locks are the locks held for the operation engine, in acquisition
+	// order, so a restart can retake them.
+	locks []mongoHeldLock
+	// exclusive holds the documents this server transaction locked
+	// exclusively.
+	exclusive map[mongoFenceTarget]struct{}
+	// slot is this transaction's shared-fence slot while slotHeld; see
+	// fences.go.
+	slot     int
+	slotHeld bool
+	// age orders the transaction in the Store's lock queue, and queueHolds
+	// lists the documents it holds there; see lock_queue.go.
+	age        uint64
+	queueHolds []mongoFenceTarget
+	// serverStarted is when the current server transaction started.
+	serverStarted time.Time
+	// suspended reports a server transaction aborted to wait for a lock, until
+	// restart replaces it. A lock that failed while suspended leaves no server
+	// transaction, so the transaction can only roll back.
+	suspended bool
+	// operation marks a transaction begun for the operation engine. Only its
+	// calls carry the statement time limit and restart on transient conflicts;
+	// migration and system transactions own their deadlines and retries.
+	operation bool
+
 	mu    sync.Mutex
 	state transactionState
 }
@@ -66,13 +97,25 @@ func isMongoConfirmedTransactionConflict(err error) bool {
 }
 
 // Begin opens a majority-committed, snapshot-isolated write transaction.
+// Until its first content write, a transient conflict restarts it on a newer
+// snapshot (see lockDocument), so its reads are snapshot-isolated from
+// that point, as a read-committed PostgreSQL transaction's statements are.
 func (backend *Store) Begin(ctx context.Context) (store.Transaction, error) {
-	return backend.begin(ctx, false)
+	return backend.beginOperation(ctx, false)
 }
 
 // BeginSnapshot opens the same stable snapshot in read-only adapter mode.
 func (backend *Store) BeginSnapshot(ctx context.Context) (store.Transaction, error) {
-	return backend.begin(ctx, true)
+	return backend.beginOperation(ctx, true)
+}
+
+func (backend *Store) beginOperation(ctx context.Context, readOnly bool) (store.Transaction, error) {
+	transaction, err := backend.begin(ctx, readOnly)
+	if err != nil {
+		return nil, err
+	}
+	transaction.operation = true
+	return transaction, nil
 }
 
 func (backend *Store) begin(ctx context.Context, readOnly bool) (*documentTransaction, error) {
@@ -103,29 +146,59 @@ func (backend *Store) begin(ctx context.Context, readOnly bool) (*documentTransa
 		session.EndSession(ctx)
 		return nil, translateMongoError(ctx, err)
 	}
-	return &documentTransaction{store: backend, session: session, readOnly: readOnly}, nil
+	return &documentTransaction{
+		store: backend, session: session, readOnly: readOnly,
+		age: backend.lockQueue.begin(), serverStarted: time.Now(),
+	}, nil
 }
 
+// enter admits one call. A writable call may write content, which ends the
+// transaction's restartable prefix. The returned context carries the
+// statement time limit (see mongoStatementContext) until leave.
 func (transaction *documentTransaction) enter(ctx context.Context, writable bool) (context.Context, func(), error) {
+	sessionContext, leave, err := transaction.enterFor(ctx, writable)
+	if err == nil && writable {
+		transaction.wrote = true
+	}
+	return sessionContext, leave, err
+}
+
+// enterLock admits a call that writes only a lock fence, keeping the
+// restartable prefix open.
+func (transaction *documentTransaction) enterLock(ctx context.Context) (context.Context, func(), error) {
+	return transaction.enterFor(ctx, true)
+}
+
+func (transaction *documentTransaction) enterFor(ctx context.Context, writable bool) (context.Context, func(), error) {
 	if ctx == nil {
 		return nil, nil, fmt.Errorf("MongoDB transaction context is required")
 	}
 	transaction.mu.Lock()
-	leave := transaction.mu.Unlock
 	if err := ctx.Err(); err != nil {
-		leave()
+		transaction.mu.Unlock()
 		return nil, nil, err
 	}
 	if transaction.session == nil || transaction.state != transactionOpen {
 		state := transaction.state
-		leave()
+		transaction.mu.Unlock()
 		return nil, nil, fmt.Errorf("MongoDB transaction is not open (state %s)", state)
 	}
+	if transaction.suspended {
+		transaction.mu.Unlock()
+		return nil, nil, fmt.Errorf("MongoDB transaction lost its server transaction while waiting for a lock; roll it back")
+	}
 	if writable && transaction.readOnly {
-		leave()
+		transaction.mu.Unlock()
 		return nil, nil, fmt.Errorf("MongoDB snapshot transaction is read-only")
 	}
-	return mongo.NewSessionContext(ctx, transaction.session), leave, nil
+	if !transaction.operation {
+		return mongo.NewSessionContext(ctx, transaction.session), transaction.mu.Unlock, nil
+	}
+	bounded, cancel := mongoStatementContext(ctx)
+	return mongo.NewSessionContext(bounded, transaction.session), func() {
+		cancel()
+		transaction.mu.Unlock()
+	}, nil
 }
 
 func (state transactionState) String() string {
@@ -152,11 +225,17 @@ func (transaction *documentTransaction) Commit(ctx context.Context) error {
 	if transaction.session == nil || transaction.state != transactionOpen {
 		return fmt.Errorf("MongoDB transaction cannot commit from state %s", transaction.state)
 	}
-	if err := ctx.Err(); err != nil {
+	if err := ctx.Err(); err != nil || transaction.suspended {
+		if err == nil {
+			err = mongoConfirmedTransactionConflict{}
+		}
 		cleanupContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), defaultCloseTimeout)
 		defer cancel()
-		_ = transaction.session.AbortTransaction(mongo.NewSessionContext(cleanupContext, transaction.session))
+		if !transaction.suspended {
+			_ = transaction.session.AbortTransaction(mongo.NewSessionContext(cleanupContext, transaction.session))
+		}
 		transaction.state = transactionRolledBack
+		transaction.releaseLocks()
 		transaction.session.EndSession(cleanupContext)
 		transaction.session = nil
 		return errors.Join(err, transaction.releaseUploadObjectLocks())
@@ -171,6 +250,7 @@ func (transaction *documentTransaction) Commit(ctx context.Context) error {
 		err := transaction.session.CommitTransaction(mongo.NewSessionContext(commitContext, transaction.session))
 		if err == nil {
 			transaction.state = transactionCommitted
+			transaction.releaseLocks()
 			transaction.session.EndSession(commitContext)
 			transaction.session = nil
 			// A confirmed content commit must remain a successful Commit result.
@@ -190,6 +270,7 @@ func (transaction *documentTransaction) Commit(ctx context.Context) error {
 				return fmt.Errorf("MongoDB commit outcome is unknown after the server commit time limit")
 			}
 			transaction.state = transactionRolledBack
+			transaction.releaseLocks()
 			cleanupContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), defaultCloseTimeout)
 			transaction.session.EndSession(cleanupContext)
 			cancel()
@@ -221,6 +302,7 @@ func (transaction *documentTransaction) Commit(ctx context.Context) error {
 
 func (transaction *documentTransaction) finishUnknownCommit(ctx context.Context) {
 	transaction.state = transactionCommitUnknown
+	transaction.releaseLocks()
 	cleanupContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), defaultCloseTimeout)
 	defer cancel()
 	// The adapter admits replica sets only. Ending the session releases its
@@ -244,8 +326,12 @@ func (transaction *documentTransaction) Rollback(ctx context.Context) error {
 	}
 	cleanupContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), defaultCloseTimeout)
 	defer cancel()
-	err := transaction.session.AbortTransaction(mongo.NewSessionContext(cleanupContext, transaction.session))
+	var err error
+	if !transaction.suspended {
+		err = transaction.session.AbortTransaction(mongo.NewSessionContext(cleanupContext, transaction.session))
+	}
 	transaction.state = transactionRolledBack
+	transaction.releaseLocks()
 	transaction.session.EndSession(cleanupContext)
 	transaction.session = nil
 	return errors.Join(translateMongoError(cleanupContext, err), transaction.releaseUploadObjectLocks())
@@ -270,6 +356,9 @@ func translateMongoError(ctx context.Context, err error) error {
 			return contextError
 		}
 	}
+	if errors.Is(err, store.ErrConflict) || errors.Is(err, store.ErrNotFound) {
+		return err
+	}
 	if errors.Is(err, context.Canceled) {
 		return context.Canceled
 	}
@@ -282,23 +371,46 @@ func translateMongoError(ctx context.Context, err error) error {
 	if mongo.IsDuplicateKeyError(err) || hasMongoErrorLabel(err, transientTransactionErrorLabel) {
 		return mongoConfirmedTransactionConflict{}
 	}
+	if errors.Is(err, driver.ErrDocumentTooLarge) {
+		return errMongoDocumentTooLarge(0)
+	}
 	var serverError mongo.ServerError
 	if errors.As(err, &serverError) {
 		for _, code := range serverError.ErrorCodes() {
 			switch code {
 			case 112, 244, 251:
 				return mongoConfirmedTransactionConflict{}
-			case 10334:
-				return fmt.Errorf("MongoDB document exceeds the supported BSON size")
+			case 10334, 17419, 17420:
+				return errMongoDocumentTooLarge(code)
 			}
 		}
 		codes := serverError.ErrorCodes()
+		var command mongo.CommandError
+		if len(codes) != 0 && errors.As(err, &command) && command.Name != "" {
+			return fmt.Errorf("MongoDB operation failed with server code %d (%s)", codes[0], command.Name)
+		}
 		if len(codes) != 0 {
 			return fmt.Errorf("MongoDB operation failed with server code %d", codes[0])
 		}
 		return fmt.Errorf("MongoDB server operation failed")
 	}
-	return fmt.Errorf("MongoDB operation failed")
+	// Driver errors can quote credentials or stored values, so only their
+	// classification is reported.
+	return fmt.Errorf("MongoDB operation failed in the driver before reaching the server")
+}
+
+// mongoMaxDocumentBytes is MongoDB's BSON document size limit.
+const mongoMaxDocumentBytes = 16 * 1024 * 1024
+
+// errMongoDocumentTooLarge reports a write MongoDB refused for exceeding its
+// document limit; code is the server's error code, or zero when the driver
+// refused to send it.
+func errMongoDocumentTooLarge(code int) error {
+	message := "MongoDB refused a document larger than its 16 MiB BSON document limit"
+	if code != 0 {
+		message += fmt.Sprintf(" (server code %d)", code)
+	}
+	return fmt.Errorf("%s; the stored value or framework record is too large for one MongoDB document", message)
 }
 
 func validateCollectionEnvelope(collection schema.Collection) error {
@@ -332,11 +444,41 @@ func validateCollectionEnvelope(collection schema.Collection) error {
 	return err
 }
 
+// validateMongoFieldEnvelope checks fields and their descendants. A block
+// definition's fields are the same wherever it is placed, so each definition
+// is checked once, through its shared definition view with paths relative to
+// the definition; the schema bounds every placement's canonical path.
 func validateMongoFieldEnvelope(fields []schema.Field, ancestors []string) error {
-	return validateMongoFieldEnvelopeAt(fields, ancestors, false)
+	return mongoEnvelope{checked: map[string]bool{}}.fields(fields, ancestors, "", false)
 }
 
-func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, insideRepeated bool) error {
+type mongoEnvelope struct {
+	// checked holds the block definitions already validated.
+	checked map[string]bool
+}
+
+// definitions checks each not yet validated block definition of a container.
+func (envelope mongoEnvelope) definitions(types []schema.BlockType, path string) error {
+	for _, block := range types {
+		if envelope.checked[block.Slug] {
+			continue
+		}
+		envelope.checked[block.Slug] = true
+		for _, blockField := range block.ResolvedFields() {
+			if blockField.Name == "blockType" {
+				return fmt.Errorf("MongoDB block %q in field %q declares reserved discriminator field \"blockType\"", block.Slug, path)
+			}
+		}
+		if err := envelope.fields(block.ResolvedFields(), nil, "block "+block.Slug+": ", true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fields checks fields whose canonical paths begin with ancestors; location
+// prefixes diagnostics for fields of a block definition.
+func (envelope mongoEnvelope) fields(fields []schema.Field, ancestors []string, location string, insideRepeated bool) error {
 	if len(ancestors) >= query.MaxPathSegments {
 		return fmt.Errorf("MongoDB field nesting exceeds %d path segments", query.MaxPathSegments)
 	}
@@ -345,7 +487,8 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 			continue
 		}
 		segments := append(append([]string(nil), ancestors...), field.Name)
-		path := strings.Join(segments, ".")
+		canonical := strings.Join(segments, ".")
+		path := location + canonical
 		repeatedSelect := field.Type == schema.FieldTypeSelect && field.Select != nil && field.Select.HasMany
 		repeatedContainer := field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks
 		if insideRepeated {
@@ -353,7 +496,7 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 				return fmt.Errorf("MongoDB adapter does not support indexes on field %q inside a repeated field", path)
 			}
 		}
-		if field.Unique && len(ancestors) != 0 {
+		if field.Unique && (len(ancestors) != 0 || location != "") {
 			return fmt.Errorf("MongoDB adapter cannot enforce unique nested field %q; use a declared compound index from the collection root", path)
 		}
 		if repeatedContainer || repeatedSelect || primitivefield.IsList(field) {
@@ -361,17 +504,14 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 				return fmt.Errorf("MongoDB adapter does not support indexed or unique repeated field %q", path)
 			}
 		}
-		if field.Name == "" || field.Path.String() != path || len(field.Path.Segments()) != len(segments) {
+		if field.Name == "" || field.Path.String() != canonical || len(field.Path.Segments()) != len(segments) {
 			return fmt.Errorf("MongoDB field %q does not have its canonical resolved path %q", field.Name, path)
 		}
 		if embedded.HasFields(field) {
 			for _, tree := range field.Plugin.EmbeddedTrees {
 				for _, c := range tree.Cases {
-					for _, variant := range c.ResolvedTypes() {
-						prefix := append(append([]string(nil), segments...), tree.Key, c.TagValue, variant.Slug)
-						if err := validateMongoFieldEnvelopeAt(variant.ResolvedFields(), prefix, true); err != nil {
-							return err
-						}
+					if err := envelope.definitions(c.Definitions(), path); err != nil {
+						return err
 					}
 				}
 			}
@@ -381,7 +521,7 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 			if field.Category != schema.FieldCategoryNested || field.Nested == nil {
 				return fmt.Errorf("MongoDB group field %q does not have a nested field contract", path)
 			}
-			if err := validateMongoFieldEnvelopeAt(field.Nested.ResolvedFields(), segments, insideRepeated); err != nil {
+			if err := envelope.fields(field.Nested.ResolvedFields(), segments, location, insideRepeated); err != nil {
 				return err
 			}
 			continue
@@ -390,24 +530,17 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 			if field.Category != schema.FieldCategoryNested || field.Nested == nil {
 				return fmt.Errorf("MongoDB array field %q does not have a nested field contract", path)
 			}
-			if err := validateMongoFieldEnvelopeAt(field.Nested.ResolvedFields(), segments, true); err != nil {
+			if err := envelope.fields(field.Nested.ResolvedFields(), segments, location, true); err != nil {
 				return err
 			}
 			continue
 		}
 		if field.Type == schema.FieldTypeBlocks {
-			if field.Category != schema.FieldCategoryNested || field.Blocks == nil || len(field.Blocks.ResolvedTypes()) == 0 {
+			if field.Category != schema.FieldCategoryNested || field.Blocks == nil || len(field.Blocks.Definitions()) == 0 {
 				return fmt.Errorf("MongoDB blocks field %q does not have a block contract", path)
 			}
-			for _, block := range field.Blocks.ResolvedTypes() {
-				for _, blockField := range block.ResolvedFields() {
-					if blockField.Name == "blockType" {
-						return fmt.Errorf("MongoDB block %q in field %q declares reserved discriminator field \"blockType\"", block.Slug, path)
-					}
-				}
-				if err := validateMongoFieldEnvelopeAt(block.ResolvedFields(), append(append([]string(nil), segments...), block.Slug), true); err != nil {
-					return err
-				}
+			if err := envelope.definitions(field.Blocks.Definitions(), path); err != nil {
+				return err
 			}
 			continue
 		}
@@ -423,7 +556,7 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 			}
 			continue
 		}
-		if len(ancestors) == 0 && mongoUploadSizesField(field) {
+		if len(ancestors) == 0 && location == "" && mongoUploadSizesField(field) {
 			continue
 		}
 		if field.Category != schema.FieldCategoryScalar &&
@@ -450,17 +583,19 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 	return nil
 }
 
-func validateRequestEnvelope(request store.Request) error {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+// validateRequestEnvelope checks a document request against its collection
+// contract, which is validated once per resolved collection value.
+func (backend *Store) validateRequestEnvelope(request store.Request) error {
+	if err := membership.ValidateRequest(request); err != nil {
 		return err
 	}
-	if err := validateCollectionEnvelope(request.Collection); err != nil {
+	if err := backend.validateCollectionEnvelope(request.Collection); err != nil {
 		return err
 	}
 	if request.IndexWindow != nil {
 		return fmt.Errorf("MongoDB adapter does not yet support list index windows")
 	}
-	if err := validateMongoPopulationEnvelope(request); err != nil {
+	if err := validateMongoPopulationEnvelope(request, backend.validateCollectionEnvelope); err != nil {
 		return err
 	}
 	if _, err := requestProjection(request); err != nil {
@@ -486,32 +621,22 @@ func validateRequestEnvelope(request store.Request) error {
 	return nil
 }
 
-func validateValues(collection schema.Collection, values store.Values) error {
-	return validateMongoFieldValues(collection.ID, collection.Fields, values, nil, false, false, nil, nil)
+// validateStoredValues checks the stored shape of authored values: known
+// fields, value types, select options, row identities, references and upper
+// bounds. Completeness belongs to operation validation, which defers it for
+// drafts and audits it in migrations: a stored document may omit or clear a
+// required value, hold fewer rows than a minimum, or keep an empty string.
+// Complete documents and patches therefore share one rule.
+func validateStoredValues(collection schema.Collection, values store.Values) error {
+	return validateMongoFieldValues(collection.ID, collection.Fields, values, nil, nil, nil)
 }
 
-func validateCompleteValues(collection schema.Collection, values store.Values) error {
-	return validateMongoFieldValues(collection.ID, collection.Fields, values, nil, true, false, nil, nil)
-}
-
-func validatePatchValues(collection schema.Collection, values store.Values) error {
-	return validateMongoFieldValues(collection.ID, collection.Fields, values, nil, false, true, nil, nil)
-}
-
-func validateCompleteValuesForLocales(collection schema.Collection, values store.Values, locales []schema.LocaleCode) error {
+func validateStoredValuesForLocales(collection schema.Collection, values store.Values, locales []schema.LocaleCode) error {
 	configured, err := mongoConfiguredLocales(locales)
 	if err != nil {
 		return err
 	}
-	return validateMongoFieldValues(collection.ID, collection.Fields, values, nil, true, false, configured, nil)
-}
-
-func validatePatchValuesForLocales(collection schema.Collection, values store.Values, locales []schema.LocaleCode) error {
-	configured, err := mongoConfiguredLocales(locales)
-	if err != nil {
-		return err
-	}
-	return validateMongoFieldValues(collection.ID, collection.Fields, values, nil, false, true, configured, nil)
+	return validateMongoFieldValues(collection.ID, collection.Fields, values, nil, configured, nil)
 }
 
 func mongoConfiguredLocales(locales []schema.LocaleCode) (map[string]struct{}, error) {
@@ -534,8 +659,6 @@ func validateMongoFieldValues(
 	fields []schema.Field,
 	values store.Values,
 	ancestors []string,
-	requireMissing bool,
-	patchRoot bool,
 	configuredLocales map[string]struct{},
 	allowedSpecialKeys map[string]struct{},
 ) error {
@@ -563,9 +686,6 @@ func validateMongoFieldValues(
 		path := strings.Join(pathSegments, ".")
 		value, exists := values[field.Name]
 		if !exists {
-			if requireMissing && field.Required {
-				return fmt.Errorf("MongoDB document is missing required field %q", path)
-			}
 			continue
 		}
 		if field.Localized {
@@ -598,8 +718,6 @@ func validateMongoFieldValues(
 					unlocalized,
 					localizedValue,
 					append(append([]string(nil), pathSegments...), locale),
-					requireMissing,
-					patchRoot,
 					configuredLocales,
 				); err != nil {
 					return err
@@ -610,7 +728,7 @@ func validateMongoFieldValues(
 			}
 			continue
 		}
-		if err := validateMongoFieldValue(collectionID, field, value, pathSegments, requireMissing, patchRoot, configuredLocales); err != nil {
+		if err := validateMongoFieldValue(collectionID, field, value, pathSegments, configuredLocales); err != nil {
 			return err
 		}
 	}
@@ -622,18 +740,10 @@ func validateMongoFieldValue(
 	field schema.Field,
 	value store.Value,
 	pathSegments []string,
-	requireMissing bool,
-	patchRoot bool,
 	configuredLocales map[string]struct{},
 ) error {
 	path := strings.Join(pathSegments, ".")
 	if value.Kind() == store.ValueNull {
-		if field.Required {
-			if patchRoot {
-				return fmt.Errorf("MongoDB patch cannot clear required field %q", path)
-			}
-			return fmt.Errorf("MongoDB document is missing required field %q", path)
-		}
 		return nil
 	}
 
@@ -645,14 +755,7 @@ func validateMongoFieldValue(
 		if field.Nested == nil {
 			return fmt.Errorf("MongoDB group field %q does not have a nested field contract", path)
 		}
-		// Complete documents require complete supplied groups. Direct store
-		// patches remain partial at every supported group depth so Update can
-		// atomically merge them with the stored canonical object.
-		nestedRequireMissing := requireMissing
-		if patchRoot {
-			nestedRequireMissing = false
-		}
-		return validateMongoFieldValues(collectionID, field.Nested.ResolvedFields(), object, pathSegments, nestedRequireMissing, patchRoot, configuredLocales, nil)
+		return validateMongoFieldValues(collectionID, field.Nested.ResolvedFields(), object, pathSegments, configuredLocales, nil)
 	}
 	if field.Type == schema.FieldTypeSelect && field.Select != nil && field.Select.HasMany {
 		return validateMongoHasManySelectValue(field, value, path)
@@ -671,7 +774,7 @@ func validateMongoFieldValue(
 			if o.Key == "" {
 				return nil, &embedded.Error{Issue: schema.Issue{Code: "missing_embedded_identity", Path: o.RuntimePath + "." + o.Case.Identity, Message: "Migrate this stored payload to assign a stable occurrence identity before using it."}}
 			}
-			return o.Payload, validateMongoFieldValues(collectionID, o.Fields, o.Payload, strings.Split(o.RuntimePath, "."), requireMissing, patchRoot, configuredLocales, map[string]struct{}{o.Case.Identity: {}, o.Case.Discriminator: {}})
+			return o.Payload, validateMongoFieldValues(collectionID, o.Fields, o.Payload, strings.Split(o.RuntimePath, "."), configuredLocales, map[string]struct{}{o.Case.Identity: {}, o.Case.Discriminator: {}})
 		})
 		return err
 	}
@@ -691,9 +794,6 @@ func validateMongoFieldValue(
 func validateMongoHasManySelectValue(field schema.Field, value store.Value, path string) error {
 	if value.Kind() != store.ValueList || field.Select == nil || !field.Select.HasMany {
 		return fmt.Errorf("MongoDB value %q does not match field type %q", path, field.Type)
-	}
-	if field.Required && value.Len() == 0 {
-		return fmt.Errorf("MongoDB document is missing required field %q", path)
 	}
 	allowed := make(map[string]struct{}, len(field.Select.Options))
 	for _, option := range field.Select.Options {
@@ -732,12 +832,6 @@ func validateMongoArrayValue(
 	if value.Kind() != store.ValueList || field.Nested == nil {
 		return fmt.Errorf("MongoDB value %q does not match field type %q", path, field.Type)
 	}
-	if field.Required && value.Len() == 0 {
-		return fmt.Errorf("MongoDB document is missing required field %q", path)
-	}
-	if value.Len() < field.Nested.MinRows {
-		return fmt.Errorf("MongoDB value %q must contain at least %d rows", path, field.Nested.MinRows)
-	}
 	if field.Nested.MaxRows > 0 && value.Len() > field.Nested.MaxRows {
 		return fmt.Errorf("MongoDB value %q must contain at most %d rows", path, field.Nested.MaxRows)
 	}
@@ -756,7 +850,7 @@ func validateMongoArrayValue(
 		if err := validateMongoFieldValues(
 			collectionID, field.Nested.ResolvedFields(), object,
 			append(append([]string(nil), pathSegments...), fmt.Sprintf("%d", index)),
-			true, false, configuredLocales, map[string]struct{}{"_key": {}},
+			configuredLocales, map[string]struct{}{"_key": {}},
 		); err != nil {
 			return err
 		}
@@ -777,12 +871,6 @@ func validateMongoBlocksValue(
 	path := strings.Join(pathSegments, ".")
 	if value.Kind() != store.ValueList || field.Blocks == nil {
 		return fmt.Errorf("MongoDB value %q does not match field type %q", path, field.Type)
-	}
-	if field.Required && value.Len() == 0 {
-		return fmt.Errorf("MongoDB document is missing required field %q", path)
-	}
-	if value.Len() < field.Blocks.MinRows {
-		return fmt.Errorf("MongoDB value %q must contain at least %d blocks", path, field.Blocks.MinRows)
 	}
 	if field.Blocks.MaxRows > 0 && value.Len() > field.Blocks.MaxRows {
 		return fmt.Errorf("MongoDB value %q must contain at most %d blocks", path, field.Blocks.MaxRows)
@@ -810,7 +898,7 @@ func validateMongoBlocksValue(
 		if err := validateMongoFieldValues(
 			collectionID, block.ResolvedFields(), object,
 			append(append([]string(nil), pathSegments...), fmt.Sprintf("%d", index)),
-			true, false, configuredLocales,
+			configuredLocales,
 			map[string]struct{}{"_key": {}, "blockType": {}},
 		); err != nil {
 			return err
@@ -854,9 +942,6 @@ func validateMongoScalarFieldValue(field schema.Field, value store.Value, path s
 	if primitivefield.IsList(field) {
 		if value.Kind() != store.ValueList {
 			return fmt.Errorf("MongoDB value %q must be a primitive array", path)
-		}
-		if field.Required && value.Len() == 0 {
-			return fmt.Errorf("MongoDB required list %q must not be empty", path)
 		}
 		index := -1
 		for item := range value.Elements() {
@@ -907,7 +992,8 @@ func validateMongoScalarFieldValue(field schema.Field, value store.Value, path s
 		return fmt.Errorf("MongoDB value %q does not match field type %q", path, field.Type)
 	}
 	if (field.Type == schema.FieldTypeSelect || field.Type == schema.FieldTypeRadio) && field.Select != nil {
-		allowed := text == "" && !field.Required
+		// An empty choice is a stored value; requiredness is not.
+		allowed := text == ""
 		for _, option := range field.Select.Options {
 			allowed = allowed || option.Value == text
 		}

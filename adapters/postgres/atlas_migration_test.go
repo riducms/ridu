@@ -11,6 +11,7 @@ import (
 
 	atlaspostgres "ariga.io/atlas/sql/postgres"
 	atlasschema "ariga.io/atlas/sql/schema"
+	"github.com/riducms/ridu/internal/schematest"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -406,6 +407,7 @@ func TestResourceRemovalFailsClosedWhenAnyReferenceBearingPhysicalRootSurvives(t
 			afterSnapshot := before.Snapshot()
 			afterSnapshot.Collections = afterSnapshot.Collections[1:]
 			afterSnapshot.Collections[1].Fields = []schema.Field{afterRoot}
+			afterSnapshot.Blocks = referenceBlockDefinitions(afterRoot)
 			after := schema.NewManifest(afterSnapshot)
 			_, err := BuildArtifact(context.Background(), "unsafe-reference-root-"+shape, &before, after, nil, true)
 			var safety *SafetyError
@@ -466,15 +468,15 @@ func TestStoredReferenceShapeDecreasesFailClosedBeforeDormantValuesCanReattach(t
 		"upload field removal": {before: upload},
 		"nested group reference removal": {
 			before: retirementReferenceRoot(t, "group", true),
-			after:  pointerToField(referenceRootWithoutChildren(retirementReferenceRoot(t, "group", true))),
+			after:  pointerToField(referenceRootWithoutChildren(t, retirementReferenceRoot(t, "group", true))),
 		},
 		"nested array reference removal": {
 			before: retirementReferenceRoot(t, "array", true),
-			after:  pointerToField(referenceRootWithoutChildren(retirementReferenceRoot(t, "array", true))),
+			after:  pointerToField(referenceRootWithoutChildren(t, retirementReferenceRoot(t, "array", true))),
 		},
 		"nested block reference removal": {
 			before: retirementReferenceRoot(t, "blocks", true),
-			after:  pointerToField(referenceRootWithoutChildren(retirementReferenceRoot(t, "blocks", true))),
+			after:  pointerToField(referenceRootWithoutChildren(t, retirementReferenceRoot(t, "blocks", true))),
 		},
 		"nested reference localization change": {
 			before: referenceRootWithLocalizedLeaf(retirementReferenceRoot(t, "group", true), true),
@@ -486,8 +488,10 @@ func TestStoredReferenceShapeDecreasesFailClosedBeforeDormantValuesCanReattach(t
 			before := referenceShapeDecreaseManifest(test.before)
 			afterSnapshot := before.Snapshot()
 			afterSnapshot.Collections[len(afterSnapshot.Collections)-1].Fields = nil
+			afterSnapshot.Blocks = nil
 			if test.after != nil {
 				afterSnapshot.Collections[len(afterSnapshot.Collections)-1].Fields = []schema.Field{*test.after}
+				afterSnapshot.Blocks = referenceBlockDefinitions(*test.after)
 			}
 			after := schema.NewManifest(afterSnapshot)
 			for _, allowDestructive := range []bool{false, true} {
@@ -519,15 +523,15 @@ func TestRunnerRejectsForgedReferenceShapeDecreaseArtifacts(t *testing.T) {
 		"upload removal": {before: uploadRetirementReferenceRoot("media")},
 		"nested group removal": {
 			before: retirementReferenceRoot(t, "group", true),
-			after:  pointerToField(referenceRootWithoutChildren(retirementReferenceRoot(t, "group", true))),
+			after:  pointerToField(referenceRootWithoutChildren(t, retirementReferenceRoot(t, "group", true))),
 		},
 		"nested array removal": {
 			before: retirementReferenceRoot(t, "array", true),
-			after:  pointerToField(referenceRootWithoutChildren(retirementReferenceRoot(t, "array", true))),
+			after:  pointerToField(referenceRootWithoutChildren(t, retirementReferenceRoot(t, "array", true))),
 		},
 		"nested block removal": {
 			before: retirementReferenceRoot(t, "blocks", true),
-			after:  pointerToField(referenceRootWithoutChildren(retirementReferenceRoot(t, "blocks", true))),
+			after:  pointerToField(referenceRootWithoutChildren(t, retirementReferenceRoot(t, "blocks", true))),
 		},
 		"nested localization change": {
 			before: referenceRootWithLocalizedLeaf(retirementReferenceRoot(t, "group", true), true),
@@ -539,8 +543,10 @@ func TestRunnerRejectsForgedReferenceShapeDecreaseArtifacts(t *testing.T) {
 			before := referenceShapeDecreaseManifest(test.before)
 			afterSnapshot := before.Snapshot()
 			afterSnapshot.Collections[len(afterSnapshot.Collections)-1].Fields = nil
+			afterSnapshot.Blocks = nil
 			if test.after != nil {
 				afterSnapshot.Collections[len(afterSnapshot.Collections)-1].Fields = []schema.Field{*test.after}
+				afterSnapshot.Blocks = referenceBlockDefinitions(*test.after)
 			}
 			after := schema.NewManifest(afterSnapshot)
 			artifact, err := ridumigration.NewArtifact("forged-reference-shape-decrease", atlasPlanner(), &before, after)
@@ -933,6 +939,7 @@ func retirementReferenceManifest(root schema.Field) schema.Manifest {
 	versions := &schema.VersionSettings{Drafts: true, MaxPerDocument: 10}
 	return schema.NewManifest(schema.Snapshot{
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "Reference-root retirement"}, Plugins: []schema.Plugin{},
+		Blocks: referenceBlockDefinitions(root),
 		Collections: []schema.Collection{
 			{ID: "retired-users", Slug: "retired-users", Fields: []schema.Field{}},
 			{ID: "keepers", Slug: "keepers", Fields: []schema.Field{}},
@@ -952,6 +959,7 @@ func referenceShapeDecreaseManifest(root schema.Field) schema.Manifest {
 			},
 		},
 		Plugins: []schema.Plugin{},
+		Blocks:  referenceBlockDefinitions(root),
 		Collections: []schema.Collection{
 			{ID: "retired-users", Slug: "retired-users", Fields: []schema.Field{}},
 			{ID: "keepers", Slug: "keepers", Fields: []schema.Field{}},
@@ -985,12 +993,13 @@ func uploadRetirementReferenceRoot(target schema.StableID) schema.Field {
 
 func pointerToField(field schema.Field) *schema.Field { return &field }
 
-func referenceRootWithoutChildren(root schema.Field) schema.Field {
+func referenceRootWithoutChildren(t *testing.T, root schema.Field) schema.Field {
+	t.Helper()
 	if root.Nested != nil {
 		root.Nested = &schema.NestedField{}
 	}
 	if root.Blocks != nil {
-		blocks := append([]schema.BlockType(nil), root.Blocks.ResolvedTypes()...)
+		blocks := append([]schema.BlockType(nil), root.Blocks.Definitions()...)
 		for index := range blocks {
 			fields := blocks[index].ResolvedFields()
 			blocks[index].Fields = nil
@@ -1000,9 +1009,22 @@ func referenceRootWithoutChildren(root schema.Field) schema.Field {
 				}
 			}
 		}
-		root.Blocks = &schema.BlocksField{Types: blocks}
+		root.Blocks = &schema.BlocksField{BlockReferences: slices.Clone(root.Blocks.BlockReferences)}
+		root = schematest.Bind(t, "entries", blocks, root)[0]
 	}
 	return root
+}
+
+// referenceBlockDefinitions returns the block definitions that the bound
+// containers of roots select, for the snapshot that records those roots.
+func referenceBlockDefinitions(roots ...schema.Field) []schema.BlockType {
+	var blocks []schema.BlockType
+	for _, root := range roots {
+		if root.Blocks != nil {
+			blocks = append(blocks, root.Blocks.Definitions()...)
+		}
+	}
+	return blocks
 }
 
 func referenceRootWithLocalizedLeaf(root schema.Field, localized bool) schema.Field {
@@ -1040,7 +1062,10 @@ func retirementReferenceRoot(t *testing.T, shape string, includeRetired bool) sc
 		root.Nested = &schema.NestedField{Fields: []schema.Field{reference}}
 	case "blocks":
 		root.Type = schema.FieldTypeBlocks
-		root.Blocks = &schema.BlocksField{Types: []schema.BlockType{{Slug: "reference", Labels: schema.BlockLabels{Singular: "Reference"}, Fields: []schema.Field{reference, atlasBlockNameField("entries-content-reference-block-name", "content.reference.blockName")}}}}
+		root.Blocks = &schema.BlocksField{BlockReferences: []string{"reference"}}
+		reference.ID, reference.Path = "block-reference-reference", query.Field("reference")
+		block := schema.BlockType{Slug: "reference", TypeName: "Reference", Labels: schema.BlockLabels{Singular: "Reference"}, Fields: []schema.Field{reference, atlasBlockNameField("block-reference-block-name", "blockName")}}
+		return schematest.Bind(t, "entries", []schema.BlockType{block}, root)[0]
 	default:
 		t.Fatalf("unknown retirement reference shape %q", shape)
 	}
@@ -1544,8 +1569,14 @@ func TestAtlasArtifactRecordsManifestOnlyTransitions(t *testing.T) {
 }
 
 func atlasTestManifest(fields ...schema.Field) schema.Manifest {
+	return atlasBlocksManifest(nil, fields...)
+}
+
+// atlasBlocksManifest is atlasTestManifest with block definitions that the
+// fields' containers select.
+func atlasBlocksManifest(blocks []schema.BlockType, fields ...schema.Field) schema.Manifest {
 	return schema.NewManifest(schema.Snapshot{
-		Version: schema.CurrentVersion, Application: schema.Application{Name: "Atlas test"}, Plugins: []schema.Plugin{},
+		Version: schema.CurrentVersion, Application: schema.Application{Name: "Atlas test"}, Plugins: []schema.Plugin{}, Blocks: blocks,
 		Collections: []schema.Collection{{
 			ID: "posts", Slug: "posts", Labels: schema.CollectionLabels{Singular: "Post", Plural: "Posts"}, Fields: fields,
 		}},

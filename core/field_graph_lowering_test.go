@@ -42,32 +42,39 @@ func TestGraphRuntimeLoweringKeepsPlacementAndScopedSnapshots(t *testing.T) {
 	if len(bindings) != 2 || bindings[0].ID == bindings[1].ID {
 		t.Fatalf("independent placements were not bound: %+v", bindings)
 	}
-	root := store.Values{"code": store.String("root"), "other": store.String("untouched")}
-	siblings := store.Values{"code": store.String("nested"), "other": store.String("sibling")}
-	prior := store.Values{"code": store.String("before")}
-	ctx := operationengine.Context{Context: t.Context(), Value: siblings["code"], ValuePresent: true, Data: root, SiblingData: siblings, OriginalSiblingData: prior, OccurrenceID: bindings[1].ID + "/row-A", RuntimePath: "variant.code"}
+	root := store.Object(store.Values{"code": store.String("root"), "other": store.String("untouched")})
+	siblings := store.Object(store.Values{"code": store.String("nested"), "other": store.String("sibling")})
+	prior := store.Object(store.Values{"code": store.String("before")})
+	replacement := &operationengine.FieldReplacement{}
+	ctx := operationengine.Context{Context: t.Context(), Value: siblings.Get("code"), ValuePresent: true, Root: root, Siblings: siblings, Prior: prior, Replacement: replacement, OccurrenceID: bindings[1].ID + "/row-A", SchemaOccurrenceID: bindings[1].ID, RuntimePath: "variant.code"}
 	if err := bindings[1].Hooks.BeforeChange[0](ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := siblings["code"].StringValue(); got != "own:nested" {
+	if got, _ := replacement.Value.StringValue(); !replacement.Set || got != "own:nested" {
 		t.Fatalf("scoped replacement = %q", got)
 	}
-	if got, _ := root["code"].StringValue(); got != "root" {
-		t.Fatalf("nested replacement mutated another occurrence: %q", got)
+	if got, _ := siblings.Get("code").StringValue(); got != "nested" {
+		t.Fatalf("replacement changed the callback's sibling view: %q", got)
 	}
-	root["other"], siblings["other"], prior["code"] = store.Null(), store.Null(), store.Null()
 	seen := contexts[0]
 	if seen.OccurrenceID != operation.OccurrenceID(ctx.OccurrenceID) || seen.SchemaOccurrenceID != operation.OccurrenceID(bindings[1].ID) {
 		t.Fatalf("callback identity = %+v", seen)
 	}
 	if value, _ := seen.Root.String("other"); value != "untouched" {
-		t.Fatal("root view retained mutable operation map")
+		t.Fatal("root view did not present the operation's root")
 	}
 	if value, _ := seen.Siblings.String("other"); value != "sibling" {
-		t.Fatal("sibling view retained mutable operation map")
+		t.Fatal("sibling view did not present the enclosing object")
 	}
 	if value, _ := seen.Prior.String("code"); value != "before" {
-		t.Fatal("prior view retained mutable operation map")
+		t.Fatal("prior view did not present the previous object")
+	}
+	// A transform run without a replacement slot cannot apply its change, so
+	// it fails instead of silently dropping it.
+	ctx.Replacement = nil
+	var failure *operationengine.Error
+	if err := bindings[1].Hooks.BeforeChange[0](ctx); !errors.As(err, &failure) || failure.Code != "invalid_field_replacement" {
+		t.Fatalf("replacement without a slot = %v", err)
 	}
 }
 
@@ -85,7 +92,7 @@ func TestGraphRuntimeTypedGuardPrecedesEveryCallback(t *testing.T) {
 		return nil, nil
 	})
 	binding := graphRuntimeBindings(t, field.Fields{text})[0]
-	ctx := operationengine.Context{Context: t.Context(), Value: store.Number(123), ValuePresent: true, SiblingData: store.Values{"code": store.Number(123)}, RuntimePath: "variants.0.code"}
+	ctx := operationengine.Context{Context: t.Context(), Value: store.Number(123), ValuePresent: true, Siblings: store.Object(store.Values{"code": store.Number(123)}), RuntimePath: "variants.0.code"}
 	for _, callback := range []operationengine.Hook{binding.Hooks.BeforeChange[0], binding.Hooks.AfterChange[0], binding.Hooks.AfterRead[0]} {
 		err := callback(ctx)
 		if err == nil || !strings.Contains(err.Error(), "invalid_type") || !strings.Contains(err.Error(), ctx.RuntimePath) {
@@ -119,7 +126,7 @@ func TestGraphRuntimeRawPresenceAndRelativeValidationIssues(t *testing.T) {
 		return []operation.Issue{{Code: "custom", Message: "invalid code"}}, nil
 	})
 	binding := graphRuntimeBindings(t, field.Fields{code})[0]
-	ctx := operationengine.Context{Context: t.Context(), SiblingData: store.Values{}, RuntimePath: "rows.1.code"}
+	ctx := operationengine.Context{Context: t.Context(), Siblings: store.Object(store.Values{}), RuntimePath: "rows.1.code"}
 	if err := binding.Hooks.BeforeValidate[0](ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +176,7 @@ func TestGraphRuntimeContainerAndNumberTypedAdmission(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
 			binding := graphRuntimeBindings(t, field.Fields{test.node(&calls)})[0]
-			ctx := operationengine.Context{Context: t.Context(), Value: test.bad, ValuePresent: true, SiblingData: store.Values{"value": test.bad}, RuntimePath: "value"}
+			ctx := operationengine.Context{Context: t.Context(), Value: test.bad, ValuePresent: true, Siblings: store.Object(store.Values{"value": test.bad}), RuntimePath: "value"}
 			if err := binding.Hooks.BeforeChange[0](ctx); err == nil || !strings.Contains(err.Error(), test.code) || calls != 0 {
 				t.Fatalf("unsafe %s admission: calls=%d error=%v", test.name, calls, err)
 			}

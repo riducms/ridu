@@ -8,16 +8,16 @@ import (
 )
 
 func TestBlockGeneratedNameIsMetadataOnly(t *testing.T) {
-	before, after := phaseOneBlocks(), phaseOneBlocks()
-	after.Blocks.ResolvedTypes()[0].TypeName = "Hero"
+	before := phaseOneBlocks(t, nil)
+	after := phaseOneBlocks(t, func(hero *schema.BlockType) { hero.TypeName = "Banner" })
 	if err := validateMongoDBAdditiveFields("posts", []schema.Field{before}, []schema.Field{after}); err != nil {
 		t.Fatal(err)
 	}
-	a, err := bson.MarshalExtJSON(mongoRepeatedRootJSONSchema(before, nil), false, false)
+	a, err := bson.MarshalExtJSON(mongoRepeatedRootJSONSchema(before, nil, mongoRowFields), false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := bson.MarshalExtJSON(mongoRepeatedRootJSONSchema(after, nil), false, false)
+	b, err := bson.MarshalExtJSON(mongoRepeatedRootJSONSchema(after, nil, mongoRowFields), false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

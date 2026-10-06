@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 
 type FrameworkName = "ridu" | "payload";
 
@@ -58,23 +59,74 @@ const mutationConcurrency = positiveInteger(
 );
 const requestTimeoutMs = positiveInteger("RIDU_PERF_REQUEST_TIMEOUT_MS", 30_000);
 const secret = "ridu-performance-payload-secret";
+// Like a generated PostgreSQL application, the measured server links only the PostgreSQL adapter.
+const riduBuildTags = ["postgresonly"];
+const riduBuildCommand = [
+	"go",
+	"build",
+	"-tags",
+	riduBuildTags.join(","),
+	"-trimpath",
+	"-ldflags=-s -w",
+	"-o",
+	relative(repository, binary),
+	"./tests/contracts/admin_server",
+];
+const riduMigrationDirectory = join(outputDirectory, "ridu-migrations");
+const riduFixtureEnvironment = {
+	RIDU_BROWSER_ADDRESS: "127.0.0.1:18181",
+	RIDU_BROWSER_PREVIEW_ADDRESS: "127.0.0.1:18182",
+	RIDU_POSTGRES_FIXTURE_SCHEMA: "ridu_admin_fixture_performance",
+};
+
+// RIDU_PERF_FRAMEWORKS reruns one side, e.g. after a Ridu-only change; compare its report with
+// the other side's earlier report from the same host and harness.
+const selectedFrameworks = new Set(
+	(Bun.env.RIDU_PERF_FRAMEWORKS ?? "ridu,payload")
+		.split(",")
+		.map((name) => name.trim())
+		.filter((name) => name !== "")
+);
+for (const name of selectedFrameworks) {
+	if (name !== "ridu" && name !== "payload") {
+		throw new Error(`RIDU_PERF_FRAMEWORKS contains unknown framework ${JSON.stringify(name)}`);
+	}
+}
+if (selectedFrameworks.size === 0) throw new Error("RIDU_PERF_FRAMEWORKS selects no framework");
 
 mkdirSync(outputDirectory, { recursive: true });
-cpSync(join(payloadDirectory, ".next/static"), join(payloadStandaloneDirectory, ".next/static"), {
-	recursive: true,
-	force: true,
-});
+if (selectedFrameworks.has("payload")) {
+	cpSync(join(payloadDirectory, ".next/static"), join(payloadStandaloneDirectory, ".next/static"), {
+		recursive: true,
+		force: true,
+	});
+}
+runCommand(riduBuildCommand, repository);
+// Mirror a deployment: write the committed migration history once and take the executable
+// history digest `ridu build` would link. Each trial applies it before the server starts.
+rmSync(riduMigrationDirectory, { recursive: true, force: true });
+const riduHistoryDigest = commandOutput(
+	binary,
+	["migrations", riduMigrationDirectory],
+	repository,
+	riduFixtureEnvironment
+);
+const riduMigrationArtifacts = readdirSync(riduMigrationDirectory).filter((name) =>
+	name.endsWith(".ridu.json")
+);
 
-const frameworks: Framework[] = [
+const allFrameworks: Framework[] = [
 	{
 		name: "ridu",
 		baseURL: "http://127.0.0.1:18181",
 		database: "ridu_performance",
 		command: [binary],
 		cwd: repository,
+		// The history digest selects production startup: the server verifies the migrated
+		// database instead of resetting and migrating its own schema.
 		environment: {
-			RIDU_BROWSER_ADDRESS: "127.0.0.1:18181",
-			RIDU_BROWSER_PREVIEW_ADDRESS: "127.0.0.1:18182",
+			...riduFixtureEnvironment,
+			RIDU_POSTGRES_FIXTURE_HISTORY_DIGEST: riduHistoryDigest,
 		},
 		// Match Payload: ready means the first successful posts read. The fixture applies its
 		// migrations before listening; /readyz also requires a ridu build migration history.
@@ -117,32 +169,43 @@ const frameworks: Framework[] = [
 const startedAt = new Date();
 const results: Array<Record<string, unknown>> = [];
 
+const frameworks = allFrameworks.filter((framework) => selectedFrameworks.has(framework.name));
+
 for (let trial = 1; trial <= trials; trial += 1) {
 	for (const framework of trial % 2 === 1 ? frameworks : [...frameworks].reverse()) {
 		results.push(await runTrial(framework, trial));
 	}
 }
 
+const finishedAt = new Date();
+const postgres = postgresMetadata();
+const gitStatus = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
+	cwd: repository,
+	encoding: "utf8",
+}).trimEnd();
 const report = {
 	version: 1,
 	startedAt: startedAt.toISOString(),
-	finishedAt: new Date().toISOString(),
+	finishedAt: finishedAt.toISOString(),
 	environment: {
 		platform: commandOutput("sw_vers", ["-productVersion"]),
 		kernel: commandOutput("uname", ["-srvmp"]),
 		cpu: commandOutput("sysctl", ["-n", "machdep.cpu.brand_string"]),
 		memoryBytes: Number(commandOutput("sysctl", ["-n", "hw.memsize"])),
-		postgres: commandOutput("psql", ["-d", "postgres", "-Atqc", "show server_version"]),
+		postgres: postgres.version,
+		postgresSettings: postgres.settings,
 		go: commandOutput("go", ["version"]),
 		bun: commandOutput("bun", ["--version"]),
 		node: commandOutput("node", ["--version"]),
 		riduRevision: commandOutput("git", ["rev-parse", "HEAD"], repository),
+		git: { dirty: gitStatus !== "", status: gitStatus === "" ? [] : gitStatus.split("\n") },
 		payloadVersion: "3.87.0",
 		nextVersion: "16.2.6",
 	},
 	configuration: {
 		trials,
 		datasetSize,
+		analyzedAfterSeeding: true,
 		readRequests,
 		mutationRequests,
 		adminRequests,
@@ -153,10 +216,30 @@ const report = {
 		postgresHost: postgresConnection.hostname,
 		postgresPort: postgresConnection.port || "5432",
 		postgresUser: decodeURIComponent(postgresConnection.username),
+		inheritedRuntimeTuning: inheritedRuntimeTuning(),
+		// NODE_OPTIONS can contain inline source; record its presence without exposing its contents.
+		inheritedNodeOptionsPresent: Boolean(Bun.env.NODE_OPTIONS),
+		riduAdminAssets: Bun.env.RIDU_BROWSER_ADMIN_DIR
+			? { source: "directory", directory: Bun.env.RIDU_BROWSER_ADMIN_DIR }
+			: { source: "embedded" },
+		riduBuild: { tags: riduBuildTags, command: riduBuildCommand.join(" ") },
+		// Ridu applies its migration history in a separate process before each server starts,
+		// as compare.ts runs `payload migrate`; the server only verifies it at startup.
+		riduMigration: {
+			separateStep: true,
+			command: `${relative(repository, binary)} migrate ${relative(repository, riduMigrationDirectory)}`,
+			artifacts: riduMigrationArtifacts,
+			historyDigest: riduHistoryDigest,
+		},
+		frameworks: frameworks.map((framework) => framework.name),
 		riduBinaryBytes: statSync(binary).size,
-		payloadStandaloneKiB: Number(
-			commandOutput("du", ["-sk", payloadStandaloneDirectory]).split(/\s+/)[0]
-		),
+		payloadStandaloneKiB: selectedFrameworks.has("payload")
+			? Number(commandOutput("du", ["-sk", payloadStandaloneDirectory]).split(/\s+/)[0])
+			: undefined,
+	},
+	artifacts: {
+		harness: fileArtifact(join(import.meta.dir, "compare.ts")),
+		riduBinary: fileArtifact(binary),
 	},
 	results,
 };
@@ -176,6 +259,11 @@ async function runTrial(framework: Framework, trial: number): Promise<Record<str
 		runCommand([join(payloadDirectory, "node_modules/.bin/payload"), "migrate"], payloadDirectory, {
 			PAYLOAD_DATABASE_URL: url,
 			PAYLOAD_SECRET: secret,
+		});
+	} else {
+		runCommand([binary, "migrate", riduMigrationDirectory], repository, {
+			...riduFixtureEnvironment,
+			RIDU_POSTGRES_URL: url,
 		});
 	}
 	const launchedAt = performance.now();
@@ -218,6 +306,9 @@ async function runTrial(framework: Framework, trial: number): Promise<Record<str
 			}
 		);
 		const publishedDocuments = await validatePublishedDataset(framework);
+		// Measure steady-state plans: without fresh statistics, each trial would time whatever
+		// PostgreSQL guesses before autovacuum next analyzes the seeded tables.
+		analyzeDatabase(framework.database);
 		await delay(2_000);
 		const datasetTreeRSSMiB = await stableRSS(process.pid);
 
@@ -525,14 +616,68 @@ async function treeRSSMiB(rootPID: number): Promise<number> {
 	return totalKiB / 1_024;
 }
 
-function recreateDatabase(database: string): void {
-	const environment = {
+function postgresEnvironment(): Record<string, string> {
+	return {
 		PGHOST: postgresConnection.hostname,
 		PGPORT: postgresConnection.port || "5432",
 		PGUSER: decodeURIComponent(postgresConnection.username),
 		PGPASSWORD: decodeURIComponent(postgresConnection.password),
 		PGSSLMODE: postgresConnection.searchParams.get("sslmode") ?? "prefer",
 	};
+}
+
+function postgresMetadata(): { version: string; settings: Record<string, string> } {
+	// Only record safe settings from the benchmark endpoint, never its connection URL or password.
+	const query = `SELECT json_build_object(
+		'version', current_setting('server_version'),
+		'settings', json_object_agg(name, current_setting(name) ORDER BY name)
+	) FROM pg_settings WHERE name IN (
+		'max_connections', 'shared_buffers', 'work_mem', 'effective_cache_size',
+		'fsync', 'synchronous_commit', 'full_page_writes', 'wal_level',
+		'checkpoint_timeout', 'random_page_cost', 'effective_io_concurrency',
+		'default_transaction_isolation', 'plan_cache_mode', 'jit',
+		'jit_above_cost', 'jit_inline_above_cost', 'jit_optimize_above_cost'
+	)`;
+	return JSON.parse(
+		commandOutput("psql", ["-d", "postgres", "-Atqc", query], repository, postgresEnvironment())
+	) as { version: string; settings: Record<string, string> };
+}
+
+function fileArtifact(path: string): { bytes: number; sha256: string } {
+	return {
+		bytes: statSync(path).size,
+		sha256: createHash("sha256").update(readFileSync(path)).digest("hex"),
+	};
+}
+
+function inheritedRuntimeTuning(): Record<string, string> {
+	const tuning: Record<string, string> = {};
+	for (const name of [
+		"GOGC",
+		"GOMEMLIMIT",
+		"GOMAXPROCS",
+		"GODEBUG",
+		"PAYLOAD_POOL_MAX",
+		"RIDU_BROWSER_BOOTSTRAP",
+		"RIDU_SQLITE_FIXTURE",
+		"RIDU_PAYLOAD_VISUAL_PREVIEW",
+	]) {
+		const value = Bun.env[name];
+		if (value !== undefined && value !== "") tuning[name] = value;
+	}
+	return tuning;
+}
+
+function analyzeDatabase(database: string): void {
+	runCommand(
+		["psql", "-d", database, "-v", "ON_ERROR_STOP=1", "-qc", "ANALYZE"],
+		repository,
+		postgresEnvironment()
+	);
+}
+
+function recreateDatabase(database: string): void {
+	const environment = postgresEnvironment();
 	runCommand(["dropdb", "--if-exists", database], repository, environment);
 	runCommand(["createdb", database], repository, environment);
 }
@@ -563,8 +708,17 @@ function runCommand(
 	if (result.exitCode !== 0) throw new Error(`${command.join(" ")} exited with ${result.exitCode}`);
 }
 
-function commandOutput(command: string, args: string[], cwd = repository): string {
-	return execFileSync(command, args, { cwd, encoding: "utf8" }).trim();
+function commandOutput(
+	command: string,
+	args: string[],
+	cwd = repository,
+	environment: Record<string, string> = {}
+): string {
+	return execFileSync(command, args, {
+		cwd,
+		env: { ...Bun.env, ...environment },
+		encoding: "utf8",
+	}).trim();
 }
 
 function percentile(sorted: number[], quantile: number): number {

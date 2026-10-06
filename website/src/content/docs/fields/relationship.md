@@ -55,7 +55,7 @@ collection and document. Use `field.PolymorphicRelationships` to select several 
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `field.Relationship(name, collection)`                                                           | Stores one document ID from one target collection.                                                                      |
 | `field.Relationships(name, collection)`                                                          | Stores an ordered list of IDs from one target collection.                                                               |
-| `field.PolymorphicRelationship(name, collections...)`                                            | Stores one `{ relationTo, value }` reference from several allowed collections.                                          |
+| `field.PolymorphicRelationship(name, collections...)`                                            | Stores one `{ relationTo, id }` reference from several allowed collections.                                             |
 | `field.PolymorphicRelationships(name, collections...)`                                           | Stores an ordered list of polymorphic references.                                                                       |
 | `.Required()`                                                                                    | Requires one reference, or a non-empty list for plural fields.                                                          |
 | `.FilterOptionRules(rules...)`                                                                   | Narrows picker choices and server admission with finite query predicates.                                               |
@@ -87,11 +87,32 @@ exists. `ReferenceDeleteCascade` deletes the referencing document as well, for o
 singular relationship. Required references default to restrict and cannot nullify. Version
 snapshots remain immutable. See [delete behavior](/docs/relationships/#delete-behavior).
 
+## Filter by related documents {#filters}
+
+Filter a relationship to one document by its ID: `{ author: { equals: adaID } }`, or `in` with
+several IDs. A list of documents is filtered by membership, so `in` matches when the list holds
+any of the IDs:
+
+```go
+// Posts that list Ada or Grace among their reviewers.
+query.In("reviewers", adaID, graceID)
+
+// Posts whose subject is this post, whichever collection holds the ID.
+query.In("subject", query.Reference("posts", postID))
+```
+
+A polymorphic relationship, single or a list, compares `{ relationTo, id }` references, as the
+SDK and REST write them: `{ subject: { in: [{ relationTo: 'posts', id: postID }] } }`. Wrap `in`
+in `not` to exclude documents. Equality, `contains` and ranges are rejected for lists and
+polymorphic relationships, and none of them can be sorted. See
+[Filter by membership](/docs/querying/#membership). The admin list offers **is any of** and
+**is none of** for these fields.
+
 ## Read and translate relationships
 
-Filter by the related ID or request `populate` through the Local API or SDK to read the related
-document. Population respects access rules, localization, and the requested depth limit.
-`.Localized()` lets each content locale select a different document.
+Request `populate` through the Local API or SDK to read the related document. Population respects
+access rules, localization, and the requested depth limit. `.Localized()` lets each content
+locale select a different document.
 
 ## Common mistakes {#troubleshooting}
 

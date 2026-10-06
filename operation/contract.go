@@ -146,6 +146,15 @@ type View struct {
 // Snapshot detaches the supplied map through store.Object.
 func Snapshot(values store.Values) View { return View{object: store.Object(values)} }
 
+// ObjectView presents an object Value, which is already immutable, without
+// copying it. Any other kind, including the zero Value, is an empty view.
+func ObjectView(object store.Value) View {
+	if object.Kind() != store.ValueObject {
+		return View{}
+	}
+	return View{object: object}
+}
+
 // Lookup reads a direct child and reports snapshot membership. During save
 // callbacks, empty scalars in Root, Siblings and an existing Prior object normalize to Null, so membership
 // does not prove the caller submitted that field. Inspect a raw hook's Value

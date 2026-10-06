@@ -29,6 +29,29 @@ PostgreSQL advisory ownership lock for the server lifetime, connect through that
 graceful shutdown. An optional `RIDU_POSTGRES_FIXTURE_SCHEMA` must retain the reserved prefix; a
 second process that requests the same schema is refused instead of racing a destructive reset.
 
+### Production-startup mode
+
+The performance comparison measures the fixture the way a generated PostgreSQL application is
+deployed. Build it with the `postgresonly` tag, which links only the PostgreSQL adapter; the
+default build also links the SQLite and MongoDB adapters that browser suites select at runtime.
+Then apply the migration history in a separate step before the server starts:
+
+```sh
+go build -tags postgresonly -trimpath -ldflags='-s -w' -o .ridu/performance/ridu-server ./tests/contracts/admin_server
+export RIDU_POSTGRES_URL='postgres://…' RIDU_POSTGRES_FIXTURE_SCHEMA=ridu_admin_fixture_performance
+digest=$(.ridu/performance/ridu-server migrations .ridu/performance/ridu-migrations)
+.ridu/performance/ridu-server migrate .ridu/performance/ridu-migrations
+RIDU_POSTGRES_FIXTURE_HISTORY_DIGEST="$digest" .ridu/performance/ridu-server
+```
+
+`migrations` writes the fixture's committed artifact history and prints the executable history
+digest that `ridu build` would link. `migrate` recreates the named schema and applies that history,
+like `ridu migrate up`. With `RIDU_POSTGRES_FIXTURE_HISTORY_DIGEST`, the server neither resets,
+migrates nor drops its schema: like `ridu.Execute`, it verifies the database's migration history and
+storage schema before serving. It still seeds the fixture accounts and content at startup, as the
+Payload fixture does in `onInit`. This mode requires `RIDU_POSTGRES_URL` and the migrated
+`RIDU_POSTGRES_FIXTURE_SCHEMA`, and excludes the bootstrap fixture and the reset route.
+
 The reset route is disabled during ordinary fixture use. Playwright explicitly enables it with
 `RIDU_BROWSER_RESET_TOKEN`, sends that token in `X-Ridu-Test-Reset-Token`, and may only enable it on
 a loopback listener. Each reset drains active requests and replaces both the fixture database and

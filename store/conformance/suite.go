@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ func Run(t *testing.T, factory Factory) {
 		t.Fatal("store conformance requires a factory")
 	}
 	t.Run("primitive-lists", func(t *testing.T) { runPrimitiveLists(t, factory) })
+	t.Run("skip-total", func(t *testing.T) { runSkipTotal(t, factory) })
 	manifest := conformanceManifest()
 	runTest := func(name string, test func(*testing.T)) {
 		t.Run(name, test)
@@ -49,7 +51,7 @@ func Run(t *testing.T, factory Factory) {
 			t.Fatal(err)
 		}
 		for _, intent := range []store.WriteIntent{store.WriteIntentSaveDraft, store.WriteIntentDiscardDraft} {
-			if _, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{
+			if _, err := LockedUpdate(t.Context(), transaction, fixture.updateRequest(store.UpdateRequest{
 				Request: store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: created.Revision},
 				Intent:  intent, Values: store.Values{"state": store.String("private")},
 			})); err == nil {
@@ -67,6 +69,75 @@ func Run(t *testing.T, factory Factory) {
 			if state != "live" {
 				t.Fatalf("rejected draft write changed head publishedOnly=%t: %q", publishedOnly, state)
 			}
+		}
+	})
+
+	runTest("update-requires-locked-current", func(t *testing.T) {
+		fixture := openFixture(t, factory, manifest)
+		transaction := begin(t, fixture.backend)
+		defer rollback(t, transaction)
+		created, err := transaction.Create(t.Context(), fixture.createRequest(store.CreateRequest{
+			Collection: fixture.records, ID: id(1), Values: recordValues("live", 1), Status: store.StatusPublished,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := transaction.Create(t.Context(), fixture.createRequest(store.CreateRequest{
+			Collection: fixture.records, ID: id(2), Values: recordValues("other", 2), Status: store.StatusPublished,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		update := fixture.updateRequest(store.UpdateRequest{
+			Request: store.Request{Collection: fixture.records, ID: created.ID},
+			Intent:  store.WriteIntentSaveDraft, Values: store.Values{"state": store.String("pending")},
+		})
+		if _, err := transaction.Update(t.Context(), update); err == nil {
+			t.Fatal("update without Current succeeded")
+		}
+		mismatched := update
+		mismatched.Current = &other
+		if _, err := transaction.Update(t.Context(), mismatched); err == nil {
+			t.Fatal("update with another document's Current succeeded")
+		}
+		stale := update
+		stale.ExpectedRevision = created.Revision + 1
+		if _, err := LockedUpdate(t.Context(), transaction, stale); !errors.Is(err, store.ErrConflict) {
+			t.Fatalf("stale expected revision = %v, want conflict", err)
+		}
+		staged, err := LockedUpdate(t.Context(), transaction, update)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if staged.PublishedRevision != created.Revision || !staged.HasDraftChanges || staged.Status != store.StatusPublished {
+			t.Fatalf("staged draft metadata = revision %d pending %t status %s, want %d true published", staged.PublishedRevision, staged.HasDraftChanges, staged.Status, created.Revision)
+		}
+		read, err := transaction.Find(t.Context(), fixture.request(store.Request{Collection: fixture.records, ID: created.ID}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if read.Revision != staged.Revision || read.PublishedRevision != staged.PublishedRevision || read.HasDraftChanges != staged.HasDraftChanges {
+			t.Fatalf("update result metadata %d/%d/%t differs from read %d/%d/%t", staged.Revision, staged.PublishedRevision, staged.HasDraftChanges, read.Revision, read.PublishedRevision, read.HasDraftChanges)
+		}
+		published, err := LockedUpdate(t.Context(), transaction, fixture.updateRequest(store.UpdateRequest{
+			Request: store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: staged.Revision},
+			Intent:  store.WriteIntentPublish,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if published.PublishedRevision != published.Revision || published.HasDraftChanges {
+			t.Fatalf("published metadata = revision %d live %d pending %t", published.Revision, published.PublishedRevision, published.HasDraftChanges)
+		}
+		unpublished, err := LockedUpdate(t.Context(), transaction, fixture.updateRequest(store.UpdateRequest{
+			Request: store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: published.Revision},
+			Intent:  store.WriteIntentUnpublish,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if unpublished.PublishedRevision != 0 || unpublished.HasDraftChanges || unpublished.Status != store.StatusDraft {
+			t.Fatalf("unpublished metadata = live %d pending %t status %s", unpublished.PublishedRevision, unpublished.HasDraftChanges, unpublished.Status)
 		}
 	})
 
@@ -91,8 +162,8 @@ func Run(t *testing.T, factory Factory) {
 			t.Fatal(err)
 		}
 		assertDocumentIDs(t, page.Documents, id(3))
-		if page.Total != 1 {
-			t.Fatalf("composed predicate total = %d, want 1", page.Total)
+		if *page.Total != 1 {
+			t.Fatalf("composed predicate total = %d, want 1", *page.Total)
 		}
 	})
 
@@ -121,7 +192,7 @@ func Run(t *testing.T, factory Factory) {
 				t.Fatal(listError)
 			}
 			assertDocumentIDs(t, page.Documents, expected...)
-			if page.Total != 5 || page.Page != pageNumber+1 || page.Limit != 2 {
+			if *page.Total != 5 || page.Page != pageNumber+1 || page.Limit != 2 {
 				t.Fatalf("page metadata = %#v, want total 5 page %d limit 2", page, pageNumber+1)
 			}
 		}
@@ -142,8 +213,8 @@ func Run(t *testing.T, factory Factory) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(page.Documents) != 0 || page.Total != 2 || page.Page != math.MaxInt || page.Limit != 2 {
-			t.Fatalf("maximum page = documents:%d total:%d page:%d limit:%d, want 0/2/%d/2", len(page.Documents), page.Total, page.Page, page.Limit, math.MaxInt)
+		if len(page.Documents) != 0 || *page.Total != 2 || page.Page != math.MaxInt || page.Limit != 2 || page.HasNextPage {
+			t.Fatalf("maximum page = documents:%d total:%d page:%d limit:%d next:%t, want 0/2/%d/2/false", len(page.Documents), *page.Total, page.Page, page.Limit, page.HasNextPage, math.MaxInt)
 		}
 	})
 
@@ -203,13 +274,33 @@ func Run(t *testing.T, factory Factory) {
 		page, err := transaction.List(t.Context(), fixture.request(store.Request{
 			Collection: fixture.records, Collections: fixture.collections, Page: 1, Limit: 101,
 		}))
-		rollback(t, transaction)
 		if err != nil {
+			rollback(t, transaction)
 			t.Fatal(err)
 		}
-		if len(page.Documents) != 100 || page.Total != 101 || page.Page != 1 || page.Limit != 100 {
-			t.Fatalf("clamped page = documents:%d total:%d page:%d limit:%d, want 100/101/1/100", len(page.Documents), page.Total, page.Page, page.Limit)
+		if len(page.Documents) != 100 || *page.Total != 101 || page.Page != 1 || page.Limit != 100 || !page.HasNextPage {
+			rollback(t, transaction)
+			t.Fatalf("clamped page = documents:%d total:%d page:%d limit:%d next:%t, want 100/101/1/100/true", len(page.Documents), *page.Total, page.Page, page.Limit, page.HasNextPage)
 		}
+		// The overflow row follows the clamped limit, not the requested one.
+		for pageNumber, want := range []struct {
+			documents int
+			next      bool
+		}{{documents: 100, next: true}, {documents: 1}} {
+			uncounted, err := transaction.List(t.Context(), fixture.request(store.Request{
+				Collection: fixture.records, Collections: fixture.collections, Page: pageNumber + 1, Limit: 101, SkipTotal: true,
+			}))
+			if err != nil {
+				rollback(t, transaction)
+				t.Fatal(err)
+			}
+			if len(uncounted.Documents) != want.documents || uncounted.HasNextPage != want.next || uncounted.Total != nil || uncounted.Limit != 100 {
+				rollback(t, transaction)
+				t.Fatalf("clamped uncounted page %d = documents:%d next:%t total:%v limit:%d, want %d/%t/nil/100",
+					pageNumber+1, len(uncounted.Documents), uncounted.HasNextPage, uncounted.Total, uncounted.Limit, want.documents, want.next)
+			}
+		}
+		rollback(t, transaction)
 	})
 
 	runTest("list-window-rejects-unsupported-request-state", func(t *testing.T) {
@@ -433,12 +524,11 @@ func Run(t *testing.T, factory Factory) {
 			{name: "access-uses-the-same-cross-row-semantics", access: nodePointer(rowAnd.Node()), want: []string{id(1), id(2)}},
 			{name: "block-siblings-may-match-different-blocks", filter: nodePointer(blockAnd.Node()), want: []string{id(1), id(2)}},
 			{name: "block-discriminator-stays-on-the-comparison-row", filter: nodePointer(query.Equal(mustPath("layout.hero.heading"), "decoy").Node()), want: []string{}},
-			{name: "has-many-select-contains-is-membership", filter: nodePointer(query.Contains(tags, "alpha").Node()), want: []string{id(1), id(3)}},
-			{name: "has-many-select-equal-is-not-membership", filter: nodePointer(query.Equal(tags, "alpha").Node()), want: []string{}},
-			{name: "has-many-select-in-is-not-membership", filter: nodePointer(query.In(tags, "alpha").Node()), want: []string{}},
+			{name: "has-many-select-in-is-membership", filter: nodePointer(query.In(tags, "alpha").Node()), want: []string{id(1), id(3)}},
+			{name: "has-many-select-in-matches-any-candidate", filter: nodePointer(query.In(tags, "alpha", "beta").Node()), want: []string{id(1), id(2), id(3)}},
+			{name: "has-many-select-not-in-excludes-members", filter: nodePointer(query.Not(query.In(tags, "alpha")).Node()), want: []string{id(2), id(4)}},
+			{name: "has-many-select-access-membership", access: nodePointer(query.In(tags, "beta").Node()), want: []string{id(1), id(2)}},
 			{name: "has-many-select-null-equality-matches-missing", filter: nodePointer(query.Equal(tags, query.Null()).Node()), want: []string{id(4)}},
-			{name: "has-many-select-including-null-matches-missing", filter: nodePointer(query.In(tags, query.String("alpha"), query.Null()).Node()), want: []string{id(4)}},
-			{name: "has-many-select-not-equal-compares-the-list-value", filter: nodePointer(query.NotEqual(tags, "alpha").Node()), want: []string{id(1), id(2), id(3), id(4)}},
 			{name: "has-many-select-not-equal-null-requires-a-list", filter: nodePointer(query.NotEqual(tags, query.Null()).Node()), want: []string{id(1), id(2), id(3)}},
 			{name: "has-many-select-exists-requires-a-list", filter: nodePointer(tagsExist.Node()), want: []string{id(1), id(2), id(3)}},
 			{name: "has-many-select-exists-false-matches-missing", filter: nodePointer(tagsMissing.Node()), want: []string{id(4)}},
@@ -455,6 +545,22 @@ func Run(t *testing.T, factory Factory) {
 				}
 				assertDocumentIDs(t, page.Documents, test.want...)
 			})
+		}
+		// A has-many select is filtered by membership alone, so a store rejects
+		// scalar and substring comparisons, including in trusted predicates.
+		for _, expression := range []query.Expression{
+			query.Contains(tags, "alpha"), query.Equal(tags, "alpha"), query.NotEqual(tags, "alpha"),
+			query.Like(tags, "alpha"), query.In(tags, query.String("alpha"), query.Null()),
+		} {
+			node := expression.Node()
+			for _, request := range []store.Request{{Collection: fixture.records, Filter: &node}, {Collection: fixture.records, Access: &node}} {
+				read := begin(t, fixture.backend)
+				_, listErr := read.List(t.Context(), fixture.request(request))
+				rollback(t, read)
+				if listErr == nil || !strings.Contains(listErr.Error(), `has-many select "tags"`) {
+					t.Fatalf("has-many select %v error = %v", node.Comparison, listErr)
+				}
+			}
 		}
 	})
 
@@ -509,7 +615,7 @@ func Run(t *testing.T, factory Factory) {
 			rollback(t, transaction)
 			t.Fatal(err)
 		}
-		patched, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{
+		patched, err := LockedUpdate(t.Context(), transaction, fixture.updateRequest(store.UpdateRequest{
 			Request: store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: created.Revision},
 			Values:  store.Values{"state": store.String("patched")},
 			Intent:  store.WriteIntentPublish,
@@ -528,7 +634,7 @@ func Run(t *testing.T, factory Factory) {
 			"_key": store.String("row-1"), "kind": store.String("article"),
 		}))
 		snapshot["localized"] = store.Object(store.Values{"en": store.String("Snapshot")})
-		replaced, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{
+		replaced, err := LockedUpdate(t.Context(), transaction, fixture.updateRequest(store.UpdateRequest{
 			Request:       store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: patched.Revision},
 			Values:        snapshot,
 			Intent:        store.WriteIntentPublish,
@@ -723,7 +829,7 @@ func Run(t *testing.T, factory Factory) {
 			rollback(t, transaction)
 			t.Fatal(err)
 		}
-		updated, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{
+		updated, err := LockedUpdate(t.Context(), transaction, fixture.updateRequest(store.UpdateRequest{
 			Request: store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: created.Revision},
 			Values:  store.Values{"state": store.String("second")},
 			Intent:  store.WriteIntentPublish,
@@ -1002,7 +1108,7 @@ func Run(t *testing.T, factory Factory) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if page.Total != 0 || len(page.Documents) != 0 {
+		if *page.Total != 0 || len(page.Documents) != 0 {
 			t.Fatalf("invalid timestamp access matched documents: %#v", page)
 		}
 
@@ -1154,8 +1260,23 @@ func conformanceManifest() schema.Manifest {
 				Locales:       []schema.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}},
 			},
 		},
+		Blocks:      conformanceBlocks(),
 		Collections: []schema.Collection{users, records, windows}, Plugins: []schema.Plugin{},
 	})
+}
+
+// conformanceBlocks are the definitions selected by records.layout. Their
+// paths and IDs are definition-relative; placements derive their own.
+func conformanceBlocks() []schema.BlockType {
+	return []schema.BlockType{
+		{Slug: "hero", TypeName: "Hero", Labels: schema.BlockLabels{Singular: "Hero", Plural: "Heroes"}, Fields: []schema.Field{
+			{ID: "block-hero-heading", Name: "heading", Path: mustPath("heading"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Admin: schema.FieldAdmin{Label: "heading"}},
+			{ID: "block-hero-tone", Name: "tone", Path: mustPath("tone"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Admin: schema.FieldAdmin{Label: "tone"}},
+		}},
+		{Slug: "quote", TypeName: "Quote", Labels: schema.BlockLabels{Singular: "Quote", Plural: "Quotes"}, Fields: []schema.Field{
+			{ID: "block-quote-heading", Name: "heading", Path: mustPath("heading"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Admin: schema.FieldAdmin{Label: "heading"}},
+		}},
+	}
 }
 
 func textField(fieldID schema.StableID, name string, unique bool) schema.Field {
@@ -1220,16 +1341,8 @@ func repeatedPredicateFields() []schema.Field {
 		{
 			ID: "conformance-records-layout", Name: "layout", Path: mustPath("layout"),
 			Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{
-				{Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{
-					{ID: "conformance-records-layout-hero-heading", Name: "heading", Path: mustPath("layout.hero.heading"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Admin: schema.FieldAdmin{Label: "heading"}},
-					{ID: "conformance-records-layout-hero-tone", Name: "tone", Path: mustPath("layout.hero.tone"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Admin: schema.FieldAdmin{Label: "tone"}},
-				}},
-				{Slug: "quote", Labels: schema.BlockLabels{Singular: "Quote"}, Fields: []schema.Field{
-					{ID: "conformance-records-layout-quote-heading", Name: "heading", Path: mustPath("layout.quote.heading"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Admin: schema.FieldAdmin{Label: "heading"}},
-				}},
-			}},
-			Admin: schema.FieldAdmin{Label: "layout"},
+			Blocks: &schema.BlocksField{BlockReferences: []string{"hero", "quote"}},
+			Admin:  schema.FieldAdmin{Label: "layout"},
 		},
 	}
 }

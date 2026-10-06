@@ -43,7 +43,7 @@ func TestListJoinPreservesSourceReadRulesAndPrivateMembership(t *testing.T) {
 			}
 			continue
 		}
-		if err != nil || page.Total != 1 || len(page.Documents) != 1 {
+		if err != nil || *page.Total != 1 || len(page.Documents) != 1 {
 			t.Fatalf("public configured join = %#v, %v", page, err)
 		}
 		if _, exists := page.Documents[0].Values["category"]; exists {

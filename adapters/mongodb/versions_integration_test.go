@@ -11,6 +11,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -22,7 +23,7 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 		return now
 	}
 	collection := mongoVersionedCollection(true, 2)
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -55,7 +56,7 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 		t.Fatalf("re-saved revision timestamp = %v, want preserved %v", resaved.CreatedAt, firstVersion.CreatedAt)
 	}
 	titlePath, _ := query.NewPath("title")
-	document, err = write.Update(t.Context(), store.UpdateRequest{
+	document, err = conformance.LockedUpdate(t.Context(), write, store.UpdateRequest{
 		Request: store.Request{
 			Collection: collection, ID: document.ID, ExpectedRevision: document.Revision,
 			Select: []query.Path{titlePath},
@@ -75,7 +76,7 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 		mongoRollback(t, write)
 		t.Fatal(err)
 	}
-	document, err = write.Update(t.Context(), store.UpdateRequest{
+	document, err = conformance.LockedUpdate(t.Context(), write, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, ExpectedRevision: document.Revision},
 		Values:  store.Values{"title": store.String("third"), "owner": store.String("owner-c")},
 		Intent:  store.WriteIntentUnpublish,
@@ -88,7 +89,7 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 		mongoRollback(t, write)
 		t.Fatal(err)
 	}
-	if _, err := write.Update(t.Context(), store.UpdateRequest{
+	if _, err := conformance.LockedUpdate(t.Context(), write, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, ExpectedRevision: 1},
 		Values:  store.Values{"title": store.String("stale")},
 		Intent:  store.WriteIntentSaveDraft,
@@ -152,7 +153,7 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 	mongoCommit(t, read)
 
 	rolledBack := mongoBegin(t, backend, false)
-	rolledDocument, err := rolledBack.Update(t.Context(), store.UpdateRequest{
+	rolledDocument, err := conformance.LockedUpdate(t.Context(), rolledBack, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, ExpectedRevision: document.Revision},
 		Values:  store.Values{"title": store.String("rolled back")},
 		Intent:  store.WriteIntentPublish,
@@ -210,10 +211,10 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 
 func TestMongoDBVersionAccessUsesRepeatedSnapshotPredicates(t *testing.T) {
 	backend := mongoIntegrationStore(t)
-	collection := mongoRepeatedCollection()
+	collection := mongoRepeatedCollection(t)
 	collection.Capabilities.Versions = true
 	collection.Versions = &schema.VersionSettings{Drafts: true, MaxPerDocument: 10}
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoRepeatedManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -233,7 +234,7 @@ func TestMongoDBVersionAccessUsesRepeatedSnapshotPredicates(t *testing.T) {
 		mongoRollback(t, write)
 		t.Fatal(err)
 	}
-	document, err = write.Update(t.Context(), store.UpdateRequest{
+	document, err = conformance.LockedUpdate(t.Context(), write, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, ExpectedRevision: document.Revision},
 		Intent:  store.WriteIntentSaveDraft,
 		Values: store.Values{"rows": store.List(store.Object(store.Values{
@@ -285,7 +286,7 @@ func TestMongoDBOperationEngineVersionsRestoreAccessAndSameIDRecreation(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	ownerA := &store.Document{ID: "owner-a"}
@@ -377,7 +378,7 @@ func TestMongoDBOperationEngineVersionsRestoreAccessAndSameIDRecreation(t *testi
 func TestMongoDBVersionRetentionRejectsCorruptHighRevisionBeforePruning(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoVersionedCollection(true, 2)
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 	write := mongoBegin(t, backend, false)

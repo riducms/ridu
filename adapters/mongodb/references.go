@@ -28,8 +28,9 @@ type mongoReferenceEntry struct {
 }
 
 func (transaction *documentTransaction) replaceDocumentReferences(ctx context.Context, collection schema.Collection, document store.Document) error {
-	if !mongoCollectionHasRelationships(collection) {
-		return nil
+	hasRelationships, err := transaction.store.collectionHasRelationships(collection)
+	if err != nil || !hasRelationships {
+		return err
 	}
 	owner := store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}
 	if err := transaction.deleteDocumentReferences(ctx, owner); err != nil {
@@ -237,16 +238,16 @@ func validateMongoReferenceIdentity(reference store.DocumentReference, role stri
 }
 
 func (transaction *documentTransaction) incomingReferenceEntries(ctx context.Context, target store.DocumentReference) ([]mongoReferenceEntry, error) {
-	cursor, err := transaction.referenceCollection().Find(ctx, bson.D{
+	cursor, err := mongoFind(ctx, transaction.referenceCollection(), bson.D{
 		{Key: "targetCollection", Value: string(target.CollectionID)},
 		{Key: "targetDocument", Value: target.DocumentID},
-	}, options.Find().SetSort(bson.D{
+	}, mongoFindCommand{sort: bson.D{
 		{Key: "ownerCollection", Value: int32(1)},
 		{Key: "ownerDocument", Value: int32(1)},
 		{Key: "field", Value: int32(1)},
 		{Key: "locale", Value: int32(1)},
 		{Key: "occurrence", Value: int32(1)},
-	}))
+	}})
 	if err != nil {
 		return nil, translateMongoError(ctx, err)
 	}
@@ -326,13 +327,14 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 		return err
 	}
 	for _, collection := range request.Collections {
-		if err := validateCollectionEnvelope(collection); err != nil {
+		hasRelationships, err := transaction.store.collectionHasRelationships(collection)
+		if err != nil {
 			return fmt.Errorf("reference delete collection %q: %w", collection.ID, err)
 		}
 		if err := transaction.store.requireVerifiedIndexes(collection); err != nil {
 			return fmt.Errorf("reference delete collection %q: %w", collection.ID, err)
 		}
-		if mongoCollectionHasRelationships(collection) {
+		if hasRelationships {
 			if err := transaction.store.requireVerifiedReferenceIndexes(collection); err != nil {
 				return fmt.Errorf("reference delete collection %q: %w", collection.ID, err)
 			}
@@ -436,7 +438,7 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 				return err
 			}
 			if liveChanged {
-				if err := validateCompleteValues(collection, nullified); err != nil {
+				if err := validateStoredValues(collection, nullified); err != nil {
 					return fmt.Errorf("nullified MongoDB published owner %q: %w", owner.CollectionID, err)
 				}
 				liveValues, err = encodeValues(nullified)
@@ -449,7 +451,7 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 			return fmt.Errorf("reference index for owner collection %q is inconsistent with both active heads", owner.CollectionID)
 		}
 		if changed {
-			if err := validateCompleteValues(collection, values); err != nil {
+			if err := validateStoredValues(collection, values); err != nil {
 				return fmt.Errorf("nullified MongoDB owner %q: %w", owner.CollectionID, err)
 			}
 		}
@@ -469,6 +471,11 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 		}
 	}
 	for _, mutation := range mutations {
+		// Changing an owner excludes the transactions that hold it with a
+		// shared lock, as any other write does.
+		if err := transaction.lockForWrite(ctx, mutation.collection, mutation.owner.DocumentID); err != nil {
+			return err
+		}
 		if mutation.liveChanged {
 			result, err := transaction.publishedCollection(mutation.collection).UpdateOne(ctx,
 				bson.D{{Key: mongoIDPath, Value: mutation.owner.DocumentID}},

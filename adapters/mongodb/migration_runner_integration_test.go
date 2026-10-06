@@ -83,7 +83,7 @@ func TestMongoMigrationReadinessAllowsHarmlessUnmanagedNonUniqueIndex(t *testing
 		if err := shadow.VerifyIndexes(t.Context(), manifest); err != nil {
 			return fmt.Errorf("verify harmless unmanaged index: %w", err)
 		}
-		if err := shadow.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := shadow.syncIndexes(t.Context(), manifest); err != nil {
 			return fmt.Errorf("sync harmless unmanaged index: %w", err)
 		}
 		if err := shadow.ReadyWithMigrationHistory(t.Context(), manifest, historyDigest); err != nil {

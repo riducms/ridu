@@ -4,6 +4,7 @@ import { createAdminI18n, en, fr } from "@riducms/translations";
 
 import { invalidFieldLabels, validateFormValues } from "../src/core/forms/form-validation";
 import { initialFormValues } from "../src/core/forms/form-schema";
+import { bindBlockField } from "./block-manifest";
 
 describe("manifest-derived form validation", () => {
 	it.each(["text", "code", "textarea", "email", "date"] as const)(
@@ -132,15 +133,18 @@ describe("manifest-derived form validation", () => {
 		const requiredRows = field("items", "array", true);
 		requiredRows.nested = { fields: [field("title", "text", true, "items.title")] };
 		const content = field("content", "blocks", false);
-		content.blocks = {
-			types: [
+		content.blocks = { blockReferences: ["heading"] };
+		bindBlockField(
+			[
 				{
 					slug: "heading",
 					labels: { singular: "Heading", plural: "Headings" },
-					fields: [field("text", "text", true, "content.heading.text")],
+					fields: [{ ...field("text", "text", true), id: "block-heading-text" }],
 				},
 			],
-		};
+			content,
+			"posts"
+		);
 
 		const issues = validateFormValues(
 			[requiredRows, content],
@@ -351,11 +355,12 @@ function relationshipField(name: string, required: boolean): SchemaField {
 describe("ordinary blocks bounds", () => {
 	it("bounds only present lists and preserves required semantics", () => {
 		const layout = field("layout", "blocks", false);
-		layout.blocks = {
-			minRows: 2,
-			maxRows: 3,
-			types: [{ slug: "hero", labels: { singular: "Hero", plural: "Heroes" }, fields: [] }],
-		};
+		layout.blocks = { minRows: 2, maxRows: 3, blockReferences: ["hero"] };
+		bindBlockField(
+			[{ slug: "hero", labels: { singular: "Hero", plural: "Heroes" }, fields: [] }],
+			layout,
+			"posts"
+		);
 		const check = (values: Record<string, unknown>, required = false) =>
 			validateFormValues([{ ...layout, required }], values, { requireMissing: true }).map(
 				({ code, path }) => ({ code, path })

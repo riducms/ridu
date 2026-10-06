@@ -246,3 +246,10 @@ or null values, following the existing read model. A nonnil empty slice retains 
 re-encoded; its `omitzero` tag omits nil slices without dropping empty lists. OpenAPI separates item
 constraints from list counts and describes write constraints without imposing them on
 read-hook results. The optional GraphQL plugin uses `[String!]` and `[Float!]`.
+
+Filters on lists, has-many selects, has-many relationships and uploads, and polymorphic
+relationships share one generated TypeScript type, `MembershipWhere<T>`: `in` with candidates of
+the item type `T`, `exists`, and `equals` or `notEquals` with `null`. `T` is `string` or `number`
+for lists, the option union for a select, `ID` for document IDs, and a union of
+`{ relationTo: "..."; id: ID }` for a polymorphic relationship. GraphQL filter inputs offer `in`,
+`not_in` and `exists` for the same fields. See [Filter by membership](/docs/querying/#membership).

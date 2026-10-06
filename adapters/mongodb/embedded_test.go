@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -11,15 +12,28 @@ import (
 	"testing"
 )
 
-func mongoEmbeddedFixture() schema.Field {
-	path, _ := query.ParsePath("canvas")
-	childPath, _ := query.ParsePath("canvas.parts.widget.card.title")
-	child := schema.Field{ID: "title", Name: "title", Path: childPath, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Required: true}
-	tree := schema.EmbeddedTree{Version: 1, Key: "parts", Root: []string{"document"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "attributes", Identity: "uid", Discriminator: "variant", Types: []schema.BlockType{{Slug: "card", Fields: []schema.Field{child}}}}}}
-	return schema.Field{ID: "canvas", Name: "canvas", Path: path, Type: schema.FieldTypePlugin, Category: schema.FieldCategoryPlugin, Plugin: &schema.PluginField{Key: "canvas", EmbeddedTrees: []schema.EmbeddedTree{tree}}}
+// mongoEmbeddedFixture places the card definition, with the given
+// definition-relative children or a required title, in the canvas field.
+func mongoEmbeddedFixture(t *testing.T, children ...schema.Field) schema.Field {
+	t.Helper()
+	return schematest.Bind(t, "pages", []schema.BlockType{mongoEmbeddedCard(children...)}, mongoEmbeddedCanvas("canvas"))[0]
+}
+
+func mongoEmbeddedCard(children ...schema.Field) schema.BlockType {
+	if len(children) == 0 {
+		children = []schema.Field{{ID: "block-card-title", Name: "title", Path: query.Field("title"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Required: true}}
+	}
+	return schema.BlockType{Slug: "card", TypeName: "Card", Fields: children}
+}
+
+// mongoEmbeddedCanvas is the unbound canvas field at path.
+func mongoEmbeddedCanvas(path string) schema.Field {
+	canvasPath, _ := query.ParsePath(path)
+	tree := schema.EmbeddedTree{Version: 1, Key: "parts", Root: []string{"document"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "attributes", Identity: "uid", Discriminator: "variant", BlockReferences: []string{"card"}}}}
+	return schema.Field{ID: "canvas", Name: "canvas", Path: canvasPath, Type: schema.FieldTypePlugin, Category: schema.FieldCategoryPlugin, Plugin: &schema.PluginField{Key: "canvas", EmbeddedTrees: []schema.EmbeddedTree{tree}}}
 }
 func TestMongoEmbeddedAdmissionAndEvolution(t *testing.T) {
-	field := mongoEmbeddedFixture()
+	field := mongoEmbeddedFixture(t)
 	if err := validateMongoFieldEnvelope([]schema.Field{field}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -28,20 +42,24 @@ func TestMongoEmbeddedAdmissionAndEvolution(t *testing.T) {
 		return store.Values{"canvas": store.Object(store.Values{"document": store.Object(store.Values{"kind": store.String("widget"), "attributes": store.Object(payload)})})}
 	}
 	collection := schema.Collection{ID: "pages", Fields: []schema.Field{field}}
-	if err := validateCompleteValues(collection, value()); err != nil {
+	if err := validateStoredValues(collection, value()); err != nil {
 		t.Fatal(err)
 	}
+	// Requiredness is an operation rule that drafts defer, not a stored shape.
 	delete(payload, "title")
-	if err := validateCompleteValues(collection, value()); err == nil || !strings.Contains(err.Error(), "canvas.document.attributes.title") {
-		t.Fatalf("missing required child: %v", err)
+	if err := validateStoredValues(collection, value()); err != nil {
+		t.Fatalf("payload without a required child: %v", err)
+	}
+	payload["title"] = store.Number(1)
+	if err := validateStoredValues(collection, value()); err == nil || !strings.Contains(err.Error(), "canvas.document.attributes.title") {
+		t.Fatalf("wrongly typed child: %v", err)
 	}
 	payload["title"] = store.String("Title")
 	payload["variant"] = store.String("unknown")
-	if err := validateCompleteValues(collection, value()); err == nil || !strings.Contains(err.Error(), "canvas.document.attributes.variant") {
+	if err := validateStoredValues(collection, value()); err == nil || !strings.Contains(err.Error(), "canvas.document.attributes.variant") {
 		t.Fatalf("unknown variant: %v", err)
 	}
-	next := mongoEmbeddedFixture()
-	next.Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0].Fields = append(next.Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0].ResolvedFields(), schema.Field{ID: "caption", Name: "caption", Type: schema.FieldTypeText})
+	next := mongoEmbeddedFixture(t, mongoEmbeddedCard().Fields[0], schema.Field{ID: "block-card-caption", Name: "caption", Path: query.Field("caption"), Type: schema.FieldTypeText})
 	if err := validateMongoDBAdditiveFields("pages", []schema.Field{field}, []schema.Field{next}); err != nil {
 		t.Fatal(err)
 	}
@@ -55,13 +73,12 @@ func TestMongoEmbeddedReferenceRenameComposesEnvelopeAndPayloads(t *testing.T) {
 	for _, rootArray := range []bool{false, true} {
 		for _, localized := range []bool{false, true} {
 			t.Run(fmt.Sprintf("array=%v/localized=%v", rootArray, localized), func(t *testing.T) {
-				field := mongoEmbeddedFixture()
+				field := mongoEmbeddedFixture(t,
+					schema.Field{ID: "block-card-target", Name: "target", Path: query.Field("target"), Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true}},
+					schema.Field{ID: "block-card-raw", Name: "raw", Path: query.Field("raw"), Type: schema.FieldTypeJSON},
+				)
 				field.Localized = localized
 				field.Plugin.ReferenceKeys = []string{"relationTo"}
-				field.Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0].Fields = []schema.Field{
-					{Name: "target", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true}},
-					{Name: "raw", Type: schema.FieldTypeJSON},
-				}
 				if rootArray {
 					field.Plugin.EmbeddedTrees[0].Root = []string{}
 				}
@@ -122,7 +139,7 @@ func TestMongoEmbeddedReferenceRenameComposesEnvelopeAndPayloads(t *testing.T) {
 }
 
 func TestMongoEmbeddedReferenceRenamePropagatesLimits(t *testing.T) {
-	field := mongoEmbeddedFixture()
+	field := mongoEmbeddedFixture(t)
 	field.Plugin.ReferenceKeys = []string{"relationTo"}
 	deep := store.Object(store.Values{"relationTo": store.String("authors")})
 	for i := 0; i < embedded.MaxDepth; i++ {

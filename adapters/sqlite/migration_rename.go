@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/riducms/ridu/internal/blockrename"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
@@ -17,10 +18,14 @@ import (
 // sqliteFieldRename is one reviewed field rename resolved against its
 // manifests. SQLite keeps each document as JSON keyed by field name, so a
 // rename moves one key in its containing object; the collection is unchanged.
+// A block field rename names its definition and moves the key in every
+// stored block of it.
 type sqliteFieldRename struct {
 	collectionID schema.StableID
+	block        string
 	before       schema.Field
 	after        schema.Field
+	intent       ridumigration.Rename
 }
 
 // sqliteFieldRenames resolves reviewed rename intent. Each rename must be one
@@ -31,27 +36,32 @@ type sqliteFieldRename struct {
 func sqliteFieldRenames(before, after schema.Manifest, renames []ridumigration.Rename) ([]sqliteFieldRename, error) {
 	candidates := schemadiff.RenameCandidates(before, after)
 	resolved := make([]sqliteFieldRename, 0, len(renames))
-	seen := make(map[schema.StableID]bool, len(renames))
-	for _, rename := range renames {
-		if rename.FieldBefore == "" || rename.FieldAfter == "" {
+	seen := make(map[string]bool, len(renames))
+	for _, rename := range blockrename.Order(after.Snapshot(), renames) {
+		if rename.Block == "" && (rename.FieldBefore == "" || rename.FieldAfter == "") {
 			return nil, fmt.Errorf("SQLite cannot rename collection %q to %q; add the new collection and move its documents with a registered data transform", rename.CollectionBefore, rename.CollectionAfter)
+		}
+		owner := string(rename.CollectionBefore)
+		if rename.Block != "" {
+			owner = "block " + rename.Block
 		}
 		matched := false
 		for _, candidate := range candidates {
-			if candidate.Kind != schemadiff.RenameField || candidate.BeforeCollection.Slug != rename.CollectionBefore || candidate.AfterCollection.Slug != rename.CollectionAfter ||
+			if candidate.Kind == schemadiff.RenameCollection || candidate.Block != rename.Block || candidate.BeforeCollection.Slug != rename.CollectionBefore || candidate.AfterCollection.Slug != rename.CollectionAfter ||
 				candidate.BeforeField.Path.String() != rename.FieldBefore || candidate.AfterField.Path.String() != rename.FieldAfter {
 				continue
 			}
-			if seen[candidate.BeforeField.ID] {
-				return nil, fmt.Errorf("field %q in collection %q is renamed more than once", rename.FieldBefore, rename.CollectionBefore)
+			key := owner + "\x00" + string(candidate.BeforeField.ID)
+			if seen[key] {
+				return nil, fmt.Errorf("field %q in %s is renamed more than once", rename.FieldBefore, owner)
 			}
-			seen[candidate.BeforeField.ID] = true
-			resolved = append(resolved, sqliteFieldRename{collectionID: candidate.BeforeCollection.ID, before: *candidate.BeforeField, after: *candidate.AfterField})
+			seen[key] = true
+			resolved = append(resolved, sqliteFieldRename{collectionID: candidate.BeforeCollection.ID, block: candidate.Block, before: *candidate.BeforeField, after: *candidate.AfterField, intent: rename})
 			matched = true
 			break
 		}
 		if !matched {
-			return nil, fmt.Errorf("%q -> %q in collection %q is not an unambiguous field rename between these schemas", rename.FieldBefore, rename.FieldAfter, rename.CollectionBefore)
+			return nil, fmt.Errorf("%q -> %q in %s is not an unambiguous field rename between these schemas", rename.FieldBefore, rename.FieldAfter, owner)
 		}
 	}
 	return resolved, nil
@@ -70,18 +80,29 @@ func buildSQLiteArtifactWithRenames(ctx context.Context, name string, before *sc
 		return ridumigration.Artifact{}, err
 	}
 	rules := sqliteAdditiveRules{renames: make(map[schema.StableID]map[schema.StableID]schema.Field), paths: make(map[schema.StableID]map[string]string)}
-	for _, rename := range resolved {
-		if rules.renames[rename.collectionID] == nil {
-			rules.renames[rename.collectionID] = make(map[schema.StableID]schema.Field)
-			rules.paths[rename.collectionID] = make(map[string]string)
+	ordered := make([]ridumigration.Rename, len(resolved))
+	for index, rename := range resolved {
+		ordered[index] = rename.intent
+		owner := rename.collectionID
+		if rename.block != "" {
+			owner = sqliteDefinitionRenames(rename.block)
 		}
-		rules.renames[rename.collectionID][rename.before.ID] = rename.after
-		rules.paths[rename.collectionID][rename.before.Path.String()] = rename.after.Path.String()
+		if rules.renames[owner] == nil {
+			rules.renames[owner] = make(map[schema.StableID]schema.Field)
+		}
+		rules.renames[owner][rename.before.ID] = rename.after
+		if rename.block == "" {
+			// Collection indexes and joins name a collection's own paths.
+			if rules.paths[owner] == nil {
+				rules.paths[owner] = make(map[string]string)
+			}
+			rules.paths[owner][rename.before.Path.String()] = rename.after.Path.String()
+		}
 	}
 	validate := func(before, after schema.Snapshot) error {
 		return rules.snapshot(sqliteStorageSchema(before), sqliteStorageSchema(after))
 	}
-	return buildSQLiteArtifactWithValidation(ctx, name, before, after, validate, renames)
+	return buildSQLiteArtifactWithValidation(ctx, name, before, after, validate, ordered)
 }
 
 // sqliteArtifactRenames returns the rename intent an artifact recorded.
@@ -187,7 +208,146 @@ func (backend *Store) RenameDevelopmentFields(ctx context.Context, before, after
 // renameSQLiteContent rewrites every current document and retained version
 // snapshot of each affected collection. reverse undoes the renames for a
 // rollback: content then moves from the after names back to the before names.
+// Collection renames move first and block field renames after them, each
+// definition's before the definitions it places, so every block is found
+// through the after schema; a rollback undoes them in the opposite order.
 func renameSQLiteContent(ctx context.Context, connection *sql.Conn, before, after schema.Manifest, renames []sqliteFieldRename, reverse bool) error {
+	var collectionRenames []sqliteFieldRename
+	var blockRenames []ridumigration.Rename
+	for _, rename := range renames {
+		if rename.block == "" {
+			collectionRenames = append(collectionRenames, rename)
+		} else {
+			blockRenames = append(blockRenames, rename.intent)
+		}
+	}
+	blockRenames = blockrename.Order(after.Snapshot(), blockRenames)
+	if reverse {
+		for left, right := 0, len(blockRenames)-1; left < right; left, right = left+1, right-1 {
+			blockRenames[left], blockRenames[right] = blockRenames[right], blockRenames[left]
+		}
+		if err := renameSQLiteBlockContent(ctx, connection, after, blockRenames, true); err != nil {
+			return err
+		}
+	}
+	if err := renameSQLiteCollectionFields(ctx, connection, before, after, collectionRenames, reverse); err != nil {
+		return err
+	}
+	if !reverse {
+		return renameSQLiteBlockContent(ctx, connection, after, blockRenames, false)
+	}
+	return nil
+}
+
+// renameSQLiteBlockContent moves each block field rename's content in every
+// resource that places its block: current, published and version values.
+func renameSQLiteBlockContent(ctx context.Context, connection *sql.Conn, after schema.Manifest, intents []ridumigration.Rename, reverse bool) error {
+	snapshot := after.Snapshot()
+	for _, intent := range intents {
+		rename, err := blockrename.New(snapshot, intent, reverse)
+		if err != nil {
+			return err
+		}
+		for _, resource := range append(append([]schema.Collection(nil), snapshot.Collections...), snapshot.Globals...) {
+			if !rename.Applies(resource) {
+				continue
+			}
+			rewrite := func(values store.Values) (store.Values, bool, error) {
+				return rename.Values(resource.Fields, values)
+			}
+			if err := rewriteSQLiteResourceValues(ctx, connection, resource.ID, rewrite); err != nil {
+				return fmt.Errorf("rename block %s field %s in %s: %w", intent.Block, intent.FieldBefore, resource.Slug, err)
+			}
+		}
+	}
+	return nil
+}
+
+// rewriteSQLiteResourceValues rewrites the values of every current, published
+// and retained version document of one resource.
+func rewriteSQLiteResourceValues(ctx context.Context, connection *sql.Conn, resource schema.StableID, rewrite func(store.Values) (store.Values, bool, error)) error {
+	for _, table := range []struct {
+		query, update string
+		snapshot      bool
+	}{
+		{query: `SELECT id, 0, values_json FROM ridu_documents WHERE collection_id = ? ORDER BY id`, update: `UPDATE ridu_documents SET values_json = ? WHERE collection_id = ? AND id = ?`},
+		{query: `SELECT id, 0, values_json FROM ridu_published_documents WHERE collection_id = ? ORDER BY id`, update: `UPDATE ridu_published_documents SET values_json = ? WHERE collection_id = ? AND id = ?`},
+		{query: `SELECT document_id, revision, snapshot_json FROM ridu_versions WHERE collection_id = ? ORDER BY document_id, revision`, update: `UPDATE ridu_versions SET snapshot_json = ? WHERE collection_id = ? AND document_id = ? AND revision = ?`, snapshot: true},
+	} {
+		rows, err := connection.QueryContext(ctx, table.query, string(resource))
+		if err != nil {
+			return translateError(err)
+		}
+		type update struct {
+			id       string
+			revision int
+			encoded  string
+		}
+		var updates []update
+		for rows.Next() {
+			var item update
+			var encoded string
+			if err := rows.Scan(&item.id, &item.revision, &encoded); err != nil {
+				rows.Close()
+				return translateError(err)
+			}
+			var document store.Document
+			if table.snapshot {
+				err = json.Unmarshal([]byte(encoded), &document)
+			} else {
+				err = document.Values.UnmarshalJSON([]byte(encoded))
+			}
+			if err != nil {
+				rows.Close()
+				return fmt.Errorf("decode document %s: %w", item.id, err)
+			}
+			values, changed, err := rewrite(document.Values)
+			if err != nil {
+				rows.Close()
+				return fmt.Errorf("document %s: %w", item.id, err)
+			}
+			if !changed {
+				continue
+			}
+			var rewritten []byte
+			if table.snapshot {
+				document.Values = values
+				rewritten, err = json.Marshal(document)
+			} else {
+				rewritten, err = values.MarshalJSON()
+			}
+			if err != nil {
+				rows.Close()
+				return err
+			}
+			item.encoded = string(rewritten)
+			updates = append(updates, item)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return translateError(err)
+		}
+		if err := rows.Close(); err != nil {
+			return translateError(err)
+		}
+		for _, item := range updates {
+			arguments := []any{item.encoded, string(resource), item.id}
+			if table.snapshot {
+				arguments = append(arguments, item.revision)
+			}
+			if _, err := connection.ExecContext(ctx, table.update, arguments...); err != nil {
+				return translateError(err)
+			}
+		}
+	}
+	return nil
+}
+
+// renameSQLiteCollectionFields moves the collection field renames.
+func renameSQLiteCollectionFields(ctx context.Context, connection *sql.Conn, before, after schema.Manifest, renames []sqliteFieldRename, reverse bool) error {
+	if len(renames) == 0 {
+		return nil
+	}
 	sourceManifest, targetManifest := before, after
 	if reverse {
 		sourceManifest, targetManifest = after, before
@@ -457,26 +617,9 @@ func renameSQLiteFieldValue(source, target schema.Field, renamed map[schema.Stab
 		return renameSQLiteItems(items, value, renamed, func(store.Values) ([]schema.Field, []schema.Field, bool) {
 			return source.Nested.ResolvedFields(), target.Nested.ResolvedFields(), true
 		})
-	case schema.FieldTypeBlocks:
-		items, valid := value.CopyList()
-		if !valid || source.Blocks == nil || target.Blocks == nil {
-			return value, false, nil
-		}
-		sourceTypes := make(map[string]schema.BlockType, len(source.Blocks.ResolvedTypes()))
-		for _, block := range source.Blocks.ResolvedTypes() {
-			sourceTypes[block.Slug] = block
-		}
-		targetTypes := make(map[string]schema.BlockType, len(target.Blocks.ResolvedTypes()))
-		for _, block := range target.Blocks.ResolvedTypes() {
-			targetTypes[block.Slug] = block
-		}
-		return renameSQLiteItems(items, value, renamed, func(item store.Values) ([]schema.Field, []schema.Field, bool) {
-			slug, _ := item["blockType"].StringValue()
-			sourceBlock, known := sourceTypes[slug]
-			targetBlock, survives := targetTypes[slug]
-			return sourceBlock.ResolvedFields(), targetBlock.ResolvedFields(), known && survives
-		})
 	}
+	// A collection field rename never reaches into a block: block definitions
+	// own their fields, which block field renames move.
 	return value, false, nil
 }
 

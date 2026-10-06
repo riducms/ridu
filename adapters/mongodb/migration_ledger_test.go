@@ -35,6 +35,16 @@ func TestMongoMigrationArtifactLedgerCodecIsStrict(t *testing.T) {
 	if _, err := decodeMongoMigrationArtifactLedger(mustMongoMigrationRaw(t, tampered)); err == nil || !strings.Contains(err.Error(), "unknown") {
 		t.Fatalf("artifact ledger unknown-field error = %v", err)
 	}
+	stale := append(bson.D(nil), document...)
+	for index := range stale {
+		if stale[index].Key == "plannerVersion" {
+			stale[index].Value = "3.0.0"
+		}
+	}
+	want := `uses unsupported planner version "3.0.0"; this Ridu release supports only mongodb "` + mongoDBPlannerVersion + `", so create a new migration history`
+	if _, err := decodeMongoMigrationArtifactLedger(mustMongoMigrationRaw(t, stale)); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("artifact ledger stale-planner error = %v", err)
+	}
 }
 
 func TestMongoMigrationStepLedgerCodecBindsExactIdentityAndState(t *testing.T) {

@@ -142,13 +142,31 @@ type AdminPreparedNavigationV1 struct {
 // contains credentials, access predicates, executable hooks, or lock state.
 type AdminPreparedRuntimeV1 struct {
 	AdminPreparedNavigationV1
-	Manifest      schema.Snapshot               `json:"manifest"`
 	Session       *AuthSession[json.RawMessage] `json:"session,omitempty"`
 	AuthBootstrap bool                          `json:"authBootstrapAvailable"`
 	Theme         string                        `json:"theme"`
 	AdminLanguage string                        `json:"adminLanguage,omitempty"`
 	AdminTimeZone string                        `json:"adminTimeZone,omitempty"`
 	Preferences   map[string]json.RawMessage    `json:"preferences"`
+	Manifest      schema.Snapshot               `json:"manifest"`
+	// EncodedManifest optionally carries the canonical encoding of Manifest. A
+	// server presenting an immutable manifest encodes it once and reuses the
+	// bytes for every response; it is never decoded and must encode Manifest.
+	EncodedManifest json.RawMessage `json:"-"`
+}
+
+// MarshalJSON writes EncodedManifest in place of encoding Manifest again.
+func (runtime AdminPreparedRuntimeV1) MarshalJSON() ([]byte, error) {
+	type fields AdminPreparedRuntimeV1
+	if runtime.EncodedManifest == nil {
+		return json.Marshal(fields(runtime))
+	}
+	// The shallower Manifest field takes precedence over the embedded one, and
+	// both encodings end with the manifest.
+	return json.Marshal(struct {
+		fields
+		Manifest json.RawMessage `json:"manifest"`
+	}{fields(runtime), runtime.EncodedManifest})
 }
 
 type AdminPreparedRouteDiagnosticV1 struct {
@@ -231,11 +249,14 @@ type ErrorEnvelope struct {
 }
 
 // Pagination contains stable page metadata independent of a document type.
+// HasNextPage is always exact. TotalDocs and TotalPages are present exactly
+// when the list counted every match; a list read with pagination=false omits
+// both instead of estimating them.
 type Pagination struct {
 	Page        int  `json:"page"`
 	Limit       int  `json:"limit"`
-	TotalDocs   int  `json:"totalDocs"`
-	TotalPages  int  `json:"totalPages"`
+	TotalDocs   *int `json:"totalDocs,omitempty"`
+	TotalPages  *int `json:"totalPages,omitempty"`
 	HasNextPage bool `json:"hasNextPage"`
 	HasPrevPage bool `json:"hasPrevPage"`
 }
@@ -336,7 +357,8 @@ type OperationCapabilities struct {
 }
 
 // FieldCapabilities summarizes field visibility and write access. Keys in an
-// AccessCapabilitiesEnvelope are authored or concrete runtime field paths.
+// AccessCapabilitiesEnvelope's Fields are canonical or concrete runtime field
+// paths.
 type FieldCapabilities struct {
 	Read   bool `json:"read"`
 	Create bool `json:"create"`
@@ -344,10 +366,15 @@ type FieldCapabilities struct {
 }
 
 // AccessCapabilitiesEnvelope carries the evaluated access state for the
-// current actor and optional document/input snapshot.
+// current actor and optional document/input snapshot. A field of a block
+// definition has Fields entries at its located values and at each placement
+// holding them; at any other placement, such as a row the client has yet to
+// add, BlockFields gives its capabilities by block slug and
+// definition-relative path.
 type AccessCapabilitiesEnvelope struct {
-	Operations OperationCapabilities        `json:"operations"`
-	Fields     map[string]FieldCapabilities `json:"fields"`
+	Operations  OperationCapabilities                   `json:"operations"`
+	Fields      map[string]FieldCapabilities            `json:"fields"`
+	BlockFields map[string]map[string]FieldCapabilities `json:"blockFields,omitempty"`
 }
 
 // CollectionSelectionInput carries the active list predicate to the bounded

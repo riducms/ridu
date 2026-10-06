@@ -446,8 +446,6 @@ func TestSQLiteVersionPredicatesRetainComplexMatcherSemantics(t *testing.T) {
 	}{
 		{"repeated equality", query.Equal("rows.label", "team"), []int{3, 1}},
 		{"repeated not equal requires no equal occurrence", query.NotEqual("rows.label", "team"), []int{4, 2}},
-		{"primitive list membership", query.In("tags", "blue"), []int{1}},
-		{"primitive empty list exists", query.Exists("tags", true), []int{4, 3, 2, 1}},
 		{"opaque JSON", query.Equal("opaque.owner", "a"), []int{3, 1}},
 		{"Unicode contains", query.Contains("title", "ÉCOLE"), []int{2, 1}},
 		{"Unicode like", query.Like("title", "école BLEUE"), []int{1}},
@@ -480,12 +478,79 @@ func TestSQLiteVersionPredicatesRetainComplexMatcherSemantics(t *testing.T) {
 	for _, expression := range []query.Expression{query.Equal("tags", "blue"), query.In("tags", 1)} {
 		request := fixture.request(expression)
 		versions := read.(store.VersionTransaction)
-		if _, err := versions.CountVersions(t.Context(), request); err == nil || !strings.Contains(err.Error(), "primitive list") {
+		if _, err := versions.CountVersions(t.Context(), request); err == nil || !strings.Contains(err.Error(), `text list "tags"`) {
 			t.Fatalf("invalid primitive-list count operand error = %v", err)
 		}
-		if _, err := versions.ListVersions(t.Context(), request); err == nil || !strings.Contains(err.Error(), "primitive list") {
+		if _, err := versions.ListVersions(t.Context(), request); err == nil || !strings.Contains(err.Error(), `text list "tags"`) {
 			t.Fatalf("invalid primitive-list history operand error = %v", err)
 		}
+	}
+}
+
+// Membership compiles natively for snapshots too, including snapshots that
+// retain an older shape of a field that is now set-valued.
+func TestSQLiteVersionPredicatesKeepMembershipNative(t *testing.T) {
+	t.Parallel()
+	fixture := newSQLiteVersionPredicateFixture(t, field.Fields{
+		field.TextList("tags"), field.PolymorphicRelationship("subject", "posts", "other-posts"),
+		field.TextList("labels").Localized(), field.Array("rows", field.Fields{field.TextList("tags")}),
+	})
+	reference := func(collection, id string) store.Value {
+		return store.Object(store.Values{"relationTo": store.String(collection), "id": store.String(id)})
+	}
+	row := func(tags store.Value) store.Value { return store.List(store.Object(store.Values{"tags": tags})) }
+	for index, values := range []store.Values{
+		{
+			"tags": store.List(store.String("red"), store.String("blue")), "subject": reference("posts", "a"),
+			"labels": store.Object(store.Values{"en": store.List(store.String("x")), "fr": store.List(store.String("y"))}),
+			"rows":   row(store.List(store.String("team"))),
+		},
+		{
+			"tags": store.String("red"), "subject": store.String("a"),
+			"labels": store.Object(store.Values{"fr": store.String(""), "en": store.List(store.String("x"))}),
+			"rows":   row(store.String("team")),
+		},
+		{
+			"tags": store.List(), "subject": store.List(reference("other-posts", "a")),
+			"labels": store.String("x"), "rows": store.List(),
+		},
+		{
+			"tags": store.Null(), "subject": store.Null(),
+			"labels": store.Object(store.Values{"fr": store.List(store.String("x"))}), "rows": row(store.List()),
+		},
+	} {
+		fixture.save(t, fixture.collection, sqliteVersionPredicateDocument(index+1, values))
+	}
+	for _, test := range []struct {
+		name       string
+		expression query.Expression
+		chain      []schema.LocaleCode
+		all        bool
+		want       []int
+	}{
+		{"list item", query.In("tags", "red"), nil, false, []int{1}},
+		{"historical text is no item", query.Not(query.In("tags", "red")), nil, false, []int{4, 3, 2}},
+		{"historical text is present", query.Exists("tags", true), nil, false, []int{3, 2, 1}},
+		{"null", query.Equal("tags", query.Null()), nil, false, []int{4}},
+		{"singular reference", query.In("subject", query.Reference("posts", "a")), nil, false, []int{1}},
+		{"historical reference list", query.In("subject", query.Reference("other-posts", "a")), nil, false, []int{3}},
+		{"singular reference absent", query.Exists("subject", false), nil, false, []int{4}},
+		{"locale", query.In("labels", "x"), []schema.LocaleCode{"en"}, false, []int{2, 1}},
+		{"fallback skips historical empty text", query.In("labels", "x"), []schema.LocaleCode{"fr", "en"}, false, []int{4, 2}},
+		{"historical unlocalized value is absent", query.Exists("labels", false), []schema.LocaleCode{"fr", "en"}, false, []int{3}},
+		{"all locales", query.Exists("labels", true), []schema.LocaleCode{"en"}, true, []int{2, 1}},
+		{"array row item", query.In("rows.tags", "team"), nil, false, []int{1}},
+		{"array without rows", query.Exists("rows.tags", false), nil, false, []int{3}},
+		{"array null", query.Equal("rows.tags", query.Null()), nil, false, []int{3}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := fixture.request(test.expression)
+			if test.chain != nil {
+				request.LocaleChain = test.chain
+			}
+			request.AllLocales = test.all
+			assertSQLiteVersionPredicateParity(t, fixture, request, sqliteVersionNative, test.want)
+		})
 	}
 }
 

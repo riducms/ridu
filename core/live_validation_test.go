@@ -254,8 +254,8 @@ func TestLiveValidationRepeatedDescendantsAndEmbeddedForms(t *testing.T) {
 	}{
 		{"array child", "sections", "en", "sections.0.sku", []any{map[string]any{"_key": "section-a", "sku": "invalid"}}, []string{"section-a"}},
 		{"nested array child", "sections", "en", "sections.0.links.0.url", []any{map[string]any{"_key": "section-a", "links": []any{link}}}, []string{"section-a", "link-b"}},
-		{"Block child", "content", "en", "content.0.sku", []any{map[string]any{"_key": "block-a", "blockType": "card", "sku": "invalid"}}, []string{"block-a", "card"}},
-		{"Block nested array", "content", "fr", "content.0.links.0.url", []any{map[string]any{"_key": "block-a", "blockType": "card", "links": []any{link}}}, []string{"block-a", "card", "link-b"}},
+		{"Block child", "content", "en", "content.0.sku", []any{map[string]any{"_key": "block-a", "blockType": livevalidation.CardSlug, "sku": "invalid"}}, []string{"block-a", livevalidation.CardSlug}},
+		{"Block nested array", "content", "fr", "content.0.links.0.url", []any{map[string]any{"_key": "block-a", "blockType": livevalidation.CardSlug, "links": []any{link}}}, []string{"block-a", livevalidation.CardSlug, "link-b"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			evaluations := liveChecked(t, liveRequest(t, app, "collections/live-validation/validate?locale="+test.locale, map[string]any{"data": map[string]any{test.field: test.value}, "fields": []string{test.field}}))
@@ -281,20 +281,22 @@ func TestLiveValidationRepeatedDescendantsAndEmbeddedForms(t *testing.T) {
 		name, field, tree, tag, locale string
 		value                          store.Value
 	}{
-		{"rich text", "body", "blocks", "block", "en", richtextblocks.Document(richtextblocks.Block("card", "embed-a", store.Values{"sku": store.String("A-original"), "supplier": store.String("acme")}))},
-		{"localized rich text", "localizedBody", "blocks", "block", "fr", richtextblocks.Document(richtextblocks.Block("card", "embed-a", store.Values{"sku": store.String("A-original"), "supplier": store.String("acme")}))},
-		{"generic plugin", "outline", "widgets", "widget", "en", embeddedplugin.Value(embeddedplugin.Widget("card", "embed-a", store.Values{"sku": store.String("A-original"), "supplier": store.String("acme")}))},
+		{"rich text", "body", "blocks", "block", "en", richtextblocks.Document(richtextblocks.Block(livevalidation.EmbeddedCardSlug, "embed-a", store.Values{"sku": store.String("A-original"), "supplier": store.String("acme")}))},
+		{"localized rich text", "localizedBody", "blocks", "block", "fr", richtextblocks.Document(richtextblocks.Block(livevalidation.EmbeddedCardSlug, "embed-a", store.Values{"sku": store.String("A-original"), "supplier": store.String("acme")}))},
+		{"generic plugin", "outline", "widgets", "widget", "en", embeddedplugin.Value(embeddedplugin.Widget(livevalidation.OutlineCardSlug, "embed-a", store.Values{"sku": store.String("A-original"), "supplier": store.String("acme")}))},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			payload := map[string]any{"supplier": "acme", "sku": "G-123", "links": []any{link}, "_key": "embed-a", "blockType": "card"}
+			slug := livevalidation.EmbeddedCardSlug
+			payload := map[string]any{"supplier": "acme", "sku": "G-123", "links": []any{link}, "_key": "embed-a", "blockType": slug}
 			if test.field == "outline" {
+				slug = livevalidation.OutlineCardSlug
 				delete(payload, "_key")
 				delete(payload, "blockType")
-				payload["uid"], payload["schema"] = "embed-a", "card"
+				payload["uid"], payload["schema"] = "embed-a", slug
 			}
 			evaluations := liveChecked(t, liveRequest(t, app, "collections/live-validation/validate?locale="+test.locale, map[string]any{
 				"data": map[string]any{"title": "Unsaved parent", test.field: test.value}, "fields": []string{"links"},
-				"embedded": []any{map[string]any{"field": test.field, "treeKey": test.tree, "caseTag": test.tag, "variantSlug": "card", "identity": "embed-a", "data": payload}},
+				"embedded": []any{map[string]any{"field": test.field, "treeKey": test.tree, "caseTag": test.tag, "variantSlug": slug, "identity": "embed-a", "data": payload}},
 			}))
 			if len(evaluations) != 1 || evaluations[0].Path != "links" || len(evaluations[0].Issues) != 1 || evaluations[0].Issues[0].Path != "links.0.url" || evaluations[0].Issues[0].Locale != schema.LocaleCode(test.locale) {
 				t.Fatalf("embedded feedback=%#v", evaluations)

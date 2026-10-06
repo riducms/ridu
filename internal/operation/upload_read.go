@@ -77,7 +77,7 @@ func (engine *Engine) ReadUploadMetadata(ctx context.Context, request Request) (
 		}
 		decision, accessError := authorize(collection, operationContext)
 		if accessError != nil {
-			return store.Document{}, capabilityAccessError("upload access rule failed", accessError)
+			return store.Document{}, accessRuleError("upload access rule failed", accessError)
 		}
 		if decision.Kind == Deny {
 			return store.Document{}, &Error{Code: "access_denied", Status: 403, Message: "editing this upload is not permitted"}
@@ -112,7 +112,7 @@ func (engine *Engine) ReadUploadMetadata(ctx context.Context, request Request) (
 			localeContext.Locale, localeContext.AllLocales = locale, true
 			decision, accessError := authorize(collection, localeContext)
 			if accessError != nil {
-				return store.Document{}, &Error{Code: "access_failed", Status: 500, Message: "source locale read access rule failed", Cause: accessError}
+				return store.Document{}, accessRuleError("source locale read access rule failed", accessError)
 			}
 			if decision.Kind == Deny {
 				return store.Document{}, &Error{Code: "access_denied", Status: 403, Message: "every retained source locale must be readable"}

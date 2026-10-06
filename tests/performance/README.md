@@ -152,7 +152,6 @@ From the repository root:
 ```sh
 mkdir -p .ridu/performance
 bun run build:admin-fixture
-go build -trimpath -ldflags='-s -w' -o .ridu/performance/ridu-server ./tests/contracts/admin_server
 PAYLOAD_DATABASE_URL="postgres://$USER@127.0.0.1:5432/payload_perf_build?sslmode=disable" \
   PAYLOAD_SECRET='ridu-performance-payload-secret' \
   RIDU_PAYLOAD_STANDALONE=true \
@@ -162,11 +161,29 @@ bun tests/performance/compare.ts
 ```
 
 The harness copies `.next/static` into the generated standalone deployment and launches its
-`server.js`, so the measured Payload process matches the reported deployment artifact.
+`server.js`, so the measured Payload process matches the reported deployment artifact. It builds the
+Ridu server itself with the fixture's `postgresonly` tag, so the binary links only the PostgreSQL
+adapter, like a generated PostgreSQL application. Both servers are deployed the same way: each trial
+migrates a fresh database in a separate step (`payload migrate`, and the fixture's `migrate` command
+for the history written once by `ridu-server migrations`) before the timed server starts. The Ridu
+server then starts as `ridu.Execute` does, verifying the applied migration history and storage
+schema instead of migrating itself; see the
+[fixture's production-startup mode](../contracts/admin_server/README.md#production-startup-mode).
+Both fixtures seed their accounts and content at server startup. The report's `riduBuild` and
+`riduMigration` configuration records the build tags, migration command, artifacts and executable
+history digest. After
+seeding, it runs `ANALYZE` on each framework's database so every trial measures steady-state query
+plans rather than whatever PostgreSQL chooses before autovacuum next collects statistics.
+Ridu uses the binary's embedded admin unless `RIDU_BROWSER_ADMIN_DIR` selects another directory;
+building the fixture admin alone does not select it for this comparison.
 
-Raw JSON is written beneath `.ridu/performance/`. These environment variables control workload
-size: `RIDU_PERF_TRIALS`, `RIDU_PERF_DATASET`, `RIDU_PERF_READ_REQUESTS`,
+Raw JSON is written beneath `.ridu/performance/`. Reports record the PostgreSQL version and safe
+settings from the benchmark connection, Git revision and dirty state, harness and Ridu binary
+SHA-256 hashes, inherited runtime tuning, and the selected Ridu admin source. These environment
+variables control workload size: `RIDU_PERF_TRIALS`, `RIDU_PERF_DATASET`, `RIDU_PERF_READ_REQUESTS`,
 `RIDU_PERF_MUTATION_REQUESTS`, `RIDU_PERF_ADMIN_REQUESTS`, and `RIDU_PERF_CONCURRENCY`.
+`RIDU_PERF_FRAMEWORKS` (default `ridu,payload`) runs one side only, for example `ridu` after a
+Ridu-only change; compare its report with the other side's earlier report from the same host.
 Mutation concurrency defaults to eight because the pinned Payload fixture stalls during versioned
 updates at concurrency 16; override it with `RIDU_PERF_MUTATION_CONCURRENCY` when testing that
 boundary. Every request has a configurable `RIDU_PERF_REQUEST_TIMEOUT_MS` deadline.
@@ -180,8 +197,9 @@ extra initialized schema surface instead of presenting the configuration as byte
 ## Production stress benchmark
 
 `stress.ts` is the longer, failure-tolerant companion to `compare.ts`. It uses the exact existing
-`.ridu/performance/ridu-server` binary, application-specific `.ridu/admin-fixture-build`, and Payload
-`.next/standalone/server.js`; it never rebuilds those artifacts. It records its own source SHA-256,
+`.ridu/performance/ridu-server` binary that `compare.ts` builds, application-specific
+`.ridu/admin-fixture-build`, and Payload `.next/standalone/server.js`; it never rebuilds those
+artifacts. It still starts that server in the fixture's default mode, which migrates its own schema. It records its own source SHA-256,
 both server artifact hashes and sizes, both admin deployment trees, allowlisted benchmark tuning
 variables, host/tool versions, Git revision and dirty state, and the effective workload
 configuration. Requiring the fixture admin prevents the multilingual/plugin-bearing application
@@ -255,6 +273,19 @@ Timestamped raw JSON and the latest copy are written to `.ridu/performance/stres
 `.ridu/performance/latest-stress.json`. A safety ceiling of one million request samples per workload
 prevents an already-dead server from filling memory with immediate connection failures; adjust it
 with `RIDU_STRESS_MAX_SAMPLES`.
+
+## Block-heavy layouts
+
+[`blocks/`](./blocks/README.md) compares Ridu with Payload on layout-builder schemas whose blocks
+reference each other through a config-level registry, including the payloadcms/payload#17214
+reproduction graph, on PostgreSQL and MongoDB. It generates both frameworks' schemas from one spec,
+runs production builds in disposable containers and records startup, RSS, live heap, admin HTML,
+generated contract sizes and validated CRUD latency:
+
+```sh
+bun install --cwd tests/performance/blocks/payload --frozen-lockfile
+bun tests/performance/blocks/run.ts
+```
 
 ## Optional GraphQL memory
 

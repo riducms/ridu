@@ -70,16 +70,22 @@ func postgresUploadReferenceStatement(request store.UploadReferenceRequest) (str
 		if !objectKeyFound || !sizesFound {
 			return "", nil, fmt.Errorf("upload collection %q is missing framework object metadata", collection.ID)
 		}
-		table := quote(collectionTable(collection.ID))
 		objectColumn := quote(objectKey)
 		sizesColumn := quote(sizes)
-		parts = append(parts,
-			fmt.Sprintf("SELECT %s AS object_key FROM %s WHERE %s = ANY($1::text[])", objectColumn, table, objectColumn),
-			fmt.Sprintf("SELECT candidate.object_key FROM unnest($1::text[]) AS candidate(object_key) WHERE EXISTS (SELECT 1 FROM %s WHERE jsonb_path_query_array(%s, '$.*.\"objectKey\"'::jsonpath) ? candidate.object_key)", table, sizesColumn),
-		)
-		if source, exists := uploadMetadataFieldColumn(collection, "source"); exists {
-			sourceKey := quote(source) + " ->> 'objectKey'"
-			parts = append(parts, fmt.Sprintf("SELECT %s AS object_key FROM %s WHERE %s = ANY($1::text[])", sourceKey, table, sourceKey))
+		// A versioned upload's live head has the working table's typed columns.
+		tables := []string{quote(collectionTable(collection.ID))}
+		if collection.Versions != nil {
+			tables = append(tables, quote(publishedCollectionTable(collection.ID)))
+		}
+		for _, table := range tables {
+			parts = append(parts,
+				fmt.Sprintf("SELECT %s AS object_key FROM %s WHERE %s = ANY($1::text[])", objectColumn, table, objectColumn),
+				fmt.Sprintf("SELECT candidate.object_key FROM unnest($1::text[]) AS candidate(object_key) WHERE EXISTS (SELECT 1 FROM %s WHERE jsonb_path_query_array(%s, '$.*.\"objectKey\"'::jsonpath) ? candidate.object_key)", table, sizesColumn),
+			)
+			if source, exists := uploadMetadataFieldColumn(collection, "source"); exists {
+				sourceKey := quote(source) + " ->> 'objectKey'"
+				parts = append(parts, fmt.Sprintf("SELECT %s AS object_key FROM %s WHERE %s = ANY($1::text[])", sourceKey, table, sourceKey))
+			}
 		}
 		if collection.Versions != nil {
 			versionCollections = append(versionCollections, string(collection.ID))
@@ -92,9 +98,6 @@ func postgresUploadReferenceStatement(request store.UploadReferenceRequest) (str
 			"SELECT snapshot #>> '{Values,source,objectKey}'::text[] AS object_key FROM ridu_versions WHERE collection_id = ANY($2::text[]) AND snapshot #>> '{Values,source,objectKey}'::text[] = ANY($1::text[])",
 			"SELECT snapshot #>> '{Values,objectKey}'::text[] AS object_key FROM ridu_versions WHERE collection_id = ANY($2::text[]) AND snapshot #>> '{Values,objectKey}'::text[] = ANY($1::text[])",
 			"SELECT candidate.object_key FROM unnest($1::text[]) AS candidate(object_key) WHERE EXISTS (SELECT 1 FROM ridu_versions WHERE collection_id = ANY($2::text[]) AND jsonb_path_query_array(snapshot #> '{Values,sizes}'::text[], '$.*.\"objectKey\"'::jsonpath) ? candidate.object_key)",
-			"SELECT snapshot #>> '{Values,source,objectKey}'::text[] AS object_key FROM ridu_published_documents WHERE collection_id = ANY($2::text[]) AND snapshot #>> '{Values,source,objectKey}'::text[] = ANY($1::text[])",
-			"SELECT snapshot #>> '{Values,objectKey}'::text[] AS object_key FROM ridu_published_documents WHERE collection_id = ANY($2::text[]) AND snapshot #>> '{Values,objectKey}'::text[] = ANY($1::text[])",
-			"SELECT candidate.object_key FROM unnest($1::text[]) AS candidate(object_key) WHERE EXISTS (SELECT 1 FROM ridu_published_documents WHERE collection_id = ANY($2::text[]) AND jsonb_path_query_array(snapshot #> '{Values,sizes}'::text[], '$.*.\"objectKey\"'::jsonpath) ? candidate.object_key)",
 		)
 	}
 	if len(parts) == 0 {

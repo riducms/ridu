@@ -39,7 +39,7 @@ func TestAffordableProductsCombineCallerAndAccessFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 1 || len(page.Documents) != 1 {
+	if *page.Total != 1 || len(page.Documents) != 1 {
 		t.Fatalf("affordable products = %#v", page)
 	}
 	if title, _ := page.Documents[0].Values["title"].StringValue(); title != "Affordable" {
@@ -48,7 +48,7 @@ func TestAffordableProductsCombineCallerAndAccessFilters(t *testing.T) {
 
 	// Removing the caller's budget and stock filter does not remove read access.
 	page, err = app.Local().List(t.Context(), "products", ridu.ListOptions{})
-	if err != nil || page.Total != 3 {
+	if err != nil || *page.Total != 3 {
 		t.Fatalf("public products = %#v, error = %v", page, err)
 	}
 }
@@ -112,8 +112,11 @@ func TestRepeatedPathsMatchRowsIndependentlyAndKeepBlockTypes(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			page, err := app.Local().List(t.Context(), "catalog", ridu.ListOptions{Where: test.where})
-			if err != nil || page.Total != test.want {
-				t.Fatalf("total = %d, want %d, error = %v", page.Total, test.want, err)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if *page.Total != test.want {
+				t.Fatalf("total = %d, want %d", *page.Total, test.want)
 			}
 		})
 	}

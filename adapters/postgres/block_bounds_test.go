@@ -2,57 +2,30 @@ package postgres
 
 import (
 	"context"
-	"fmt"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
-	"github.com/riducms/ridu/store"
 	"strings"
 	"testing"
 )
 
+// phaseOneBlocks is a bounded blocks field selecting phaseOneHero.
 func phaseOneBlocks() schema.Field {
 	path, _ := query.ParsePath("layout")
 	return schema.Field{ID: "layout", Name: "layout", Path: path, Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested,
-		Blocks: &schema.BlocksField{MinRows: 2, MaxRows: 3, Types: []schema.BlockType{{Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{atlasBlockNameField("layout-hero-block-name", "layout.hero.blockName")}}}}}
-}
-func phaseOneBlockRows(count int) store.Value {
-	rows := make([]store.Value, count)
-	for i := range rows {
-		rows[i] = store.Object(store.Values{"_key": store.String(fmt.Sprintf("row-%d", i)), "blockType": store.String("hero")})
-	}
-	return store.List(rows...)
+		Blocks: &schema.BlocksField{MinRows: 2, MaxRows: 3, BlockReferences: []string{"hero"}}}
 }
 
-func TestPostgresPhaseOneBlockBoundsValidation(t *testing.T) {
-	field := phaseOneBlocks()
-	transaction := &postgresMigrationDataTransaction{locales: map[string]struct{}{"en": {}}}
-	validate := func(field schema.Field, values store.Values) error {
-		return transaction.validateValues([]schema.Field{field}, values, "posts", nil)
-	}
-	for _, values := range []store.Values{{}, {"layout": store.Null()}} {
-		if err := validate(field, values); err != nil {
-			t.Fatalf("optional absent/null: %v", err)
-		}
-	}
-	for _, count := range []int{0, 1, 2, 3, 4} {
-		err := validate(field, store.Values{"layout": phaseOneBlockRows(count)})
-		invalid := count < 2 || count > 3
-		if (err != nil) != invalid {
-			t.Fatalf("%d rows: %v", count, err)
-		}
-		if err != nil && !strings.Contains(err.Error(), "layout") {
-			t.Fatalf("missing precise field path: %v", err)
-		}
-	}
-	field.Localized = true
-	if err := validate(field, store.Values{"layout": store.Object(store.Values{"en": phaseOneBlockRows(1)})}); err == nil || !strings.Contains(err.Error(), "layout.en") {
-		t.Fatalf("localized bounds: %v", err)
-	}
+func phaseOneHero() schema.BlockType {
+	return schema.BlockType{Slug: "hero", TypeName: "Hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{atlasBlockNameField("block-hero-block-name", "blockName")}}
+}
+
+func phaseOneManifest() schema.Manifest {
+	return atlasBlocksManifest([]schema.BlockType{phaseOneHero()}, phaseOneBlocks())
 }
 
 func TestPostgresPhaseOneTightenedBoundsPlanner(t *testing.T) {
-	before := atlasTestManifest(phaseOneBlocks())
+	before := phaseOneManifest()
 	afterSnapshot := before.Snapshot()
 	afterSnapshot.Collections[0].Fields[0].Blocks.MinRows = 3
 	after := schema.NewManifest(afterSnapshot)
@@ -72,18 +45,38 @@ func TestPostgresPhaseOneTightenedBoundsPlanner(t *testing.T) {
 }
 
 func TestPostgresPhaseOneBoundsGuardFollowsOwnerAndFieldRenames(t *testing.T) {
+	// The bounded field belongs to the section definition, which every
+	// placement shares: its identity is definition-relative.
 	beforeField := phaseOneBlocks()
+	beforeField.ID = "block-section-layout"
 	afterField := phaseOneBlocks()
-	afterField.ID = "content"
+	afterField.ID = "block-section-content"
 	afterField.Name = "content"
-	afterField.Path, _ = query.ParsePath("wrapper.hero.content")
+	afterField.Path, _ = query.ParsePath("content")
 	afterField.Blocks.MaxRows = 2
 	groupPath, _ := query.ParsePath("wrapper")
-	before := schema.Snapshot{Globals: []schema.Collection{{ID: "home", Fields: []schema.Field{{ID: "wrapper", Name: "wrapper", Path: groupPath, Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{beforeField}}}}}}}}}
-	after := schema.Snapshot{Globals: []schema.Collection{{ID: "landing", Fields: []schema.Field{{ID: "wrapper", Name: "wrapper", Path: groupPath, Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{afterField}}}}}}}}}
-	mapping := referenceShapeMapping{fields: map[string]referenceShapeFieldIdentity{referenceShapeFieldKey("home", "layout"): {ID: "content", Path: afterField.Path.String()}}}
+	snapshot := func(owner schema.StableID, field schema.Field) schema.Snapshot {
+		section := schema.BlockType{Slug: "section", TypeName: "Section", Fields: []schema.Field{field}}
+		value := schema.Snapshot{Blocks: []schema.BlockType{section, phaseOneHero()}, Collections: []schema.Collection{{ID: owner, Fields: []schema.Field{{ID: owner + "-wrapper", Name: "wrapper", Path: groupPath, Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"section"}}}}}}}
+		if err := schema.BindBlockReferences(&value); err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	before, after := snapshot("home", beforeField), snapshot("landing", afterField)
+	mapping := referenceShapeMapping{fields: map[string]referenceShapeFieldIdentity{
+		referenceShapeFieldKey(definitionOwner("section"), "block-section-layout"): {ID: "block-section-content", Path: "content"},
+	}}
 	owners := atlasIdentityMap{collections: map[schema.StableID]schema.StableID{"home": "landing"}}
-	if path := tightenedBlockBounds(before, after, mapping, owners); path != "wrapper.hero.content" {
+	if path := tightenedBlockBounds(before, after, mapping, owners); path != "block section.content" {
 		t.Fatalf("renamed nested bound tightening path = %q", path)
+	}
+	// Without the reviewed field rename the bounds are not compared.
+	if path := tightenedBlockBounds(before, after, referenceShapeMapping{}, owners); path != "" {
+		t.Fatalf("unmapped nested bound tightening path = %q", path)
+	}
+	// Without the collection rename no placement survives the change.
+	if path := tightenedBlockBounds(before, after, mapping, atlasIdentityMap{}); path != "" {
+		t.Fatalf("unplaced bound tightening path = %q", path)
 	}
 }

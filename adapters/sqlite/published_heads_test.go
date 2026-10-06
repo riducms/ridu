@@ -13,6 +13,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestSQLiteFieldKindClearCoversPublishedOnlyValuesAndLogicalCounts(t *testing.T) {
@@ -54,7 +55,7 @@ func TestSQLiteFieldKindClearCoversPublishedOnlyValuesAndLogicalCounts(t *testin
 			}
 			continue
 		}
-		if _, err := write.Update(ctx, store.UpdateRequest{
+		if _, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{
 			Request: store.Request{Collection: collection, ID: id, ExpectedRevision: created.Revision},
 			Intent:  store.WriteIntentSaveDraft, Values: store.Values{"body": store.Null()},
 		}); err != nil {
@@ -129,10 +130,10 @@ func TestSQLitePublishedHeadSelectsBeforeFilterAndPreservesRevision(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: created.Revision}, Values: store.Values{"title": store.String("implicit publication")}}); err == nil {
+	if _, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: created.Revision}, Values: store.Values{"title": store.String("implicit publication")}}); err == nil {
 		t.Fatal("draft-capable default update accepted an implicit publication")
 	}
-	staged, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: created.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("pending")}})
+	staged, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: created.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("pending")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,15 +152,15 @@ func TestSQLitePublishedHeadSelectsBeforeFilterAndPreservesRevision(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 0 {
-		t.Fatalf("published pending-title count = %d", page.Total)
+	if *page.Total != 0 {
+		t.Fatalf("published pending-title count = %d", *page.Total)
 	}
 	filter = query.Equal("title", "live").Node()
 	page, err = transaction.List(ctx, store.Request{Collection: collection, PublishedOnly: true, Filter: &filter})
-	if err != nil || page.Total != 1 {
+	if err != nil || *page.Total != 1 {
 		t.Fatalf("published live-title page = %#v, %v", page, err)
 	}
-	discarded, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: staged.Revision}, Intent: store.WriteIntentDiscardDraft})
+	discarded, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: staged.Revision}, Intent: store.WriteIntentDiscardDraft})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +206,7 @@ func TestSQLitePopulatedWorkingHeadsIncludePublicationMetadata(t *testing.T) {
 		}
 		if candidate.id != "root" {
 			values["title"] = store.String("pending-" + candidate.id)
-			if _, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: candidate.id, ExpectedRevision: created.Revision}, Intent: store.WriteIntentSaveDraft, Values: values}); err != nil {
+			if _, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: candidate.id, ExpectedRevision: created.Revision}, Intent: store.WriteIntentSaveDraft, Values: values}); err != nil {
 				_ = write.Rollback(ctx)
 				t.Fatal(err)
 			}
@@ -263,11 +264,11 @@ func TestSQLiteMutationResponsesTrackPublishedMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	published, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "one", ExpectedRevision: created.Revision}, Intent: store.WriteIntentPublish})
+	published, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "one", ExpectedRevision: created.Revision}, Intent: store.WriteIntentPublish})
 	if err != nil || published.PublishedRevision != 2 || published.HasDraftChanges {
 		t.Fatalf("publish response = %#v, %v", published, err)
 	}
-	staged, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "one", ExpectedRevision: published.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("pending")}})
+	staged, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "one", ExpectedRevision: published.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("pending")}})
 	if err != nil || staged.PublishedRevision != 2 || !staged.HasDraftChanges {
 		t.Fatalf("draft response = %#v, %v", staged, err)
 	}
@@ -311,7 +312,7 @@ func TestSQLitePublishedAndWorkingHeadsReserveBothUniqueValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	staged, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: first.ID, ExpectedRevision: first.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"slug": store.String("new")}})
+	staged, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: collection, ID: first.ID, ExpectedRevision: first.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"slug": store.String("new")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +334,7 @@ func TestSQLitePublishedAndWorkingHeadsReserveBothUniqueValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer transaction.Rollback(ctx)
-	if _, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: first.ID, ExpectedRevision: staged.Revision}, Intent: store.WriteIntentUnpublish}); err != nil {
+	if _, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: collection, ID: first.ID, ExpectedRevision: staged.Revision}, Intent: store.WriteIntentUnpublish}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := transaction.Create(ctx, store.CreateRequest{Collection: collection, ID: "other-old", Status: store.StatusDraft, Values: store.Values{"slug": store.String("old")}}); err != nil {
@@ -355,11 +356,13 @@ func TestSQLiteRejectsUnsupportedPlannerHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unsupported.Planner.Version = "1.1.0"
+	// 1.2.0 is the previous released planner; its artifacts cannot replay.
+	unsupported.Planner.Version = "1.2.0"
 	if _, err := migrationartifact.Create(directory, "initial", unsupported, time.Unix(1, 0)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateArtifact(ctx, directory, "next", manifest, time.Unix(2, 0), false); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
+	want := `_initial.ridu.json uses unsupported planner version "1.2.0"; this Ridu release supports only ridu-sqlite "` + sqlitePlannerVersion + `", so create a new migration history`
+	if _, err := CreateArtifact(ctx, directory, "next", manifest, time.Unix(2, 0), false); err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("new artifact over unsupported planner history = %v", err)
 	}
 	backend, err := Open(ctx, ":memory:")
@@ -367,7 +370,7 @@ func TestSQLiteRejectsUnsupportedPlannerHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = backend.Close() })
-	if err := backend.ApplyArtifacts(ctx, directory); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
+	if err := backend.ApplyArtifacts(ctx, directory); err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("apply unsupported planner history = %v", err)
 	}
 }

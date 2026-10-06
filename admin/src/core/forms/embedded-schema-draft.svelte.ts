@@ -124,6 +124,7 @@ export function createEmbeddedSchemaDraft(
 			operations: parent.access?.operations,
 			mode: parent.accessMode,
 			entries,
+			blockFields: parent.access?.blockFields,
 		});
 	};
 	const initialAccess = accessState();
@@ -151,6 +152,7 @@ export function createEmbeddedSchemaDraft(
 		nested: { fields: block.fields },
 	};
 	form.reset({ [id]: payload }, [container]);
+	form.accessSchema = parent.accessSchema ?? parent.schemaFields;
 	form.setResource(parent.resource);
 	const rebase = (path: string) =>
 		occurrence !== undefined && (path === occurrence.path || path.startsWith(`${occurrence.path}.`))

@@ -115,6 +115,7 @@ const page = await ridu.list('posts', {
 | `sort`                      | Store-defined stable order; at most 16 unique terms over HTTP | Sort supported stored fields. Ridu adds `id` as a stable tie-breaker when needed.                          |
 | `page`                      | `1`                                                           | Choose a positive result page. Deep offset pagination can still cost more as the page grows.               |
 | `limit`                     | `10`; HTTP maximum `100`                                      | Bound documents read, processed, serialized, and rendered.                                                 |
+| `pagination`                | `true`: every list counts all matches                         | Set `false` for load-more or feed pages; it skips the count and keeps `hasNextPage` exact.                 |
 | `select`                    | All readable authored fields; at most 256 entries over HTTP   | Return only needed top-level fields plus framework identity metadata.                                      |
 | `populate`                  | No population; at most 64 explicit paths and depth `5`        | Expand named relationships with per-target access and redaction. Add a target `select`.                    |
 | `depth`                     | `0`; maximum `5`                                              | Expand every root reference uniformly. Prefer `populate` when cost and output shape matter.                |

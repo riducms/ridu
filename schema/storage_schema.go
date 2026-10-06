@@ -48,8 +48,8 @@ func (manifest Manifest) StorageSchema() Manifest {
 	}
 	// Rebind the detached graph to the cleared registry without materializing
 	// placement views or copying the snapshot again.
-	_ = BindBlockReferences(&snapshot)
-	return Manifest{snapshot: snapshot}
+	attachBlockReferences(&snapshot)
+	return Manifest{snapshot: snapshot, instance: new(byte)}
 }
 
 // SameStorage reports whether two manifests have the same storage schema.
@@ -82,16 +82,6 @@ func clearPresentationFields(fields []Field) {
 		if field.Nested != nil {
 			field.Nested.RowLabel, field.Nested.RowLabelComponent, field.Nested.RowLabels = "", nil, nil
 			clearPresentationFields(field.Nested.Fields)
-		}
-		if field.Blocks != nil {
-			clearPresentationBlocks(field.Blocks.Types)
-		}
-		if field.Plugin != nil {
-			for tree := range field.Plugin.EmbeddedTrees {
-				for variant := range field.Plugin.EmbeddedTrees[tree].Cases {
-					clearPresentationBlocks(field.Plugin.EmbeddedTrees[tree].Cases[variant].Types)
-				}
-			}
 		}
 	}
 }

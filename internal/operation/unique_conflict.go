@@ -59,7 +59,7 @@ func (engine *Engine) explainUniqueConflict(ctx context.Context, err error) erro
 		}
 		filter := query.Equal(path, value).Node()
 		page, listError := transaction.List(ctx, store.Request{
-			Collection: candidate.collection, Filter: &filter, Limit: 2,
+			Collection: candidate.collection, Filter: &filter, Limit: 2, SkipTotal: true,
 			Deletion: store.DeletionAll, Locales: candidate.locales,
 		})
 		if listError != nil {

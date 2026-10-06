@@ -38,7 +38,7 @@ func ordinarySemantics(t *testing.T, factory Factory) {
 		{"unknown-field", Block("callout", "", store.Values{"title": store.String("Title"), "undeclared": store.String("no")}), "body.root.children.0.fields.undeclared"},
 		{"array-required", Block("callout", "", store.Values{"title": store.String("Title"), "links": store.List(store.Object(store.Values{"_key": store.String("link")}))}), "body.root.children.0.fields.links.0.label"},
 		{"custom-validation", Block("callout", "", store.Values{"title": store.String("invalid")}), "body.root.children.0.fields.title"},
-		{"nested-validation", Block("callout", "", store.Values{"title": store.String("Title"), "detail": Document(Block("cta", "", store.Values{}))}), "body.root.children.0.fields.detail.root.children.0.fields.label"},
+		{"nested-validation", Block("callout", "", store.Values{"title": store.String("Title"), "detail": Document(Block("action", "", store.Values{}))}), "body.root.children.0.fields.detail.root.children.0.fields.label"},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			_, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Article"), "body": Document(fixture.node)}, ridu.MutationOptions{Draft: &published})
@@ -50,7 +50,7 @@ func ordinarySemantics(t *testing.T, factory Factory) {
 	seen.occurrences = nil
 	created, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Article"), "body": Document(
 		paragraph("Before"),
-		Block("callout", "", store.Values{"title": store.String("First"), "secret": store.String("never disclose"), "links": store.List(store.Object(store.Values{"label": store.String("Read"), "href": store.String("/read")})), "detail": Document(Block("cta", "shared-inner", store.Values{"label": store.String("Inner one")})), "aside": Document(Block("cta", "shared-inner", store.Values{"label": store.String("Inner two")}))}),
+		Block("callout", "", store.Values{"title": store.String("First"), "secret": store.String("never disclose"), "links": store.List(store.Object(store.Values{"label": store.String("Read"), "href": store.String("/read")})), "detail": Document(Block("action", "shared-inner", store.Values{"label": store.String("Inner one")})), "aside": Document(Block("action", "shared-inner", store.Values{"label": store.String("Inner two")}))}),
 		Block("callout", "", store.Values{"title": store.String("Second")}), paragraph("After"),
 	)}, ridu.MutationOptions{})
 	if err != nil {
@@ -109,7 +109,7 @@ func ordinarySemantics(t *testing.T, factory Factory) {
 		t.Fatal("failed transaction changed aggregate")
 	}
 	audit, err := app.Local().List(ctx, "audit-events", ridu.ListOptions{})
-	if err != nil || audit.Total != 0 {
+	if err != nil || *audit.Total != 0 {
 		t.Fatalf("nested side effect escaped rollback: %v", err)
 	}
 	versions, err := app.Local().Versions(ctx, "articles", created.ID, ridu.FindOptions{})
@@ -142,7 +142,7 @@ func localesAndReferences(t *testing.T, factory Factory) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "two", store.Values{"translation": store.String("Au revoir")}), Block("callout", "one", store.Values{"translation": store.String("Bonjour")})), "localizedBody": Document(Block("cta", "independent", store.Values{"label": store.String("French document")}))}, ridu.MutationOptions{Locale: "fr"})
+	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "two", store.Values{"translation": store.String("Au revoir")}), Block("callout", "one", store.Values{"translation": store.String("Bonjour")})), "localizedBody": Document(Block("action", "independent", store.Values{"label": store.String("French document")}))}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func localesAndReferences(t *testing.T, factory Factory) {
 		t.Fatal("positional localized merge corrupted translation")
 	}
 	whole, _ := all.Values["localizedBody"].CopyObject()
-	if stringValue(payload(t, whole["en"], 0)["blockType"]) != "callout" || stringValue(payload(t, whole["fr"], 0)["blockType"]) != "cta" {
+	if stringValue(payload(t, whole["en"], 0)["blockType"]) != "callout" || stringValue(payload(t, whole["fr"], 0)["blockType"]) != "action" {
 		t.Fatal("whole-field locales were correlated together")
 	}
 	for _, locale := range []schema.LocaleCode{"en", "fr"} {
@@ -294,7 +294,7 @@ func retiredSchema(t *testing.T, factory Factory) {
 	config := configuration(t, &observations{})
 	backend, app := factory(t, config)
 	ctx := t.Context()
-	created, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Historical"), "body": Document(Block("cta", "historical", store.Values{"label": store.String("never disclose")}))}, ridu.MutationOptions{})
+	created, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Historical"), "body": Document(Block("action", "historical", store.Values{"label": store.String("never disclose")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,8 +310,8 @@ func retiredSchema(t *testing.T, factory Factory) {
 		trees := field.Snapshot(body).EmbeddedTrees()
 		variants := trees[0].Cases[0].Types
 		for j, variant := range variants {
-			if variant.Slug == "cta" {
-				variants[j] = field.Block{Slug: "renamed-cta", Labels: field.BlockLabels{Singular: "CTA"}, Fields: field.Fields{
+			if variant.Slug == "action" {
+				variants[j] = field.Block{Slug: "renamed-action", Labels: field.BlockLabels{Singular: "Action"}, Fields: field.Fields{
 					field.Text("label"),
 					field.Relationship("destination", "pages"),
 				}}

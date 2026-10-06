@@ -394,7 +394,7 @@ func TestSQLiteSnapshotRejectsMutationEntryPoints(t *testing.T) {
 			return err
 		}},
 		{name: "update", run: func() error {
-			_, err := snapshot.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "post-1"}})
+			_, err := snapshot.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "post-1"}, Current: &store.Document{ID: "post-1"}})
 			return err
 		}},
 		{name: "trash", run: func() error {
