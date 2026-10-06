@@ -330,7 +330,7 @@ func TestPostgresAnonymousFirstAuthUserBootstrapHasOneWinner(t *testing.T) {
 		t.Fatalf("PostgreSQL bootstrap outcomes = %d success, %d denied", succeeded, denied)
 	}
 	page, err := application.Local().List(ctx, "users", ridu.ListOptions{})
-	if err != nil || page.Total != 1 {
+	if err != nil || *page.Total != 1 {
 		t.Fatalf("PostgreSQL bootstrapped users = %#v, %v", page, err)
 	}
 }

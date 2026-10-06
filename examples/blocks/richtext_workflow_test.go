@@ -2,13 +2,13 @@ package blocks_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 	"testing"
 
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/adapters/sqlite"
 	"github.com/riducms/ridu/core"
+	"github.com/riducms/ridu/examples/blocks/content"
 	"github.com/riducms/ridu/examples/blocks/generated"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/operation"
@@ -81,21 +81,27 @@ func TestTypedArticleRoundTripPreservesRedactionLocalizationAndPopulation(t *tes
 		t.Fatal(err)
 	}
 	// This reader cannot see Message, while Media.Asset is a populated document.
+	// Callout is one definition wherever it is placed, so every placement
+	// receives the same restricted field value.
 	restricted := referenceWorkflowConfig()
+	var hidden field.Node
+	for _, node := range content.Callout.Fields {
+		if node.Name() != "message" {
+			continue
+		}
+		message, err := field.AsText(node)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hidden = message.Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})
+	}
+	if hidden == nil {
+		t.Fatal("callout message field missing")
+	}
 	for _, host := range []string{"body", "localizedBody"} {
 		restricted.Collections[3].Fields, err = restricted.Collections[3].Fields.Edit(func(root *field.ChildrenDraft) error {
 			return root.EditBranch(host, field.BranchSelector{Boundary: field.EmbeddedCase, Tree: "blocks", Case: "block", Slug: "callout"}, func(block *field.ChildrenDraft) error {
-				for _, node := range block.Fields() {
-					if node.Name() != "message" {
-						continue
-					}
-					message, err := field.AsText(node)
-					if err != nil {
-						return err
-					}
-					return block.Replace("message", message.Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}))
-				}
-				return fmt.Errorf("callout message field missing")
+				return block.Replace("message", hidden)
 			})
 		})
 		if err != nil {

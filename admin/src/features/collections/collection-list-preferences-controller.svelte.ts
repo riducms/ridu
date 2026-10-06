@@ -5,11 +5,13 @@ import type { AdminI18n } from "@riducms/translations";
 import type { AdminClient } from "@admin/core/api/admin-client";
 import type { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import { getPreferenceWriteQueue } from "@admin/core/preferences/preference-write-queue";
+import type { ListFilterFields } from "@admin/features/collections/list-filter-fields";
 import {
 	normalizeWorkspacePreference,
 	parseListFilters,
 	parseListPageSize,
 	type ListColumnSelection,
+	type ListFilterFieldLookup,
 	type ListViewState,
 	type ListWorkspacePreference,
 } from "@admin/features/collections/list-workspace";
@@ -23,7 +25,7 @@ interface CollectionListPreferenceRoute {
 	sessionID: string;
 	preferenceOwnerID: string;
 	columnFields: readonly Pick<SchemaField, "path">[];
-	filterFields: readonly SchemaField[];
+	filterFields: Pick<ListFilterFields, "resolve" | "signature">;
 	defaultColumns: readonly string[];
 }
 
@@ -345,7 +347,7 @@ function routeKey(route: CollectionListPreferenceRoute) {
 		route.sessionID,
 		route.preferenceOwnerID,
 		route.columnFields.map((field) => field.path),
-		route.filterFields.map((field) => field.path),
+		route.filterFields.signature,
 		route.defaultColumns,
 	]);
 }
@@ -360,7 +362,7 @@ function fallbackWorkspace(defaultColumns: readonly string[]): ListWorkspacePref
 
 function validPresets(
 	value: unknown,
-	fields: readonly SchemaField[],
+	fields: ListFilterFieldLookup,
 	defaultColumns: readonly string[]
 ): CollectionListPreset[] {
 	if (!Array.isArray(value)) return [];

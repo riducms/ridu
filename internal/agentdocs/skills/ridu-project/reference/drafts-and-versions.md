@@ -84,7 +84,9 @@ Draft saves defer required fields, minimum text length and minimum row counts re
 enum values, upper bounds, structural row identity, valid references, access and plugin codecs still
 apply. Authentication identity and upload-file requirements are not editorial completeness rules.
 Custom validators still run; publication-only rules can inspect
-`operation.Context.WritePhase == operation.WritePhasePublished`.
+`operation.Context.WritePhase == operation.WritePhasePublished`. Drafts also stay incomplete when
+a migration [makes a field required](./migrations.md#required-fields): it checks published
+content, not drafts.
 
 In REST/SDK calls, the equivalent write option is `draft: true` or `draft: false`. Publishing and
 unpublishing are clearer lifecycle operations than changing status as part of an unrelated update,
@@ -121,6 +123,11 @@ must choose `System` rather than obtaining permission by setting a draft selecto
 Head selection precedes access predicates, caller filters, sorting, pagination, counts and
 population in the store query. Public queries cannot match a pending title and then return the old
 published title. Draft-aware population still checks each target's normal access rules.
+
+Every database adapter stores live content with the working layout and the same indexes, so a
+field's `Index()` serves public and editorial queries alike. PostgreSQL keeps live content in a
+typed live table beside each versioned resource's working table; SQLite and MongoDB mirror their
+working document storage. Version history is stored separately.
 
 To choose who reads drafts yourself, set `ReadDrafts` on the collection or global. It returns
 `Allow` or `Deny` and replaces the editor default:

@@ -36,12 +36,12 @@ func renameChildrenIntent(t *testing.T, before, after schema.Manifest) []Rename 
 	t.Helper()
 	var renames []Rename
 	for _, candidate := range schemadiff.RenameCandidates(before, after) {
-		if candidate.Kind != schemadiff.RenameField {
+		if candidate.Kind == schemadiff.RenameCollection {
 			t.Fatalf("unexpected rename candidate %#v", candidate)
 		}
 		renames = append(renames, Rename{
-			Kind: RenameField, BeforeCollection: candidate.BeforeCollection, AfterCollection: candidate.AfterCollection,
-			BeforeField: candidate.BeforeField, AfterField: candidate.AfterField,
+			Kind: RenameKind(candidate.Kind), BeforeCollection: candidate.BeforeCollection, AfterCollection: candidate.AfterCollection,
+			Block: candidate.Block, BeforeField: candidate.BeforeField, AfterField: candidate.AfterField,
 		})
 	}
 	return renames
@@ -52,11 +52,23 @@ func renameChildrenIntent(t *testing.T, before, after schema.Manifest) []Rename 
 // rename. A field rename moves the stored value whole: the nested values
 // would stay under the old child names, where the new config does not read
 // them. Creating that migration is refused, at every depth a child can sit,
-// and so is a rename that changes the field's own localization.
+// and so is a rename that changes the field's own localization. A block's
+// fields are the definition's: renaming one is its own block field rename,
+// confirmed beside the container's.
 func TestPostgresFieldRenameRefusesRenamedChildren(t *testing.T) {
 	ctx := context.Background()
 	hero := func(name string) field.Block {
 		return field.Block{Slug: "hero", Fields: field.Fields{field.Text(name), field.Number("height")}}
+	}
+	_, beforeBlocks := renameChildrenManifest(t, field.Blocks("layout", hero("caption")), field.Number("views"))
+	_, afterBlocks := renameChildrenManifest(t, field.Blocks("sections", hero("credit")), field.Number("views"))
+	if renames := renameChildrenIntent(t, beforeBlocks, afterBlocks); len(renames) != 2 || renames[0].Kind != RenameBlockField || renames[0].Block != "hero" || renames[1].Kind != RenameField {
+		t.Fatalf("container and block field renames = %#v", renames)
+	} else if artifact, err := BuildArtifact(ctx, "rename", &beforeBlocks, afterBlocks, renames, false); err != nil {
+		t.Fatalf("container and block field renames were refused: %v", err)
+	} else if steps := artifact.Phases[0].Steps; steps[len(steps)-2].Kind != "rename_content" || !strings.Contains(steps[len(steps)-2].Name, "block field content hero.caption") {
+		// The block field rename finds its blocks under the renamed container.
+		t.Fatalf("block field rename does not follow the container rename: %#v", steps)
 	}
 	for name, candidate := range map[string]struct {
 		before, after []field.Node
@@ -72,11 +84,7 @@ func TestPostgresFieldRenameRefusesRenamedChildren(t *testing.T) {
 			[]field.Node{field.Array("items", field.Fields{field.Text("name"), field.Number("weight")})},
 			`"rows.label"`, "renames",
 		},
-		"block": {
-			[]field.Node{field.Blocks("layout", hero("caption"))},
-			[]field.Node{field.Blocks("sections", hero("credit"))},
-			"caption", "renames",
-		},
+
 		"nested group": {
 			[]field.Node{field.Group("meta", field.Fields{field.Group("seo", field.Fields{field.Text("slug")}), field.Number("rank")})},
 			[]field.Node{field.Group("info", field.Fields{field.Group("seo", field.Fields{field.Text("handle")}), field.Number("rank")})},

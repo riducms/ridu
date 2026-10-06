@@ -13,9 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riducms/ridu/internal/blockgraph"
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/requiredfield"
 	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
@@ -23,10 +25,19 @@ import (
 )
 
 // The SQLite planner accepts only artifacts recorded by this exact planner.
+// Change the version whenever the planner can emit a different artifact for
+// the same input, so stale artifacts fail before replay instead of replanning
+// into a digest mismatch.
 const (
 	sqlitePlannerName    = "ridu-sqlite"
-	sqlitePlannerVersion = "1.2.0"
+	sqlitePlannerVersion = "1.3.0"
 )
+
+// sqliteUnsupportedPlannerVersion explains that an artifact or ledger row was
+// recorded by another planner contract, which this release cannot replay.
+func sqliteUnsupportedPlannerVersion(subject, version string) error {
+	return fmt.Errorf("%s uses unsupported planner version %q; this Ridu release supports only %s %q, so create a new migration history with ridu migrate create and apply it to a new database", subject, version, sqlitePlannerName, sqlitePlannerVersion)
+}
 
 // MigrationStatus describes one immutable SQLite artifact relative to the
 // database ledger. SQLite artifacts are atomic, so phases and steps are either
@@ -204,14 +215,35 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
+		owner, scope := string(rename.CollectionBefore), ""
+		if rename.Block != "" {
+			owner, scope = "block "+rename.Block, " of every "+rename.Block+" block"
+		}
 		steps = append(steps, ridumigration.Step{
 			ID: fmt.Sprintf("step-%04d", len(steps)+1), Kind: ridumigration.StepRenameContent,
-			ExecutorVersion: 1, Name: fmt.Sprintf("rename %s.%s to %s", rename.CollectionBefore, rename.FieldBefore, rename.FieldAfter), Payload: payload,
+			ExecutorVersion: 1, Name: fmt.Sprintf("rename %s.%s to %s", owner, rename.FieldBefore, rename.FieldAfter), Payload: payload,
 		})
 		artifact.Risks = append(artifact.Risks, ridumigration.Risk{
 			Code: "RIDU_SQLITE_FIELD_RENAME", Level: ridumigration.RiskWarning,
-			Message: fmt.Sprintf("move stored %s.%s content to %s in current documents and retained versions; stop application writers while the migration runs", rename.CollectionBefore, rename.FieldBefore, rename.FieldAfter),
+			Message: fmt.Sprintf("move stored %s.%s content to %s%s in current documents and retained versions; stop application writers while the migration runs", owner, rename.FieldBefore, rename.FieldAfter, scope),
 		})
+	}
+	if before != nil {
+		requirements, err := sqliteRequirements(*before, after, renames)
+		if err != nil {
+			return ridumigration.Artifact{}, err
+		}
+		if len(requirements) != 0 {
+			payload, err := ridumigration.MarshalStepPayload(requiredfield.Payload(requirements))
+			if err != nil {
+				return ridumigration.Artifact{}, err
+			}
+			steps = append(steps, ridumigration.Step{
+				ID: fmt.Sprintf("step-%04d", len(steps)+1), Kind: ridumigration.StepAuditRequiredValues,
+				ExecutorVersion: 1, Name: requiredfield.StepName, Payload: payload,
+			})
+			artifact.Risks = append(artifact.Risks, requiredfield.Risks(requirements)...)
+		}
 	}
 	assertion, err := ridumigration.MarshalStepPayload(ridumigration.AssertSchemaPayload{})
 	if err != nil {
@@ -253,6 +285,9 @@ type sqliteAdditiveRules struct {
 	paths   map[schema.StableID]map[string]string
 	// renamed is the renames entry of the collection being validated.
 	renamed map[schema.StableID]schema.Field
+	// embedded marks fields inside a plugin's embedded payload, which the
+	// required-value audit does not read: their requiredness stays fixed.
+	embedded bool
 }
 
 // sqliteFieldUnderIdentity returns target as it would be declared under
@@ -274,42 +309,16 @@ func sqliteRerootedField(field schema.Field, oldID, newID string, oldDepth int, 
 			field.Path = path
 		}
 	}
-	reroot := func(fields []schema.Field) []schema.Field {
-		rerooted := make([]schema.Field, len(fields))
-		for index, child := range fields {
-			rerooted[index] = sqliteRerootedField(child, oldID, newID, oldDepth, newRoot)
-		}
-		return rerooted
-	}
-	rerootTypes := func(types []schema.BlockType) []schema.BlockType {
-		rerooted := make([]schema.BlockType, len(types))
-		for index, block := range types {
-			block.Fields = reroot(block.ResolvedFields())
-			rerooted[index] = block
-		}
-		return rerooted
-	}
+	// Block definitions keep their own definition-relative fields wherever
+	// they are placed, so only groups and arrays carry the renamed identity.
 	if field.Nested != nil {
 		nested := *field.Nested
-		nested.Fields = reroot(nested.ResolvedFields())
-		field.Nested = &nested
-	}
-	if field.Blocks != nil {
-		blocks := *field.Blocks
-		blocks.Types = rerootTypes(blocks.ResolvedTypes())
-		field.Blocks = &blocks
-	}
-	if field.Plugin != nil {
-		plugin := *field.Plugin
-		plugin.EmbeddedTrees = append([]schema.EmbeddedTree(nil), plugin.EmbeddedTrees...)
-		for tree := range plugin.EmbeddedTrees {
-			cases := append([]schema.EmbeddedTreeCase(nil), plugin.EmbeddedTrees[tree].Cases...)
-			for index := range cases {
-				cases[index].Types = rerootTypes(cases[index].ResolvedTypes())
-			}
-			plugin.EmbeddedTrees[tree].Cases = cases
+		rerooted := make([]schema.Field, len(nested.ResolvedFields()))
+		for index, child := range nested.ResolvedFields() {
+			rerooted[index] = sqliteRerootedField(child, oldID, newID, oldDepth, newRoot)
 		}
-		field.Plugin = &plugin
+		nested.Fields = rerooted
+		field.Nested = &nested
 	}
 	return field
 }
@@ -357,7 +366,48 @@ func (rules sqliteAdditiveRules) snapshot(before, after schema.Snapshot) error {
 	if err := rules.collections(before.Collections, after.Collections); err != nil {
 		return err
 	}
-	return rules.resources("global", before.Globals, after.Globals)
+	if err := rules.resources("global", before.Globals, after.Globals); err != nil {
+		return err
+	}
+	return rules.definitions(before, after)
+}
+
+// sqliteDefinitionRenames keys a block definition's renames in
+// sqliteAdditiveRules.renames beside collection IDs, which never contain a colon.
+func sqliteDefinitionRenames(slug string) schema.StableID {
+	return schema.StableID("block:" + slug)
+}
+
+// definitions validates each block definition placed before and after the
+// transition once: ordinarily placed views with the ordinary rules, and views
+// placed inside embedded plugin payloads with the embedded rules, which fix
+// requiredness because the required-value audit does not read payloads.
+// Containers already refused deselecting a placed definition.
+func (rules sqliteAdditiveRules) definitions(before, after schema.Snapshot) error {
+	previous, current := blockgraph.New(before), blockgraph.New(after)
+	validate := func(keys map[blockgraph.Key]bool, embedded bool) error {
+		for _, key := range blockgraph.SortedKeys(keys) {
+			beforeView, _ := previous.View(key)
+			afterView, placed := current.View(key)
+			if !placed {
+				continue
+			}
+			definition := rules
+			definition.embedded = embedded
+			definition.renamed = rules.renames[sqliteDefinitionRenames(key.Slug)]
+			if !reflect.DeepEqual(beforeView.Labels, afterView.Labels) {
+				return fmt.Errorf("SQLite artifact planner supports only additive transitions; block type %q changed", key.Slug)
+			}
+			if err := definition.fields(fmt.Sprintf("block type %q", key.Slug), beforeView.ResolvedFields(), afterView.ResolvedFields()); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := validate(blockgraph.Shared(previous, current, nil, false), false); err != nil {
+		return err
+	}
+	return validate(blockgraph.EmbeddedPlacements(previous), true)
 }
 
 func (rules sqliteAdditiveRules) collections(before, after []schema.Collection) error {
@@ -457,8 +507,15 @@ func (rules sqliteAdditiveRules) fields(location string, before, after []schema.
 		if !previous.Unique && comparison.Unique {
 			comparison.Unique = false
 		}
+		// Requiredness does not change stored JSON. Relaxing it is safe, and
+		// the same transaction audits stored values for a field made required.
+		if !rules.embedded {
+			comparison.Required = previous.Required
+		}
+		payload := rules
+		payload.embedded = true
 		var embeddedErr error
-		comparison, embeddedErr = embedded.CompareEvolution(previous, comparison, rules.blockTypes)
+		comparison, embeddedErr = embedded.CompareEvolution(previous, comparison, payload.blockTypes)
 		if embeddedErr != nil {
 			return embeddedErr
 		}
@@ -481,18 +538,19 @@ func (rules sqliteAdditiveRules) fields(location string, before, after []schema.
 			}
 		}
 		if previous.Blocks != nil {
-			if err := rules.blockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.ResolvedTypes(), current.Blocks.ResolvedTypes()); err != nil {
+			if err := rules.blockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.Definitions(), current.Blocks.Definitions()); err != nil {
 				return err
 			}
 		}
 		delete(afterByID, previous.ID)
 	}
+	if !rules.embedded {
+		// An added required field is audited like any field made required.
+		return nil
+	}
 	for _, added := range after {
-		if _, remains := afterByID[added.ID]; !remains {
-			continue
-		}
-		if added.Required && added.Category != schema.FieldCategoryPresentation {
-			return fmt.Errorf("SQLite additive migration cannot add required field %q to existing %s without rewriting existing documents", added.ID, location)
+		if _, remains := afterByID[added.ID]; remains && added.Required && added.Category != schema.FieldCategoryPresentation {
+			return fmt.Errorf("SQLite additive migration cannot add required embedded field %q to existing %s without rewriting existing documents", added.ID, location)
 		}
 	}
 	return nil
@@ -520,13 +578,10 @@ func (rules sqliteAdditiveRules) blockTypes(location string, before, after []sch
 		if !exists {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; block type %q in %s was removed", previous.Slug, location)
 		}
-		// Children are checked below; placement caches and generated type names
-		// are not part of the stored block contract.
+		// A container may only keep or add selections. Each selected
+		// definition is validated once, wherever it is placed.
 		if !reflect.DeepEqual(previous.Labels, current.Labels) {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; block type %q in %s changed", previous.Slug, location)
-		}
-		if err := rules.fields(fmt.Sprintf("block type %q in %s", previous.Slug, location), previous.ResolvedFields(), current.ResolvedFields()); err != nil {
-			return err
 		}
 		delete(afterByKey, previous.Slug)
 	}
@@ -664,14 +719,15 @@ func preflightSQLiteArtifacts(ctx context.Context, files []migrationartifact.Fil
 			return fmt.Errorf("SQLite migration %s uses planner %q instead of %q", file.Name, file.Artifact.Planner.Name, sqlitePlannerName)
 		}
 		if file.Artifact.Planner.Version != sqlitePlannerVersion {
-			return fmt.Errorf("SQLite migration %s uses unsupported planner version %q", file.Name, file.Artifact.Planner.Version)
+			return sqliteUnsupportedPlannerVersion("SQLite migration "+file.Name, file.Artifact.Planner.Version)
 		}
 		for _, phase := range file.Artifact.Phases {
 			if phase.Mode != ridumigration.PhaseTransaction {
 				return fmt.Errorf("SQLite migration %s uses unsupported phase mode %q", file.Name, phase.Mode)
 			}
 			for _, step := range phase.Steps {
-				if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepDataTransform && step.Kind != ridumigration.StepRenameContent && step.Kind != ridumigration.StepAssertSchema {
+				if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepDataTransform && step.Kind != ridumigration.StepRenameContent &&
+					step.Kind != ridumigration.StepAuditRequiredValues && step.Kind != ridumigration.StepAssertSchema {
 					return fmt.Errorf("SQLite migration %s uses unsupported step kind %q", file.Name, step.Kind)
 				}
 			}
@@ -761,6 +817,18 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 					return fmt.Errorf("decode SQLite migration %s step %s: %w", file.Name, step.ID, err)
 				}
 				if err := backend.executeSQLiteDataTransform(ctx, connection, file, payload.Transform, transforms, false); err != nil {
+					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
+				}
+			case ridumigration.StepAuditRequiredValues:
+				var payload ridumigration.AuditRequiredValuesPayload
+				if err := json.Unmarshal(step.Payload, &payload); err != nil {
+					return fmt.Errorf("decode SQLite migration %s step %s: %w", file.Name, step.ID, err)
+				}
+				requirements, err := sqliteArtifactRequirements(file.Artifact, payload)
+				if err == nil {
+					err = auditSQLiteRequiredValues(ctx, connection, requirements, false)
+				}
+				if err != nil {
 					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
 				}
 			case ridumigration.StepAssertSchema:
@@ -993,7 +1061,7 @@ func (backend *Store) verifyImmutableReadyState(ctx context.Context, manifest sc
 		return fmt.Errorf("SQLite migration ledger head %s uses planner %q instead of %q", head.name, head.plannerName, sqlitePlannerName)
 	}
 	if head.plannerVersion != sqlitePlannerVersion {
-		return fmt.Errorf("SQLite migration ledger head %s uses unsupported planner version %q", head.name, head.plannerVersion)
+		return sqliteUnsupportedPlannerVersion("SQLite migration ledger head "+head.name, head.plannerVersion)
 	}
 	if err := assertSQLitePhysicalSchema(ctx, connection, manifest, true); err != nil {
 		return fmt.Errorf("SQLite migration readiness physical schema: %w", err)

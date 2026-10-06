@@ -1,11 +1,16 @@
 package mongodb
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/riducms/ridu/internal/fieldchange"
+	"github.com/riducms/ridu/internal/requiredfield"
 	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -85,17 +90,44 @@ func (backend *Store) readMongoDevelopmentManifest(ctx context.Context) (*schema
 	return &manifest, nil
 }
 
+// The schema record stores its manifest as gzip-compressed compact JSON. The
+// manifest stores each block definition once, so it grows with the schema's
+// declarations; compression keeps even very large schemas far below
+// MongoDB's document limit.
+const (
+	mongoSchemaRecordManifestField = "manifestJSONGzip"
+	// mongoMaxSchemaRecordManifestBytes leaves the record's identity and
+	// digest room within MongoDB's 16 MiB document limit.
+	mongoMaxSchemaRecordManifestBytes = mongoMaxDocumentBytes - 4*1024
+	// mongoMaxSchemaRecordJSONBytes bounds decompression of a stored record.
+	mongoMaxSchemaRecordJSONBytes = 1 << 30
+)
+
 func decodeMongoDevelopmentManifest(raw bson.Raw) (schema.Manifest, error) {
-	if err := requireExactKeys(raw, "MongoDB synchronized schema", "_id", "manifestJSON", "manifestDigest"); err != nil {
+	if err := requireExactKeys(raw, "MongoDB synchronized schema", "_id", mongoSchemaRecordManifestField, "manifestDigest"); err != nil {
 		return schema.Manifest{}, err
 	}
 	id, idOK := raw.Lookup("_id").StringValueOK()
-	encoded, encodedOK := raw.Lookup("manifestJSON").StringValueOK()
+	subtype, compressed, compressedOK := raw.Lookup(mongoSchemaRecordManifestField).BinaryOK()
 	recordedDigest, digestOK := raw.Lookup("manifestDigest").StringValueOK()
-	if !idOK || id != mongoDevelopmentSchemaID || !encodedOK || !digestOK {
+	if !idOK || id != mongoDevelopmentSchemaID || !compressedOK || subtype != bson.TypeBinaryGeneric || !digestOK {
 		return schema.Manifest{}, fmt.Errorf("stored MongoDB synchronized schema has invalid identity or field types")
 	}
-	manifest, err := schema.ParseHistorical([]byte(encoded))
+	reader, err := gzip.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		return schema.Manifest{}, fmt.Errorf("stored MongoDB synchronized schema is not gzip-compressed: %w", err)
+	}
+	encoded, err := io.ReadAll(io.LimitReader(reader, mongoMaxSchemaRecordJSONBytes+1))
+	if err == nil {
+		err = reader.Close()
+	}
+	if err != nil {
+		return schema.Manifest{}, fmt.Errorf("decompress stored MongoDB synchronized schema: %w", err)
+	}
+	if len(encoded) > mongoMaxSchemaRecordJSONBytes {
+		return schema.Manifest{}, fmt.Errorf("stored MongoDB synchronized schema exceeds %d bytes of JSON", mongoMaxSchemaRecordJSONBytes)
+	}
+	manifest, err := schema.ParseHistorical(encoded)
 	if err != nil {
 		return schema.Manifest{}, err
 	}
@@ -106,8 +138,32 @@ func decodeMongoDevelopmentManifest(raw bson.Raw) (schema.Manifest, error) {
 	return manifest, nil
 }
 
+// encodeMongoDevelopmentManifest compresses the manifest for the schema
+// record and rejects one MongoDB cannot store before anything is written.
+func encodeMongoDevelopmentManifest(manifest schema.Manifest) ([]byte, error) {
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		return nil, err
+	}
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	if _, err := writer.Write(encoded); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	if compressed.Len() > mongoMaxSchemaRecordManifestBytes {
+		return nil, fmt.Errorf(
+			"MongoDB cannot record this schema: its manifest is %.1f MiB of JSON and %.1f MiB compressed, over MongoDB's 16 MiB document limit; split the application's collections, globals or block definitions across smaller schemas",
+			float64(len(encoded))/(1<<20), float64(compressed.Len())/(1<<20),
+		)
+	}
+	return compressed.Bytes(), nil
+}
+
 func (backend *Store) writeMongoDevelopmentManifest(ctx context.Context, manifest schema.Manifest) error {
-	encoded, err := manifest.Bytes()
+	compressed, err := encodeMongoDevelopmentManifest(manifest)
 	if err != nil {
 		return err
 	}
@@ -118,7 +174,7 @@ func (backend *Store) writeMongoDevelopmentManifest(ctx context.Context, manifes
 	_, err = backend.mongoMigrationCollection(mongoDevelopmentSchemaCollection).ReplaceOne(ctx,
 		bson.D{{Key: "_id", Value: mongoDevelopmentSchemaID}}, bson.D{
 			{Key: "_id", Value: mongoDevelopmentSchemaID},
-			{Key: "manifestJSON", Value: string(encoded)},
+			{Key: mongoSchemaRecordManifestField, Value: bson.Binary{Subtype: bson.TypeBinaryGeneric, Data: compressed}},
 			{Key: "manifestDigest", Value: digest},
 		}, options.Replace().SetUpsert(true))
 	return translateMongoError(ctx, err)
@@ -152,23 +208,30 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 			return err
 		}
 		var changes []fieldchange.Change
+		var requirements []requiredfield.Requirement
 		if exists {
 			if err := schemadiff.RejectVersionsEnable(before.Snapshot(), manifest.Snapshot(), nil); err != nil {
 				return err
 			}
 			changes = fieldchange.Detect(before.Snapshot(), manifest.Snapshot())
+			requirements = requiredfield.Detect(before.Snapshot(), manifest.Snapshot(), requiredfield.Renames{})
 		}
+		// Stored values must fit a changed field kind and fill a field that
+		// becomes required, both before index work and again when the schema
+		// record is published.
 		requireEmpty := func(sessionContext context.Context) error {
-			if len(changes) == 0 {
-				return nil
+			if len(changes) != 0 {
+				reports := fieldchange.Reports(changes)
+				if err := backend.scanMongoFieldKinds(sessionContext, &documentTransaction{store: backend}, changes, reports, false, mongoManifestLocales(before)); err != nil {
+					return err
+				}
+				if err := fieldchange.RequireEmpty(reports); err != nil {
+					return err
+				}
 			}
-			reports := fieldchange.Reports(changes)
-			if err := backend.scanMongoFieldKinds(sessionContext, &documentTransaction{store: backend}, changes, reports, false, mongoManifestLocales(before)); err != nil {
-				return err
-			}
-			return fieldchange.RequireEmpty(reports)
+			return backend.auditMongoRequiredValues(sessionContext, requirements, true)
 		}
-		if len(changes) != 0 {
+		if len(changes) != 0 || len(requirements) != 0 {
 			if err := lease.transaction(runContext, requireEmpty); err != nil {
 				return err
 			}

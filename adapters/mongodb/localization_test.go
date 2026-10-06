@@ -25,7 +25,7 @@ func TestMongoLocalizedScalarEnvelopeAndCanonicalValuesStayBounded(t *testing.T)
 			"details":  store.Object(store.Values{"summary": store.String("Summary")}),
 		}),
 	}
-	if err := validateCompleteValuesForLocales(collection, valid, []schema.LocaleCode{"en", "fr"}); err != nil {
+	if err := validateStoredValuesForLocales(collection, valid, []schema.LocaleCode{"en", "fr"}); err != nil {
 		t.Fatalf("canonical localized values: %v", err)
 	}
 
@@ -41,12 +41,12 @@ func TestMongoLocalizedScalarEnvelopeAndCanonicalValuesStayBounded(t *testing.T)
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := validateCompleteValuesForLocales(collection, test.values, []schema.LocaleCode{"en", "fr"}); err == nil || !strings.Contains(err.Error(), test.want) {
+			if err := validateStoredValuesForLocales(collection, test.values, []schema.LocaleCode{"en", "fr"}); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("localized value error = %v, want containing %q", err, test.want)
 			}
 		})
 	}
-	if err := validateCompleteValuesForLocales(collection, valid, []schema.LocaleCode{"en", "en"}); err == nil || !strings.Contains(err.Error(), "duplicated") {
+	if err := validateStoredValuesForLocales(collection, valid, []schema.LocaleCode{"en", "en"}); err == nil || !strings.Contains(err.Error(), "duplicated") {
 		t.Fatalf("duplicate locale error = %v", err)
 	}
 }

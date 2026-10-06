@@ -17,6 +17,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestSQLiteMigrationLifecycleDownResetRefreshAndFresh(t *testing.T) {
@@ -343,7 +344,7 @@ func TestSQLiteRollbackScrubsPublishedFieldsBeforeReapply(t *testing.T) {
 	created, err := write.Create(ctx, store.CreateRequest{Collection: collection, ID: "one", Status: store.StatusPublished,
 		Values: store.Values{"title": store.String("Live"), "later": store.String("must disappear")}})
 	if err == nil {
-		_, err = write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: created.Revision},
+		_, err = conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: created.Revision},
 			Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("Pending")}})
 	}
 	if err != nil {
@@ -428,7 +429,7 @@ func TestSQLiteRetireRollbackResourcesScrubsPublishedOnlyReference(t *testing.T)
 	created, err := write.Create(ctx, store.CreateRequest{Collection: keeper, ID: "keeper-1", Status: store.StatusPublished,
 		Values: store.Values{"title": store.String("Keeper"), "subject": reference("retired")}})
 	if err == nil {
-		_, err = write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: keeper, ID: created.ID, ExpectedRevision: created.Revision},
+		_, err = conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: keeper, ID: created.ID, ExpectedRevision: created.Revision},
 			Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("Pending"), "subject": reference("tags")}})
 	}
 	if err != nil {
@@ -1135,7 +1136,7 @@ func TestSQLiteDataTransformDownPreservesRestoredFieldDuringRollbackScrub(t *tes
 			if !ok {
 				return errors.New("up transform could not read title")
 			}
-			_, err = transaction.Update(ctx, store.UpdateRequest{
+			_, err = transaction.Update(ctx, migration.UpdateRequest{
 				Request: store.Request{Collection: afterCollection, ID: document.ID},
 				Values: store.Values{
 					"headline": store.String(title),
@@ -1153,7 +1154,7 @@ func TestSQLiteDataTransformDownPreservesRestoredFieldDuringRollbackScrub(t *tes
 			if !ok {
 				return errors.New("down transform could not read headline")
 			}
-			_, err = transaction.Update(ctx, store.UpdateRequest{
+			_, err = transaction.Update(ctx, migration.UpdateRequest{
 				Request: store.Request{Collection: beforeCollection, ID: document.ID},
 				Values:  store.Values{"title": store.String(headline)},
 			})
@@ -1275,7 +1276,7 @@ func TestSQLiteDataTransformCannotDivergeVersionHistory(t *testing.T) {
 	transform := migration.DataTransform{
 		DataTransformDescriptor: descriptor,
 		Up: func(ctx context.Context, transaction migration.DataTransaction) error {
-			_, err := transaction.Update(ctx, store.UpdateRequest{
+			_, err := transaction.Update(ctx, migration.UpdateRequest{
 				Request: store.Request{Collection: collection, ID: document.ID},
 				Values:  store.Values{"title": store.String("Diverged")},
 			})

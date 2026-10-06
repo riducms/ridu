@@ -1,6 +1,6 @@
-import { resolveBlockTypes } from "@riducms/protocol";
 import type { SchemaCollection, SchemaField } from "@riducms/protocol";
 import type { AdminI18n } from "@riducms/translations";
+import type { ListFilterFields } from "@admin/features/collections/list-filter-fields";
 
 export const listPageSizes = [10, 25, 50, 100] as const;
 
@@ -15,12 +15,17 @@ export type ListFilterOperator =
 	| "lessThan"
 	| "lessThanEqual"
 	| "exists"
-	| "in";
+	| "in"
+	| "notIn";
 
 export interface ListFilter {
 	field: string;
 	operator: ListFilterOperator;
-	value: string;
+	/**
+	 * The operand, or the candidates of `in` and `notIn`. A polymorphic relationship's
+	 * candidate is `collection:id`; collection slugs never contain a colon.
+	 */
+	value: string | string[];
 }
 
 export interface ListColumn {
@@ -69,11 +74,78 @@ const orderedOperators: readonly ListFilterOperator[] = [
 	"exists",
 ];
 const identityOperators: readonly ListFilterOperator[] = ["equals", "notEquals", "exists"];
+const membershipOperators: readonly ListFilterOperator[] = ["in", "notIn", "exists"];
+
+/**
+ * Lists, has-many fields and polymorphic relationships hold a set of items, so the server
+ * filters them by membership alone.
+ */
+export function membershipField(field: SchemaField) {
+	switch (field.type) {
+		case "text-list":
+		case "number-list":
+			return true;
+		case "select":
+			return field.select?.hasMany === true;
+		case "relationship":
+			return field.relationship?.hasMany === true || field.relationship?.polymorphic === true;
+		case "upload":
+			return field.upload?.hasMany === true;
+		default:
+			return false;
+	}
+}
+
+export function membershipOperator(operator: ListFilterOperator) {
+	return operator === "in" || operator === "notIn";
+}
+
+/** Encodes one polymorphic relationship candidate for a list filter. */
+export function referenceCandidate(relationTo: string, id: string) {
+	return `${relationTo}:${id}`;
+}
+
+export function parseReferenceCandidate(candidate: string) {
+	const cut = candidate.indexOf(":");
+	if (cut <= 0) return undefined;
+	return { relationTo: candidate.slice(0, cut), id: candidate.slice(cut + 1) };
+}
+
+/**
+ * The `in` candidates a membership condition sends: numbers for a number list and
+ * `{ relationTo, id }` references for a polymorphic relationship. Undefined when incomplete.
+ */
+export function membershipCandidates(filter: ListFilter, field: SchemaField) {
+	if (typeof filter.value === "string" || !listFilterComplete(filter, field)) return undefined;
+	const candidates = filter.value.map((candidate) => {
+		if (field.relationship?.polymorphic === true) return parseReferenceCandidate(candidate)!;
+		return field.type === "number-list" ? Number(candidate) : candidate;
+	});
+	return candidates.every(
+		(candidate) => typeof candidate !== "number" || Number.isFinite(candidate)
+	)
+		? candidates
+		: undefined;
+}
+
+/** Whether a draft condition says enough to be applied. */
+export function listFilterComplete(filter: ListFilter, field: SchemaField) {
+	if (filter.operator === "exists") return true;
+	if (typeof filter.value === "string") return filter.value !== "";
+	return (
+		filter.value.length > 0 &&
+		filter.value.every((candidate) =>
+			field.relationship?.polymorphic === true
+				? (parseReferenceCandidate(candidate)?.id ?? "") !== ""
+				: candidate !== ""
+		)
+	);
+}
 
 export function listColumnFields(collection: SchemaCollection | undefined) {
 	return (collection?.fields ?? []).flatMap((field) => {
 		if (field.type === "ui") return [];
-		if (field.type === "group") return nestedFields(field, "columns");
+		if (field.type === "group") return groupColumnFields(field);
 		return [field];
 	});
 }
@@ -93,16 +165,6 @@ export function bulkEditableListFields(fields: readonly SchemaField[]) {
 				field.type
 			)
 	);
-}
-
-export function filterableFields(fields: readonly SchemaField[]) {
-	return fields.flatMap((field) => {
-		if (field.queryRestricted) return [];
-		if (field.type === "group" || field.type === "array" || field.type === "blocks") {
-			return nestedFields(field, "filters");
-		}
-		return filterableLeaf(field) ? [field] : [];
-	});
 }
 
 export function sortableField(field: SchemaField) {
@@ -144,7 +206,7 @@ export function defaultListColumns(
 }
 
 export function filterOperatorsFor(field: SchemaField): readonly ListFilterOperator[] {
-	if (field.type === "text-list" || field.type === "number-list") return ["in", "exists"];
+	if (membershipField(field)) return membershipOperators;
 	if (field.type === "number" || field.type === "date") return orderedOperators;
 	if (field.type === "text" || field.type === "textarea" || field.type === "email") {
 		return textOperators;
@@ -154,7 +216,8 @@ export function filterOperatorsFor(field: SchemaField): readonly ListFilterOpera
 
 export function filterOperatorLabel(operator: ListFilterOperator, i18n: AdminI18n) {
 	const labels: Record<ListFilterOperator, Parameters<AdminI18n["t"]>[0]> = {
-		in: "collections:operatorIncludesItem",
+		in: "collections:operatorIsAnyOf",
+		notIn: "collections:operatorIsNoneOf",
 		equals: "collections:operatorEquals",
 		notEquals: "collections:operatorNotEquals",
 		like: "collections:operatorLike",
@@ -168,9 +231,12 @@ export function filterOperatorLabel(operator: ListFilterOperator, i18n: AdminI18
 	return i18n.t(labels[operator]);
 }
 
+/** Resolves a filter's dotted field path without enumerating the schema. */
+export type ListFilterFieldLookup = Pick<ListFilterFields, "resolve">;
+
 export function normalizeListFilters(
 	value: unknown,
-	fields: readonly SchemaField[]
+	fields: ListFilterFieldLookup
 ): ListFilterGroup[] {
 	if (!Array.isArray(value)) return [];
 	return value
@@ -178,38 +244,38 @@ export function normalizeListFilters(
 		.filter((group) => group.length > 0);
 }
 
-function normalizeFilterGroup(value: unknown, fields: readonly SchemaField[]): ListFilter[] {
+function normalizeFilterGroup(value: unknown, fields: ListFilterFieldLookup): ListFilter[] {
 	if (!Array.isArray(value)) return [];
-	const byName = new Map(fields.map((field) => [field.path, field]));
 	return value.flatMap((candidate) => {
 		if (typeof candidate !== "object" || candidate === null) return [];
 		const fieldName = Reflect.get(candidate, "field");
 		const operator = Reflect.get(candidate, "operator");
 		const rawValue = Reflect.get(candidate, "value");
 		if (typeof fieldName !== "string" || typeof operator !== "string") return [];
-		const field = byName.get(fieldName);
+		const field = fields.resolve(fieldName)?.field;
 		if (
 			field === undefined ||
 			!filterOperatorsFor(field).includes(operator as ListFilterOperator)
 		) {
 			return [];
 		}
+		const scalar = (raw: unknown) =>
+			typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean"
+				? String(raw)
+				: "";
 		return [
 			{
 				field: fieldName,
 				operator: operator as ListFilterOperator,
-				value:
-					typeof rawValue === "string" ||
-					typeof rawValue === "number" ||
-					typeof rawValue === "boolean"
-						? String(rawValue)
-						: "",
+				value: membershipOperator(operator as ListFilterOperator)
+					? (Array.isArray(rawValue) ? rawValue : [rawValue]).map(scalar).filter(Boolean)
+					: scalar(rawValue),
 			},
 		];
 	});
 }
 
-export function parseListFilters(encoded: string | null, fields: readonly SchemaField[]) {
+export function parseListFilters(encoded: string | null, fields: ListFilterFieldLookup) {
 	if (encoded === null || encoded === "") return [];
 	try {
 		return normalizeListFilters(JSON.parse(encoded), fields);
@@ -273,53 +339,17 @@ export function encodeColumnSelection(columns: readonly ListColumnSelection[]) {
 	return columns.map((column) => (column.active ? column.path : `-${column.path}`)).join(",");
 }
 
-function nestedFields(field: SchemaField, mode: "columns" | "filters"): SchemaField[] {
-	if (mode === "filters" && field.queryRestricted) return [];
-	if (field.type === "blocks") {
-		if (mode === "columns") return [];
-		return (resolveBlockTypes(field.blocks) ?? []).flatMap((block) =>
-			block.fields.flatMap((child) =>
-				withListLabel(child, `${field.admin.label} > ${block.labels.singular}`, mode)
-			)
-		);
-	}
-	return (field.nested?.fields ?? []).flatMap((child) =>
-		withListLabel(
-			field.queryRestricted ? { ...child, queryRestricted: true } : child,
-			field.admin.label,
-			mode
-		)
-	);
-}
-
-function withListLabel(
-	field: SchemaField,
-	prefix: string,
-	mode: "columns" | "filters"
-): SchemaField[] {
-	const labelled = {
-		...field,
-		admin: { ...field.admin, label: `${prefix} > ${field.admin.label}` },
-	};
-	if (field.type === "group" || (mode === "filters" && field.type === "array")) {
-		return nestedFields(labelled, mode);
-	}
-	if (field.type === "blocks") return mode === "filters" ? nestedFields(labelled, mode) : [];
-	if (mode === "filters" && !filterableLeaf(field)) return [];
-	return [labelled];
-}
-
-function filterableLeaf(field: SchemaField) {
-	return (
-		field.queryRestricted !== true &&
-		field.virtual === undefined &&
-		field.join === undefined &&
-		field.plugin === undefined &&
-		field.type !== "ui" &&
-		field.type !== "json" &&
-		field.type !== "point" &&
-		field.type !== "code"
-	);
+/** Group leaves become columns; repeated values are not flattened into table cells. */
+function groupColumnFields(group: SchemaField): SchemaField[] {
+	return (group.nested?.fields ?? []).flatMap((child) => {
+		if (child.type === "blocks") return [];
+		const field = group.queryRestricted ? { ...child, queryRestricted: true } : child;
+		const labelled = {
+			...field,
+			admin: { ...field.admin, label: `${group.admin.label} > ${field.admin.label}` },
+		};
+		return child.type === "group" ? groupColumnFields(labelled) : [labelled];
+	});
 }
 
 /** Queryable document metadata is owned by the runtime, rather than application fields. */

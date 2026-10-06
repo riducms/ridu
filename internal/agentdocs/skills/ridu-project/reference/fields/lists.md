@@ -227,20 +227,19 @@ this SDK filter matches products tagged `"sale"` **or** `"featured"`:
 Matching is exact: `"sale"` does not
 match `"wholesale"`. Order and duplicates do not affect membership. Use `query.Not(...)` to
 exclude matches, or combine two `In` filters with `query.And(...)` to require both tags.
-See [querying lists](../querying.md#primitive-list-membership) for a complete Go example.
+See [filtering by membership](../querying.md#membership) for a complete Go example; has-many
+selects and relationships follow the same rules.
 
 Existence and null checks are also supported. Whole-list equality, scalar equality, substring
-search, range comparisons, sorting, indexes, and uniqueness are unavailable for these fields.
-Reject duplicate items with a validator; there is no `.Unique()` list option.
+search, range comparisons, sorting, indexes, and uniqueness are unavailable for these fields;
+the operators fail with `bad_query` rather than matching nothing. Reject duplicate items with a
+validator; there is no `.Unique()` list option.
 
 ### Query nested lists {#nested-queries}
 
-| Adapter    | Supported list-query locations                                                                                             |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------- |
-| PostgreSQL | Root and Group fields, and paths through one enclosing Array or Block                                                      |
-| SQLite     | Root and nested fields using its normal query paths                                                                        |
-| MongoDB    | Root and Group fields, including localized list fields; paths through Arrays, Blocks, or localized containers are rejected |
-
-All three adapters can **store** lists at those nested locations. The restrictions above apply
-to querying them. See [generated contracts](../generated-contracts.md#primitive-lists) for Go,
-TypeScript, and GraphQL list types.
+A list inside groups, arrays or blocks is queried by its full path. With an `availableSizes`
+list in the rows of a `variants` array, `{ "variants.availableSizes": { "in": [10] } }` matches
+a product when any variant offers size 10; see [nested paths](../querying.md#paths). Every
+database adapter queries lists at any depth, including inside localized groups and arrays. See
+[generated contracts](../generated-contracts.md#primitive-lists) for Go, TypeScript, and GraphQL
+list types.

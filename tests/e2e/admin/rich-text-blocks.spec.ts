@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type { SchemaField } from "@riducms/protocol";
+import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
 import type { Page } from "@playwright/test";
 import { insertBlock, bodyEditor, bodyCards, richDocument, block } from "./rich-text-block-fixture";
 import { expect, test } from "./fixture";
@@ -828,7 +828,8 @@ test("a historical variant remains exportable when the loaded admin schema loses
 			?.find((tree) => tree.key === "blocks")
 			?.cases.find((branch) => branch.tagValue === "block");
 		if (branch === undefined) throw new Error("Missing test embedded schema");
-		branch.types = branch.types!.filter((type) => type.slug !== "callout");
+		// The container stops selecting the definition; the registry is unchanged.
+		branch.blockReferences = branch.blockReferences!.filter((slug) => slug !== "callout");
 		await route.fulfill({ response, json: envelope });
 	});
 	await page.goto(`/admin/collections/block-articles/${original.id}`);
@@ -868,24 +869,30 @@ test("draft validation reveals an invalid child through multiple lazy disclosure
 	await page.route("**/api/schema", async (route) => {
 		const response = await route.fetch();
 		const envelope = (await response.json()) as {
-			schema: { collections: { slug: string; fields: SchemaField[] }[] };
+			schema: { blocks: SchemaBlockType[]; collections: { slug: string; fields: SchemaField[] }[] };
 		};
-		const links = envelope.schema.collections
+		const selected = envelope.schema.collections
 			.find((c) => c.slug === "block-articles")
 			?.fields.find((f) => f.name === "body")
 			?.plugin?.embeddedTrees?.find((t) => t.key === "blocks")
 			?.cases.find((c) => c.tagValue === "block")
-			?.types?.find((t) => t.slug === "callout")
+			?.blockReferences?.includes("callout");
+		// Block fields live in the shared definition; every placement derives them.
+		const links = envelope.schema.blocks
+			.find((definition) => definition.slug === "callout")
 			?.fields.find((f) => f.name === "links");
 		const label = links?.nested?.fields.find((f) => f.name === "label");
-		if (links === undefined || label === undefined) throw new Error("Missing links fixture");
+		if (!selected || links === undefined || label === undefined)
+			throw new Error("Missing links fixture");
+		// Definition presentation IDs start with the definition's ID and are
+		// rebased onto each placement.
 		links.admin.collapsible = {
-			id: "outer-links",
+			id: "block-callout-outer-links",
 			label: "Link details",
 			initiallyCollapsed: true,
 		};
 		label.admin.collapsible = {
-			id: "inner-label",
+			id: "block-callout-inner-label",
 			label: "Link label details",
 			initiallyCollapsed: true,
 		};
@@ -893,8 +900,8 @@ test("draft validation reveals an invalid child through multiple lazy disclosure
 	});
 	await page.goto(`/admin/collections/block-articles/${original.id}`);
 	const callout = bodyCards(page).first();
-	const outer = callout.locator('[data-field-collapsible^="outer-links"]');
-	const inner = callout.locator('[data-field-collapsible^="inner-label"]');
+	const outer = callout.locator('[data-field-collapsible*="-outer-links"]');
+	const inner = callout.locator('[data-field-collapsible*="-inner-label"]');
 	await expect(outer).not.toHaveAttribute("open");
 	await outer.locator(":scope > summary").click();
 	await inner.locator(":scope > summary").click();
@@ -1019,7 +1026,7 @@ test("release page composes Hero Content Media and CTA with rich-text embeds and
 	await page.getByRole("option", { name: /About Ridu/ }).click();
 	const saved = await saveCollection(page, "block-pages");
 	expect(saved.layout.map((row: { blockType: string }) => row.blockType)).toEqual([
-		"hero",
+		"page-hero",
 		"content",
 		"media",
 		"cta",

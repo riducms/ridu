@@ -74,6 +74,10 @@ Reads return the selected media ID. Request population to include details such a
 MIME type, image dimensions, generated sizes, and `alt` text. Access rules still apply to the
 media document and its fields.
 
+Filter a single upload by media ID with `equals` or `in`. An `Uploads` list is filtered by
+membership: `{ gallery: { in: [mediaID] } }` matches documents whose gallery holds that file. See
+[Filter by membership](/docs/querying/#membership).
+
 To add a new file, use the admin, the SDK’s `upload` or `uploadFromURL` method, or the multipart
 REST endpoint. Then select the resulting media document in this field.
 

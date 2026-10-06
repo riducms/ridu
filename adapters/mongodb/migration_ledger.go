@@ -185,7 +185,7 @@ func validateMongoMigrationArtifactLedgerRow(row mongoMigrationArtifactLedgerRow
 		return fmt.Errorf("planner name %q is not %q", row.PlannerName, mongoDBPlannerName)
 	}
 	if row.PlannerVersion != mongoDBPlannerVersion {
-		return fmt.Errorf("planner version %q is unsupported", row.PlannerVersion)
+		return mongoDBUnsupportedPlannerVersion("migration "+row.Name, row.PlannerVersion)
 	}
 	if row.StepCount <= 0 {
 		return fmt.Errorf("step count must be positive")

@@ -66,7 +66,7 @@ func (engine *Engine) CopyLocale(ctx context.Context, collectionName, documentID
 	}
 	readDecision, err := authorize(collection, readContext)
 	if err != nil {
-		return store.Document{}, &Error{Code: "access_failed", Status: 500, Message: "source read access rule failed", Cause: err}
+		return store.Document{}, accessRuleError("source read access rule failed", err)
 	}
 	if readDecision.Kind == Deny {
 		return store.Document{}, &Error{Code: "access_denied", Status: 403, Message: "source document may not be read"}

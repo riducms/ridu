@@ -15,13 +15,14 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestMongoDBAuthCredentialSessionTokenAndAPIKeyLifecycle(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoAuthTestCollection(t, "auth-users")
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -50,7 +51,7 @@ func TestMongoDBAuthCredentialSessionTokenAndAPIKeyLifecycle(t *testing.T) {
 
 	updateValues := store.Values{"email": store.String(" Next@Example.COM ")}
 	update := mongoBegin(t, backend, false)
-	updated, err := update.Update(t.Context(), store.UpdateRequest{
+	updated, err := conformance.LockedUpdate(t.Context(), update, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: user.ID}, Values: updateValues,
 	})
 	if err != nil {
@@ -217,7 +218,7 @@ func TestMongoDBAuthMaintenanceConcurrencyBootstrapAndCleanup(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoAuthTestCollection(t, "auth-maintenance-users")
 	manifest := mongoIndexTestManifest(collection)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	secondBackend := mongoAdditionalIntegrationStore(t, backend)
@@ -430,7 +431,7 @@ func TestMongoDBAuthMaintenanceConcurrencyBootstrapAndCleanup(t *testing.T) {
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "auth bootstrap"},
 		Collections: []schema.Collection{collection, bootstrapCollection, corruptBootstrapCollection, bootstrapRaceCollection}, Plugins: []schema.Plugin{},
 	})
-	if err := backend.SyncIndexes(t.Context(), bootstrapManifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), bootstrapManifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := secondBackend.VerifyIndexes(t.Context(), bootstrapManifest); err != nil {
@@ -518,7 +519,7 @@ func TestMongoDBAuthMaintenanceConcurrencyBootstrapAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	mongoCommit(t, verification)
-	if page.Total != 1 || len(page.Documents) != 1 || (page.Documents[0].ID != "winner" && page.Documents[0].ID != "contender") {
+	if *page.Total != 1 || len(page.Documents) != 1 || (page.Documents[0].ID != "winner" && page.Documents[0].ID != "contender") {
 		t.Fatalf("documents after bootstrap race = %#v", page)
 	}
 	bootstrap := mongoBegin(t, backend, false)
@@ -581,7 +582,7 @@ func TestMongoDBAuthRevocationAndIncarnationFencesAcrossClients(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoAuthTestCollection(t, "auth-fence-users")
 	manifest := mongoIndexTestManifest(collection)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	second := mongoAdditionalIntegrationStore(t, backend)
@@ -750,7 +751,7 @@ func TestMongoDBAuthPasswordMutationsSerializeWithSessionCreation(t *testing.T) 
 	backend := mongoIntegrationStore(t)
 	collection := mongoAuthTestCollection(t, "auth-password-race-users")
 	manifest := mongoIndexTestManifest(collection)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	second := mongoAdditionalIntegrationStore(t, backend)

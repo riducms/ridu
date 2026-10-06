@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
@@ -20,6 +21,15 @@ func liveTestField(name string, kind schema.FieldType) schema.Field {
 	parts := strings.Split(name, ".")
 	return schema.Field{ID: schema.StableID(name), Name: parts[len(parts)-1], Path: path, Type: kind}
 }
+
+// liveBlockField declares a field of block slug with its definition-relative
+// path and ID.
+func liveBlockField(slug, name string, kind schema.FieldType) schema.Field {
+	field := liveTestField(name, kind)
+	field.ID = schema.PlacementFieldID(schema.StableID("block-"+slug), strings.Split(name, "."))
+	return field
+}
+
 func liveTestCollection(fields ...schema.Field) Collection {
 	return Collection{Schema: schema.Collection{ID: "products", Slug: "products", Fields: fields}}
 }
@@ -99,18 +109,18 @@ func TestLiveValidationRedactsPriorAndCandidateBeforeCallback(t *testing.T) {
 	collection := liveTestCollection(sku, secret, visible)
 	calls := 0
 	collection.Bindings = []FieldBinding{
-		{Field: secret, Access: FieldRules{Read: func(ctx Context) (bool, error) { value, _ := ctx.Data["visible"].BooleanValue(); return value, nil }}},
+		{Field: secret, Access: FieldRules{Read: func(ctx Context) (bool, error) { value, _ := ctx.Root.Get("visible").BooleanValue(); return value, nil }}},
 		{Field: sku, LiveValidators: []FieldLiveValidator{func(ctx Context) ([]schema.Issue, bool, error) {
 			calls++
-			for name, values := range map[string]store.Values{"root": ctx.RootData, "siblings": ctx.SiblingData, "prior": ctx.OriginalSiblingData, "input": ctx.InputSiblingData} {
-				if _, ok := values["secret"]; ok {
+			for name, view := range map[string]store.Value{"root": ctx.Root, "siblings": ctx.Siblings, "prior": ctx.Prior, "input": ctx.Input} {
+				if _, ok := view.Lookup("secret"); ok {
 					t.Errorf("%s leaked secret", name)
 				}
 			}
-			if old, _ := ctx.OriginalSiblingData["sku"].StringValue(); old != "old" {
+			if old, _ := ctx.Prior.Get("sku").StringValue(); old != "old" {
 				t.Errorf("prior sku=%q", old)
 			}
-			if _, ok := ctx.InputSiblingData["sku"]; ok {
+			if _, ok := ctx.Input.Lookup("sku"); ok {
 				t.Error("retained sku appeared submitted")
 			}
 			return nil, true, nil
@@ -391,10 +401,14 @@ func TestLiveValidationResourceLocalQueriesDoNotRunLifecycle(t *testing.T) {
 }
 
 func TestLiveValidationDetachedSelectorsCannotCrossSchemasOrProtectedOwners(t *testing.T) {
-	child := liveTestField("body.widgets.widget.card.sku", schema.FieldTypeText)
-	note := liveTestField("body.widgets.widget.note.sku", schema.FieldTypeText)
 	owner := liveTestField("body", schema.FieldTypePlugin)
-	owner.Plugin = &schema.PluginField{EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "widgets", Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", Types: []schema.BlockType{{Slug: "card", Fields: []schema.Field{child}}, {Slug: "note", Fields: []schema.Field{note}}}}}}}}
+	owner.Plugin = &schema.PluginField{EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "widgets", Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", BlockReferences: []string{"card", "note"}}}}}}
+	owner = schematest.Bind(t, "products", []schema.BlockType{
+		{Slug: "card", TypeName: "Card", Fields: []schema.Field{liveBlockField("card", "sku", schema.FieldTypeText)}},
+		{Slug: "note", TypeName: "Note", Fields: []schema.Field{liveBlockField("note", "sku", schema.FieldTypeText)}},
+	}, owner)[0]
+	child := liveBlockField("card", "sku", schema.FieldTypeText)
+	note := liveBlockField("note", "sku", schema.FieldTypeText)
 	payload := func(kind, key, value string) store.Values {
 		return store.Values{"schema": store.String(kind), "uid": store.String(key), "sku": store.String(value)}
 	}
@@ -405,13 +419,13 @@ func TestLiveValidationDetachedSelectorsCannotCrossSchemasOrProtectedOwners(t *t
 	calls := 0
 	denyOwner, denyChild := false, false
 	var prior string
-	collection.Bindings = []FieldBinding{{Field: owner, Access: FieldRules{Read: func(Context) (bool, error) { return !denyOwner, nil }}}, {Field: child, Access: FieldRules{Update: func(Context) (bool, error) { return !denyChild, nil }}, LiveValidators: []FieldLiveValidator{func(ctx Context) ([]schema.Issue, bool, error) {
+	collection.Bindings = []FieldBinding{{Field: owner, Access: FieldRules{Read: func(Context) (bool, error) { return !denyOwner, nil }}}, {Block: "card", Field: child, Access: FieldRules{Update: func(Context) (bool, error) { return !denyChild, nil }}, LiveValidators: []FieldLiveValidator{func(ctx Context) ([]schema.Issue, bool, error) {
 		calls++
-		prior, _ = ctx.OriginalSiblingData["sku"].StringValue()
+		prior, _ = ctx.Prior.Get("sku").StringValue()
 		return nil, true, nil
-	}}}, {Field: note, LiveValidators: []FieldLiveValidator{func(ctx Context) ([]schema.Issue, bool, error) {
+	}}}, {Block: "note", Field: note, LiveValidators: []FieldLiveValidator{func(ctx Context) ([]schema.Issue, bool, error) {
 		calls++
-		prior, _ = ctx.OriginalSiblingData["sku"].StringValue()
+		prior, _ = ctx.Prior.Get("sku").StringValue()
 		return nil, true, nil
 	}}}}
 	engine, id := liveTestEngine(t, collection, store.Values{"body": node("card", "A", "persisted")})
@@ -478,6 +492,63 @@ func TestLiveValidationDetachedSelectorsCannotCrossSchemasOrProtectedOwners(t *t
 	}
 	if prior != "" {
 		t.Fatalf("deleted row inherited Prior %q", prior)
+	}
+}
+
+// The top-level snapshot leaves the protected child unchanged, so only the
+// embedded scope's own admission can reject the draft's edit. That scope must
+// index its own bindings: reusing the owner's plan treated the child as absent
+// and ran a sibling's validator instead of failing.
+func TestLiveValidationEmbeddedScopeAdmitsItsOwnProtectedChildren(t *testing.T) {
+	owner := liveTestField("body", schema.FieldTypePlugin)
+	owner.Plugin = &schema.PluginField{EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "widgets", Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", BlockReferences: []string{"card"}}}}}}
+	owner = schematest.Bind(t, "products", []schema.BlockType{{Slug: "card", TypeName: "Card", Fields: []schema.Field{
+		liveBlockField("card", "sku", schema.FieldTypeText), liveBlockField("card", "label", schema.FieldTypeText),
+	}}}, owner)[0]
+	sku := liveBlockField("card", "sku", schema.FieldTypeText)
+	label := liveBlockField("card", "label", schema.FieldTypeText)
+	payload := func(members store.Values) store.Values {
+		values := store.Values{"schema": store.String("card"), "uid": store.String("A")}
+		for name, value := range members {
+			values[name] = value
+		}
+		return values
+	}
+	node := func(members store.Values) store.Value {
+		return store.Object(store.Values{"kind": store.String("widget"), "content": store.Object(payload(members))})
+	}
+	collection := liveTestCollection(owner)
+	labelRuns := 0
+	collection.Bindings = []FieldBinding{
+		{Field: owner, Access: FieldRules{Read: func(Context) (bool, error) { return true, nil }}},
+		{Block: "card", Field: sku, Access: FieldRules{Update: func(Context) (bool, error) { return false, nil }}},
+		{Block: "card", Field: label, LiveValidators: []FieldLiveValidator{func(Context) ([]schema.Issue, bool, error) {
+			labelRuns++
+			return nil, true, nil
+		}}},
+	}
+	engine, id := liveTestEngine(t, collection, store.Values{"body": node(store.Values{"sku": store.String("persisted"), "label": store.String("persisted")})})
+	request := LiveValidationRequest{
+		Collection: "products", ID: id, Fields: []string{"label"},
+		// The top-level snapshot does not carry the child: it keeps its stored value.
+		Data: store.Values{"body": node(store.Values{"label": store.String("persisted")})},
+		Embedded: []LiveValidationEmbeddedScope{{
+			Field: "body", TreeKey: "widgets", CaseTag: "widget", VariantSlug: "card", Identity: "A",
+			Data: payload(store.Values{"sku": store.String("draft"), "label": store.String("draft")}),
+		}},
+	}
+	_, err := engine.LiveValidate(t.Context(), request)
+	var failure *Error
+	if !errors.As(err, &failure) || failure.Status != 403 || failure.Code != "field_access_denied" {
+		t.Fatalf("protected embedded edit = %#v", err)
+	}
+	if labelRuns != 0 {
+		t.Fatal("a sibling validator ran despite a denied embedded edit")
+	}
+	// A draft that leaves the protected child out still validates its sibling.
+	request.Embedded[0].Data = payload(store.Values{"label": store.String("draft")})
+	if result, err := engine.LiveValidate(t.Context(), request); err != nil || len(result.Evaluations) != 1 || labelRuns != 1 {
+		t.Fatalf("unchanged protected child: result=%#v err=%v runs=%d", result, err, labelRuns)
 	}
 }
 

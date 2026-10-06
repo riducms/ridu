@@ -35,6 +35,55 @@ func Config() core.Config {
 	}
 }
 
+// Block slugs of this contract. A slug names one definition per application,
+// and the browser fixture combines this contract with others that use plain
+// "card" and "note" blocks, so these blocks have their own slugs while keeping
+// the same editor labels. One definition also has one payload envelope, so the
+// rich-text card (blockType/_key) and the outline card (schema/uid) are
+// separate definitions.
+const (
+	CardSlug         = "live-card"
+	NoteSlug         = "live-note"
+	EmbeddedCardSlug = "live-embedded-card"
+	OutlineCardSlug  = "live-outline-card"
+	GlobalCardSlug   = "live-global-card"
+)
+
+// payloadCard declares a rich-text or outline payload block whose links
+// validate every row directly.
+func payloadCard(slug string) field.Block {
+	return field.Block{
+		Slug:   slug,
+		Labels: field.BlockLabels{Singular: "Card", Plural: "Cards"},
+		Fields: field.Fields{
+			field.Text("supplier"),
+			SKU("sku"),
+			SupplierCodes("supplierCodes"),
+			PackSizes("packSizes"),
+			SupplierCodes("customCodes").Label("Custom codes").Admin(field.Admin{
+				Editor: field.Component("app:primitiveText"),
+			}),
+			linkArray(),
+		},
+	}
+}
+
+// linkArray validates every link row directly.
+func linkArray() field.ArrayField {
+	return field.Array("links", field.Fields{
+		field.Text("url").Label("URL"),
+		field.Text("supplier"),
+		SupplierCodes("supplierCodes"),
+		PackSizes("packSizes"),
+	}).
+		Validate(func(_ operation.Context, value operation.Value[store.Value]) ([]operation.Issue, error) {
+			return linkIssues(operation.At(), value), nil
+		}).
+		LiveValidate(func(_ operation.LiveValidationContext, value operation.Value[store.Value]) ([]operation.Issue, error) {
+			return linkIssues(operation.At(), value), nil
+		})
+}
+
 func Global() core.Global {
 	sku := SKU("sku")
 	allow := func(core.AccessContext) (core.AccessDecision, error) { return core.Allow(), nil }
@@ -51,8 +100,8 @@ func Global() core.Global {
 			richtext.Field("body", richtext.Config{
 				Blocks: []field.Block{
 					{
-						Slug: "card",
-
+						Slug:   GlobalCardSlug,
+						Labels: field.BlockLabels{Singular: "Card", Plural: "Cards"},
 						Fields: field.Fields{
 							field.Text("supplier"),
 							sku,
@@ -66,18 +115,7 @@ func Global() core.Global {
 
 func Collection() core.Collection {
 	sku := SKU("sku")
-	links := field.Array("links", field.Fields{
-		field.Text("url").Label("URL"),
-		field.Text("supplier"),
-		SupplierCodes("supplierCodes"),
-		PackSizes("packSizes"),
-	}).
-		Validate(func(_ operation.Context, value operation.Value[store.Value]) ([]operation.Issue, error) {
-			return linkIssues(operation.At(), value), nil
-		}).
-		LiveValidate(func(_ operation.LiveValidationContext, value operation.Value[store.Value]) ([]operation.Issue, error) {
-			return linkIssues(operation.At(), value), nil
-		})
+	links := linkArray()
 	// Containers validate their aggregate descendants; embedded items use the
 	// same link rule directly without running duplicate checks at both levels.
 	children := field.Fields{
@@ -87,22 +125,9 @@ func Collection() core.Collection {
 		PackSizes("packSizes"),
 		links.ReplaceValidators().ReplaceLiveValidators(),
 	}
-	card := field.Block{Slug: "card", Fields: children}
-	note := field.Block{Slug: "note", Fields: children}
-	embeddedCard := field.Block{
-		Slug: "card",
-
-		Fields: field.Fields{
-			field.Text("supplier"),
-			sku,
-			SupplierCodes("supplierCodes"),
-			PackSizes("packSizes"),
-			SupplierCodes("customCodes").Label("Custom codes").Admin(field.Admin{
-				Editor: field.Component("app:primitiveText"),
-			}),
-			links,
-		},
-	}
+	card := field.Block{Slug: CardSlug, Labels: field.BlockLabels{Singular: "Card", Plural: "Cards"}, Fields: children}
+	note := field.Block{Slug: NoteSlug, Labels: field.BlockLabels{Singular: "Note", Plural: "Notes"}, Fields: children}
+	embeddedCard := payloadCard(EmbeddedCardSlug)
 	sections := field.Array("sections", children).
 		Validate(func(_ operation.Context, value operation.Value[store.Value]) ([]operation.Issue, error) {
 			return rowIssues(value, false), nil
@@ -151,7 +176,7 @@ func Collection() core.Collection {
 			richtext.Field("localizedBody", richtext.Config{
 				Blocks: []field.Block{embeddedCard},
 			}).Localized(),
-			embeddedplugin.Field("outline", embeddedCard),
+			embeddedplugin.Field("outline", payloadCard(OutlineCardSlug)),
 		},
 	}
 }

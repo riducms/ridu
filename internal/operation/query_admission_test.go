@@ -105,7 +105,7 @@ func TestQueryAdmissionPreservesTrustedPredicatesAndPageScopedReadRules(t *testi
 	for _, actor := range []*store.Document{nil, {ID: "fixture-b"}} {
 		evaluated, backend.reads = nil, 0
 		result, err := engine.Execute(t.Context(), Request{Operation: operation.Read, Collection: "posts", Actor: actor, Sort: []query.Sort{{Path: title, Direction: query.Ascending}}, Page: 2, Limit: 1})
-		if err != nil || result.Page == nil || result.Page.Total != 2 || len(result.Page.Documents) != 1 || result.Page.Documents[0].ID != "fixture-b" {
+		if err != nil || result.Page == nil || *result.Page.Total != 2 || len(result.Page.Documents) != 1 || result.Page.Documents[0].ID != "fixture-b" {
 			t.Fatalf("access-filtered page = %#v, %v", result.Page, err)
 		}
 		if backend.reads != 1 || len(evaluated) != 1 || evaluated[0] != "fixture-b" {

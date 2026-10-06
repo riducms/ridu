@@ -37,6 +37,8 @@ type LocaleSelection struct {
 
 // FieldAtPath resolves a canonical schema path through groups, arrays, and
 // block discriminators. Repeated runtime rows do not appear in schema paths.
+// It describes the field's configuration: a registered block's field is its
+// shared definition, whose path and ID are definition-relative.
 func FieldAtPath(fields []schema.Field, path query.Path) (schema.Field, bool) {
 	return fieldAtSegments(fields, path.Segments())
 }
@@ -61,10 +63,8 @@ func fieldAtSegments(fields []schema.Field, segments []string) (schema.Field, bo
 					if c.TagValue != segments[2] {
 						continue
 					}
-					for _, variant := range c.ResolvedTypes() {
-						if variant.Slug == segments[3] {
-							return fieldAtSegments(variant.ResolvedFields(), segments[4:])
-						}
+					if variant, found := c.Definition(segments[3]); found {
+						return fieldAtSegments(variant.ResolvedFields(), segments[4:])
 					}
 				}
 			}
@@ -78,10 +78,8 @@ func fieldAtSegments(fields []schema.Field, segments []string) (schema.Field, bo
 			if field.Blocks == nil || len(segments) < 3 {
 				return schema.Field{}, false
 			}
-			for _, block := range field.Blocks.ResolvedTypes() {
-				if block.Slug == segments[1] {
-					return fieldAtSegments(block.ResolvedFields(), segments[2:])
-				}
+			if block, found := field.Blocks.Definition(segments[1]); found {
+				return fieldAtSegments(block.ResolvedFields(), segments[2:])
 			}
 		}
 		return schema.Field{}, false
@@ -89,21 +87,89 @@ func fieldAtSegments(fields []schema.Field, segments []string) (schema.Field, bo
 	return schema.Field{}, false
 }
 
-// ReferenceFields returns every relationship and upload field in stable
-// schema order, including fields beneath groups, arrays, and blocks.
+// ReferenceFields returns every relationship and upload field placement in
+// stable schema order, including fields beneath groups, arrays, and blocks.
+// Each field's Path is its canonical placement path; a registered block's
+// field otherwise describes its shared definition. The walk skips field lists
+// without references, so it follows the reference placements rather than
+// every placement of the schema.
 func ReferenceFields(fields []schema.Field) []schema.Field {
+	counts := referenceCounts{}
 	var result []schema.Field
-	collectReferenceFields(fields, &result)
+	schema.WalkPlacements(fields, func(segments []string, field schema.Field, shared bool) bool {
+		if counts.field(field) == 0 {
+			return false
+		}
+		if field.Relationship != nil || field.Upload != nil {
+			if shared {
+				field.Path, _ = query.NewPath(segments...)
+			}
+			result = append(result, field)
+		}
+		return true
+	})
 	return result
 }
 
-func collectReferenceFields(fields []schema.Field, result *[]schema.Field) {
-	for _, field := range fields {
-		if field.Relationship != nil || field.Upload != nil {
-			*result = append(*result, field)
+// ReferenceFieldCount is len(ReferenceFields(fields)), counted once per block
+// definition rather than once per placement.
+func ReferenceFieldCount(fields []schema.Field) int {
+	return referenceCounts{}.list(fields)
+}
+
+// ReferenceTargets lists the collections that some reference field can target,
+// in first-seen schema order, visiting each block definition once.
+func ReferenceTargets(fields []schema.Field) []schema.RelationshipTarget {
+	var result []schema.RelationshipTarget
+	seen := map[schema.StableID]bool{}
+	schema.WalkDefinitionFields(func(field schema.Field) bool {
+		relationship := RelationshipDetails(field)
+		if relationship == nil {
+			return true
 		}
-		collectReferenceFields(schema.ChildFields(field), result)
+		targets := relationship.Targets
+		if !relationship.Polymorphic {
+			targets = []schema.RelationshipTarget{{CollectionID: relationship.CollectionID, CollectionSlug: relationship.CollectionSlug}}
+		}
+		for _, target := range targets {
+			if !seen[target.CollectionID] {
+				seen[target.CollectionID] = true
+				result = append(result, target)
+			}
+		}
+		return true
+	}, fields)
+	return result
+}
+
+// referenceCounts memoizes reference placements per field list. A shared
+// definition is one slice at every placement, so each is counted once.
+type referenceCounts map[*schema.Field]int
+
+func (counts referenceCounts) list(fields []schema.Field) int {
+	if len(fields) == 0 {
+		return 0
 	}
+	if count, known := counts[&fields[0]]; known {
+		return count
+	}
+	total := 0
+	for _, field := range fields {
+		total += counts.field(field)
+	}
+	counts[&fields[0]] = total
+	return total
+}
+
+func (counts referenceCounts) field(field schema.Field) int {
+	total := 0
+	if field.Relationship != nil || field.Upload != nil {
+		total++
+	}
+	schema.EachDefinitionChildList(field, func(children []schema.Field) {
+		total += counts.list(children)
+	})
+	return total
 }
 
 // DepthPopulations expands every relationship/upload field in a target
@@ -257,10 +323,8 @@ func (w pathWalker) fieldValue(field schema.Field, value store.Value, segments [
 		if field.Blocks == nil || len(segments) < 3 {
 			return value, false
 		}
-		for _, block := range field.Blocks.ResolvedTypes() {
-			if block.Slug == segments[1] {
-				return w.list(block.ResolvedFields(), value, segments[2:], block.Slug, true)
-			}
+		if block, found := field.Blocks.Definition(segments[1]); found {
+			return w.list(block.ResolvedFields(), value, segments[2:], block.Slug, true)
 		}
 	}
 	return value, false
@@ -316,8 +380,10 @@ func (w pathWalker) child(fields []schema.Field, lookup func(string) (store.Valu
 // MapPopulatedDocuments recursively maps already-populated relationship and
 // upload documents in response-shaped values. Single-locale responses have
 // localized fields projected to their scalar/container value; all-locale
-// responses retain locale maps. The root map and callback documents are
-// detached; immutable branches without populated documents are reused.
+// responses retain locale maps. Callback documents are detached. When a
+// callback runs, the result is a new root map; immutable branches without
+// populated documents are reused. Without populated documents the input root
+// map itself is returned, so callers that need a detached map must copy it.
 func MapPopulatedDocuments(
 	fields []schema.Field,
 	values store.Values,
@@ -325,13 +391,19 @@ func MapPopulatedDocuments(
 	transform func(schema.StableID, schema.LocaleCode, store.Document) store.Document,
 ) store.Values {
 	walker := populatedWalker{allLocales: allLocales, transform: transform}
-	result := store.CloneValues(values)
+	var result store.Values
 	for _, field := range fields {
-		if value, exists := result[field.Name]; exists {
+		if value, exists := values[field.Name]; exists {
 			if updated, changed := walker.field(field, value, ""); changed {
+				if result == nil {
+					result = store.CloneValues(values)
+				}
 				result[field.Name] = updated
 			}
 		}
+	}
+	if result == nil {
+		return values
 	}
 	return result
 }
@@ -421,10 +493,8 @@ func (w populatedWalker) fieldValue(field schema.Field, value store.Value, inher
 				return w.object(field.Nested.ResolvedFields(), item, inheritedLocale)
 			}
 			blockType, _ := item.Get("blockType").StringValue()
-			for _, block := range field.Blocks.ResolvedTypes() {
-				if block.Slug == blockType {
-					return w.object(block.ResolvedFields(), item, inheritedLocale)
-				}
+			if block, found := field.Blocks.Definition(blockType); found {
+				return w.object(block.ResolvedFields(), item, inheritedLocale)
 			}
 			return item, false
 		})

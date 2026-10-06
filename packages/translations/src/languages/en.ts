@@ -66,6 +66,8 @@ export const enMessages = {
 	"apiReference:jsonSchema": "Plugin JSON schema",
 	"apiReference:queryPage": "Page number, starting at 1. Default: 1.",
 	"apiReference:queryLimit": "Documents per page, 1–100. Default: 10.",
+	"apiReference:queryPagination":
+		"Set to false to skip the total count; hasNextPage stays exact. Default: true.",
 	"apiReference:queryWhere":
 		'JSON filter using field paths and operators, for example {"title":{"equals":"Hello"}}. Only queryable fields are accepted.',
 	"apiReference:querySort":
@@ -123,7 +125,9 @@ export const enMessages = {
 	"collections:and": "And",
 	"collections:addAndFilter": "Add AND condition",
 	"collections:perPageLabel": "Per Page: {count}",
-	"collections:operatorIncludesItem": "Includes item",
+	"collections:operatorIsAnyOf": "is any of",
+	"collections:operatorIsNoneOf": "is none of",
+	"collections:filterCollection": "Filter collection",
 	"fields:listAdd": "Add item",
 	"fields:listEmpty": "No items yet.",
 	"fields:listItem": "{label}, item {number}",
@@ -391,6 +395,16 @@ export const enMessages = {
 	"collections:filteredResultLoadFailed": "The filtered result could not be loaded.",
 	"collections:filterDocuments": "Filter documents",
 	"collections:filterField": "Filter field",
+	"collections:filterFieldsLoadFailed": "The field list could not be loaded.",
+	"collections:allFields": "All fields",
+	"collections:searchFilterFields": "Search fields",
+	"collections:filterFieldBack": "Back to {label}",
+	"collections:filterFieldGroup": "Group",
+	"collections:filterFieldArray": "Array",
+	"collections:filterFieldBlocks": "Blocks",
+	"collections:filterFieldBlock": "Block",
+	"collections:filterFieldMoreMatches":
+		"Showing the first {count} matches. Refine the search or open a field to see more.",
 	"collections:filterOperator": "Filter operator",
 	"collections:filterSummary": "{field} {operator} {value}",
 	"collections:filterValue": "Filter value",

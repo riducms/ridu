@@ -47,44 +47,50 @@ func initializeDynamicDefaults(collection Collection, ctx Context, values store.
 	}
 	ctx.Data, ctx.Document = root, nil
 	patch := &runtimePatch{}
-	for _, binding := range collection.Bindings {
-		if binding.Default == nil {
-			continue
+	// The candidate changes only after every callback, so each location read
+	// shares these snapshots.
+	// One walk of each snapshot finds every defaulted binding's locations.
+	defaulted := func(index int) bool { return collection.Bindings[index].Default != nil }
+	candidateRoot := lazyObject{values: candidate}
+	current := bindingLocations(collection, candidateRoot.value(), false, true, defaulted)
+	retainedLocations := bindingPriors(collection, optionalObject(options.previous), ctx.AllLocales, defaulted)
+	priors := bindingPriors(collection, originalFieldRoot(ctx), ctx.AllLocales, defaulted)
+	views := callbackViews{}
+	err = eachDispatched(dispatchOrder(newPlacementOrders(collection), current), current, func(index int, location fieldLocation) error {
+		if !location.value.IsZero() || location.root && !options.requireMissing {
+			return nil
 		}
-		path := binding.Field.Path.String()
-		retained := originalFieldLocations(ctx, path, options.previous)
-		prior := originalFieldLocations(ctx, path, originalFieldValues(ctx))
-		for _, location := range fieldLocationsAtPath(collection.Schema.Fields, candidate, path, false, true) {
-			if !location.value.IsZero() || location.parentPath == "" && !options.requireMissing {
-				continue
-			}
-			if _, exists := retained[location.identity]; exists {
-				continue
-			}
-			scoped := scopedBindingContext(ctx, binding, location, prior)
-			result, evaluated := results[scoped.OccurrenceID]
-			if !evaluated {
-				if err := ctx.Context.Err(); err != nil {
-					return nil, hookError("field default", err)
-				}
-				if err := budget.Enter(location.runtimePath); err != nil {
-					return nil, embeddedOperationError(err, false)
-				}
-				value, present, err := binding.Default(scoped)
-				budget.Leave()
-				if err != nil {
-					return nil, hookError("field default", fmt.Errorf("field %q: %w", location.runtimePath, err))
-				}
-				if err := ctx.Context.Err(); err != nil {
-					return nil, hookError("field default", err)
-				}
-				result = defaultResult{value: value, present: present}
-				results[scoped.OccurrenceID] = result
-			}
-			if result.present {
-				patch.add(location.runtimePath, result.value, false)
-			}
+		if _, exists := retainedLocations[index][location.identity]; exists {
+			return nil
 		}
+		binding := collection.Bindings[index]
+		scoped := scopedBindingContext(ctx, binding, location, priors[index], &views)
+		result, evaluated := results[scoped.OccurrenceID]
+		if !evaluated {
+			if err := ctx.Context.Err(); err != nil {
+				return hookError("field default", err)
+			}
+			if err := budget.Enter(location.runtimePath); err != nil {
+				return embeddedOperationError(err, false)
+			}
+			value, present, err := binding.Default(scoped)
+			budget.Leave()
+			if err != nil {
+				return hookError("field default", fmt.Errorf("field %q: %w", location.runtimePath, err))
+			}
+			if err := ctx.Context.Err(); err != nil {
+				return hookError("field default", err)
+			}
+			result = defaultResult{value: value, present: present}
+			results[scoped.OccurrenceID] = result
+		}
+		if result.present {
+			patch.add(location.runtimePath, result.value, false)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	// Every callback at this checkpoint sees the same available candidate. This
 	// deliberately does not establish declaration-order dependencies between them.
@@ -160,7 +166,7 @@ func prepareDefaultMembers(fields []schema.Field, object *validationObject, opti
 					children = field.Nested.ResolvedFields()
 				} else if field.Blocks != nil {
 					kind, _ := row.Get("blockType").StringValue()
-					if block := findBlock(field.Blocks.ResolvedTypes(), kind); block != nil {
+					if block := findBlock(field.Blocks.Definitions(), kind); block != nil {
 						children = block.ResolvedFields()
 					}
 					if previousKind, _ := previous.Get("blockType").StringValue(); previousKind != kind {

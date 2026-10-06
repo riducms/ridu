@@ -24,7 +24,7 @@ func TestGeneratedUnifiedContractsThroughTypedLocalAPI(t *testing.T) {
 	}
 	articles := g.UnifiedArticlesCollection.With(app.Local())
 	var input g.UnifiedArticleCreate
-	if err := json.Unmarshal([]byte(`{"title":"Typed graph","sku":" sku-root ","sections":[{"_key":"A","products":[{"_key":"B","sku":"sku-b"}]}],"content":[{"blockType":"card","_key":"C","sku":"sku-c"}],"localizedTitle":"English","privateNote":"redacted"}`), &input); err != nil {
+	if err := json.Unmarshal([]byte(`{"title":"Typed graph","sku":" sku-root ","sections":[{"_key":"A","products":[{"_key":"B","sku":"sku-b"}]}],"content":[{"blockType":"unified-card","_key":"C","sku":"sku-c"}],"localizedTitle":"English","privateNote":"redacted"}`), &input); err != nil {
 		t.Fatal(err)
 	}
 	input.Author = core.Set(user.ID)
@@ -38,7 +38,7 @@ func TestGeneratedUnifiedContractsThroughTypedLocalAPI(t *testing.T) {
 	if len(created.Sections) != 1 || created.Sections[0].Key != "A" || created.Sections[0].Products[0].Key != "B" || *created.Sections[0].Products[0].Sku != "SKU-B" {
 		t.Fatal("typed nested identity/value")
 	}
-	if created.Content == nil || len(*created.Content) != 1 || (*created.Content)[0].BlockType() != "card" || (*created.Content)[0].BlockKey() != "C" {
+	if created.Content == nil || len(*created.Content) != 1 || (*created.Content)[0].BlockType() != unifiedfields.CardSlug || (*created.Content)[0].BlockKey() != "C" {
 		t.Fatal("typed Block discriminated identity")
 	}
 	var patch g.UnifiedArticleUpdate

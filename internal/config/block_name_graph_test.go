@@ -2,13 +2,12 @@ package config
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/riducms/ridu/field"
 )
 
-func TestBlockNameConditionBindsAcrossBlockPlacements(t *testing.T) {
+func TestBlockNameConditionBindsWithinItsDefinition(t *testing.T) {
 	for _, placement := range []string{"inline", "registered", "embedded"} {
 		for _, authored := range []bool{false, true} {
 			name := placement + "/automatic"
@@ -49,9 +48,9 @@ func TestBlockNameConditionBindsAcrossBlockPlacements(t *testing.T) {
 				for _, occurrence := range graph.Occurrences() {
 					candidate := occurrence
 					switch {
-					case strings.HasSuffix(candidate.ResolvedPath, ".card.caption"):
+					case candidate.ResourceKind == BlockResource && candidate.Resource == "card" && candidate.ResolvedPath == "caption":
 						caption = &candidate
-					case strings.HasSuffix(candidate.ResolvedPath, ".card.blockName"):
+					case candidate.ResourceKind == BlockResource && candidate.Resource == "card" && candidate.ResolvedPath == "blockName":
 						if blockName != nil {
 							t.Fatal("duplicate blockName occurrence")
 						}
@@ -81,7 +80,7 @@ func TestBlockNameConditionUsesAuthoredLayoutChild(t *testing.T) {
 	}
 	var names int
 	for _, occurrence := range graph.Occurrences() {
-		if strings.HasSuffix(occurrence.ResolvedPath, ".card.blockName") {
+		if occurrence.ResourceKind == BlockResource && occurrence.Resource == "card" && occurrence.ResolvedPath == "blockName" {
 			names++
 		}
 	}

@@ -217,6 +217,26 @@ func (value Value) WithListItem(index int, replacement Value) (Value, bool) {
 	return value, true
 }
 
+// WithMembers returns an object with members added or replaced, sharing the
+// other immutable members with the original. It copies the object's map once,
+// where CopyObject followed by Object would copy it twice. It returns the
+// original value and false for a non-object value. Existing values and retained
+// snapshots are never mutated.
+func (value Value) WithMembers(members Values) (Value, bool) {
+	if value.kind != ValueObject {
+		return value, false
+	}
+	object := make(Values, len(value.object)+len(members))
+	for name, member := range value.object {
+		object[name] = member
+	}
+	for name, member := range members {
+		object[name] = member
+	}
+	value.object = object
+	return value, true
+}
+
 func CloneValues(values Values) Values {
 	if values == nil {
 		return Values{}

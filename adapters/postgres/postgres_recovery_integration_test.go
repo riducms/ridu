@@ -118,8 +118,8 @@ func TestPostgresBackupRestoreDrill(t *testing.T) {
 	if err != nil || len(status) != 1 || !status[0].Applied {
 		t.Fatalf("restored migration ledger = %#v, %v", status, err)
 	}
-	if plan, err := restored.Plan(ctx, manifest); err != nil || len(plan) != 0 {
-		t.Fatalf("restored schema plan = %#v, %v", plan, err)
+	if err := restored.VerifySchema(ctx, manifest); err != nil {
+		t.Fatalf("restored schema = %v", err)
 	}
 }
 

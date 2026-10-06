@@ -30,8 +30,8 @@ func (backend *Store) prepareAuthOperation(ctx context.Context, capability strin
 	return backend.requireVerifiedAuthIndexes()
 }
 
-func validateMongoAuthCollection(collection schema.Collection) (schema.Field, error) {
-	if err := validateCollectionEnvelope(collection); err != nil {
+func (backend *Store) validateMongoAuthCollection(collection schema.Collection) (schema.Field, error) {
+	if err := backend.validateCollectionEnvelope(collection); err != nil {
 		return schema.Field{}, err
 	}
 	return validateMongoAuthCollectionMetadata(collection)
@@ -195,7 +195,7 @@ func (backend *Store) SetPasswordHash(ctx context.Context, collection schema.Col
 	if err := backend.prepareAuthOperation(ctx, "authentication password replacement"); err != nil {
 		return err
 	}
-	if _, err := validateMongoAuthCollection(collection); err != nil {
+	if _, err := backend.validateMongoAuthCollection(collection); err != nil {
 		return err
 	}
 	if err := backend.requireVerifiedIndexes(collection); err != nil {
@@ -274,7 +274,7 @@ func (backend *Store) compareAndSetPasswordHash(ctx context.Context, collection 
 	if err := backend.prepareAuthOperation(ctx, "authentication password change"); err != nil {
 		return err
 	}
-	if _, err := validateMongoAuthCollection(collection); err != nil {
+	if _, err := backend.validateMongoAuthCollection(collection); err != nil {
 		return err
 	}
 	if err := backend.requireVerifiedIndexes(collection); err != nil {
@@ -346,7 +346,7 @@ func (backend *Store) FindAuthCredential(ctx context.Context, collection schema.
 	if err := backend.prepareAuthOperation(ctx, "authentication credential lookup"); err != nil {
 		return store.AuthCredential{}, err
 	}
-	identityField, err := validateMongoAuthCollection(collection)
+	identityField, err := backend.validateMongoAuthCollection(collection)
 	if err != nil {
 		return store.AuthCredential{}, err
 	}
@@ -600,7 +600,7 @@ func (transaction *documentTransaction) CreateAuthCredential(ctx context.Context
 	if err := transaction.store.requireVerifiedIndexes(collection); err != nil {
 		return err
 	}
-	if _, err := validateMongoAuthCollection(collection); err != nil {
+	if _, err := transaction.store.validateMongoAuthCollection(collection); err != nil {
 		return err
 	}
 	reference := store.DocumentReference{CollectionID: collection.ID, DocumentID: userID}
@@ -641,7 +641,7 @@ func (transaction *documentTransaction) CreateFirstAuthCredential(ctx context.Co
 	if err := transaction.store.requireVerifiedIndexes(collection); err != nil {
 		return err
 	}
-	if _, err := validateMongoAuthCollection(collection); err != nil {
+	if _, err := transaction.store.validateMongoAuthCollection(collection); err != nil {
 		return err
 	}
 

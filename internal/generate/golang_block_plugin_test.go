@@ -18,7 +18,11 @@ func TestGeneratedGoBlockPluginPointerCodecs(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := manifest.Snapshot()
-	child := &snapshot.Collections[0].Fields[0].Blocks.ResolvedTypes()[0].ResolvedFields()[0]
+	// Contracts follow the block definition, so the registry entry changes.
+	if len(snapshot.Blocks) != 1 || snapshot.Blocks[0].Slug != "hero" || snapshot.Blocks[0].Fields[0].Name != "value" {
+		t.Fatalf("block registry = %#v", snapshot.Blocks)
+	}
+	child := &snapshot.Blocks[0].Fields[0]
 	child.Type = schema.FieldTypePlugin
 	child.Plugin = &schema.PluginField{Key: "codec"}
 	snapshot.Plugins = []schema.Plugin{{Key: "codec", FieldTypes: []schema.PluginFieldType{{Key: "codec", GoPackage: "example.com/plugin-consumer/pluginvalue", GoType: "Value"}}}}

@@ -11,6 +11,7 @@ import { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { FormController } from "@admin/core/forms/form-controller.svelte";
 import { FieldEditorBinding } from "@admin/core/forms/field-editor-binding";
 import { indexFieldValues } from "@admin/core/forms/form-issue-correlation";
+import { bindBlockField, blockDefinition } from "../block-manifest";
 import { draftFixture, title } from "./draft-fixture";
 
 const Editor = svelte`
@@ -148,30 +149,27 @@ function accent(path: string, label = "Accent"): SchemaField {
 }
 function rows(type: "array" | "blocks" = "array"): SchemaField {
 	const children = [accent("rows.title", "Row title")];
-	return {
-		...title,
-		id: "rows",
-		name: "rows",
-		path: "rows",
-		type,
-		category: "nested",
-		required: false,
-		admin: { label: "Rows" },
-		nested: {
-			fields: type === "array" ? children : [],
-			rowLabelComponent: { reference: "app:row", config: { prefix: "Configured row" } },
-		},
-		...(type === "blocks"
-			? {
-					blocks: {
-						types: [
-							{ slug: "card", labels: { singular: "Card", plural: "Cards" }, fields: children },
-							{ slug: "other", labels: { singular: "Other", plural: "Others" }, fields: children },
-						],
-					},
-				}
-			: {}),
-	};
+	return bindBlockField(
+		[
+			blockDefinition("card", children, { singular: "Card", plural: "Cards" }),
+			blockDefinition("other", children, { singular: "Other", plural: "Others" }),
+		],
+		{
+			...title,
+			id: "rows",
+			name: "rows",
+			path: "rows",
+			type,
+			category: "nested",
+			required: false,
+			admin: { label: "Rows" },
+			nested: {
+				fields: type === "array" ? children : [],
+				rowLabelComponent: { reference: "app:row", config: { prefix: "Configured row" } },
+			},
+			...(type === "blocks" ? { blocks: { blockReferences: ["card", "other"] } } : {}),
+		}
+	);
 }
 
 it("preserves a repeated row's surface while dragging", async () => {
@@ -477,22 +475,17 @@ function plain(path: string, label: string): SchemaField {
 function plainRows(type: "array" | "blocks"): SchemaField {
 	const field = rows(type);
 	const children = [plain("rows.title", "Plain row")];
-	return {
-		...field,
-		nested: {
-			fields: type === "array" ? children : [],
-			rowLabelComponent: { reference: "app:plainRow" },
-		},
-		...(type === "blocks"
-			? {
-					blocks: {
-						types: [
-							{ slug: "card", labels: { singular: "Card", plural: "Cards" }, fields: children },
-						],
-					},
-				}
-			: {}),
-	};
+	return bindBlockField(
+		[blockDefinition("card", children, { singular: "Card", plural: "Cards" })],
+		{
+			...field,
+			nested: {
+				fields: type === "array" ? children : [],
+				rowLabelComponent: { reference: "app:plainRow" },
+			},
+			...(type === "blocks" ? { blocks: { blockReferences: ["card"] } } : {}),
+		}
+	);
 }
 
 for (const type of ["array", "blocks"] as const)

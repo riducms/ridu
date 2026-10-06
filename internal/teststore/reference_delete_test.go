@@ -9,6 +9,7 @@ import (
 
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestApplyReferenceDeletePlansRestrictBeforeReconcilingCurrentTrashValues(t *testing.T) {
@@ -71,7 +72,7 @@ func TestApplyReferenceDeletePlansRestrictBeforeReconcilingCurrentTrashValues(t 
 		t.Fatalf("nullify ran before restrict planning: %#v", unchanged.Values)
 	}
 
-	owner, err = transaction.Update(ctx, store.UpdateRequest{
+	owner, err = conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{
 		Request: store.Request{Collection: posts, ID: owner.ID},
 		Values:  store.Values{"guard": store.String("user-2")},
 		Intent:  store.WriteIntentSaveDraft,

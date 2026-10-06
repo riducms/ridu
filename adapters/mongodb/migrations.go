@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riducms/ridu/internal/blockgraph"
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/primitivefield"
@@ -19,9 +20,16 @@ const (
 	mongoDBPlannerName = "mongodb"
 	// mongoDBPlannerVersion is recorded in every artifact. Validation replans
 	// each committed artifact with this planner, so its emitted artifacts and
-	// digests must remain byte-for-byte reproducible.
-	mongoDBPlannerVersion = "3.0.0"
+	// digests must remain byte-for-byte reproducible. Change the version
+	// whenever the planner can emit a different artifact for the same input.
+	mongoDBPlannerVersion = "5.0.0"
 )
+
+// mongoDBUnsupportedPlannerVersion explains that an artifact or ledger row was
+// recorded by another planner contract, which this release cannot replay.
+func mongoDBUnsupportedPlannerVersion(subject, version string) error {
+	return fmt.Errorf("%s uses unsupported planner version %q; this Ridu release supports only %s %q, so create a new migration history with ridu migrate create and apply it to a new database", subject, version, mongoDBPlannerName, mongoDBPlannerVersion)
+}
 
 // CreatedArtifact is the stable filesystem identity of one newly published
 // immutable MongoDB migration artifact.
@@ -134,7 +142,7 @@ func validateMongoDBArtifactPlan(ctx context.Context, artifact ridumigration.Art
 		return fmt.Errorf("validate MongoDB migration %s: %w", label, err)
 	}
 	if artifact.Planner.Version != mongoDBPlannerVersion {
-		return fmt.Errorf("MongoDB migration %s uses unsupported planner version %q", label, artifact.Planner.Version)
+		return mongoDBUnsupportedPlannerVersion("MongoDB migration "+label, artifact.Planner.Version)
 	}
 	after, err := artifact.AfterManifest()
 	if err != nil {
@@ -236,7 +244,35 @@ func validateMongoDBAdditiveTransition(before, after schema.Snapshot) error {
 	if err := validateMongoDBAdditiveResources("collection", before.Collections, after.Collections); err != nil {
 		return err
 	}
-	return validateMongoDBAdditiveResources("global", before.Globals, after.Globals)
+	if err := validateMongoDBAdditiveResources("global", before.Globals, after.Globals); err != nil {
+		return err
+	}
+	return validateMongoDBAdditiveDefinitions(before, after)
+}
+
+// validateMongoDBAdditiveDefinitions validates each block definition placed
+// before and after the transition once: ordinarily placed views with the
+// ordinary rules, and views inside embedded plugin payloads with the embedded
+// rules. Containers already refused deselecting a placed definition.
+func validateMongoDBAdditiveDefinitions(before, after schema.Snapshot) error {
+	previous, current := blockgraph.New(before), blockgraph.New(after)
+	validate := func(keys map[blockgraph.Key]bool, rules mongoDBAdditiveRules) error {
+		for _, key := range blockgraph.SortedKeys(keys) {
+			beforeView, _ := previous.View(key)
+			afterView, placed := current.View(key)
+			if !placed {
+				continue
+			}
+			if err := rules.fields(fmt.Sprintf("block type %q", key.Slug), beforeView.ResolvedFields(), afterView.ResolvedFields()); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := validate(blockgraph.Shared(previous, current, nil, false), mongoDBAdditiveRules{}); err != nil {
+		return err
+	}
+	return validate(blockgraph.EmbeddedPlacements(previous), mongoDBAdditiveRules{embedded: true})
 }
 
 func validateMongoDBAdditiveResources(kind string, before, after []schema.Collection) error {
@@ -281,7 +317,18 @@ func mongoDBIndexesContain(current, previous []schema.CollectionIndex) bool {
 	return true
 }
 
+// mongoDBAdditiveRules validates an additive field transition. embedded marks
+// fields inside a plugin's embedded payload, which the required-value audit
+// does not read: their requiredness stays fixed.
+type mongoDBAdditiveRules struct {
+	embedded bool
+}
+
 func validateMongoDBAdditiveFields(location string, before, after []schema.Field) error {
+	return mongoDBAdditiveRules{}.fields(location, before, after)
+}
+
+func (rules mongoDBAdditiveRules) fields(location string, before, after []schema.Field) error {
 	afterByID := make(map[schema.StableID]schema.Field, len(after))
 	for _, field := range after {
 		afterByID[field.ID] = field
@@ -299,18 +346,27 @@ func validateMongoDBAdditiveFields(location string, before, after []schema.Field
 		if !previous.Unique && comparison.Unique {
 			comparison.Unique = false
 		}
+		// Requiredness does not reshape stored documents. Relaxing it is safe,
+		// and the migration audits stored values for a field made required.
+		if !rules.embedded {
+			comparison.Required = previous.Required
+		}
 		if previous.Nested != nil && comparison.Nested != nil {
-			nested := *comparison.Nested
-			nested.Fields = previous.Nested.ResolvedFields()
+			// Children are compared below; the group or array keeps its prior
+			// children and compares only its row limits.
+			nested := *previous.Nested
+			nested.MinRows, nested.MaxRows = comparison.Nested.MinRows, comparison.Nested.MaxRows
 			comparison.Nested = &nested
 		}
 		if previous.Blocks != nil && comparison.Blocks != nil {
-			blocks := *comparison.Blocks
-			blocks.Types = previous.Blocks.ResolvedTypes()
+			// Variants are compared below; the container keeps the prior
+			// selection and compares only its row limits.
+			blocks := *previous.Blocks
+			blocks.MinRows, blocks.MaxRows = comparison.Blocks.MinRows, comparison.Blocks.MaxRows
 			comparison.Blocks = &blocks
 		}
 		var embeddedErr error
-		comparison, embeddedErr = embedded.CompareEvolution(previous, comparison, validateMongoDBAdditiveBlockTypes)
+		comparison, embeddedErr = embedded.CompareEvolution(previous, comparison, mongoDBAdditiveRules{embedded: true}.blockTypes)
 		if embeddedErr != nil {
 			return embeddedErr
 		}
@@ -322,46 +378,41 @@ func validateMongoDBAdditiveFields(location string, before, after []schema.Field
 			return fmt.Errorf("MongoDB artifact planner supports only additive transitions; field %q in %s changed", previous.ID, location)
 		}
 		if previous.Nested != nil {
-			if err := validateMongoDBAdditiveFields(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Nested.ResolvedFields(), current.Nested.ResolvedFields()); err != nil {
+			if err := rules.fields(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Nested.ResolvedFields(), current.Nested.ResolvedFields()); err != nil {
 				return err
 			}
 		}
 		if previous.Blocks != nil {
-			if err := validateMongoDBAdditiveBlockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.ResolvedTypes(), current.Blocks.ResolvedTypes()); err != nil {
+			if err := rules.blockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.Definitions(), current.Blocks.Definitions()); err != nil {
 				return err
 			}
 		}
 		delete(afterByID, previous.ID)
 	}
+	if !rules.embedded {
+		// An added required field is audited like any field made required.
+		return nil
+	}
 	for _, added := range after {
 		if _, remains := afterByID[added.ID]; remains && added.Required && added.Category != schema.FieldCategoryPresentation {
-			return fmt.Errorf("MongoDB additive migration cannot add required field %q to existing %s without rewriting existing documents", added.ID, location)
+			return fmt.Errorf("MongoDB additive migration cannot add required embedded field %q to existing %s without rewriting existing documents", added.ID, location)
 		}
 	}
 	return nil
 }
 
-func validateMongoDBAdditiveBlockTypes(location string, before, after []schema.BlockType) error {
+func (rules mongoDBAdditiveRules) blockTypes(location string, before, after []schema.BlockType) error {
 	afterByKey := make(map[string]schema.BlockType, len(after))
 	for _, block := range after {
 		afterByKey[block.Slug] = block
 	}
 	for _, previous := range before {
-		current, exists := afterByKey[previous.Slug]
-		if !exists {
+		if _, exists := afterByKey[previous.Slug]; !exists {
 			return fmt.Errorf("MongoDB artifact planner supports only additive transitions; block type %q in %s was removed", previous.Slug, location)
 		}
-		comparison := current
-		comparison.Fields = previous.ResolvedFields()
-		// Block summaries are presentation metadata, not a stored-data transition.
-		comparison.Admin = previous.Admin
-		comparison.TypeName = previous.TypeName
-		if !reflect.DeepEqual(previous, comparison) {
-			return fmt.Errorf("MongoDB artifact planner supports only additive transitions; block type %q in %s changed", previous.Slug, location)
-		}
-		if err := validateMongoDBAdditiveFields(fmt.Sprintf("block type %q in %s", previous.Slug, location), previous.ResolvedFields(), current.ResolvedFields()); err != nil {
-			return err
-		}
+		// A block's labels, summary and type name are presentation metadata, and
+		// its slug is its identity. Its fields are validated once with the
+		// definition, wherever it is placed.
 	}
 	return nil
 }

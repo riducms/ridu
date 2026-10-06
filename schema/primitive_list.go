@@ -17,8 +17,13 @@ type PrimitiveListField struct {
 }
 
 func validatePrimitiveListMetadata(snapshot Snapshot) error {
+	// Each block definition is inspected once.
+	entered := FieldListSet{}
 	var inspect func([]Field, string) error
 	inspect = func(fields []Field, prefix string) error {
+		if !entered.Add(fields) {
+			return nil
+		}
 		for i, f := range fields {
 			path := fmt.Sprintf("%s[%d]", prefix, i)
 			isList := f.Type == FieldTypeTextList || f.Type == FieldTypeNumberList
@@ -50,7 +55,7 @@ func validatePrimitiveListMetadata(snapshot Snapshot) error {
 					}
 				}
 			}
-			if err := inspect(EmbeddedBlocks(f), path+".plugin.embeddedTrees"); err != nil {
+			if err := inspect(EmbeddedDefinitionBlocks(f), path+".plugin.embeddedTrees"); err != nil {
 				return err
 			}
 			if f.Nested != nil {
@@ -59,7 +64,7 @@ func validatePrimitiveListMetadata(snapshot Snapshot) error {
 				}
 			}
 			if f.Blocks != nil {
-				for j, b := range f.Blocks.ResolvedTypes() {
+				for j, b := range f.Blocks.Definitions() {
 					if err := inspect(b.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", path, j)); err != nil {
 						return err
 					}

@@ -54,6 +54,9 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 	}
 	checks := make(map[string]referenceCheck, len(references))
 	referenceKeys := make([][]string, len(references))
+	// Only option filters read source values; each locale view is projected
+	// once, on first use, and then only read.
+	var localeSources map[schema.LocaleCode]store.Values
 	for referenceIndex, reference := range references {
 		selections, resolveError := engine.referenceValidationSelections(reference, selection)
 		if resolveError != nil {
@@ -61,8 +64,16 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 		}
 		for _, referenceSelection := range selections {
 			sourceValues := values
-			if selection.All && referenceSelection.Locale != "" {
-				sourceValues = projectValues(ctx.projections, ctx.Collection.Fields, values, referenceSelection)
+			if selection.All && referenceSelection.Locale != "" && len(reference.optionFilters) != 0 {
+				projected, cached := localeSources[referenceSelection.Locale]
+				if !cached {
+					projected = projectValues(ctx.projections, ctx.Collection.Fields, values, referenceSelection)
+					if localeSources == nil {
+						localeSources = make(map[schema.LocaleCode]store.Values)
+					}
+					localeSources[referenceSelection.Locale] = projected
+				}
+				sourceValues = projected
 			}
 			filter, filterIdentity, filterError := referenceOptionPredicate(reference, sourceValues)
 			if filterError != nil {
@@ -79,6 +90,10 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 	}
 	sort.Strings(keys)
 	checked := make(map[string]bool, len(keys))
+	// A lookup with neither an access predicate nor an option filter does not
+	// depend on the checked locale, so one locked read answers every locale
+	// whose rule allowed it.
+	unfilteredLookups := make(map[string]bool)
 	for _, key := range keys {
 		check := checks[key]
 		reference := check.reference
@@ -89,7 +104,7 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 		}
 		targetContext := Context{
 			Context: ctx.Context, Operation: operation.Read, Collection: target.Schema, ID: reference.id,
-			Actor: cloneDocumentPointer(ctx.Actor), ActorCollection: ctx.ActorCollection, System: ctx.System, Data: store.Values{}, Locale: referenceSelection.Locale, AllLocales: referenceSelection.All,
+			Actor: ctx.Actor, ActorCollection: ctx.ActorCollection, System: ctx.System, Data: store.Values{}, Locale: referenceSelection.Locale, AllLocales: referenceSelection.All,
 			Locales: append([]schema.LocaleCode(nil), referenceSelection.Configured...),
 		}
 		// The target's Reference rule decides what may be linked to; without
@@ -99,7 +114,7 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 		}
 		decision, err := authorize(target, targetContext)
 		if err != nil {
-			return nil, &Error{Code: "access_failed", Status: 500, Message: "reference target access rule failed", Cause: err}
+			return nil, accessRuleError("reference target access rule failed", err)
 		}
 		access := decision.Access
 		if decision.Kind == Deny {
@@ -109,6 +124,14 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 		publishedOnly, err := engine.publishedTargetOnly(target, targetContext)
 		if err != nil {
 			return nil, err
+		}
+		lookupKey := ""
+		if decision.Kind != Deny && access == nil && check.filter == nil {
+			lookupKey = string(target.Schema.ID) + "\x00" + reference.id + "\x00" + strconv.FormatBool(publishedOnly)
+			if available, seen := unfilteredLookups[lookupKey]; seen {
+				checked[key] = available
+				continue
+			}
 		}
 		_, err = transaction.Find(ctx.Context, store.Request{
 			Collection: target.Schema, Collections: engine.schemas, ID: reference.id,
@@ -124,6 +147,9 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 			return nil, translateStoreError(err)
 		}
 		checked[key] = available
+		if lookupKey != "" {
+			unfilteredLookups[lookupKey] = available
+		}
 	}
 	var issues []schema.Issue
 	for referenceIndex, reference := range references {
@@ -422,8 +448,16 @@ func maxDocumentReferencesIssue(path string) *schema.Issue {
 	}
 }
 
+// collectDocumentReferences reads the root map in place; only nested objects
+// are immutable Values.
 func collectDocumentReferences(fields []schema.Field, values store.Values, prefix string, mode referenceCollectionMode, collector *documentReferenceCollector) {
-	collectDocumentReferenceObject(fields, store.Object(values), prefix, mode, collector)
+	for _, field := range fields {
+		if collector.full() {
+			return
+		}
+		value, exists := values[field.Name]
+		collectDocumentReferenceMember(field, value, exists, prefix, mode, collector)
+	}
 }
 
 func collectDocumentReferenceObject(fields []schema.Field, values store.Value, prefix string, mode referenceCollectionMode, collector *documentReferenceCollector) {
@@ -432,44 +466,59 @@ func collectDocumentReferenceObject(fields []schema.Field, values store.Value, p
 			return
 		}
 		value, exists := values.Lookup(field.Name)
-		if !exists || value.Kind() == store.ValueNull {
-			continue
+		collectDocumentReferenceMember(field, value, exists, prefix, mode, collector)
+	}
+}
+
+func collectDocumentReferenceMember(field schema.Field, value store.Value, exists bool, prefix string, mode referenceCollectionMode, collector *documentReferenceCollector) {
+	if !exists || value.Kind() == store.ValueNull || !mayContainReferences(field) {
+		return
+	}
+	path := joinFieldPath(prefix, field.Name)
+	if mode.projectedLocale != "" && field.Localized {
+		unlocalized := field
+		unlocalized.Localized = false
+		localizedMode := mode
+		localizedMode.inheritedLocale = mode.projectedLocale
+		collectDocumentReferenceFieldValue(
+			unlocalized, value, joinFieldPath(path, string(mode.projectedLocale)), localizedMode, collector,
+		)
+		return
+	}
+	if mode.allLocales && field.Localized {
+		if value.Kind() != store.ValueObject {
+			return
 		}
-		path := joinFieldPath(prefix, field.Name)
-		if mode.projectedLocale != "" && field.Localized {
-			unlocalized := field
-			unlocalized.Localized = false
+		locales := make([]string, 0, value.Len())
+		for locale := range value.Entries() {
+			locales = append(locales, locale)
+		}
+		sort.Strings(locales)
+		unlocalized := field
+		unlocalized.Localized = false
+		for _, locale := range locales {
+			if collector.full() {
+				return
+			}
 			localizedMode := mode
-			localizedMode.inheritedLocale = mode.projectedLocale
+			localizedMode.inheritedLocale = schema.LocaleCode(locale)
 			collectDocumentReferenceFieldValue(
-				unlocalized, value, joinFieldPath(path, string(mode.projectedLocale)), localizedMode, collector,
+				unlocalized, value.Get(locale), joinFieldPath(path, locale), localizedMode, collector,
 			)
-			continue
 		}
-		if mode.allLocales && field.Localized {
-			if value.Kind() != store.ValueObject {
-				continue
-			}
-			locales := make([]string, 0, value.Len())
-			for locale := range value.Entries() {
-				locales = append(locales, locale)
-			}
-			sort.Strings(locales)
-			unlocalized := field
-			unlocalized.Localized = false
-			for _, locale := range locales {
-				if collector.full() {
-					return
-				}
-				localizedMode := mode
-				localizedMode.inheritedLocale = schema.LocaleCode(locale)
-				collectDocumentReferenceFieldValue(
-					unlocalized, value.Get(locale), joinFieldPath(path, locale), localizedMode, collector,
-				)
-			}
-			continue
-		}
-		collectDocumentReferenceFieldValue(field, value, path, mode, collector)
+		return
+	}
+	collectDocumentReferenceFieldValue(field, value, path, mode, collector)
+}
+
+// mayContainReferences reports whether collectDocumentReferenceFieldValue can
+// find a reference in field's value; other kinds are skipped before building paths.
+func mayContainReferences(field schema.Field) bool {
+	switch field.Type {
+	case schema.FieldTypePlugin, schema.FieldTypeRelationship, schema.FieldTypeUpload, schema.FieldTypeGroup, schema.FieldTypeArray, schema.FieldTypeBlocks:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -519,7 +568,7 @@ func collectDocumentReferenceFieldValue(field schema.Field, value store.Value, p
 				continue
 			}
 			blockKey, _ := item.Get("blockType").StringValue()
-			if block := findBlock(field.Blocks.ResolvedTypes(), blockKey); block != nil {
+			if block := findBlock(field.Blocks.Definitions(), blockKey); block != nil {
 				collectDocumentReferenceObject(block.ResolvedFields(), item, fmt.Sprintf("%s.%d", path, index), mode, collector)
 			}
 		}
@@ -546,7 +595,7 @@ func collectRelationshipFieldReferences(field schema.Field, value store.Value, p
 				collector.append(documentReference{
 					target: schema.RelationshipTarget{CollectionID: field.Relationship.CollectionID, CollectionSlug: field.Relationship.CollectionSlug},
 					id:     id, path: itemPath, locale: locale, kind: relationshipReferenceKind,
-					fieldIdentity: field.Path.String(),
+					fieldIdentity: string(field.ID),
 					optionFilters: append([]schema.RelationshipFilter(nil), field.Relationship.OptionFilters...),
 				})
 			}
@@ -564,7 +613,7 @@ func collectRelationshipFieldReferences(field schema.Field, value store.Value, p
 			if string(target.CollectionSlug) == slug {
 				collector.append(documentReference{
 					target: target, id: id, path: itemPath, locale: locale, kind: relationshipReferenceKind,
-					fieldIdentity: field.Path.String(),
+					fieldIdentity: string(field.ID),
 					optionFilters: append([]schema.RelationshipFilter(nil), field.Relationship.OptionFilters...),
 				})
 				break
@@ -594,7 +643,7 @@ func collectUploadFieldReferences(field schema.Field, value store.Value, path st
 		collector.append(documentReference{
 			target: schema.RelationshipTarget{CollectionID: field.Upload.CollectionID, CollectionSlug: field.Upload.CollectionSlug},
 			id:     id, path: itemPath, locale: locale, kind: uploadReferenceKind,
-			fieldIdentity: field.Path.String(),
+			fieldIdentity: string(field.ID),
 			optionFilters: append([]schema.RelationshipFilter(nil), field.Upload.OptionFilters...),
 		})
 	}

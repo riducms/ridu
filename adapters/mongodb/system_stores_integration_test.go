@@ -31,7 +31,7 @@ func TestMongoDBDeleteDocumentStateRequiresVerifiedSystemIndexes(t *testing.T) {
 func TestMongoDBPreferencesAndDocumentLocksMatchStoreSemantics(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	users, staff, posts, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, time.August, 30, 19, 20, 21, 123456789, time.UTC)
@@ -175,7 +175,7 @@ func TestMongoDBPreferencesAndDocumentLocksMatchStoreSemantics(t *testing.T) {
 func TestMongoDBSystemLogicalIdentityDriftFailsClosedWithoutMutation(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	users, _, posts, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, time.August, 30, 21, 22, 23, 123456789, time.UTC)
@@ -293,7 +293,7 @@ func TestMongoDBPreferenceWritesSerializeAcrossClients(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	peer := mongoSystemStorePeer(t, backend)
 	users, _, _, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := peer.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -371,7 +371,7 @@ func TestMongoDBPreferenceWritesSerializeAcrossClients(t *testing.T) {
 func TestMongoDBDeleteDocumentStateCleansPreferencesAndBothLockSides(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	users, staff, posts, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, time.August, 30, 20, 0, 0, 987654321, time.UTC)
@@ -449,7 +449,7 @@ func TestMongoDBDeleteDocumentStateCleansPreferencesAndBothLockSides(t *testing.
 func TestMongoDBDocumentLockFirstAcquireRacesReturnWinningOwnership(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	users, _, posts, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, time.August, 30, 21, 0, 0, 111222333, time.UTC)
@@ -517,7 +517,7 @@ func TestMongoDBDocumentLockTransactionsSerializeAcrossClients(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	peer := mongoSystemStorePeer(t, backend)
 	users, _, posts, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := peer.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -702,7 +702,7 @@ func TestMongoDBSystemTransactionContentionHonorsCallerCancellation(t *testing.T
 	backend := mongoIntegrationStore(t)
 	peer := mongoSystemStorePeer(t, backend)
 	users, _, posts, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := peer.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -749,7 +749,7 @@ func TestMongoDBSystemWritesConflictWithStagedSameIDRecreation(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	peer := mongoSystemStorePeer(t, backend)
 	users, _, posts, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := peer.VerifyIndexes(t.Context(), manifest); err != nil {

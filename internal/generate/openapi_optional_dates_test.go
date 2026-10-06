@@ -18,7 +18,7 @@ import (
 func TestOpenAPIOptionalDatesValidateHTTPEmptyValues(t *testing.T) {
 	for _, appearance := range []field.DateFormat{field.DateOnly, field.DateTime, field.TimeOnly} {
 		t.Run(string(appearance), func(t *testing.T) {
-			fields := field.Fields{field.Date("when").Format(appearance), field.Blocks("layout", field.Block{Slug: "event", Fields: field.Fields{field.Date("when").Format(appearance)}})}
+			fields := field.Fields{field.Date("when").Format(appearance), field.Blocks("layout", field.Block{Slug: "session", Fields: field.Fields{field.Date("when").Format(appearance)}})}
 			app, err := core.New(core.Config{Name: "Optional dates", Collections: []core.Collection{{Slug: "events", Fields: fields}}}, teststore.New())
 			if err != nil {
 				t.Fatal(err)
@@ -59,7 +59,7 @@ func TestOpenAPIOptionalDatesValidateHTTPEmptyValues(t *testing.T) {
 				{"absent", store.Null(), false}, {"null", store.Null(), true}, {"empty", store.String(""), true}, {"valid", store.String(valid), true},
 			} {
 				t.Run(test.name, func(t *testing.T) {
-					row := store.Values{"blockType": store.String("event")}
+					row := store.Values{"blockType": store.String("session")}
 					values := store.Values{}
 					if test.present {
 						values["when"] = test.value

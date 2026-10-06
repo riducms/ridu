@@ -53,9 +53,8 @@ func TestPostgresMigrationsAndStoreConformance(t *testing.T) {
 	if err != nil || !status[0].Applied {
 		t.Fatalf("applied status = %#v, %v", status, err)
 	}
-	current, err := backend.Plan(ctx, manifest)
-	if err != nil || len(current) != 0 {
-		t.Fatalf("post-migration plan = %#v, %v", current, err)
+	if err := backend.VerifySchema(ctx, manifest); err != nil {
+		t.Fatalf("post-migration schema = %v", err)
 	}
 
 	application, err := ridu.New(integrationConfig(), backend)
@@ -119,7 +118,7 @@ func TestPostgresMigrationsAndStoreConformance(t *testing.T) {
 	watchersPath, _ := query.NewPath("watchers")
 	relatedPath, _ := query.NewPath("related")
 	page, err := application.Local().List(ctx, "posts", ridu.ListOptions{Page: 1, Limit: 20, Populate: []query.Population{{Path: watchersPath}, {Path: relatedPath, Depth: 2}}})
-	if err != nil || page.Total != 1 || page.Documents[0].ID != public.ID {
+	if err != nil || *page.Total != 1 || page.Documents[0].ID != public.ID {
 		t.Fatalf("access-filtered page = %#v, %v", page, err)
 	}
 	if score, valid := page.Documents[0].Values["score"].NumberValue(); !valid || score != 9.5 {
@@ -568,7 +567,7 @@ func TestPostgresLocalizedIntermediateContainerPredicatesMatchProjectedDocuments
 		page, err := application.Local().List(ctx, "pages", ridu.ListOptions{
 			Locale: "fr", Where: query.Equal(path, "visible"),
 		})
-		if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
+		if err != nil || *page.Total != 1 || page.Documents[0].ID != document.ID {
 			t.Fatalf("French predicate %s = %#v, %v", path.String(), page, err)
 		}
 	}
@@ -635,7 +634,7 @@ func TestPostgresExactLocaleAccessPreservesEmptyLocalizedScalars(t *testing.T) {
 		}
 	}
 	page, err := application.Local().List(ctx, "pages", ridu.ListOptions{Locale: "en"})
-	if err != nil || page.Total != 0 {
+	if err != nil || *page.Total != 0 {
 		t.Fatalf("empty localized access list = %#v, %v", page, err)
 	}
 	versions, err := application.Local().Versions(ctx, "pages", document.ID, ridu.FindOptions{AllLocales: true})
@@ -743,7 +742,7 @@ func TestPostgresRepeatedNullPredicatesMatchProjectedAccessSemantics(t *testing.
 			}
 			delete(remaining, document.ID)
 		}
-		if page.Total != len(want) || len(remaining) != 0 {
+		if *page.Total != len(want) || len(remaining) != 0 {
 			t.Fatalf("%s returned %#v; missing IDs %#v", label, page.Documents, remaining)
 		}
 	}
@@ -836,7 +835,7 @@ func TestPostgresJSONStringPredicatesRemainTypeAwareUnderNot(t *testing.T) {
 			}
 			delete(remaining, document.ID)
 		}
-		if page.Total != len(want) || len(remaining) != 0 {
+		if *page.Total != len(want) || len(remaining) != 0 {
 			t.Fatalf("%s returned %#v; missing IDs %#v", label, page.Documents, remaining)
 		}
 	}
@@ -943,27 +942,27 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 	}
 	title, _ := query.NewPath("title")
 	page, err := application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(title, "Bonjour")})
-	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
+	if err != nil || *page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("French query = %#v, %v", page, err)
 	}
 	summary, _ := query.NewPath("summary")
 	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "ar", Where: query.Equal(summary, "English summary")})
-	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
+	if err != nil || *page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("Arabic empty-string fallback query = %#v, %v", page, err)
 	}
 	description, _ := query.NewPath("seo", "description")
 	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(description, "Description française")})
-	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
+	if err != nil || *page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("French nested query = %#v, %v", page, err)
 	}
 	detailName, _ := query.NewPath("details", "name")
 	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(detailName, "Détails français")})
-	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
+	if err != nil || *page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("French localized-parent query = %#v, %v", page, err)
 	}
 	label, _ := query.NewPath("links", "label")
 	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(label, "À propos")})
-	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
+	if err != nil || *page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("French localized array query = %#v, %v", page, err)
 	}
 	all, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{AllLocales: true})
@@ -1135,6 +1134,17 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A published post's live row is renamed and rewritten with its working row.
+	live, err := beforeApp.Local().Create(ctx, "posts", store.Values{
+		"seo":     store.Object(store.Values{"title": store.String("Preserved live value")}),
+		"related": store.Object(store.Values{"relationTo": store.String("users"), "id": store.String(user.ID)}),
+	}, ridu.MutationOptions{Actor: &store.Document{ID: "editor"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live, err = beforeApp.Local().Publish(ctx, "posts", live.ID, ridu.MutationOptions{System: true, ExpectedRevision: live.Revision}); err != nil {
+		t.Fatal(err)
+	}
 	news, err := beforeApp.Local().Create(ctx, "news", store.Values{"title": store.String("Durable rename")}, ridu.MutationOptions{Actor: &user})
 	if err != nil {
 		t.Fatal(err)
@@ -1298,6 +1308,19 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if relationTo, _ := versionRelated["relationTo"].StringValue(); relationTo != "members" {
 		t.Fatalf("version relationship target = %#v", versionRelated)
 	}
+	published := false
+	livePost, err := afterApp.Local().Find(ctx, "posts", live.ID, ridu.FindOptions{System: true, Draft: &published})
+	if err != nil {
+		t.Fatal(err)
+	}
+	liveSEO, _ := livePost.Values["seo"].CopyObject()
+	liveRelated, _ := livePost.Values["related"].CopyObject()
+	if headline, _ := liveSEO["headline"].StringValue(); headline != "Preserved live value" {
+		t.Fatalf("live nested value = %#v", livePost.Values)
+	}
+	if relationTo, _ := liveRelated["relationTo"].StringValue(); relationTo != "members" {
+		t.Fatalf("live relationship target = %#v", liveRelated)
+	}
 	if _, err := afterApp.Local().Delete(ctx, "members", user.ID, ridu.MutationOptions{}); !hasOperationCode(err, "delete_restricted") {
 		t.Fatalf("renamed derived reference did not protect target: %v", err)
 	}
@@ -1308,13 +1331,13 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if err := postgres.VerifyArtifactsWithOptions(ctx, os.Getenv("RIDU_POSTGRES_URL"), directory, postgres.RunnerOptions{AllowMaintenance: true, AllowInsecureDatabase: true}); err != nil {
 		t.Fatalf("shadow verification: %v", err)
 	}
-	if err := backend.ApplyPlan(ctx, []postgres.Statement{{Kind: "test_drift", SQL: `CREATE TABLE "z_c_unexpected_drift" ("id" text PRIMARY KEY)`}}); err != nil {
+	if err := backend.ExecForTest(ctx, `CREATE TABLE "z_c_unexpected_drift" ("id" text PRIMARY KEY)`); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err == nil || !strings.Contains(err.Error(), "physical schema drift") {
 		t.Fatalf("expected physical drift failure, got %v", err)
 	}
-	if err := backend.ApplyPlan(ctx, []postgres.Statement{{Kind: "remove_test_drift", SQL: `DROP TABLE "z_c_unexpected_drift"`}}); err != nil {
+	if err := backend.ExecForTest(ctx, `DROP TABLE "z_c_unexpected_drift"`); err != nil {
 		t.Fatal(err)
 	}
 	files, err := migrationartifact.ReadAll(directory)
@@ -1369,7 +1392,7 @@ func TestPostgresRollbackReferenceLocksAndOptimisticConcurrency(t *testing.T) {
 		t.Fatalf("PostgreSQL after-operation rollback error = %v", err)
 	}
 	page, err := application.Local().List(ctx, "entries", ridu.ListOptions{})
-	if err != nil || page.Total != 0 {
+	if err != nil || *page.Total != 0 {
 		t.Fatalf("rolled-back PostgreSQL entries = %#v, %v", page, err)
 	}
 
@@ -1866,8 +1889,8 @@ func TestPostgresDestructiveArtifactRequiresApprovalAndAppliesInIsolation(t *tes
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
 		t.Fatal(err)
 	}
-	if plan, err := backend.Plan(ctx, after); err != nil || len(plan) != 0 {
-		t.Fatalf("post-destructive migration plan = %#v, %v", plan, err)
+	if err := backend.VerifySchema(ctx, after); err != nil {
+		t.Fatalf("post-destructive migration schema = %v", err)
 	}
 	afterApplication, err := ridu.New(afterConfig, backend)
 	if err != nil {

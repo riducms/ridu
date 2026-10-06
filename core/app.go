@@ -22,7 +22,7 @@ type App struct {
 	manifest     schema.Manifest
 	// runtime is the resolved schema the engine runs on. HTTP and plugin
 	// transports read it instead of copying the manifest, so every consumer
-	// shares one set of materialized placement views.
+	// shares one set of block definition views.
 	runtime                schema.Snapshot
 	local                  *LocalAPI
 	auth                   store.AuthStore
@@ -146,14 +146,14 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 	var application *App
 	previewTokens := &previewTokenRegistry{grants: make(map[string]previewTokenGrant)}
 	engineCollections := make([]operationengine.Collection, 0, len(snapshot.Collections)+len(snapshot.Globals))
-	occurrences := applicationConfig.fieldGraph.Occurrences()
+	bindings := newFieldBindings(applicationConfig.fieldGraph, &local)
 	for _, resolved := range snapshot.Collections {
 		authored, exists := authoredBySlug[resolved.Slug]
 		if !exists {
 			return nil, fmt.Errorf("resolved collection %q has no authored runtime configuration", resolved.ID)
 		}
 		adapted := adaptCollection(authored, resolved, &local)
-		adapted.Bindings, err = lowerFieldGraph(applicationConfig.fieldGraph, occurrences, "collection", string(resolved.Slug), resolved.Fields, &local)
+		adapted.Bindings, err = bindings.resource("collection", string(resolved.Slug), resolved.Fields)
 		if err != nil {
 			return nil, err
 		}
@@ -165,7 +165,7 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 			return nil, fmt.Errorf("resolved global %q has no authored runtime configuration", resolved.ID)
 		}
 		adapted := adaptGlobal(authored, resolved, &local)
-		adapted.Bindings, err = lowerFieldGraph(applicationConfig.fieldGraph, occurrences, "global", string(resolved.Slug), resolved.Fields, &local)
+		adapted.Bindings, err = bindings.resource("global", string(resolved.Slug), resolved.Fields)
 		if err != nil {
 			return nil, err
 		}

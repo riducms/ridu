@@ -57,7 +57,7 @@ func TestMongoCapabilityReadsPreserveSchemaRecovery(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := backend.SyncIndexes(t.Context(), app.Manifest()); err != nil {
+				if err := backend.syncIndexes(t.Context(), app.Manifest()); err != nil {
 					t.Fatal(err)
 				}
 				created, err := app.Local().Create(t.Context(), "pages", store.Values{"body": value}, ridu.MutationOptions{})

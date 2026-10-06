@@ -144,6 +144,23 @@ func TestOperatorValueCompatibility(t *testing.T) {
 	}
 }
 
+func TestReferenceOperandKeepsItsCollectionAndID(t *testing.T) {
+	reference := query.Reference("posts", "p1")
+	if relationTo, id, ok := reference.ReferenceValue(); !ok || relationTo != "posts" || id != "p1" || reference.Kind() != query.ValueReference {
+		t.Fatalf("reference = %q %q %v (%s)", relationTo, id, ok, reference.Kind())
+	}
+	if _, ok := reference.StringValue(); ok {
+		t.Fatal("a reference is not a string operand")
+	}
+	if _, _, ok := query.String("p1").ReferenceValue(); ok {
+		t.Fatal("a string is not a reference operand")
+	}
+	items := query.In("subjects", reference).Node().Comparison.Value.Values()
+	if relationTo, id, _ := items[0].ReferenceValue(); relationTo != "posts" || id != "p1" {
+		t.Fatalf("list item reference = %q %q", relationTo, id)
+	}
+}
+
 func TestExistsRequiresBooleanOperand(t *testing.T) {
 	path, err := query.NewPath("title")
 	if err != nil {
@@ -210,6 +227,7 @@ func TestHelpersAcceptFieldNamesAndPlainValues(t *testing.T) {
 		{"float", query.GreaterThanEqual("score", 2.5), `score greater_than_equal 2.5`},
 		{"in", query.In("status", "draft", "published"), `status in ["draft","published"]`},
 		{"in values", query.In("status", []query.Value{query.String("draft")}...), `status in ["draft"]`},
+		{"in references", query.In("subjects", query.Reference("posts", "p1")), `subjects in [{"relationTo":"posts","id":"p1"}]`},
 		{"contains", query.Contains("title", "ridu"), `title contains "ridu"`},
 		{"like", query.Like("title", "go cms"), `title like "go cms"`},
 		{"exists", query.Exists("image", false), `image exists false`},

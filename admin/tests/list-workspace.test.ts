@@ -1,19 +1,26 @@
 import { describe, expect, test } from "bun:test";
 
-import type { SchemaCollection, SchemaField } from "@riducms/protocol";
+import type { SchemaBlockType, SchemaCollection, SchemaField } from "@riducms/protocol";
+import { createAdminI18n } from "@riducms/translations";
 
 import { PreferenceWriteQueue } from "@admin/core/preferences/preference-write-queue";
+import { ListFilterFields } from "@admin/features/collections/list-filter-fields";
 import {
 	bulkEditableListFields,
 	defaultListColumns,
-	filterableFields,
 	filterOperatorsFor,
 	listColumnFields,
+	listFilterComplete,
 	normalizeWorkspacePreference,
 	parseListFilters,
 	parseListPageSize,
+	parseReferenceCandidate,
+	referenceCandidate,
 	sortableField,
+	type ListFilterOperator,
 } from "@admin/features/collections/list-workspace";
+
+import { bindBlockFields } from "./block-manifest";
 
 const fields = [
 	{ name: "title", path: "title", type: "text", admin: { label: "Title" } },
@@ -21,6 +28,9 @@ const fields = [
 	{ name: "online", path: "online", type: "checkbox", admin: { label: "Online" } },
 	{ name: "status", path: "status", type: "select", admin: { label: "Status" } },
 ] as SchemaField[];
+
+const filterFields = (candidates: readonly SchemaField[]) =>
+	new ListFilterFields({ fields: candidates, metadata: [], i18n: createAdminI18n() });
 
 describe("collection list workspace", () => {
 	test("limits scalar bulk editing to values represented by the bulk editor", () => {
@@ -103,7 +113,7 @@ describe("collection list workspace", () => {
 					{ field: "missing", operator: "equals", value: "ignored" },
 				],
 			]),
-			fields
+			filterFields(fields)
 		);
 		expect(filters).toEqual([
 			[
@@ -120,8 +130,86 @@ describe("collection list workspace", () => {
 		expect(filterOperatorsFor(fields[2]!)).toEqual(["equals", "notEquals", "exists"]);
 	});
 
+	test("filters set-valued fields by membership rather than equality", () => {
+		const reference = (name: string, relationship: SchemaField["relationship"]) =>
+			({
+				name,
+				path: name,
+				type: "relationship",
+				admin: { label: name },
+				relationship,
+			}) as SchemaField;
+		const tags = {
+			...fields[3]!,
+			name: "tags",
+			path: "tags",
+			select: { hasMany: true, options: [] },
+		} as SchemaField;
+		const authors = reference("authors", { hasMany: true, onDelete: "nullify" });
+		const subject = reference("subject", {
+			polymorphic: true,
+			targets: [{ collectionId: "people", collectionSlug: "people" }],
+			onDelete: "nullify",
+		});
+		const author = reference("author", { onDelete: "nullify" });
+		const gallery = {
+			name: "gallery",
+			path: "gallery",
+			type: "upload",
+			admin: { label: "Gallery" },
+			upload: {
+				collectionId: "media",
+				collectionSlug: "media",
+				hasMany: true,
+				onDelete: "nullify",
+			},
+		} as SchemaField;
+		for (const field of [tags, authors, subject, gallery])
+			expect(filterOperatorsFor(field)).toEqual(["in", "notIn", "exists"]);
+		expect(filterOperatorsFor(author)).toEqual(["equals", "notEquals", "exists"]);
+
+		const lookup = filterFields([tags, authors, subject]);
+		expect(
+			parseListFilters(
+				JSON.stringify([
+					[
+						{ field: "tags", operator: "in", value: ["news", "tech"] },
+						{ field: "authors", operator: "notIn", value: "ada" },
+						{ field: "subject", operator: "in", value: ["people:ada"] },
+						{ field: "authors", operator: "equals", value: "ada" },
+					],
+				]),
+				lookup
+			)
+		).toEqual([
+			[
+				{ field: "tags", operator: "in", value: ["news", "tech"] },
+				{ field: "authors", operator: "notIn", value: ["ada"] },
+				{ field: "subject", operator: "in", value: ["people:ada"] },
+			],
+		]);
+		expect(parseReferenceCandidate(referenceCandidate("people", "a:b"))).toEqual({
+			relationTo: "people",
+			id: "a:b",
+		});
+		const draft = (value: string | string[], operator: ListFilterOperator = "in") => ({
+			field: "subject",
+			operator,
+			value,
+		});
+		expect(listFilterComplete(draft(["people:ada"]), subject)).toBe(true);
+		expect(listFilterComplete(draft(["people:"]), subject)).toBe(false);
+		expect(listFilterComplete(draft([]), authors)).toBe(false);
+		expect(listFilterComplete(draft("true", "exists"), authors)).toBe(true);
+	});
+
 	test("offers group leaves as columns and repeated leaves as filters", () => {
-		const candidates = [
+		const hero = {
+			slug: "hero",
+			labels: { singular: "Hero", plural: "Heroes" },
+			fields: [{ name: "heading", path: "heading", type: "text", admin: { label: "Heading" } }],
+		} as SchemaBlockType;
+		const candidates = bindBlockFields([hero], [
 			...fields,
 			{
 				name: "seo",
@@ -153,22 +241,7 @@ describe("collection list workspace", () => {
 				path: "layout",
 				type: "blocks",
 				admin: { label: "Layout" },
-				blocks: {
-					types: [
-						{
-							slug: "hero",
-							labels: { singular: "Hero", plural: "Heroes" },
-							fields: [
-								{
-									name: "heading",
-									path: "layout.hero.heading",
-									type: "text",
-									admin: { label: "Heading" },
-								},
-							],
-						},
-					],
-				},
+				blocks: { blockReferences: ["hero"] },
 			},
 			{
 				name: "content",
@@ -177,7 +250,7 @@ describe("collection list workspace", () => {
 				admin: { label: "Content" },
 				plugin: { key: "richtext", config: {} },
 			},
-		] as SchemaField[];
+		] as SchemaField[]);
 		expect(
 			listColumnFields({ fields: candidates } as SchemaCollection).map((field) => field.path)
 		).toEqual([
@@ -190,18 +263,20 @@ describe("collection list workspace", () => {
 			"layout",
 			"content",
 		]);
-		expect(filterableFields(candidates).map((field) => field.path)).toEqual([
-			"title",
-			"capacity",
-			"online",
-			"status",
-			"seo.description",
-			"links.label",
-			"layout.hero.heading",
+		const filters = filterFields(candidates);
+		expect(filters.level("")!.entries.map((entry) => [entry.kind, entry.path])).toEqual([
+			["field", "title"],
+			["field", "capacity"],
+			["field", "online"],
+			["field", "status"],
+			["group", "seo"],
+			["array", "links"],
+			["blocks", "layout"],
 		]);
-		expect(filterableFields(candidates).map((field) => field.admin.label)).toContain(
-			"Layout > Hero > Heading"
-		);
+		for (const path of ["seo.description", "links.label", "layout.hero.heading"])
+			expect(filters.resolve(path)?.field.path).toBe(path);
+		expect(filters.resolve("layout.hero.heading")?.trail).toEqual(["Layout", "Hero", "Heading"]);
+		expect(filters.resolve("content")).toBeUndefined();
 	});
 
 	test("normalizes persisted columns and bounded page sizes", () => {
@@ -412,9 +487,10 @@ test("attached read protection excludes queries while retaining readable list co
 		queryRestricted: true,
 		nested: { fields: [{ ...fields[0]!, path: "meta.title" }] },
 	} as SchemaField;
-	expect(filterableFields([protectedTitle, group, fields[1]!]).map((field) => field.path)).toEqual([
-		"capacity",
-	]);
+	const filters = filterFields([protectedTitle, group, fields[1]!]);
+	expect(filters.level("")!.entries.map((entry) => entry.path)).toEqual(["capacity"]);
+	expect(filters.resolve("meta.title")).toBeUndefined();
+	expect(filters.level("meta")).toBeUndefined();
 	const columns = listColumnFields({ fields: [protectedTitle, group] } as SchemaCollection);
 	expect(columns.map((field) => field.path)).toEqual(["title", "meta.title"]);
 	expect(columns.every((field) => !sortableField(field))).toBe(true);

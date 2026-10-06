@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { tick } from "svelte";
-	import type { SchemaField } from "@riducms/protocol";
 	import { getAdminI18n } from "@riducms/plugin";
 	import Plus from "@admin/components/icons/plus.svelte";
 	import FilterRow from "@admin/features/collections/controls/filter-row.svelte";
+	import type { ListFilterFields } from "@admin/features/collections/list-filter-fields";
 	import {
 		filterOperatorsFor,
+		listFilterComplete,
 		type ListFilter,
 		type ListFilterGroup,
 	} from "@admin/features/collections/list-workspace";
@@ -18,7 +19,7 @@
 		onChange,
 		navigationIdle = true,
 	}: {
-		fields: readonly SchemaField[];
+		fields: ListFilterFields;
 		filters: readonly ListFilterGroup[];
 		label: string;
 		onChange: (filters: ListFilterGroup[]) => void;
@@ -85,11 +86,10 @@
 				.map((group) =>
 					group.rows
 						.map((row) => row.filter)
-						.filter(
-							(filter) =>
-								fields.some((field) => field.path === filter.field) &&
-								(filter.operator === "exists" || filter.value !== "")
-						)
+						.filter((filter) => {
+							const field = fields.resolve(filter.field)?.field;
+							return field !== undefined && listFilterComplete(filter, field);
+						})
 				)
 				.filter((group) => group.length > 0);
 			lastEmittedFilters = JSON.stringify(value);
@@ -109,11 +109,12 @@
 	}
 
 	function createRow(): Row {
+		const initial = fields.initial;
 		return {
 			id: crypto.randomUUID(),
 			filter: {
-				field: fields[0]?.path ?? "",
-				operator: fields[0] ? filterOperatorsFor(fields[0])[0]! : "equals",
+				field: initial?.path ?? "",
+				operator: initial ? filterOperatorsFor(initial.field)[0]! : "equals",
 				value: "",
 			},
 		};
@@ -156,7 +157,7 @@
 			class="ridu-list__text-action"
 			onclick={addGroup}
 			data-filter-add
-			disabled={fields.length === 0}
+			disabled={fields.empty}
 		>
 			<Plus />{i18n.t("collections:addFilter")}
 		</button>

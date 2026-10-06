@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -20,7 +21,7 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 		return store.Document{}, err
 	}
 	defer leave()
-	if err := validateCollectionEnvelope(request.Collection); err != nil {
+	if err := transaction.store.validateCollectionEnvelope(request.Collection); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -34,7 +35,7 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 	}
 	values := store.CloneValues(request.Values)
 	canonicalizeMongoAuthIdentity(request.Collection, values)
-	if err := validateCompleteValuesForLocales(request.Collection, values, request.Locales); err != nil {
+	if err := validateStoredValuesForLocales(request.Collection, values, request.Locales); err != nil {
 		return store.Document{}, err
 	}
 	status := request.Status
@@ -106,7 +107,15 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 }
 
 func (transaction *documentTransaction) Find(ctx context.Context, request store.Request) (store.Document, error) {
-	sessionContext, leave, err := transaction.enter(ctx, request.Lock == store.LockMutation || request.Lock == store.LockReference)
+	locked := request.Lock == store.LockMutation || request.Lock == store.LockReference
+	var sessionContext context.Context
+	var leave func()
+	var err error
+	if locked {
+		sessionContext, leave, err = transaction.enterLock(ctx)
+	} else {
+		sessionContext, leave, err = transaction.enter(ctx, false)
+	}
 	if err != nil {
 		return store.Document{}, err
 	}
@@ -118,7 +127,7 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 	}
 	validatedRequest := request
 	validatedRequest.Lock = store.LockNone
-	if err := validateRequestEnvelope(validatedRequest); err != nil {
+	if err := transaction.store.validateRequestEnvelope(validatedRequest); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -138,20 +147,24 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 		return store.Document{}, err
 	}
 	var raw bson.Raw
-	if request.Lock == store.LockMutation || request.Lock == store.LockReference {
-		basePredicate := predicate
-		predicate = mongoAnd([]bson.D{basePredicate, mongoTypeGuard(mongoFencePath, "long")})
-		raw, err = transaction.readCollection(request).FindOneAndUpdate(
-			sessionContext,
-			predicate,
-			bson.D{{Key: "$inc", Value: bson.D{{Key: mongoFencePath, Value: int64(1)}}}},
-			options.FindOneAndUpdate().SetReturnDocument(options.After),
-		).Raw()
-		if errors.Is(err, mongo.ErrNoDocuments) {
+	if locked {
+		lock := mongoHeldLock{
+			mode:       mongoLockShared,
+			target:     mongoFenceTarget{collectionID: request.Collection.ID, documentID: request.ID},
+			working:    transaction.collection(request.Collection),
+			collection: transaction.readCollection(request),
+			predicate:  predicate,
+		}
+		if request.Lock == store.LockMutation {
+			lock.mode = mongoLockExclusive
+			lock.predicate = mongoAnd([]bson.D{predicate, mongoTypeGuard(mongoFencePath, "long")})
+		}
+		raw, err = transaction.lockDocument(sessionContext, lock)
+		if errors.Is(err, mongo.ErrNoDocuments) && lock.mode == mongoLockExclusive {
 			// A corrupt fence must not masquerade as an absent document. Probe
 			// with the same ID, filter, access, and deletion predicate so an
 			// unauthorized or otherwise non-matching document remains hidden.
-			candidate, probeErr := transaction.readCollection(request).FindOne(sessionContext, basePredicate).Raw()
+			candidate, probeErr := transaction.readCollection(request).FindOne(sessionContext, predicate).Raw()
 			switch {
 			case probeErr == nil:
 				if _, decodeErr := decodeCollectionDocumentForLocales(candidate, request.Collection, request.Locales); decodeErr != nil {
@@ -165,7 +178,7 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 		raw, err = transaction.readCollection(request).FindOne(sessionContext, predicate).Raw()
 	}
 	if err != nil {
-		return store.Document{}, translateMongoError(ctx, err)
+		return store.Document{}, translateLockError(ctx, err)
 	}
 	document, err := decodeCollectionDocumentForLocales(raw, request.Collection, request.Locales)
 	if err != nil {
@@ -187,7 +200,7 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 		return store.Page{}, err
 	}
 	defer leave()
-	if err := validateRequestEnvelope(request); err != nil {
+	if err := transaction.store.validateRequestEnvelope(request); err != nil {
 		return store.Page{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -205,41 +218,60 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 		return store.Page{}, err
 	}
 	collection := transaction.readCollection(request)
-	total64, err := collection.CountDocuments(sessionContext, predicate)
-	if err != nil {
-		return store.Page{}, translateMongoError(ctx, err)
-	}
-	if total64 > int64(math.MaxInt) {
-		return store.Page{}, fmt.Errorf("MongoDB list total exceeds the platform integer range")
-	}
-	total := int(total64)
-	page, limit, start, end := store.ListPageBounds(request.Page, request.Limit, total)
-	result := store.Page{Page: page, Limit: limit, Total: total}
-	if start == end {
-		result.Documents = []store.Document{}
-		return result, nil
+	// A SkipTotal read runs no count. It reads one row past the page so the
+	// extra row alone proves that a next page exists.
+	var result store.Page
+	var start, read int
+	if request.SkipTotal {
+		var limit int
+		result.Page, limit, start = store.UncountedPageBounds(request.Page, request.Limit)
+		result.Limit, read = limit, limit+1
+		if start == math.MaxInt {
+			result.Documents = []store.Document{}
+			return result, nil
+		}
+	} else {
+		total64, err := collection.CountDocuments(sessionContext, predicate)
+		if err != nil {
+			return store.Page{}, translateMongoError(ctx, err)
+		}
+		if total64 > int64(math.MaxInt) {
+			return store.Page{}, fmt.Errorf("MongoDB list total exceeds the platform integer range")
+		}
+		total := int(total64)
+		var end int
+		_, _, start, end = store.ListPageBounds(request.Page, request.Limit, total)
+		result, read = store.CountedPage(nil, request.Page, request.Limit, total), end-start
+		if read == 0 {
+			result.Documents = []store.Document{}
+			return result, nil
+		}
 	}
 	var cursor *mongo.Cursor
 	if len(order.computed) == 0 {
-		findOptions := options.Find().SetSort(order.order).SetSkip(int64(start)).SetLimit(int64(end - start))
-		cursor, err = collection.Find(sessionContext, predicate, findOptions)
+		cursor, err = mongoFind(sessionContext, collection, predicate, mongoFindCommand{sort: order.order, skip: int64(start), limit: int64(read)})
 	} else {
 		pipeline := mongo.Pipeline{
 			bson.D{{Key: "$match", Value: predicate}},
 			bson.D{{Key: "$set", Value: order.computed}},
 			bson.D{{Key: "$sort", Value: order.order}},
 			bson.D{{Key: "$skip", Value: int64(start)}},
-			bson.D{{Key: "$limit", Value: int64(end - start)}},
+			bson.D{{Key: "$limit", Value: int64(read)}},
 			bson.D{{Key: "$unset", Value: order.temporary}},
 		}
-		cursor, err = collection.Aggregate(sessionContext, pipeline)
+		cursor, err = mongoAggregate(sessionContext, collection, pipeline)
 	}
 	if err != nil {
 		return store.Page{}, translateMongoError(ctx, err)
 	}
 	defer transaction.closeCursor(cursor)
-	result.Documents = make([]store.Document, 0, end-start)
+	result.Documents = make([]store.Document, 0, min(read, result.Limit))
 	for cursor.Next(sessionContext) {
+		if len(result.Documents) == result.Limit {
+			// Only a SkipTotal read reaches the overflow row; it is never decoded.
+			result.HasNextPage = true
+			break
+		}
 		document, err := decodeCollectionDocumentForLocales(cursor.Current, request.Collection, request.Locales)
 		if err != nil {
 			return store.Page{}, err
@@ -275,7 +307,7 @@ func (transaction *documentTransaction) ResolveFilteredSelection(ctx context.Con
 		Collection: request.Collection, Filter: request.Filter, Access: request.Access,
 		Deletion: request.Deletion, Locales: request.Locales, LocaleChain: request.LocaleChain, AllLocales: request.AllLocales,
 	}
-	if err := validateRequestEnvelope(documentRequest); err != nil {
+	if err := transaction.store.validateRequestEnvelope(documentRequest); err != nil {
 		return store.FilteredSelection{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -285,11 +317,11 @@ func (transaction *documentTransaction) ResolveFilteredSelection(ctx context.Con
 	if err != nil {
 		return store.FilteredSelection{}, err
 	}
-	findOptions := options.Find().
-		SetSort(bson.D{{Key: "_id", Value: 1}}).
-		SetProjection(bson.D{{Key: "_id", Value: 1}}).
-		SetLimit(int64(request.Limit + 1))
-	cursor, err := transaction.collection(request.Collection).Find(sessionContext, predicate, findOptions)
+	cursor, err := mongoFind(sessionContext, transaction.collection(request.Collection), predicate, mongoFindCommand{
+		sort:       bson.D{{Key: "_id", Value: 1}},
+		projection: bson.D{{Key: "_id", Value: 1}},
+		limit:      int64(request.Limit + 1),
+	})
 	if err != nil {
 		return store.FilteredSelection{}, translateMongoError(ctx, err)
 	}
@@ -321,7 +353,7 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		return store.Document{}, err
 	}
 	defer leave()
-	if err := validateRequestEnvelope(request.Request); err != nil {
+	if err := transaction.store.validateRequestEnvelope(request.Request); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -356,29 +388,51 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 	}
 	values := store.CloneValues(request.Values)
 	canonicalizeMongoAuthIdentity(request.Collection, values)
-	if err := validatePatchValuesForLocales(request.Collection, values, request.Locales); err != nil {
+	if err := validateStoredValuesForLocales(request.Collection, values, request.Locales); err != nil {
 		return store.Document{}, err
 	}
 	predicate, err := requestPredicate(request.Request, true)
 	if err != nil {
 		return store.Document{}, err
 	}
-	currentRaw, currentError := transaction.collection(request.Collection).FindOne(sessionContext, predicate).Raw()
-	if err := transaction.mutationResultError(ctx, sessionContext, request.Request, currentError); err != nil {
-		return store.Document{}, err
-	}
-	current, err := decodeCollectionDocumentForLocales(currentRaw, request.Collection, request.Locales)
+	current, err := request.LockedCurrent()
 	if err != nil {
 		return store.Document{}, err
 	}
-	live, hasLive, err := transaction.publishedHead(sessionContext, request.Collection, request.ID, request.Locales)
-	if err != nil {
-		return store.Document{}, err
+	if request.ExpectedRevision > 0 && current.Revision != request.ExpectedRevision {
+		return store.Document{}, store.ErrConflict
+	}
+	hasLive := store.HasLiveHead(request.Collection, current)
+	liveRevision := current.PublishedRevision
+	var live store.Document
+	if request.Intent == store.WriteIntentDiscardDraft {
+		// Only a discard needs the live content; every other intent derives
+		// the live state from the locked working read.
+		var found bool
+		live, found, err = transaction.publishedHead(sessionContext, request.Collection, request.ID, request.Locales)
+		if err != nil {
+			return store.Document{}, err
+		}
+		hasLive = found
+		liveRevision = live.Revision
 	}
 	if (request.Intent == store.WriteIntentUnpublish && !hasLive) || (request.Intent == store.WriteIntentDiscardDraft && (!hasLive || !current.HasDraftChanges)) {
 		return store.Document{}, store.ErrConflict
 	}
-	updatedAt, err := encodeTime(transaction.store.now().UTC())
+	// The row must still be the stored version Current describes. Every write
+	// advances updatedAt, and revision on a revisioned resource, so a stale or
+	// caller-built Current matches nothing and becomes a conflict.
+	storedUpdatedAt, err := encodeTime(current.UpdatedAt)
+	if err != nil {
+		// No stored document has an unrepresentable updatedAt.
+		return store.Document{}, store.ErrConflict
+	}
+	guard := []bson.D{predicate, {{Key: "meta.updatedAt", Value: storedUpdatedAt}}}
+	if request.Collection.Versions != nil || request.Collection.Upload != nil {
+		guard = append(guard, bson.D{{Key: mongoRevisionPath, Value: int64(current.Revision)}})
+	}
+	predicate = mongoAnd(guard)
+	updatedAt, err := encodeTime(nextUpdatedAt(transaction.store.now(), current.UpdatedAt))
 	if err != nil {
 		return store.Document{}, err
 	}
@@ -424,11 +478,14 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		assignments = append(assignments, bson.E{Key: mongoRevisionPath, Value: bson.D{{Key: "$add", Value: bson.A{"$" + mongoRevisionPath, int64(1)}}}})
 	}
 	update := mongo.Pipeline{bson.D{{Key: "$set", Value: assignments}}}
+	if err := transaction.lockForWrite(sessionContext, request.Collection, request.ID); err != nil {
+		return store.Document{}, err
+	}
 	result := transaction.collection(request.Collection).FindOneAndUpdate(
 		sessionContext, predicate, update, options.FindOneAndUpdate().SetReturnDocument(options.After),
 	)
 	raw, err := result.Raw()
-	if err := transaction.mutationResultError(ctx, sessionContext, request.Request, err); err != nil {
+	if err := transaction.mutationResultError(ctx, sessionContext, request.Request, err, true); err != nil {
 		return store.Document{}, err
 	}
 	document, err := decodeCollectionDocumentForLocales(raw, request.Collection, request.Locales)
@@ -458,8 +515,19 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 				return store.Document{}, translateMongoError(ctx, err)
 			}
 		}
-		if err := transaction.attachPublishedMetadata(sessionContext, request.Request, &document); err != nil {
-			return store.Document{}, err
+		// The live state just written in this transaction is the state an
+		// authoring read would attach; the pending flag is stored on the row.
+		document.PublishedRevision = 0
+		if request.Collection.Versions.Drafts && document.Status == store.StatusPublished {
+			switch request.Intent {
+			case store.WriteIntentSaveDraft, store.WriteIntentDiscardDraft:
+				document.PublishedRevision = liveRevision
+			default:
+				document.PublishedRevision = document.Revision
+			}
+		}
+		if !request.Collection.Versions.Drafts {
+			document.HasDraftChanges = false
 		}
 	}
 	if err := transaction.replaceHeadReservations(sessionContext, request.Collection, document, request.Locales); err != nil {
@@ -499,7 +567,7 @@ func (transaction *documentTransaction) setTrashed(ctx context.Context, request 
 		return store.Document{}, err
 	}
 	defer leave()
-	if err := validateRequestEnvelope(request); err != nil {
+	if err := transaction.store.validateRequestEnvelope(request); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -526,14 +594,18 @@ func (transaction *documentTransaction) setTrashed(ctx context.Context, request 
 	if trashed {
 		deletedAt = now
 	}
-	update := bson.D{{Key: "$set", Value: bson.D{
-		{Key: "meta.updatedAt", Value: now},
-		{Key: "meta.deletedAt", Value: deletedAt},
-	}}}
+	// updatedAt strictly advances, as in Update, even if the clock does not.
+	update := mongo.Pipeline{bson.D{{Key: "$set", Value: bson.D{
+		{Key: "meta.updatedAt", Value: bson.D{{Key: "$max", Value: bson.A{now, bson.D{{Key: "$add", Value: bson.A{"$meta.updatedAt", int64(1)}}}}}}},
+		{Key: "meta.deletedAt", Value: mongoLiteral(deletedAt)},
+	}}}}
+	if err := transaction.lockForWrite(sessionContext, request.Collection, request.ID); err != nil {
+		return store.Document{}, err
+	}
 	raw, err := transaction.collection(request.Collection).FindOneAndUpdate(
 		sessionContext, predicate, update, options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Raw()
-	if err := transaction.mutationResultError(ctx, sessionContext, request, err); err != nil {
+	if err := transaction.mutationResultError(ctx, sessionContext, request, err, false); err != nil {
 		return store.Document{}, err
 	}
 	document, err := decodeCollectionDocumentForLocales(raw, request.Collection, request.Locales)
@@ -562,7 +634,7 @@ func (transaction *documentTransaction) Delete(ctx context.Context, request stor
 		return store.Document{}, err
 	}
 	defer leave()
-	if err := validateRequestEnvelope(request); err != nil {
+	if err := transaction.store.validateRequestEnvelope(request); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -585,7 +657,7 @@ func (transaction *documentTransaction) Delete(ctx context.Context, request stor
 		return store.Document{}, err
 	}
 	raw, err := transaction.collection(request.Collection).FindOneAndDelete(sessionContext, predicate).Raw()
-	if err := transaction.mutationResultError(ctx, sessionContext, request, err); err != nil {
+	if err := transaction.mutationResultError(ctx, sessionContext, request, err, false); err != nil {
 		return store.Document{}, err
 	}
 	document, err := decodeCollectionDocumentForLocales(raw, request.Collection, request.Locales)
@@ -597,7 +669,17 @@ func (transaction *documentTransaction) Delete(ctx context.Context, request stor
 			return store.Document{}, translateMongoError(ctx, err)
 		}
 	}
-	if mongoCollectionHasRelationships(request.Collection) {
+	// A deleted document keeps no shared fences. Deleting them also excludes
+	// their holders, as the deleted working head excludes a transaction
+	// creating one.
+	if err := transaction.deleteSharedFences(sessionContext, mongoFenceTarget{collectionID: request.Collection.ID, documentID: document.ID}); err != nil {
+		return store.Document{}, translateMongoError(ctx, err)
+	}
+	hasRelationships, err := transaction.store.collectionHasRelationships(request.Collection)
+	if err != nil {
+		return store.Document{}, err
+	}
+	if hasRelationships {
 		if err := transaction.deleteDocumentReferences(sessionContext, store.DocumentReference{CollectionID: request.Collection.ID, DocumentID: document.ID}); err != nil {
 			return store.Document{}, err
 		}
@@ -605,11 +687,14 @@ func (transaction *documentTransaction) Delete(ctx context.Context, request stor
 	return projectDocument(document, request.Select), nil
 }
 
-func (transaction *documentTransaction) mutationResultError(ctx, sessionContext context.Context, request store.Request, mutationError error) error {
+// mutationResultError reports a write that matched no document. A visible
+// document that the write did not match has another expected revision or,
+// for a guarded write, changed since it was read: that is a conflict.
+func (transaction *documentTransaction) mutationResultError(ctx, sessionContext context.Context, request store.Request, mutationError error, guarded bool) error {
 	if mutationError == nil {
 		return nil
 	}
-	if !errors.Is(mutationError, mongo.ErrNoDocuments) || request.ExpectedRevision <= 0 {
+	if !errors.Is(mutationError, mongo.ErrNoDocuments) || request.ExpectedRevision <= 0 && !guarded {
 		return translateMongoError(ctx, mutationError)
 	}
 	probe := request
@@ -680,6 +765,13 @@ func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	return transaction.deleteDocumentState(ctx, sessionContext, reference, versioned, references)
+}
+
+// deleteDocumentState removes the framework state reference owns or targets.
+// Its caller has entered the transaction and established which namespaces
+// the resource uses.
+func (transaction *documentTransaction) deleteDocumentState(ctx, sessionContext context.Context, reference store.DocumentReference, versioned, references bool) error {
 	if references {
 		if err := transaction.deleteDocumentReferenceState(sessionContext, reference); err != nil {
 			return err
@@ -703,11 +795,22 @@ func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context,
 	// Version state is keyed by stable resource identity plus canonical document
 	// ID. DeleteMany is deliberately idempotent so a retried version-enabled
 	// cleanup does not need a separate existence probe.
-	_, err = transaction.store.database.Collection(physicalVersionCollectionName(reference.CollectionID)).DeleteMany(
+	_, err := transaction.store.database.Collection(physicalVersionCollectionName(reference.CollectionID)).DeleteMany(
 		sessionContext,
 		bson.D{{Key: mongoVersionOwnerPath, Value: reference.DocumentID}},
 	)
 	return translateMongoError(ctx, err)
+}
+
+// nextUpdatedAt is the updatedAt of a write that replaces a document last
+// written at previous. It strictly increases even when the clock does not
+// advance, so updatedAt identifies a document's stored version.
+func nextUpdatedAt(now, previous time.Time) time.Time {
+	now = now.UTC()
+	if now.After(previous) {
+		return now
+	}
+	return previous.UTC().Add(time.Nanosecond)
 }
 
 func canonicalizeMongoAuthIdentity(collection schema.Collection, values store.Values) {

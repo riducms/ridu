@@ -88,7 +88,7 @@ describe("localized schema display metadata", () => {
 	});
 });
 
-test("both block label forms localize identically through inline and shared embedded placements", () => {
+test("both block label forms localize identically through ordinary and embedded placements", () => {
 	const definition: SchemaBlockType = {
 		slug: "people",
 		labels: {
@@ -97,85 +97,81 @@ test("both block label forms localize identically through inline and shared embe
 			singularTranslations: { fr: "Personne" },
 			pluralTranslations: { fr: "Personnes" },
 		},
-		fields: [field],
+		fields: [{ ...field, id: "block-people-status" }],
 	};
-	for (const references of [false, true]) {
-		const types = references ? { blockReferences: ["people"] } : { types: [definition] };
-		const ordinary: SchemaField = {
-			...field,
-			name: "layout",
-			path: "layout",
-			id: "pages-layout",
-			type: "blocks",
-			category: "nested",
-			blocks: types,
-		};
-		const embedded: SchemaField = {
-			...field,
-			name: "body",
-			path: "body",
-			id: "pages-body",
-			type: "plugin",
-			category: "plugin",
-			plugin: {
-				key: "test",
-				config: {},
-				embeddedTrees: [
-					{
-						version: 1,
-						key: "blocks",
-						root: ["root"],
-						children: "children",
-						tag: "type",
-						cases: [
-							{
-								tagValue: "block",
-								payload: "fields",
-								discriminator: "blockType",
-								identity: "_key",
-								...types,
-							},
-						],
-					},
-				],
-			},
-		};
-		const schema = bindSchemaManifest({
-			blocks: references ? [definition] : [],
-			collections: [
+	const ordinary: SchemaField = {
+		...field,
+		name: "layout",
+		path: "layout",
+		id: "pages-layout",
+		type: "blocks",
+		category: "nested",
+		blocks: { blockReferences: ["people"] },
+	};
+	const embedded: SchemaField = {
+		...field,
+		name: "body",
+		path: "body",
+		id: "pages-body",
+		type: "plugin",
+		category: "plugin",
+		plugin: {
+			key: "test",
+			config: {},
+			embeddedTrees: [
 				{
-					id: "pages",
-					slug: "pages",
-					labels: { singular: "Page", plural: "Pages" },
-					admin: {},
-					capabilities: {
-						auth: false,
-						upload: false,
-						versions: false,
-						trash: false,
-						locking: false,
-					},
-					fields: [ordinary, embedded],
+					version: 1,
+					key: "blocks",
+					root: ["root"],
+					children: "children",
+					tag: "type",
+					cases: [
+						{
+							tagValue: "block",
+							payload: "fields",
+							discriminator: "blockType",
+							identity: "_key",
+							blockReferences: ["people"],
+						},
+					],
 				},
 			],
-			globals: [],
-		});
-		const wire = JSON.stringify(schema);
-		for (const language of ["fr", "en"] as const) {
-			const i18n = createAdminI18n({ languages: [en, fr], language });
-			const layout = localizeSchemaField(ordinary, i18n);
-			const body = localizeSchemaField(embedded, i18n);
-			const labels = resolveBlockTypes(layout.blocks)[0]!.labels;
-			expect(labels).toMatchObject(
-				language === "fr"
-					? { singular: "Personne", plural: "Personnes" }
-					: { singular: "Person", plural: "People" }
-			);
-			expect(resolveBlockTypes(body.plugin!.embeddedTrees![0]!.cases[0])[0]!.labels).toEqual(
-				labels
-			);
-			expect(JSON.stringify(schema)).toBe(wire);
-			expect(resolveBlockTypes(layout.blocks)[0]!.slug).toBe("people");
-		}
+		},
+	};
+	const schema = bindSchemaManifest({
+		blocks: [definition],
+		collections: [
+			{
+				id: "pages",
+				slug: "pages",
+				labels: { singular: "Page", plural: "Pages" },
+				admin: {},
+				capabilities: {
+					auth: false,
+					upload: false,
+					versions: false,
+					trash: false,
+					locking: false,
+				},
+				fields: [ordinary, embedded],
+			},
+		],
+		globals: [],
+	});
+	const wire = JSON.stringify(schema);
+	for (const language of ["fr", "en"] as const) {
+		const i18n = createAdminI18n({ languages: [en, fr], language });
+		const layout = localizeSchemaField(ordinary, i18n);
+		const body = localizeSchemaField(embedded, i18n);
+		const labels = resolveBlockTypes(layout.blocks)[0]!.labels;
+		expect(labels).toMatchObject(
+			language === "fr"
+				? { singular: "Personne", plural: "Personnes" }
+				: { singular: "Person", plural: "People" }
+		);
+		expect(resolveBlockTypes(body.plugin!.embeddedTrees![0]!.cases[0])[0]!.labels).toEqual(labels);
+		expect(JSON.stringify(schema)).toBe(wire);
+		expect(resolveBlockTypes(layout.blocks)[0]!.slug).toBe("people");
+		expect(resolveBlockTypes(layout.blocks)[0]!.fields[0]!.path).toBe("layout.people.status");
 	}
 });

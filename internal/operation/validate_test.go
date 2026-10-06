@@ -3,6 +3,7 @@ package operation
 import (
 	"testing"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -92,10 +93,11 @@ func TestRequiredCollectionsRejectZeroItems(t *testing.T) {
 	rowField := validationField(t, "items", schema.FieldTypeArray, true)
 	rowField.Nested = &schema.NestedField{Fields: []schema.Field{validationField(t, "items.title", schema.FieldTypeText, true)}}
 	blockField := validationField(t, "content", schema.FieldTypeBlocks, true)
-	blockField.Blocks = &schema.BlocksField{Types: []schema.BlockType{{Slug: "heading", Labels: schema.BlockLabels{Singular: "Heading"}}}}
+	blockField.Blocks = &schema.BlocksField{BlockReferences: []string{"heading"}}
+	heading := schema.BlockType{Slug: "heading", TypeName: "Heading", Labels: schema.BlockLabels{Singular: "Heading"}}
 
 	_, issues := validate(
-		[]schema.Field{rowField, blockField},
+		schematest.Bind(t, "pages", []schema.BlockType{heading}, rowField, blockField),
 		store.Values{"items": store.List(), "content": store.List()},
 		true,
 		nil,
@@ -161,12 +163,11 @@ func TestNestedValidationUsesRuntimePathsAndRequiresCompleteSuppliedRows(t *test
 }
 
 func TestBlockAndPluginIssuesUseConcreteRuntimePaths(t *testing.T) {
-	pluginField := validationField(t, "content.callout.accent", schema.FieldTypePlugin, true)
+	pluginField := validationField(t, "accent", schema.FieldTypePlugin, true)
 	pluginField.Plugin = &schema.PluginField{Key: "color"}
 	content := validationField(t, "content", schema.FieldTypeBlocks, false)
-	content.Blocks = &schema.BlocksField{Types: []schema.BlockType{{
-		Slug: "callout", Labels: schema.BlockLabels{Singular: "Callout"}, Fields: []schema.Field{pluginField},
-	}}}
+	content.Blocks = &schema.BlocksField{BlockReferences: []string{"callout"}}
+	callout := schema.BlockType{Slug: "callout", TypeName: "Callout", Labels: schema.BlockLabels{Singular: "Callout"}, Fields: []schema.Field{pluginField}}
 	validators := map[string]PluginValidator{
 		"color": func(_ schema.Field, _ store.Value, runtimePath string) []schema.Issue {
 			return []schema.Issue{{Code: "invalid_color", Path: runtimePath, Message: "invalid color"}}
@@ -174,7 +175,7 @@ func TestBlockAndPluginIssuesUseConcreteRuntimePaths(t *testing.T) {
 	}
 
 	_, issues := validate(
-		[]schema.Field{content},
+		schematest.Bind(t, "pages", []schema.BlockType{callout}, content),
 		store.Values{"content": store.List(store.Object(store.Values{
 			"blockType": store.String("callout"), "accent": store.String("purple"),
 		}))},
@@ -269,12 +270,11 @@ func TestNestedDefaultsMaterializeForAbsentGroupsAndRepeatingRows(t *testing.T) 
 	items := validationField(t, "items", schema.FieldTypeArray, false)
 	items.Nested = &schema.NestedField{Fields: []schema.Field{defaultGroup("items.settings")}}
 	content := validationField(t, "content", schema.FieldTypeBlocks, false)
-	content.Blocks = &schema.BlocksField{Types: []schema.BlockType{{
-		Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{defaultGroup("content.hero.settings")},
-	}}}
+	content.Blocks = &schema.BlocksField{BlockReferences: []string{"hero"}}
+	hero := schema.BlockType{Slug: "hero", TypeName: "Hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{defaultGroup("settings")}}
 
 	validated, issues := validate(
-		[]schema.Field{settings, items, content},
+		schematest.Bind(t, "pages", []schema.BlockType{hero}, settings, items, content),
 		store.Values{
 			"items": store.List(store.Object(store.Values{"_key": store.String("item-1")})),
 			"content": store.List(store.Object(store.Values{

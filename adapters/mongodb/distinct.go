@@ -27,7 +27,7 @@ func (transaction *documentTransaction) Distinct(ctx context.Context, request st
 		PublishedOnly: request.PublishedOnly, Deletion: request.Deletion,
 		Locales: request.Locales, LocaleChain: request.LocaleChain,
 	}
-	if err := validateRequestEnvelope(documentRequest); err != nil {
+	if err := transaction.store.validateRequestEnvelope(documentRequest); err != nil {
 		return store.DistinctPage{}, err
 	}
 	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
@@ -71,7 +71,7 @@ func (transaction *documentTransaction) Distinct(ctx context.Context, request st
 		bson.D{{Key: "$skip", Value: int64(start)}},
 		bson.D{{Key: "$limit", Value: int64(end - start)}},
 	)
-	cursor, err := collection.Aggregate(sessionContext, pipeline)
+	cursor, err := mongoAggregate(sessionContext, collection, pipeline)
 	if err != nil {
 		return store.DistinctPage{}, translateMongoError(ctx, err)
 	}
@@ -99,7 +99,7 @@ func (transaction *documentTransaction) Distinct(ctx context.Context, request st
 func (transaction *documentTransaction) distinctTotal(callerContext, sessionContext context.Context, collection *mongo.Collection, base mongo.Pipeline) (int, error) {
 	pipeline := append(mongo.Pipeline(nil), base...)
 	pipeline = append(pipeline, bson.D{{Key: "$count", Value: "total"}})
-	cursor, err := collection.Aggregate(sessionContext, pipeline)
+	cursor, err := mongoAggregate(sessionContext, collection, pipeline)
 	if err != nil {
 		return 0, translateMongoError(callerContext, err)
 	}

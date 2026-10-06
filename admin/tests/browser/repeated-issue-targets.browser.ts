@@ -3,6 +3,7 @@ import { RiduError } from "@riducms/sdk";
 import type { SchemaField } from "@riducms/protocol";
 import { FormController } from "@admin/core/forms/form-controller.svelte";
 import { indexFieldValues } from "@admin/core/forms/form-issue-correlation";
+import { bindBlockField, blockDefinition } from "../block-manifest";
 import { draftFixture, title } from "./draft-fixture";
 
 const links: SchemaField = {
@@ -52,24 +53,22 @@ function fixture(kind: "array" | "blocks" | "embedded") {
 			destroy: () => embedded.binding.destroy(),
 		};
 	}
-	const field: SchemaField = {
-		...links,
-		id: "sections",
-		name: "sections",
-		path: "sections",
-		type: kind,
-		...(kind === "array"
-			? { nested: { fields: [links] } }
-			: {
-					blocks: {
-						types: [
-							{ slug: "card", labels: { singular: "Card", plural: "Cards" }, fields: [links] },
-							{ slug: "note", labels: { singular: "Note", plural: "Notes" }, fields: [links] },
-						],
-					},
-					nested: { fields: [] },
-				}),
-	};
+	const field = bindBlockField(
+		[
+			blockDefinition("card", [links], { singular: "Card", plural: "Cards" }),
+			blockDefinition("note", [links], { singular: "Note", plural: "Notes" }),
+		],
+		{
+			...links,
+			id: "sections",
+			name: "sections",
+			path: "sections",
+			type: kind,
+			...(kind === "array"
+				? { nested: { fields: [links] } }
+				: { blocks: { blockReferences: ["card", "note"] }, nested: { fields: [] } }),
+		}
+	);
 	const form = new FormController();
 	form.reset({ sections: original }, [field]);
 	return {

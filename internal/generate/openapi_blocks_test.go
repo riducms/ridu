@@ -2,19 +2,24 @@ package generate
 
 import (
 	"encoding/json"
-	"github.com/riducms/ridu/schema"
 	"reflect"
 	"testing"
+
+	"github.com/riducms/ridu/internal/schematest"
+	"github.com/riducms/ridu/schema"
 )
 
 func TestOpenAPIRecursiveBlocksSchemas(t *testing.T) {
-	field := schema.Field{Name: "layout", Type: schema.FieldTypeBlocks, Required: true, Blocks: &schema.BlocksField{MinRows: 2, MaxRows: 4, Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{
+	heroBlock := schema.BlockType{Slug: "hero", TypeName: "Hero", Fields: []schema.Field{
 		{Name: "heading", Type: schema.FieldTypeText, Required: true},
 		{Name: "count", Type: schema.FieldTypeNumber, Required: true},
 		{Name: "settings", Type: schema.FieldTypeGroup, Required: true, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "enabled", Type: schema.FieldTypeCheckbox, Required: true}}}},
 		{Name: "items", Type: schema.FieldTypeArray, Required: true, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "body", Type: schema.FieldTypePlugin, Required: true, Plugin: &schema.PluginField{Key: "editor"}}}}},
-		{Name: "inner", Type: schema.FieldTypeBlocks, Required: true, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "callout", Fields: []schema.Field{{Name: "body", Type: schema.FieldTypeTextarea}}}}}},
-	}}, {Slug: "image", Fields: []schema.Field{{Name: "caption", Type: schema.FieldTypeText}}}}}}
+		{Name: "inner", Type: schema.FieldTypeBlocks, Required: true, Blocks: &schema.BlocksField{BlockReferences: []string{"callout"}}},
+	}}
+	calloutBlock := schema.BlockType{Slug: "callout", TypeName: "Callout", Fields: []schema.Field{{Name: "body", Type: schema.FieldTypeTextarea}}}
+	imageBlock := schema.BlockType{Slug: "image", TypeName: "Image", Fields: []schema.Field{{Name: "caption", Type: schema.FieldTypeText}}}
+	field := schematest.Bind(t, "pages", []schema.BlockType{heroBlock, calloutBlock, imageBlock}, schema.Field{Name: "layout", Type: schema.FieldTypeBlocks, Required: true, Blocks: &schema.BlocksField{MinRows: 2, MaxRows: 4, BlockReferences: []string{"hero", "image"}}})[0]
 	result, err := openAPIFieldSchema(field, map[string]json.RawMessage{"editor": json.RawMessage(`{"type":"object","properties":{"root":{"type":"object"}}}`)})
 	if err != nil {
 		t.Fatal(err)

@@ -14,6 +14,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -25,7 +26,7 @@ func TestMongoDBContentMetadataIndexesAreExactAndFailClosed(t *testing.T) {
 	collection.ID, collection.Slug = "metadata-index-posts", "metadata-index-posts"
 	collection.Capabilities.Trash = true
 	manifest := mongoIndexTestManifest(collection)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -65,7 +66,7 @@ func TestMongoDBContentMetadataIndexesAreExactAndFailClosed(t *testing.T) {
 	if err := backend.requireVerifiedIndexes(collection); err == nil || !strings.Contains(err.Error(), "not verified") {
 		t.Fatalf("failed metadata verification retained runtime authorization: %v", err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("restore lifecycle metadata index: %v", err)
 	}
 
@@ -78,7 +79,7 @@ func TestMongoDBContentMetadataIndexesAreExactAndFailClosed(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err == nil || !strings.Contains(err.Error(), "does not match") {
+	if err := backend.syncIndexes(t.Context(), manifest); err == nil || !strings.Contains(err.Error(), "does not match") {
 		t.Fatalf("wrong publication metadata index sync error = %v", err)
 	}
 	afterRejectedSync, err := backend.readCollectionIndexes(t.Context(), plans[0])
@@ -95,7 +96,7 @@ func TestMongoDBContentMetadataIndexesAreExactAndFailClosed(t *testing.T) {
 	if err := physical.Indexes().DropOne(t.Context(), mongoContentPublicationIndexName); err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("restore publication metadata index: %v", err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -110,7 +111,7 @@ func TestMongoDBIndexContractRejectsPrepareUniqueConversionState(t *testing.T) {
 	collection.Fields = append([]schema.Field(nil), collection.Fields...)
 	collection.Fields[0].Index = true
 	manifest := mongoIndexTestManifest(collection)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -151,7 +152,7 @@ func TestMongoDBIndexContractRejectsPrepareUniqueConversionState(t *testing.T) {
 		run  func() error
 	}{
 		{name: "VerifyIndexes", run: func() error { return backend.VerifyIndexes(t.Context(), manifest) }},
-		{name: "SyncIndexes", run: func() error { return backend.SyncIndexes(t.Context(), manifest) }},
+		{name: "SyncIndexes", run: func() error { return backend.syncIndexes(t.Context(), manifest) }},
 	} {
 		err := verification.run()
 		if err == nil || !strings.Contains(err.Error(), indexName) ||
@@ -168,7 +169,7 @@ func TestMongoDBConcurrentIndexOperationsCannotPublishStaleAuthorization(t *test
 	trash := base
 	trash.Capabilities.Trash = true
 	trashManifest := mongoIndexTestManifest(trash)
-	if err := backend.SyncIndexes(t.Context(), baseManifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), baseManifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.requireVerifiedIndexes(base); err != nil {
@@ -184,7 +185,7 @@ func TestMongoDBConcurrentIndexOperationsCannotPublishStaleAuthorization(t *test
 	backend.indexLifecycleMu.Lock()
 	go func() {
 		started <- "sync"
-		results <- operationResult{operation: "sync", err: backend.SyncIndexes(t.Context(), trashManifest)}
+		results <- operationResult{operation: "sync", err: backend.syncIndexes(t.Context(), trashManifest)}
 	}()
 	go func() {
 		started <- "verify"
@@ -241,7 +242,7 @@ func TestMongoDBInvalidIndexPlanRejectsAndClearsAuthorization(t *testing.T) {
 	valid.Fields = append([]schema.Field(nil), valid.Fields...)
 	valid.Fields[0].Index = true
 	validManifest := mongoIndexTestManifest(valid)
-	if err := backend.SyncIndexes(t.Context(), validManifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), validManifest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -282,11 +283,11 @@ func TestMongoDBInvalidIndexPlanRejectsAndClearsAuthorization(t *testing.T) {
 		name string
 		run  func() error
 	}{
-		{name: "SyncIndexes", run: func() error { return backend.SyncIndexes(t.Context(), invalidManifest) }},
+		{name: "SyncIndexes", run: func() error { return backend.syncIndexes(t.Context(), invalidManifest) }},
 		{name: "VerifyIndexes", run: func() error { return backend.VerifyIndexes(t.Context(), invalidManifest) }},
 	} {
 		if operation.name == "VerifyIndexes" {
-			if err := backend.SyncIndexes(t.Context(), validManifest); err != nil {
+			if err := backend.syncIndexes(t.Context(), validManifest); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -315,7 +316,7 @@ func TestMongoDBUnusedDerivedNamespacesAreStatusDiagnosticsNotServingFailures(t 
 			Version: schema.CurrentVersion, Application: schema.Application{Name: "MongoDB unversioned namespace diagnostic"},
 			Globals: []schema.Global{global}, Plugins: []schema.Plugin{},
 		})
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatal(err)
 		}
 		versionCollection := backend.database.Collection(physicalVersionCollectionName(global.ID))
@@ -325,7 +326,7 @@ func TestMongoDBUnusedDerivedNamespacesAreStatusDiagnosticsNotServingFailures(t 
 		if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
 			t.Fatalf("serving verification rejected unused version namespace: %v", err)
 		}
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatalf("additive sync rejected unused version namespace: %v", err)
 		}
 		plan, err := mongoPhysicalIndexPlans(manifest)
@@ -346,7 +347,7 @@ func TestMongoDBUnusedDerivedNamespacesAreStatusDiagnosticsNotServingFailures(t 
 		collection.Fields[0].ID = "reference-free-title"
 		collection.Fields[1].ID = "reference-free-rank"
 		manifest := mongoIndexTestManifest(collection)
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatal(err)
 		}
 		references := backend.database.Collection(mongoReferenceCollectionName)
@@ -361,7 +362,7 @@ func TestMongoDBUnusedDerivedNamespacesAreStatusDiagnosticsNotServingFailures(t 
 		}); err != nil {
 			t.Fatalf("serving write with unused reference namespace: %v", err)
 		}
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatalf("additive sync rejected unused reference namespace: %v", err)
 		}
 		plan, err := mongoPhysicalIndexPlans(manifest)
@@ -378,7 +379,7 @@ func TestMongoDBUnusedDerivedNamespacesAreStatusDiagnosticsNotServingFailures(t 
 func TestMongoDBAdmittedReferenceCleanupDoesNotRereadVerificationState(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	target, owner, _, manifest := mongoFrameworkIndexTestManifest(t)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	const ownerID = "admitted-reference-owner"
@@ -440,7 +441,7 @@ func TestMongoDBCollectionContractRequiresSimpleWritableCollections(t *testing.T
 		createCollection(t, backend, physicalName, "simple")
 
 		manifest := mongoIndexTestManifest(collection)
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatalf("sync explicit simple collection: %v", err)
 		}
 		if _, err := backend.database.Collection(physicalName).InsertMany(t.Context(), []any{
@@ -467,7 +468,7 @@ func TestMongoDBCollectionContractRequiresSimpleWritableCollections(t *testing.T
 			t.Fatalf("non-simple collection ID equality error = %v", err)
 		}
 
-		err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection))
+		err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection))
 		if err == nil || !strings.Contains(err.Error(), `collection "non-simple-collection-contract"`) ||
 			!strings.Contains(err.Error(), "collation") {
 			t.Fatalf("non-simple collection sync error = %v", err)
@@ -499,7 +500,7 @@ func TestMongoDBCollectionContractRequiresSimpleWritableCollections(t *testing.T
 			t.Fatal("write to MongoDB view unexpectedly succeeded")
 		}
 
-		err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection))
+		err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection))
 		if err == nil || !strings.Contains(err.Error(), `collection "view-collection-contract"`) ||
 			!strings.Contains(err.Error(), "writable") {
 			t.Fatalf("view collection sync error = %v", err)
@@ -590,7 +591,7 @@ func TestMongoDBNativeIDIndexContractCoversEveryPlannedNamespaceKind(t *testing.
 		assertNativeID(t, name, 1)
 	}
 
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("sync with version-one native ID indexes: %v", err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -616,7 +617,7 @@ func TestMongoDBCollectionContractRejectsOnlyEnforcingValidators(t *testing.T) {
 	if err := backend.database.CreateCollection(t.Context(), physicalName); err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -709,7 +710,7 @@ func TestMongoDBCollectionContractRejectsCappedCollections(t *testing.T) {
 	}
 
 	manifest := mongoIndexTestManifest(collection)
-	err = backend.SyncIndexes(t.Context(), manifest)
+	err = backend.syncIndexes(t.Context(), manifest)
 	if err == nil || !strings.Contains(err.Error(), `collection "capped-content-contract"`) ||
 		!strings.Contains(err.Error(), "retention") {
 		t.Fatalf("capped collection sync error = %v", err)
@@ -752,7 +753,7 @@ func TestMongoDBCollectionContractAllowsClusteredStorageButRejectsExpiry(t *test
 		createClustered(t, backend, physicalName, nil)
 
 		manifest := mongoIndexTestManifest(collection)
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatalf("sync clustered collection: %v", err)
 		}
 		if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -773,7 +774,7 @@ func TestMongoDBCollectionContractAllowsClusteredStorageButRejectsExpiry(t *test
 		expiration := int64(0)
 		createClustered(t, backend, physicalCollectionName(collection.ID), &expiration)
 
-		err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection))
+		err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection))
 		if err == nil || !strings.Contains(err.Error(), "retention") {
 			t.Fatalf("clustered expiry sync error = %v", err)
 		}
@@ -800,7 +801,7 @@ func TestMongoDBCollectionContractRejectsOnlyEffectiveEncryptedFields(t *testing
 		createEncryptedCollection(t, backend, physicalCollectionName(collection.ID), bson.A{})
 
 		manifest := mongoIndexTestManifest(collection)
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatalf("sync collection with inert encrypted-fields metadata: %v", err)
 		}
 		if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -836,7 +837,7 @@ func TestMongoDBCollectionContractRejectsOnlyEffectiveEncryptedFields(t *testing
 			t.Fatalf("plaintext encrypted-field insert error = %v", err)
 		}
 
-		err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection))
+		err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection))
 		if err == nil || !strings.Contains(err.Error(), `collection "effective-encrypted-fields"`) ||
 			!strings.Contains(err.Error(), "encryption") {
 			t.Fatalf("effective encrypted-fields sync error = %v", err)
@@ -855,7 +856,7 @@ func TestMongoDBIndexCountBoundaryMatchesServerAndPreflightsOverflow(t *testing.
 	if len(plans.collections) != 1 || len(plans.collections[0].definitions) != mongoMaxIndexesPerCollection-1 {
 		t.Fatalf("bounded MongoDB index-count plan = %#v", plans.collections)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("sync maximum MongoDB index count: %v", err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -875,7 +876,7 @@ func TestMongoDBIndexCountBoundaryMatchesServerAndPreflightsOverflow(t *testing.
 	overflow := bounded
 	overflow.Capabilities.Versions = true
 	overflow.Versions = &schema.VersionSettings{Drafts: true, MaxPerDocument: 3}
-	err = backend.SyncIndexes(t.Context(), mongoLocalizedIndexTestManifest(overflow))
+	err = backend.syncIndexes(t.Context(), mongoLocalizedIndexTestManifest(overflow))
 	if err == nil || !strings.Contains(err.Error(), "requires 65 indexes") {
 		t.Fatalf("overflow MongoDB index-count preflight error = %v", err)
 	}
@@ -921,7 +922,7 @@ func TestMongoDBIndexKeyPatternBoundaryMatchesServerAndPreflightsOverflow(t *tes
 	if len(encoded) != mongoMaxIndexKeyPatternBytes {
 		t.Fatalf("bounded MongoDB key pattern = %d bytes, want %d", len(encoded), mongoMaxIndexKeyPatternBytes)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("sync maximum MongoDB key pattern: %v", err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -941,7 +942,7 @@ func TestMongoDBIndexKeyPatternBoundaryMatchesServerAndPreflightsOverflow(t *tes
 	sort.Strings(before)
 
 	overflow := mongoIndexKeyPatternLimitTestCollection(t, "key-pattern-live-overflow", mongoMaxIndexKeyPatternBytes+1)
-	err = backend.SyncIndexes(t.Context(), mongoIndexTestManifest(overflow))
+	err = backend.syncIndexes(t.Context(), mongoIndexTestManifest(overflow))
 	if err == nil || !strings.Contains(err.Error(), "2049-byte key pattern") {
 		t.Fatalf("overflow MongoDB key-pattern preflight error = %v", err)
 	}
@@ -972,7 +973,7 @@ func TestMongoDBSyncIndexesEnforcesUniqueNullAndTrashSemantics(t *testing.T) {
 	}
 	mongoRollback(t, unverified)
 
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("sync MongoDB indexes: %v", err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -1020,7 +1021,7 @@ func TestMongoDBSyncIndexesEnforcesUniqueNullAndTrashSemantics(t *testing.T) {
 func TestMongoDBUniqueIndexAllowsExactlyOneConcurrentWinner(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	collection := mongoIndexTestCollection(t)
-	if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1061,7 +1062,7 @@ func TestMongoDBLocalizedIndexesAreExactPerLocaleAndRaceSafe(t *testing.T) {
 	collection := mongoLocalizedIndexTestCollection(t)
 	locales := []schema.LocaleCode{"en", "fr"}
 	manifest := mongoLocalizedIndexTestManifest(collection)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("sync localized MongoDB indexes: %v", err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -1208,7 +1209,7 @@ func TestMongoDBLocalizedIndexesAreExactPerLocaleAndRaceSafe(t *testing.T) {
 	if err := backend.requireVerifiedIndexesForLocales(collection, locales); err == nil || !strings.Contains(err.Error(), "not verified") {
 		t.Fatalf("failed localized verification retained runtime authorization: %v", err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("restore localized MongoDB index: %v", err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -1221,7 +1222,7 @@ func TestMongoDBNumericUniqueIndexesCanonicalizeSignedZeroAndRedactConflicts(t *
 	collection := mongoSignedZeroIndexTestCollection(t)
 	locales := []schema.LocaleCode{"en", "fr"}
 	manifest := mongoLocalizedIndexTestManifest(collection)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -1318,7 +1319,7 @@ func TestMongoDBSyncIndexesRejectsExistingDuplicatesAndAllowsHarmlessIndexes(t *
 		unindexed.Fields[1].Index = false
 		unindexed.Fields[3].Nested.ResolvedFields()[0].Index = false
 
-		if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(unindexed)); err != nil {
+		if err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(unindexed)); err != nil {
 			t.Fatal(err)
 		}
 		for _, id := range []string{"duplicate-a", "duplicate-b"} {
@@ -1326,7 +1327,7 @@ func TestMongoDBSyncIndexesRejectsExistingDuplicatesAndAllowsHarmlessIndexes(t *
 				t.Fatal(err)
 			}
 		}
-		err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(indexed))
+		err := backend.syncIndexes(t.Context(), mongoIndexTestManifest(indexed))
 		if !errors.Is(err, store.ErrConflict) {
 			t.Fatalf("duplicate-data index build error = %v, want ErrConflict", err)
 		}
@@ -1356,7 +1357,7 @@ func TestMongoDBSyncIndexesRejectsExistingDuplicatesAndAllowsHarmlessIndexes(t *
 		backend := mongoIntegrationStore(t)
 		collection := mongoIndexTestCollection(t)
 		manifest := mongoIndexTestManifest(collection)
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatal(err)
 		}
 		_, err := backend.database.Collection(physicalCollectionName(collection.ID)).Indexes().CreateOne(
@@ -1375,7 +1376,7 @@ func TestMongoDBSyncIndexesRejectsExistingDuplicatesAndAllowsHarmlessIndexes(t *
 		if err := backend.requireVerifiedIndexes(collection); err != nil {
 			t.Fatalf("harmless unmanaged index did not authorize runtime: %v", err)
 		}
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatalf("sync with harmless unmanaged index: %v", err)
 		}
 		if _, err := mongoIndexedCreate(
@@ -1403,7 +1404,7 @@ func TestMongoDBUnmanagedIndexHazardsRejectVerification(t *testing.T) {
 			run  func() error
 		}{
 			{name: "VerifyIndexes", run: func() error { return backend.VerifyIndexes(t.Context(), manifest) }},
-			{name: "SyncIndexes", run: func() error { return backend.SyncIndexes(t.Context(), manifest) }},
+			{name: "SyncIndexes", run: func() error { return backend.syncIndexes(t.Context(), manifest) }},
 		} {
 			err := verification.run()
 			if err == nil || !strings.Contains(err.Error(), indexName) ||
@@ -1420,7 +1421,7 @@ func TestMongoDBUnmanagedIndexHazardsRejectVerification(t *testing.T) {
 		collection.Fields = append([]schema.Field(nil), collection.Fields...)
 		collection.Fields[0].Index = true
 		manifest := mongoIndexTestManifest(collection)
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatal(err)
 		}
 		physical := backend.database.Collection(physicalCollectionName(collection.ID))
@@ -1453,7 +1454,7 @@ func TestMongoDBUnmanagedIndexHazardsRejectVerification(t *testing.T) {
 		collection.Fields = append([]schema.Field(nil), collection.Fields...)
 		collection.Fields[0].Index = true
 		manifest := mongoIndexTestManifest(collection)
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatal(err)
 		}
 		const indexName = "application_expiry_lookup"
@@ -1476,7 +1477,7 @@ func TestMongoDBUnmanagedIndexHazardsRejectVerification(t *testing.T) {
 		collection.Fields = append([]schema.Field(nil), collection.Fields...)
 		collection.Fields[0].Index = true
 		manifest := mongoIndexTestManifest(collection)
-		if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+		if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 			t.Fatal(err)
 		}
 		const indexName = "application_location_lookup"
@@ -1501,7 +1502,7 @@ func TestMongoDBUnmanagedIndexHazardsRejectVerification(t *testing.T) {
 func TestMongoDBSystemIndexesAreExplicitExactAndFailClosed(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	target, owner, versioned, manifest := mongoFrameworkIndexTestManifest(t)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -1548,7 +1549,7 @@ func TestMongoDBSystemIndexesAreExplicitExactAndFailClosed(t *testing.T) {
 	if err := backend.requireVerifiedVersionIndexes(versioned); err == nil || !strings.Contains(err.Error(), "not verified") {
 		t.Fatalf("failed manifest verification retained version authorization: %v", err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("restore missing reference index: %v", err)
 	}
 
@@ -1564,7 +1565,7 @@ func TestMongoDBSystemIndexesAreExplicitExactAndFailClosed(t *testing.T) {
 	if err := backend.requireVerifiedDocumentLockIndexes(); err == nil || !strings.Contains(err.Error(), "not verified") {
 		t.Fatalf("failed manifest verification retained document-lock authorization: %v", err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("restore missing preference index: %v", err)
 	}
 	if _, err := backend.database.Collection(mongoDocumentLockCollectionName).Indexes().CreateOne(
@@ -1579,7 +1580,7 @@ func TestMongoDBSystemIndexesAreExplicitExactAndFailClosed(t *testing.T) {
 	if err := backend.VerifyIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("verify harmless unmanaged document-lock index: %v", err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatalf("sync harmless unmanaged document-lock index: %v", err)
 	}
 
@@ -1600,7 +1601,7 @@ func TestMongoDBSystemIndexesAreExplicitExactAndFailClosed(t *testing.T) {
 func TestMongoDBPopulationRequiresTargetContentIndexVerification(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	target, owner, _, manifest := mongoFrameworkIndexTestManifest(t)
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	write := mongoBegin(t, backend, false)
@@ -1802,7 +1803,7 @@ func mongoLocalizedIndexedUpdate(
 	if err != nil {
 		return store.Document{}, err
 	}
-	document, err := transaction.Update(ctx, store.UpdateRequest{
+	document, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: id, Locales: locales}, Values: values,
 	})
 	if err != nil {
@@ -1912,7 +1913,7 @@ func mongoIndexedUpdate(ctx context.Context, backend *Store, collection schema.C
 	if err != nil {
 		return store.Document{}, err
 	}
-	document, err := transaction.Update(ctx, store.UpdateRequest{
+	document, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: id}, Values: values,
 	})
 	if err != nil {

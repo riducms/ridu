@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
@@ -12,6 +13,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -40,7 +42,7 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -201,7 +203,7 @@ func TestMongoDBReferenceFencePreventsConcurrentAdmissionAndDelete(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	target, err := application.Local().Create(t.Context(), "targets", store.Values{"name": store.String("Target")}, ridu.MutationOptions{})
@@ -230,23 +232,21 @@ func TestMongoDBReferenceFencePreventsConcurrentAdmissionAndDelete(t *testing.T)
 		t.Fatal(err)
 	}
 
-	deleteAttempt := mongoBegin(t, backend, false)
-	if _, err := deleteAttempt.Find(t.Context(), store.Request{
-		Collection: targetCollection, Collections: allCollections, ID: target.ID, Lock: store.LockMutation,
-	}); !errors.Is(err, store.ErrConflict) {
-		mongoRollback(t, deleteAttempt)
-		mongoRollback(t, admission)
-		t.Fatalf("concurrent target delete fence = %v, want ErrConflict", err)
-	}
-	mongoRollback(t, deleteAttempt)
-	mongoCommit(t, admission)
-
+	// The delete's fence waits for the admission instead of passing it, and
+	// then observes the admitted reference.
 	retry := mongoBegin(t, backend, false)
-	if _, err := retry.Find(t.Context(), store.Request{
-		Collection: targetCollection, Collections: allCollections, ID: target.ID, Lock: store.LockMutation,
-	}); err != nil {
+	locked := make(chan error, 1)
+	go func() {
+		_, err := retry.Find(t.Context(), store.Request{
+			Collection: targetCollection, Collections: allCollections, ID: target.ID, Lock: store.LockMutation,
+		})
+		locked <- err
+	}()
+	mongoStillWaiting(t, locked)
+	mongoCommit(t, admission)
+	if err := mongoAwait(t, locked, 5*time.Second); err != nil {
 		mongoRollback(t, retry)
-		t.Fatal(err)
+		t.Fatalf("delete fence after the admission committed = %v", err)
 	}
 	if err := retry.ApplyReferenceDelete(t.Context(), store.ReferenceDeleteRequest{
 		Target: store.DocumentReference{CollectionID: targetCollection.ID, DocumentID: target.ID}, Collections: allCollections,
@@ -285,7 +285,7 @@ func TestMongoDBPopulationBudgetCountsDuplicateOutputNodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	target, err := application.Local().Create(t.Context(), "targets", store.Values{"name": store.String("Target")}, ridu.MutationOptions{})
@@ -327,7 +327,7 @@ func TestMongoDBRecursivePopulationChargesEachOutputNodeOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	leaves, err := application.Local().Create(t.Context(), "nodes", store.Values{"name": store.String("leaf")}, ridu.MutationOptions{})
@@ -391,7 +391,7 @@ func TestMongoDBPopulatedWorkingHeadsIncludePublicationMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(ctx, application.Manifest()); err != nil {
+	if err := backend.syncIndexes(ctx, application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	collection := application.Manifest().Snapshot().Collections[0]
@@ -408,7 +408,7 @@ func TestMongoDBPopulatedWorkingHeadsIncludePublicationMetadata(t *testing.T) {
 		}
 		if candidate.id != "root" {
 			values["title"] = store.String("pending-" + candidate.id)
-			if _, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: candidate.id, ExpectedRevision: created.Revision}, Intent: store.WriteIntentSaveDraft, Values: values}); err != nil {
+			if _, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: candidate.id, ExpectedRevision: created.Revision}, Intent: store.WriteIntentSaveDraft, Values: values}); err != nil {
 				mongoRollback(t, write)
 				t.Fatal(err)
 			}
@@ -453,7 +453,7 @@ func TestMongoDBRecursivePopulationAllowsWideGeneratedPlans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	hub, err := application.Local().Create(t.Context(), "hubs", store.Values{"name": store.String("wide")}, ridu.MutationOptions{})
@@ -489,7 +489,7 @@ func TestMongoDBDeleteDocumentStateRemovesOwnedAndTargetReferenceRows(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	collections := mongoCollectionsBySlug(application.Manifest().Snapshot().Collections)

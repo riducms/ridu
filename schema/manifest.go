@@ -636,12 +636,14 @@ type ArrayRowLabels struct {
 	PluralTranslations   map[string]string `json:"pluralTranslations,omitempty"`
 }
 
+// BlocksField selects the block definitions a row may use, by slug, from the
+// manifest's Blocks registry. Inline declarations resolve to registered
+// definitions, so every container has this one representation.
 type BlocksField struct {
 	BlockReferences []string `json:"blockReferences,omitempty"`
 	bound           *boundBlocks
-	MinRows         int         `json:"minRows,omitempty"`
-	MaxRows         int         `json:"maxRows,omitempty"`
-	Types           []BlockType `json:"types,omitempty"`
+	MinRows         int `json:"minRows,omitempty"`
+	MaxRows         int `json:"maxRows,omitempty"`
 }
 
 // BlockAdmin contains presentation metadata derived from direct block children.
@@ -697,7 +699,9 @@ type BlockLabels struct {
 }
 
 type BlockType struct {
-	bound    *boundFields
+	bound *boundFields
+	// shared identifies a block's shared definition view.
+	shared   *sharedDefinition
 	TypeName string      `json:"typeName,omitempty"`
 	Admin    *BlockAdmin `json:"admin,omitempty"`
 	Slug     string      `json:"slug"`
@@ -716,11 +720,21 @@ type PluginField struct {
 // any public accessor.
 type Manifest struct {
 	snapshot Snapshot
+	// instance is shared by every copy of one constructed manifest.
+	instance *byte
 }
 
 // NewManifest freezes an already validated manifest snapshot.
 func NewManifest(snapshot Snapshot) Manifest {
-	return Manifest{snapshot: cloneSnapshot(snapshot)}
+	return Manifest{snapshot: cloneSnapshot(snapshot), instance: new(byte)}
+}
+
+// SameInstance reports whether manifest and other are copies of one
+// constructed manifest. Manifests are immutable, so data derived from one
+// instance stays valid for all of its copies. Separately constructed equal
+// manifests are different instances.
+func (manifest Manifest) SameInstance(other Manifest) bool {
+	return manifest.instance != nil && manifest.instance == other.instance
 }
 
 // Parse decodes a manifest, rejects unknown properties, and verifies that its
@@ -818,10 +832,17 @@ func parse(encoded []byte, requireBlockNames bool) (Manifest, error) {
 	return NewManifest(snapshot), nil
 }
 
+// The Parse validators below inspect each block definition once per
+// resource, at its first placement, rather than once per placement.
+
 func validateSelectMetadata(snapshot Snapshot) error {
 	validateFields := func(fields []Field, fieldsPath string) error {
+		entered := FieldListSet{}
 		var inspect func([]Field, string) error
 		inspect = func(candidates []Field, path string) error {
+			if !entered.Add(candidates) {
+				return nil
+			}
 			for index, candidate := range candidates {
 				fieldPath := fmt.Sprintf("%s[%d]", path, index)
 				isSelect := candidate.Type == FieldTypeSelect || candidate.Type == FieldTypeRadio
@@ -879,7 +900,7 @@ func validateSelectMetadata(snapshot Snapshot) error {
 						}
 					}
 				}
-				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+				if err := inspect(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
 					return err
 				}
 				if candidate.Nested != nil {
@@ -888,7 +909,7 @@ func validateSelectMetadata(snapshot Snapshot) error {
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					for blockIndex, block := range candidate.Blocks.Definitions() {
 						if block.TypeName != "" && !IsValidBlockTypeName(block.TypeName) {
 							return fmt.Errorf("invalid block type name at %s.blocks.types[%d].typeName", fieldPath, blockIndex)
 						}
@@ -917,8 +938,12 @@ func validateSelectMetadata(snapshot Snapshot) error {
 }
 
 func validateAdminFieldMetadata(snapshot Snapshot) error {
+	entered := FieldListSet{}
 	var validateFields func([]Field, string, bool) error
 	validateFields = func(fields []Field, path string, nested bool) error {
+		if !entered.Add(fields) {
+			return nil
+		}
 		for fieldIndex, candidate := range fields {
 			fieldPath := fmt.Sprintf("%s[%d]", path, fieldIndex)
 			if nested && candidate.Admin.Sidebar {
@@ -935,7 +960,7 @@ func validateAdminFieldMetadata(snapshot Snapshot) error {
 					return fmt.Errorf("unsupported placeholder at %s.admin.placeholder for field type %q", fieldPath, candidate.Type)
 				}
 			}
-			if err := validateFields(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
+			if err := validateFields(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
 				return err
 			}
 			if candidate.Nested != nil {
@@ -944,7 +969,7 @@ func validateAdminFieldMetadata(snapshot Snapshot) error {
 				}
 			}
 			if candidate.Blocks != nil {
-				for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+				for blockIndex, block := range candidate.Blocks.Definitions() {
 					if err := validateFields(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
 						return err
 					}
@@ -1011,8 +1036,12 @@ func validateEndpointMetadata(snapshot Snapshot) error {
 
 func validateConstraintAndIndexMetadata(snapshot Snapshot) error {
 	validateFields := func(fields []Field, fieldsPath string) error {
+		entered := FieldListSet{}
 		var inspect func([]Field, string, bool) error
 		inspect = func(candidates []Field, path string, repeated bool) error {
+			if !entered.Add(candidates) {
+				return nil
+			}
 			for index, candidate := range candidates {
 				fieldPath := fmt.Sprintf("%s[%d]", path, index)
 				if candidate.Index && (repeated || !manifestSupportsIndexField(candidate)) {
@@ -1070,7 +1099,7 @@ func validateConstraintAndIndexMetadata(snapshot Snapshot) error {
 						}
 					}
 				}
-				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
+				if err := inspect(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
 					return err
 				}
 				if candidate.Nested != nil {
@@ -1083,7 +1112,7 @@ func validateConstraintAndIndexMetadata(snapshot Snapshot) error {
 						return fmt.Errorf("invalid block row bounds at %s.blocks", fieldPath)
 					}
 
-					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					for blockIndex, block := range candidate.Blocks.Definitions() {
 						if block.Admin != nil && block.Admin.RowLabel != "" {
 							found := false
 							for _, child := range block.ResolvedFields() {
@@ -1190,28 +1219,9 @@ func validateBlockNameMetadata(snapshot Snapshot, requireBlockNames bool) error 
 					return err
 				}
 			}
-			if candidate.Blocks != nil {
-				// Registered definitions are checked once through snapshot.Blocks.
-				// Reference placements cannot override their admin metadata, so
-				// expanding a lazy view here would repeat the shared subtree.
-				for blockIndex, block := range candidate.Blocks.Types {
-					if err := inspectBlock(block, fmt.Sprintf("%s.blocks.types[%d]", fieldPath, blockIndex)); err != nil {
-						return err
-					}
-				}
-			}
-			if candidate.Plugin != nil {
-				for treeIndex, tree := range candidate.Plugin.EmbeddedTrees {
-					for caseIndex, branch := range tree.Cases {
-						for blockIndex, block := range branch.Types {
-							blockPath := fmt.Sprintf("%s.plugin.embeddedTrees[%d].cases[%d].types[%d]", fieldPath, treeIndex, caseIndex, blockIndex)
-							if err := inspectBlock(block, blockPath); err != nil {
-								return err
-							}
-						}
-					}
-				}
-			}
+			// Block definitions are checked once through snapshot.Blocks.
+			// Placements cannot override their admin metadata, so expanding a
+			// lazy view here would repeat the shared subtree.
 		}
 		return nil
 	}
@@ -1257,8 +1267,12 @@ func invalidBlockNameFieldReason(candidate Field) string {
 
 func validateSlugMetadata(snapshot Snapshot) error {
 	validateResource := func(fields []Field, fieldsPath string) error {
+		entered := FieldListSet{}
 		var inspect func([]Field, string, bool) error
 		inspect = func(candidates []Field, path string, nested bool) error {
+			if !entered.Add(candidates) {
+				return nil
+			}
 			for index, candidate := range candidates {
 				fieldPath := fmt.Sprintf("%s[%d]", path, index)
 				if candidate.Text != nil && candidate.Text.Slug != nil {
@@ -1294,7 +1308,7 @@ func validateSlugMetadata(snapshot Snapshot) error {
 						return fmt.Errorf("invalid slug source %q at %s.text.slug.sourcePath: slug fields cannot derive from other slug fields", sourcePath, fieldPath)
 					}
 				}
-				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
+				if err := inspect(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
 					return err
 				}
 				if candidate.Nested != nil {
@@ -1303,7 +1317,7 @@ func validateSlugMetadata(snapshot Snapshot) error {
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					for blockIndex, block := range candidate.Blocks.Definitions() {
 						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
 							return err
 						}
@@ -1382,8 +1396,14 @@ func manifestSupportsIndexField(candidate Field) bool {
 // deleted.
 func CascadeReferenceIssues(snapshot Snapshot) []Issue {
 	var issues []Issue
+	// Block children are always repeated, so a shared definition's issues are
+	// the same at each of its placements in one resource.
+	var entered FieldListSet
 	var inspect func([]Field, string, bool, bool)
 	inspect = func(candidates []Field, path string, repeated, global bool) {
+		if !entered.Add(candidates) {
+			return
+		}
 		for index, candidate := range candidates {
 			fieldPath := fmt.Sprintf("%s[%d]", path, index)
 			action, hasMany := ReferenceDeleteAction(""), false
@@ -1401,21 +1421,23 @@ func CascadeReferenceIssues(snapshot Snapshot) []Issue {
 					issues = append(issues, Issue{Code: "invalid_reference_delete_action", Path: fieldPath + ".onDelete", Message: "cascade applies only to a singular, unlocalized reference outside arrays and blocks"})
 				}
 			}
-			inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true, global)
+			inspect(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees", true, global)
 			if candidate.Nested != nil {
 				inspect(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields", repeated || candidate.Type == FieldTypeArray || candidate.Localized, global)
 			}
 			if candidate.Blocks != nil {
-				for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+				for blockIndex, block := range candidate.Blocks.Definitions() {
 					inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true, global)
 				}
 			}
 		}
 	}
 	for index, collection := range snapshot.Collections {
+		entered = FieldListSet{}
 		inspect(collection.Fields, fmt.Sprintf("collections[%d].fields", index), false, false)
 	}
 	for index, global := range snapshot.Globals {
+		entered = FieldListSet{}
 		inspect(global.Fields, fmt.Sprintf("globals[%d].fields", index), false, true)
 	}
 	return issues
@@ -1426,8 +1448,12 @@ func validateReferenceDeleteMetadata(snapshot Snapshot) error {
 		return fmt.Errorf("invalid reference delete action at %s: %s", issues[0].Path, issues[0].Message)
 	}
 	validate := func(fields []Field, fieldsPath string) error {
+		entered := FieldListSet{}
 		var inspect func([]Field, string) error
 		inspect = func(candidates []Field, path string) error {
+			if !entered.Add(candidates) {
+				return nil
+			}
 			for index, candidate := range candidates {
 				fieldPath := fmt.Sprintf("%s[%d]", path, index)
 				var action ReferenceDeleteAction
@@ -1445,7 +1471,7 @@ func validateReferenceDeleteMetadata(snapshot Snapshot) error {
 						return fmt.Errorf("invalid reference delete action at %s.onDelete: required references cannot be nullified", fieldPath)
 					}
 				}
-				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+				if err := inspect(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
 					return err
 				}
 				if candidate.Nested != nil {
@@ -1454,7 +1480,7 @@ func validateReferenceDeleteMetadata(snapshot Snapshot) error {
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					for blockIndex, block := range candidate.Blocks.Definitions() {
 						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
 							return err
 						}
@@ -1485,8 +1511,12 @@ func validateReferenceFilterMetadata(snapshot Snapshot) error {
 	}
 
 	validateResource := func(resource Collection, prefix string) error {
+		entered := FieldListSet{}
 		var inspect func([]Field, string) error
 		inspect = func(fields []Field, fieldsPath string) error {
+			if !entered.Add(fields) {
+				return nil
+			}
 			for fieldIndex, candidate := range fields {
 				fieldPath := fmt.Sprintf("%s[%d]", fieldsPath, fieldIndex)
 				var rules []RelationshipFilter
@@ -1561,7 +1591,7 @@ func validateReferenceFilterMetadata(snapshot Snapshot) error {
 						return err
 					}
 				}
-				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+				if err := inspect(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
 					return err
 				}
 				if candidate.Nested != nil {
@@ -1570,7 +1600,7 @@ func validateReferenceFilterMetadata(snapshot Snapshot) error {
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					for blockIndex, block := range candidate.Blocks.Definitions() {
 						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
 							return err
 						}
@@ -1703,8 +1733,12 @@ func manifestReferenceFilterFieldKind(candidate *Field) manifestReferenceFilterV
 
 func validateUniqueMetadata(snapshot Snapshot) error {
 	validate := func(fields []Field, prefix string) error {
+		entered := FieldListSet{}
 		var inspect func([]Field, string, bool) error
 		inspect = func(candidates []Field, path string, nested bool) error {
+			if !entered.Add(candidates) {
+				return nil
+			}
 			for fieldIndex, candidate := range candidates {
 				fieldPath := fmt.Sprintf("%s[%d]", path, fieldIndex)
 				if candidate.Unique {
@@ -1721,7 +1755,7 @@ func validateUniqueMetadata(snapshot Snapshot) error {
 						return fmt.Errorf("unsupported unique field at %s.unique: list-valued references are not enforced by Ridu stores", fieldPath)
 					}
 				}
-				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
+				if err := inspect(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
 					return err
 				}
 				if candidate.Nested != nil {
@@ -1730,7 +1764,7 @@ func validateUniqueMetadata(snapshot Snapshot) error {
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					for blockIndex, block := range candidate.Blocks.Definitions() {
 						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
 							return err
 						}
@@ -1908,8 +1942,12 @@ func validateAdminDisplayTranslations(snapshot Snapshot) error {
 			}
 		}
 	}
+	entered := FieldListSet{}
 	var validateFields func([]Field, string) error
 	validateFields = func(fields []Field, path string) error {
+		if !entered.Add(fields) {
+			return nil
+		}
 		for fieldIndex, candidate := range fields {
 			fieldPath := fmt.Sprintf("%s[%d]", path, fieldIndex)
 			for _, value := range []struct {
@@ -1937,7 +1975,7 @@ func validateAdminDisplayTranslations(snapshot Snapshot) error {
 					}
 				}
 			}
-			if err := validateFields(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+			if err := validateFields(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
 				return err
 			}
 			if candidate.Nested != nil {
@@ -1954,7 +1992,7 @@ func validateAdminDisplayTranslations(snapshot Snapshot) error {
 				}
 			}
 			if candidate.Blocks != nil {
-				for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+				for blockIndex, block := range candidate.Blocks.Definitions() {
 					blockPath := fmt.Sprintf("%s.blocks.types[%d]", fieldPath, blockIndex)
 					if err := validate(block.Labels.SingularTranslations, blockPath+".labels.singularTranslations"); err != nil {
 						return err
@@ -2111,7 +2149,11 @@ func localizedFieldPath(fields []Field, prefix string) (string, bool) {
 		if field.Localized {
 			return path, true
 		}
-		if nested, found := localizedFieldPath(EmbeddedBlocks(field), path); found {
+		// Block definitions summarize their localization once.
+		if DescendantTraits(field)&FieldTraitLocalized == 0 {
+			continue
+		}
+		if nested, found := localizedFieldPath(EmbeddedDefinitionBlocks(field), path); found {
 			return nested, true
 		}
 		if field.Nested != nil {
@@ -2120,7 +2162,7 @@ func localizedFieldPath(fields []Field, prefix string) (string, bool) {
 			}
 		}
 		if field.Blocks != nil {
-			for _, block := range field.Blocks.ResolvedTypes() {
+			for _, block := range field.Blocks.Definitions() {
 				if nested, found := localizedFieldPath(block.ResolvedFields(), path+"."+block.Slug); found {
 					return nested, true
 				}
@@ -2264,8 +2306,12 @@ func validateAdminFieldComponents(snapshot Snapshot) error {
 	for _, plugin := range snapshot.Plugins {
 		plugins[plugin.Key] = plugin.Admin != nil
 	}
+	entered := FieldListSet{}
 	var inspect func([]Field, string) error
 	inspect = func(fields []Field, path string) error {
+		if !entered.Add(fields) {
+			return nil
+		}
 		for index, field := range fields {
 			fieldPath := fmt.Sprintf("%s[%d]", path, index)
 			if component := field.Admin.Component; component != nil {
@@ -2273,7 +2319,7 @@ func validateAdminFieldComponents(snapshot Snapshot) error {
 					return err
 				}
 			}
-			if err := inspect(EmbeddedBlocks(field), fieldPath+".plugin.embeddedTrees"); err != nil {
+			if err := inspect(EmbeddedDefinitionBlocks(field), fieldPath+".plugin.embeddedTrees"); err != nil {
 				return err
 			}
 			if field.Nested != nil {
@@ -2290,7 +2336,7 @@ func validateAdminFieldComponents(snapshot Snapshot) error {
 				}
 			}
 			if field.Blocks != nil {
-				for blockIndex, block := range field.Blocks.ResolvedTypes() {
+				for blockIndex, block := range field.Blocks.Definitions() {
 					if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
 						return err
 					}
@@ -2334,8 +2380,12 @@ func validatePairedAdminComponent(component *FieldAdminComponent, path string, p
 
 func validateFieldConditionMetadata(snapshot Snapshot) error {
 	validateFields := func(fields []Field, fieldsPath string) error {
+		entered := FieldListSet{}
 		var inspect func([]Field, string) error
 		inspect = func(candidates []Field, path string) error {
+			if !entered.Add(candidates) {
+				return nil
+			}
 			for index, candidate := range candidates {
 				fieldPath := fmt.Sprintf("%s[%d]", path, index)
 				if candidate.Admin.Condition != nil {
@@ -2347,7 +2397,7 @@ func validateFieldConditionMetadata(snapshot Snapshot) error {
 						return err
 					}
 				}
-				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+				if err := inspect(EmbeddedDefinitionBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
 					return err
 				}
 				if candidate.Nested != nil {
@@ -2356,7 +2406,7 @@ func validateFieldConditionMetadata(snapshot Snapshot) error {
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					for blockIndex, block := range candidate.Blocks.Definitions() {
 						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
 							return err
 						}
@@ -2534,7 +2584,7 @@ func (manifest *Manifest) UnmarshalJSON(encoded []byte) error {
 	if err != nil {
 		return err
 	}
-	manifest.snapshot = parsed.snapshot
+	manifest.snapshot, manifest.instance = parsed.snapshot, parsed.instance
 	return nil
 }
 
@@ -2653,7 +2703,7 @@ func cloneSnapshot(snapshot Snapshot) Snapshot {
 		}
 		cloned.Plugins[index].Endpoints = append([]PluginEndpoint(nil), plugin.Endpoints...)
 	}
-	_ = BindBlockReferences(&cloned)
+	attachBlockReferences(&cloned)
 	return cloned
 }
 
@@ -2822,21 +2872,6 @@ func cloneFields(fields []Field) []Field {
 			blocks := *field.Blocks
 			blocks.bound = nil
 			blocks.BlockReferences = append([]string(nil), field.Blocks.BlockReferences...)
-			blocks.Types = nil
-			if field.Blocks.Types != nil {
-				blocks.Types = make([]BlockType, len(field.Blocks.Types))
-			}
-			for blockIndex, block := range field.Blocks.Types {
-				blocks.Types[blockIndex] = block
-				blocks.Types[blockIndex].bound = nil
-				blocks.Types[blockIndex].Labels.SingularTranslations = cloneStringMap(block.Labels.SingularTranslations)
-				blocks.Types[blockIndex].Labels.PluralTranslations = cloneStringMap(block.Labels.PluralTranslations)
-				blocks.Types[blockIndex].Fields = cloneFields(block.Fields)
-				if block.Admin != nil {
-					admin := *block.Admin
-					blocks.Types[blockIndex].Admin = &admin
-				}
-			}
 			cloned[index].Blocks = &blocks
 		}
 		if field.Plugin != nil {

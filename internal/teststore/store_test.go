@@ -9,6 +9,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 type cancelAfterChecks struct {
@@ -41,10 +42,10 @@ func TestPublishedHeadIsSelectedBeforeFilteringAndSurvivesDraftAndDiscard(t *tes
 	if created.Revision != 1 || created.PublishedRevision != 1 || created.HasDraftChanges {
 		t.Fatalf("published create metadata = %#v", created)
 	}
-	if _, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Values: store.Values{"title": store.String("implicit publish")}}); err == nil {
+	if _, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Values: store.Values{"title": store.String("implicit publish")}}); err == nil {
 		t.Fatal("draft-capable default update accepted an implicit publication")
 	}
-	staged, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("pending")}})
+	staged, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("pending")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,10 +64,10 @@ func TestPublishedHeadIsSelectedBeforeFilteringAndSurvivesDraftAndDiscard(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if publicPage.Total != 0 {
-		t.Fatalf("public pending-title count = %d, want 0", publicPage.Total)
+	if *publicPage.Total != 0 {
+		t.Fatalf("public pending-title count = %d, want 0", *publicPage.Total)
 	}
-	discarded, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 2}, Intent: store.WriteIntentDiscardDraft})
+	discarded, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 2}, Intent: store.WriteIntentDiscardDraft})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +97,7 @@ func TestPopulationSelectsTargetLiveHeadIndependentlyOfWorkingRoot(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: target, ID: live.ID, ExpectedRevision: live.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("private pending")}}); err != nil {
+	if _, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: target, ID: live.ID, ExpectedRevision: live.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("private pending")}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := transaction.Create(ctx, store.CreateRequest{Collection: owner, ID: "owner-1", Status: store.StatusDraft, Values: store.Values{"target": store.String(live.ID)}}); err != nil {
@@ -142,7 +143,7 @@ func TestNonDraftVersionsDoNotExposeDraftMetadata(t *testing.T) {
 	if working.PublishedRevision != 0 || working.HasDraftChanges {
 		t.Fatalf("non-draft working read metadata = %#v", working)
 	}
-	updated, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}})
+	updated, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +215,7 @@ func TestSnapshotRejectsMutationEntryPoints(t *testing.T) {
 			return err
 		}},
 		{name: "update", run: func() error {
-			_, err := snapshot.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "post-1"}})
+			_, err := snapshot.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "post-1"}, Current: &store.Document{ID: "post-1"}})
 			return err
 		}},
 		{name: "trash", run: func() error {
@@ -462,13 +463,13 @@ func TestUpdateHonorsTheRequestedDeletionScope(t *testing.T) {
 	if _, err := transaction.Trash(context.Background(), store.Request{Collection: collection, ID: document.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transaction.Update(context.Background(), store.UpdateRequest{
+	if _, err := conformance.LockedUpdate(context.Background(), transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, Deletion: store.DeletionActive},
 		Values:  store.Values{"title": store.String("Must not update trash")},
 	}); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("active update of trashed row = %v, want store.ErrNotFound", err)
 	}
-	updated, err := transaction.Update(context.Background(), store.UpdateRequest{
+	updated, err := conformance.LockedUpdate(context.Background(), transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, Deletion: store.DeletionTrash},
 		Values:  store.Values{"title": store.String("Trash-scoped update")},
 	})
@@ -477,5 +478,87 @@ func TestUpdateHonorsTheRequestedDeletionScope(t *testing.T) {
 	}
 	if title, _ := updated.Values["title"].StringValue(); title != "Trash-scoped update" {
 		t.Fatalf("trash-scoped update title = %q", title)
+	}
+}
+
+// The engine rewrites returned pages and documents in place, so every read
+// must return a fresh slice and fresh value maps.
+func TestReadsReturnDetachedDocuments(t *testing.T) {
+	ctx := context.Background()
+	collection := schema.Collection{ID: "posts", Fields: []schema.Field{{ID: "title", Name: "title", Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar}}}
+	write, err := New().Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = write.Rollback(ctx) }()
+	if _, err := write.Create(ctx, store.CreateRequest{Collection: collection, ID: "post-1", Values: store.Values{"title": store.String("stored")}}); err != nil {
+		t.Fatal(err)
+	}
+	request := store.Request{Collection: collection, Limit: 10}
+	page, err := write.List(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.Documents[0].Values["title"] = store.String("page edit")
+	page.Documents[0] = store.Document{ID: "replaced"}
+	found, err := write.Find(ctx, store.Request{Collection: collection, ID: "post-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found.Values["title"] = store.String("find edit")
+	again, err := write.List(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title, _ := again.Documents[0].Values["title"].StringValue(); again.Documents[0].ID != "post-1" || title != "stored" {
+		t.Fatalf("a read shared state with an earlier result: %#v", again.Documents[0])
+	}
+}
+
+// Adapters update from Current without reading the row again, so the strict
+// fake rejects a Current that is not the stored row instead of ignoring it.
+func TestUpdateRejectsCurrentThatIsNotTheStoredRow(t *testing.T) {
+	ctx := context.Background()
+	collection := schema.Collection{ID: "posts", Versions: &schema.VersionSettings{Drafts: true}, Fields: []schema.Field{
+		{ID: "title", Name: "title", Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar},
+		{ID: "summary", Name: "summary", Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar},
+	}}
+	write, err := New().Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = write.Rollback(ctx) }()
+	if _, err := write.Create(ctx, store.CreateRequest{Collection: collection, ID: "post-1", Values: store.Values{"title": store.String("seed")}}); err != nil {
+		t.Fatal(err)
+	}
+	request := store.Request{Collection: collection, ID: "post-1", Lock: store.LockMutation}
+	stale, err := write.Find(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: request, Intent: store.WriteIntentSaveDraft, Values: store.Values{"summary": store.String("nested")}}); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := write.Find(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forged := fresh
+	forged.Values = store.CloneValues(fresh.Values)
+	forged.Values["summary"] = store.String("other")
+	for name, current := range map[string]store.Document{"stale revision": stale, "forged values": forged} {
+		t.Run(name, func(t *testing.T) {
+			_, err := write.Update(ctx, store.UpdateRequest{Request: request, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("outer")}, Current: &current})
+			if err == nil || errors.Is(err, store.ErrConflict) || errors.Is(err, store.ErrNotFound) {
+				t.Fatalf("mismatched Current error = %v", err)
+			}
+		})
+	}
+	stored, err := write.Find(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title, _ := stored.Values["title"].StringValue(); title != "seed" || stored.Revision != 2 {
+		t.Fatalf("rejected updates changed the row: %#v", stored)
 	}
 }

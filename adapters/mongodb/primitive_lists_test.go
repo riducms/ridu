@@ -7,7 +7,7 @@ import (
 
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
-	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/querypath"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -53,15 +53,19 @@ func TestPrimitiveListsMongoDBMigrationAndIndexes(t *testing.T) {
 	}
 }
 
-func TestPrimitiveListMongoDBUnsupportedQueryMarkerIsCallerOnly(t *testing.T) {
+func TestMongoUnsupportedQueryPathMarkerIsCallerOnly(t *testing.T) {
 	manifest, err := core.Resolve(core.Config{Name: "Query bounds", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{
+		field.JSON("metadata"),
 		field.Array("rows", field.Fields{field.TextList("points"), field.Array("nested", field.Fields{field.Text("title")})}),
 	}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"rows.points", "rows.nested.title"} {
-		path, _ := query.ParsePath(name)
+	for _, test := range []struct {
+		name      string
+		supported bool
+	}{{"rows.points", true}, {"rows.nested.title", true}, {"metadata", true}, {"metadata.tag", false}} {
+		path, _ := query.ParsePath(test.name)
 		node := query.In(path, "value").Node()
 		for _, caller := range []bool{false, true} {
 			request := store.Request{Collection: manifest.Snapshot().Collections[0]}
@@ -71,9 +75,9 @@ func TestPrimitiveListMongoDBUnsupportedQueryMarkerIsCallerOnly(t *testing.T) {
 				request.Access = &node
 			}
 			_, err := requestPredicate(request, false)
-			var unsupported *primitivefield.UnsupportedQueryError
-			if err == nil || errors.As(err, &unsupported) != (caller && name == "rows.points") {
-				t.Fatalf("field %s caller=%v marked incorrectly: %v", name, caller, err)
+			var unsupported *querypath.UnsupportedError
+			if (err == nil) != test.supported || errors.As(err, &unsupported) != (caller && !test.supported) {
+				t.Fatalf("path %s caller=%v marked incorrectly: %v", test.name, caller, err)
 			}
 		}
 	}

@@ -31,7 +31,7 @@ func loadPostSummary(
 		return PostSummaryData{}, err
 	}
 	return PostSummaryData{
-		Total: posts.Total, Search: input.Search,
+		Total: *posts.Total, Search: input.Search,
 		Locale: string(ctx.Locale()),
 	}, nil
 }

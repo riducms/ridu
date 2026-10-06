@@ -14,22 +14,26 @@ import (
 )
 
 // Graph is the private companion to a manifest. Authoring nodes retain their
-// executable attachments and placement metadata here; both remain private.
-// Application construction lowers the companion once; requests never query it.
-// A block case whose fields have no executable behavior or visibility condition
-// has no occurrences: nothing lowers them, and conditions cannot traverse a
-// repeated field to reference them from outside the block.
+// executable attachments here; both remain private. Application construction
+// lowers the companion once; requests never query it.
+//
+// Each resource's own fields and each block definition's fields are recorded
+// once. A definition is a scope of its own, with definition-relative paths,
+// however many containers select it: the engine binds a definition's field
+// once and resolves each placement from the document it walks, so the graph
+// and everything lowered from it follow definitions, not placements.
 type Graph struct {
-	// occurrences are allocated individually: a doubling []Occurrence would
-	// hold up to twice their size while resolution builds a large schema.
 	occurrences []*Occurrence
 	bindings    map[string]field.View
 }
 
-// Occurrence is a schema placement, not a concrete runtime row. Repeated axes
-// retain the identity property and case needed by a later operation binding;
-// LocaleOwner identifies the existing exact-locale dimension without inventing
-// runtime rows or expanding localization semantics.
+// Occurrence is a field of a resource or of a block definition, not a concrete
+// runtime row. ResourceKind is "collection", "global" or "block"; a block
+// definition's occurrences name its slug as Resource, and their paths are
+// relative to the definition. Repeated axes retain the identity property and
+// case within that scope; LocaleOwner identifies an exact-locale dimension the
+// scope declares. A placement additionally inherits its container's locale
+// scope, which the engine reads from the document walk.
 type Occurrence struct {
 	ID           string                 `json:"id"`
 	SchemaID     schema.StableID        `json:"schemaId,omitempty"`
@@ -50,12 +54,18 @@ type Occurrence struct {
 	Extensions   map[string]store.Value `json:"extensions,omitempty"`
 }
 
+// BlockResource is the ResourceKind of a block definition's occurrences.
+const BlockResource = "block"
+
 type RepeatedAxis struct {
 	OccurrenceID string `json:"occurrenceId"`
 	Identity     string `json:"identity"`
 	Case         string `json:"case,omitempty"`
 }
 
+// ReferenceBinding is a visibility condition's bound target. A root reference
+// from a block definition binds once for each resource that places the
+// definition, since each resolves the path against its own root.
 type ReferenceBinding struct {
 	Policy       string               `json:"policy"`
 	Scope        field.ReferenceScope `json:"scope"`
@@ -77,8 +87,8 @@ func (g Graph) Occurrences() []Occurrence {
 }
 
 // Binding returns an immutable view, never an executable dispatch table. Only
-// placements with executable behavior, a visibility condition, or a reference
-// target retain a view; the Occurrence alone describes every other placement.
+// fields with executable behavior, a visibility condition, or a reference
+// target retain a view; the Occurrence alone describes every other field.
 func (g Graph) Binding(id string) (field.View, bool) { d, ok := g.bindings[id]; return d, ok }
 
 // ResolveGraph binds field-owned selectors before lowering the manifest and
@@ -89,7 +99,7 @@ func ResolveGraph(input Input) (schema.Manifest, Graph, error) {
 	if bindErr != nil {
 		return schema.Manifest{}, Graph{}, bindErr
 	}
-	b := graphBuilder{graph: Graph{bindings: make(map[string]field.View)}, scopes: make(map[string]map[string]string), byID: make(map[string]int), byPath: make(map[graphPathKey]int)}
+	b := graphBuilder{graph: Graph{bindings: make(map[string]field.View)}, scopes: make(map[string]map[string]string), byID: make(map[string]int), byPath: make(map[graphPathKey]int), places: make(map[graphOwner][]string)}
 	for i, collection := range input.Collections {
 		if collection.Upload {
 			fields, err := UploadFields(collection.Fields, fmt.Sprintf("collections[%d].fields", i))
@@ -104,6 +114,12 @@ func ResolveGraph(input Input) (schema.Manifest, Graph, error) {
 	for i, global := range input.Globals {
 		b.resource("global", string(global.Slug), fmt.Sprintf("globals[%d].fields", i), global.Fields)
 	}
+	// Binding interned every inline declaration into the registry, so each
+	// definition is recorded exactly once, used or not, as its own scope.
+	for _, block := range input.Blocks {
+		b.definition(block)
+	}
+	b.validateGlobalDefinitions()
 	b.bindReferences()
 	// Symbolic and policy errors retain authored occurrence provenance.
 	// Aggregate duplicate-field diagnostics come from static schema resolution.
@@ -123,12 +139,7 @@ func ResolveGraph(input Input) (schema.Manifest, Graph, error) {
 	if len(b.issues) != 0 {
 		return schema.Manifest{}, Graph{}, schema.NewValidationError(b.issues)
 	}
-	for _, collection := range resolved.Collections {
-		b.schemaIDs("collection", string(collection.Slug), collection.Fields)
-	}
-	for _, global := range resolved.Globals {
-		b.schemaIDs("global", string(global.Slug), global.Fields)
-	}
+	b.schemaIDs(resolved)
 	return manifest, b.graph, nil
 }
 
@@ -137,16 +148,25 @@ type graphPosition struct {
 	repeated                                                            []RepeatedAxis
 }
 
+func (p graphPosition) owner() graphOwner { return graphOwner{kind: p.resourceKind, slug: p.resource} }
+
 type graphPathKey struct{ kind, resource, path string }
+
+// graphOwner is a resource or block definition: a scope whose own fields the
+// graph records.
+type graphOwner struct{ kind, slug string }
 
 type graphBuilder struct {
 	graph  Graph
 	scopes map[string]map[string]string
-	// registeredNeeds memoizes blockNeedsGraph for registered block slugs.
-	registeredNeeds map[string]bool
-	byID            map[string]int
-	byPath          map[graphPathKey]int
-	issues          []schema.Issue
+	byID   map[string]int
+	byPath map[graphPathKey]int
+	// resources lists collections and globals in declaration order.
+	resources []graphOwner
+	// places lists, in schema order, the block definitions that each resource's
+	// or definition's own fields select.
+	places map[graphOwner][]string
+	issues []schema.Issue
 }
 
 func occurrenceID(kind, resource, boundary, path string) string {
@@ -157,7 +177,23 @@ func occurrenceID(kind, resource, boundary, path string) string {
 func (b *graphBuilder) resource(kind, resource, authored string, definitions field.Fields) {
 	scope := occurrenceID(kind, resource, "resource", "")
 	b.scopes[scope] = make(map[string]string)
+	b.resources = append(b.resources, graphOwner{kind: kind, slug: resource})
 	b.fields(definitions, authored, graphPosition{resourceKind: kind, resource: resource, rootScope: scope, scope: scope})
+}
+
+// definition records a block definition's fields once, as a scope of their
+// own: sibling conditions resolve within it, wherever it is placed.
+func (b *graphBuilder) definition(block field.Block) {
+	scope := occurrenceID(BlockResource, block.Slug, "resource", "")
+	b.scopes[scope] = make(map[string]string)
+	p := graphPosition{resourceKind: BlockResource, resource: block.Slug, rootScope: scope, scope: scope}
+	authored := "blocks." + block.Slug + ".fields"
+	b.fields(block.Fields, authored, p)
+	// Manifest lowering adds this direct child when it was not authored.
+	// Bind sibling conditions against the same scope before lowering runs.
+	if b.scopes[scope]["blockName"] == "" {
+		b.node(defaultBlockNameField(), fmt.Sprintf("%s[%d]", authored, len(block.Fields)), p)
+	}
 }
 
 func (b *graphBuilder) fields(definitions field.Fields, authored string, p graphPosition) {
@@ -235,8 +271,7 @@ func (b *graphBuilder) node(d field.View, authored string, p graphPosition) {
 	}
 	id := b.add(d.Name(), d.Kind(), boundary, stored, authored, path, p, d.Provenance())
 	admin := d.AdminPolicy()
-	// A view copies the whole definition; registered blocks repeat it at every
-	// placement, so keep only those that lowering or reference binding reads.
+	// Keep a view only where lowering or reference binding reads it.
 	if d.HasBehavior() || !admin.VisibleWhen.IsZero() || boundary == "stored_reference" {
 		b.graph.bindings[id] = d
 	}
@@ -259,8 +294,11 @@ func (b *graphBuilder) node(d field.View, authored string, p graphPosition) {
 		}
 		b.fields(d.Fields(), authored+".fields", p)
 	case field.KindBlocks:
-		p.repeated = append(slices.Clone(p.repeated), RepeatedAxis{OccurrenceID: id, Identity: "_key"})
-		b.blocks(d.Blocks(), len(d.BlockReferences()) > 0, authored+".blocks", p)
+		// A container records which definitions it places. Their fields are
+		// recorded once, by definition, never beneath each placement.
+		for _, block := range d.Blocks() {
+			b.place(p, block.Slug)
+		}
 	case field.KindTabs:
 		if d.IsUnnamedTab() {
 			b.fields(d.Fields(), authored+".fields", p)
@@ -282,79 +320,86 @@ func (b *graphBuilder) node(d field.View, authored string, p graphPosition) {
 				r := q
 				r.path = appendGraphPath(q.path, c.TagValue)
 				r.parent = b.add(c.TagValue, "", "embedded_case", false, casePath, r.path, q, d.Provenance())
-				r.repeated = append(slices.Clone(q.repeated), RepeatedAxis{OccurrenceID: r.parent, Identity: c.Identity, Case: c.TagValue})
-				b.blocks(c.Types, len(c.BlockReferences) > 0, casePath+".types", r)
-			}
-		}
-	}
-}
-
-func (b *graphBuilder) blocks(blocks []field.Block, registered bool, authored string, p graphPosition) {
-	for i, block := range blocks {
-		if !b.blockNeedsGraph(block, registered) {
-			continue
-		}
-		q := p
-		q.path = appendGraphPath(p.path, block.Slug)
-		blockPath := fmt.Sprintf("%s[%d]", authored, i)
-		q.parent = b.add(block.Slug, "", "block_case", false, blockPath, q.path, p, nil)
-		q.scope = q.parent
-		b.scopes[q.scope] = make(map[string]string)
-		q.repeated = slices.Clone(p.repeated)
-		if len(q.repeated) != 0 {
-			q.repeated[len(q.repeated)-1].Case = block.Slug
-		}
-		b.fields(block.Fields, blockPath+".fields", q)
-		// Manifest lowering adds this direct child when it was not authored.
-		// Bind sibling conditions against the same scope before lowering runs.
-		if b.scopes[q.scope]["blockName"] == "" {
-			b.node(defaultBlockNameField(), fmt.Sprintf("%s.fields[%d]", blockPath, len(block.Fields)), q)
-		}
-	}
-}
-
-// blockNeedsGraph reports whether a block's fields, at any depth, carry
-// executable behavior or a visibility condition. A registered block has the
-// same fields wherever it is referenced.
-func (b *graphBuilder) blockNeedsGraph(block field.Block, registered bool) bool {
-	if needs, known := b.registeredNeeds[block.Slug]; registered && known {
-		return needs
-	}
-	needs := fieldsNeedGraph(block.Fields)
-	if registered {
-		if b.registeredNeeds == nil {
-			b.registeredNeeds = make(map[string]bool)
-		}
-		b.registeredNeeds[block.Slug] = needs
-	}
-	return needs
-}
-
-func fieldsNeedGraph(fields field.Fields) bool {
-	for _, node := range fields {
-		d := field.Snapshot(node)
-		if d.HasBehavior() || !d.AdminPolicy().VisibleWhen.IsZero() || fieldsNeedGraph(d.Fields()) {
-			return true
-		}
-		for _, block := range d.Blocks() {
-			if fieldsNeedGraph(block.Fields) {
-				return true
-			}
-		}
-		for _, tree := range d.EmbeddedTrees() {
-			for _, c := range tree.Cases {
 				for _, block := range c.Types {
-					if fieldsNeedGraph(block.Fields) {
-						return true
-					}
+					b.place(p, block.Slug)
 				}
 			}
 		}
 	}
-	return false
+}
+
+// place records that p's resource or definition selects the definition slug.
+func (b *graphBuilder) place(p graphPosition, slug string) {
+	owner := p.owner()
+	if !slices.Contains(b.places[owner], slug) {
+		b.places[owner] = append(b.places[owner], slug)
+	}
+}
+
+// reachable lists the definitions owner places directly or through other
+// definitions, in the order a depth-first walk of its fields first meets them.
+// The walk visits each definition once, so its cost follows definitions.
+func (b *graphBuilder) reachable(owner graphOwner) []string {
+	var order []string
+	seen := map[string]bool{}
+	var visit func(graphOwner)
+	visit = func(current graphOwner) {
+		for _, slug := range b.places[current] {
+			if !seen[slug] {
+				seen[slug] = true
+				order = append(order, slug)
+				visit(graphOwner{kind: BlockResource, slug: slug})
+			}
+		}
+	}
+	visit(owner)
+	return order
+}
+
+// placedBy lists, for each definition, the resources that place it.
+func (b *graphBuilder) placedBy() map[string][]graphOwner {
+	result := map[string][]graphOwner{}
+	for _, resource := range b.resources {
+		for _, slug := range b.reachable(resource) {
+			result[slug] = append(result[slug], resource)
+		}
+	}
+	return result
+}
+
+// validateGlobalDefinitions applies the global field policy to every
+// definition a global places, once per definition, however many globals and
+// placements reach it.
+func (b *graphBuilder) validateGlobalDefinitions() {
+	inGlobal := map[string]bool{}
+	for _, resource := range b.resources {
+		if resource.kind == "global" {
+			for _, slug := range b.reachable(resource) {
+				inGlobal[slug] = true
+			}
+		}
+	}
+	for _, o := range b.graph.occurrences {
+		if o.ResourceKind != BlockResource || !inGlobal[o.Resource] {
+			continue
+		}
+		if d, bound := b.graph.bindings[o.ID]; bound {
+			b.validateGlobalPolicies(d.BehaviorSummary(), o.AuthoredPath, graphFieldLabel(o.ResourceKind, o.Resource, o.ResolvedPath)+" is placed in a global")
+		}
+	}
+}
+
+// graphFieldLabel names a field in diagnostics: by its path in a resource,
+// or by its path within a block definition.
+func graphFieldLabel(kind, resource, path string) string {
+	if kind == BlockResource {
+		return fmt.Sprintf("field %q of block %q", path, resource)
+	}
+	return fmt.Sprintf("field %q", path)
 }
 
 func (b *graphBuilder) bindReferences() {
+	placedBy := b.placedBy()
 	for _, o := range b.graph.occurrences {
 		d, ok := b.graph.bindings[o.ID]
 		if !ok {
@@ -364,24 +409,22 @@ func (b *graphBuilder) bindReferences() {
 		if condition.IsZero() || condition.Err() != nil {
 			continue
 		}
-		var bind func(field.Condition, string)
-		bind = func(condition field.Condition, policy string) {
-			for index, child := range condition.Conditions() {
-				bind(child, fmt.Sprintf("%s.conditions[%d]", policy, index))
+		// resolve binds one reference from the occurrence's own scope, or from
+		// the root of resource, the resource it is placed in.
+		resolve := func(reference field.Reference, policy string, resource graphOwner) {
+			scope := o.ScopeID
+			label := graphFieldLabel(o.ResourceKind, o.Resource, o.ResolvedPath)
+			if reference.Scope() == field.RootScope {
+				scope = occurrenceID(resource.kind, resource.slug, "resource", "")
+				if o.ResourceKind == BlockResource {
+					label += fmt.Sprintf(" placed in %s %q", resource.kind, resource.slug)
+				}
 			}
-			if condition.Kind() != field.ConditionKindPredicate {
-				return
-			}
-			reference := condition.Reference()
 			issue := func(message string) {
 				if len(o.Provenance) > 0 {
 					message += "; provenance: " + strings.Join(o.Provenance, " -> ")
 				}
-				b.issues = append(b.issues, schema.Issue{Code: "invalid_field_condition_path", Path: o.AuthoredPath + "." + policy + ".reference.path", Message: fmt.Sprintf("field %q: %s", o.ResolvedPath, message)})
-			}
-			scope := o.ScopeID
-			if reference.Scope() == field.RootScope {
-				scope = occurrenceID(o.ResourceKind, o.Resource, "resource", "")
+				b.issues = append(b.issues, schema.Issue{Code: "invalid_field_condition_path", Path: o.AuthoredPath + "." + policy + ".reference.path", Message: fmt.Sprintf("%s: %s", label, message)})
 			}
 			segments := strings.Split(reference.Path(), ".")
 			var targetID string
@@ -407,33 +450,64 @@ func (b *graphBuilder) bindReferences() {
 			target := b.graph.occurrences[b.byID[targetID]]
 			o.References = append(o.References, ReferenceBinding{Policy: policy, Scope: reference.Scope(), Path: reference.Path(), TargetID: targetID, ResolvedPath: target.ResolvedPath})
 		}
+		var bind func(field.Condition, string)
+		bind = func(condition field.Condition, policy string) {
+			for index, child := range condition.Conditions() {
+				bind(child, fmt.Sprintf("%s.conditions[%d]", policy, index))
+			}
+			if condition.Kind() != field.ConditionKindPredicate {
+				return
+			}
+			reference := condition.Reference()
+			if reference.Scope() == field.RootScope && o.ResourceKind == BlockResource {
+				// Each placing resource resolves the path against its own root.
+				for _, resource := range placedBy[o.Resource] {
+					resolve(reference, policy, resource)
+				}
+				return
+			}
+			resolve(reference, policy, o.owner())
+		}
 		bind(condition, "admin.visibleWhen")
 	}
 }
 
-func (b *graphBuilder) schemaIDs(kind, resource string, fields []schema.Field) {
-	for _, candidate := range fields {
-		if i, ok := b.byPath[graphPathKey{kind, resource, candidate.Path.String()}]; ok {
-			b.graph.occurrences[i].SchemaID = candidate.ID
+// Occurrence.owner names the resource or definition whose fields include o.
+func (o *Occurrence) owner() graphOwner { return graphOwner{kind: o.ResourceKind, slug: o.Resource} }
+
+// schemaIDs records the stable field ID of every stored occurrence: a
+// resource's field by its resolved path, and a definition's field by its
+// definition-relative ID. Each lookup follows only its own path.
+func (b *graphBuilder) schemaIDs(resolved schema.Snapshot) {
+	fields := map[graphPathKey][]schema.Field{}
+	for _, collection := range resolved.Collections {
+		fields[graphPathKey{kind: "collection", resource: string(collection.Slug)}] = collection.Fields
+	}
+	for _, global := range resolved.Globals {
+		fields[graphPathKey{kind: "global", resource: string(global.Slug)}] = global.Fields
+	}
+	for _, block := range resolved.Blocks {
+		fields[graphPathKey{kind: BlockResource, resource: block.Slug}] = block.ResolvedFields()
+	}
+	for key, index := range b.byPath {
+		if candidate, found := schema.FieldAtPath(fields[graphPathKey{kind: key.kind, resource: key.resource}], strings.Split(key.path, ".")); found {
+			b.graph.occurrences[index].SchemaID = candidate.ID
 		}
-		b.schemaIDs(kind, resource, schema.ChildFields(candidate))
 	}
 }
 
+// validatePolicies checks the field kinds that admit each policy, and, for a
+// global's own field, the global field policy. A block definition's fields are
+// checked against the global policy once all placements are known; see
+// validateGlobalDefinitions.
 func (b *graphBuilder) validatePolicies(d field.View, authored, path, boundary string, p graphPosition) {
 	summary := d.BehaviorSummary()
+	label := graphFieldLabel(p.resourceKind, p.resource, path)
 	issue := func(policy, message string) {
-		b.issues = append(b.issues, schema.Issue{Code: "incompatible_field_policy", Path: authored + "." + policy, Message: fmt.Sprintf("field %q: %s", path, message)})
+		b.issues = append(b.issues, schema.Issue{Code: "incompatible_field_policy", Path: authored + "." + policy, Message: fmt.Sprintf("%s: %s", label, message)})
 	}
 	if p.resourceKind == "global" {
-		if summary.CreateAccess {
-			issue("access.create", "global fields use update access, including initialization; configure Access.Update")
-		}
-		for _, phase := range []string{"beforeDuplicate", "beforeDelete", "afterDelete"} {
-			if summary.Hooks[phase] > 0 {
-				issue("hooks."+phase, "global fields do not support "+phase+" hooks; remove this hook or attach it to a collection field")
-			}
-		}
+		b.validateGlobalPolicies(summary, authored, label)
 	}
 	phases := make([]string, 0, len(summary.Hooks))
 	for phase := range summary.Hooks {
@@ -484,6 +558,22 @@ func (b *graphBuilder) validatePolicies(d field.View, authored, path, boundary s
 				policy = "afterRead"
 			}
 			issue(policy, message)
+		}
+	}
+}
+
+// validateGlobalPolicies rejects policies a global's fields cannot run: globals
+// initialize through update access and have no duplicate or delete phases.
+func (b *graphBuilder) validateGlobalPolicies(summary field.PolicySummary, authored, label string) {
+	issue := func(policy, message string) {
+		b.issues = append(b.issues, schema.Issue{Code: "incompatible_field_policy", Path: authored + "." + policy, Message: fmt.Sprintf("%s: %s", label, message)})
+	}
+	if summary.CreateAccess {
+		issue("access.create", "global fields use update access, including initialization; configure Access.Update")
+	}
+	for _, phase := range []string{"beforeDuplicate", "beforeDelete", "afterDelete"} {
+		if summary.Hooks[phase] > 0 {
+			issue("hooks."+phase, "global fields do not support "+phase+" hooks; remove this hook or attach it to a collection field")
 		}
 	}
 }

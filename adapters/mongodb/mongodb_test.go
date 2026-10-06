@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -281,14 +282,14 @@ func TestMongoBoundedSchemaEnvelopeAcceptsImplementedAndRejectsUnimplementedCapa
 		t.Fatalf("global resource envelope rejected: %v", err)
 	}
 	path, _ := query.NewPath("title")
-	if err := validateRequestEnvelope(store.Request{Collection: base, Populate: []query.Population{{Path: path}}}); err == nil || !strings.Contains(err.Error(), "population") {
+	if err := (&Store{}).validateRequestEnvelope(store.Request{Collection: base, Populate: []query.Population{{Path: path}}}); err == nil || !strings.Contains(err.Error(), "population") {
 		t.Fatalf("population envelope error = %v", err)
 	}
 }
 
 func TestMongoRequestEnvelopeDoesNotLetNonFindCallsIgnoreMutationLocks(t *testing.T) {
 	request := store.Request{Collection: mongoScalarCollection(false), Lock: store.LockMutation}
-	if err := validateRequestEnvelope(request); err == nil || !strings.Contains(err.Error(), "lock mode") {
+	if err := (&Store{}).validateRequestEnvelope(request); err == nil || !strings.Contains(err.Error(), "lock mode") {
 		t.Fatalf("shared request envelope accepted a mutation lock: %v", err)
 	}
 }
@@ -303,18 +304,24 @@ func TestMongoFilteredSelectionRejectsUnboundedLimitsBeforeEnteringTransaction(t
 	}
 }
 
-func TestMongoRequiredValuesStayReadableAcrossDirectWrites(t *testing.T) {
+// Requiredness is an operation rule that drafts defer and migrations audit.
+// Storage admits a document without a required value, and a patch that
+// clears one, exactly as PostgreSQL and SQLite store drafts.
+func TestMongoStoredValuesLeaveRequirednessToOperations(t *testing.T) {
 	collection := mongoScalarCollection(false)
 	collection.Fields = append([]schema.Field(nil), collection.Fields...)
 	collection.Fields[0].Required = true
-	if err := validateCompleteValues(collection, store.Values{"rank": store.Number(1)}); err == nil || !strings.Contains(err.Error(), "required field") {
-		t.Fatalf("incomplete create values error = %v", err)
+	for name, values := range map[string]store.Values{
+		"absent":  {"rank": store.Number(1)},
+		"cleared": {"title": store.Null()},
+		"empty":   {"title": store.String("")},
+	} {
+		if err := validateStoredValues(collection, values); err != nil {
+			t.Fatalf("%s required value rejected: %v", name, err)
+		}
 	}
-	if err := validatePatchValues(collection, store.Values{"title": store.Null()}); err == nil || !strings.Contains(err.Error(), "cannot clear") {
-		t.Fatalf("required-field patch error = %v", err)
-	}
-	if err := validatePatchValues(collection, store.Values{"rank": store.Number(2)}); err != nil {
-		t.Fatalf("unrelated patch rejected: %v", err)
+	if err := validateStoredValues(collection, store.Values{"title": store.Number(1)}); err == nil || !strings.Contains(err.Error(), "does not match field type") {
+		t.Fatalf("wrongly typed required value error = %v", err)
 	}
 }
 
@@ -395,49 +402,49 @@ func TestMongoNestedGroupValuesAreRecursivelySchemaChecked(t *testing.T) {
 			}),
 		}),
 	}
-	if err := validateCompleteValues(collection, valid); err != nil {
+	if err := validateStoredValues(collection, valid); err != nil {
 		t.Fatalf("complete nested values rejected: %v", err)
 	}
 
 	tests := []struct {
 		name   string
 		values store.Values
-		patch  bool
 		want   string
 	}{
-		{name: "missing required group", values: store.Values{"title": store.String("missing")}, want: "required field \"seo\""},
 		{name: "group list", values: store.Values{"seo": store.List(store.String("unsafe"))}, want: "value \"seo\" does not match field type \"group\""},
 		{name: "unknown child", values: store.Values{"seo": store.Object(store.Values{"headline": store.String("safe"), "removed": store.String("leak")})}, want: "value \"seo.removed\" is not a stored field"},
-		{name: "missing required child", values: store.Values{"seo": store.Object(store.Values{"rank": store.Number(1)})}, want: "required field \"seo.headline\""},
-		{name: "missing deep required child", values: store.Values{"seo": store.Object(store.Values{"headline": store.String("safe"), "details": store.Object(store.Values{})})}, want: "required field \"seo.details.summary\""},
-		{name: "patch cannot clear required group", values: store.Values{"seo": store.Null()}, patch: true, want: "cannot clear required field \"seo\""},
+		{name: "wrong deep child type", values: store.Values{"seo": store.Object(store.Values{"details": store.Object(store.Values{"summary": store.Number(1)})})}, want: "value \"seo.details.summary\" does not match field type"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var err error
-			if test.patch {
-				err = validatePatchValues(collection, test.values)
-			} else {
-				err = validateCompleteValues(collection, test.values)
-			}
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			if err := validateStoredValues(collection, test.values); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("nested value error = %v, want containing %q", err, test.want)
 			}
 		})
 	}
-	if err := validatePatchValues(collection, store.Values{"title": store.String("unrelated")}); err != nil {
-		t.Fatalf("unrelated root patch rejected: %v", err)
+	// Required groups and children are completeness rules: a draft may omit or
+	// clear them, and a patch may supply any part of a group.
+	for name, values := range map[string]store.Values{
+		"missing required group":      {"title": store.String("missing")},
+		"cleared required group":      {"seo": store.Null()},
+		"missing required child":      {"seo": store.Object(store.Values{"rank": store.Number(1)})},
+		"missing deep required child": {"seo": store.Object(store.Values{"headline": store.String("safe"), "details": store.Object(store.Values{})})},
+		"unrelated root":              {"title": store.String("unrelated")},
+	} {
+		if err := validateStoredValues(collection, values); err != nil {
+			t.Fatalf("%s rejected: %v", name, err)
+		}
 	}
-	if err := validatePatchValues(collection, store.Values{"seo": store.Object(store.Values{"headline": store.String("changed")})}); err != nil {
+	if err := validateStoredValues(collection, store.Values{"seo": store.Object(store.Values{"headline": store.String("changed")})}); err != nil {
 		t.Fatalf("partial supplied group patch rejected: %v", err)
 	}
-	if err := validatePatchValues(collection, store.Values{"seo": store.Object(store.Values{"rank": store.Number(2)})}); err != nil {
+	if err := validateStoredValues(collection, store.Values{"seo": store.Object(store.Values{"rank": store.Number(2)})}); err != nil {
 		t.Fatalf("sibling-only supplied group patch rejected: %v", err)
 	}
 }
 
 func TestMongoRepeatedFieldEnvelopeIsBounded(t *testing.T) {
-	if err := validateCollectionEnvelope(mongoRepeatedCollection()); err != nil {
+	if err := validateCollectionEnvelope(mongoRepeatedCollection(t)); err != nil {
 		t.Fatalf("bounded repeated envelope rejected: %v", err)
 	}
 	portable := []struct {
@@ -457,7 +464,7 @@ func TestMongoRepeatedFieldEnvelopeIsBounded(t *testing.T) {
 	}
 	for _, test := range portable {
 		t.Run(test.name, func(t *testing.T) {
-			collection := mongoRepeatedCollection()
+			collection := mongoRepeatedCollection(t)
 			test.mutate(&collection)
 			if err := validateCollectionEnvelope(collection); err != nil {
 				t.Fatalf("portable repeated envelope error = %v", err)
@@ -466,6 +473,7 @@ func TestMongoRepeatedFieldEnvelopeIsBounded(t *testing.T) {
 	}
 	tests := []struct {
 		name   string
+		blocks func([]schema.BlockType)
 		mutate func(*schema.Collection)
 		want   string
 	}{
@@ -473,19 +481,19 @@ func TestMongoRepeatedFieldEnvelopeIsBounded(t *testing.T) {
 		{name: "indexed row child", mutate: func(collection *schema.Collection) { collection.Fields[2].Nested.ResolvedFields()[0].Index = true }, want: "indexes on field"},
 		{
 			name: "block discriminator child",
-			mutate: func(collection *schema.Collection) {
-				child := collection.Fields[3].Blocks.ResolvedTypes()[0].ResolvedFields()[0]
-				child.Name = "blockType"
-				child.Path, _ = query.NewPath("layout", "hero", "blockType")
-				collection.Fields[3].Blocks.ResolvedTypes()[0].ResolvedFields()[0] = child
+			blocks: func(blocks []schema.BlockType) {
+				child := &blocks[0].Fields[0]
+				child.ID, child.Name, child.Path = "block-hero-block-type", "blockType", query.Field("blockType")
 			},
 			want: "reserved discriminator",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			collection := mongoRepeatedCollection()
-			test.mutate(&collection)
+			collection := mongoRepeatedCollectionWith(t, test.blocks)
+			if test.mutate != nil {
+				test.mutate(&collection)
+			}
 			if err := validateCollectionEnvelope(collection); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("repeated envelope error = %v, want containing %q", err, test.want)
 			}
@@ -494,21 +502,24 @@ func TestMongoRepeatedFieldEnvelopeIsBounded(t *testing.T) {
 }
 
 func TestMongoRepeatedValuesRequireCanonicalWholeRoots(t *testing.T) {
-	collection := mongoRepeatedCollection()
+	collection := mongoRepeatedCollection(t)
 	valid := mongoRepeatedValues()
-	if err := validateCompleteValues(collection, valid); err != nil {
+	if err := validateStoredValues(collection, valid); err != nil {
 		t.Fatalf("complete repeated values rejected: %v", err)
 	}
-	if err := validatePatchValues(collection, store.Values{
+	if err := validateStoredValues(collection, store.Values{
 		"rows": valid["rows"], "layout": valid["layout"], "tags": valid["tags"],
 	}); err != nil {
 		t.Fatalf("whole-root repeated patch rejected: %v", err)
+	}
+	// A row may lack a required child, as a draft row does.
+	if err := validateStoredValues(collection, store.Values{"rows": store.List(store.Object(store.Values{"kind": store.String("a")}))}); err != nil {
+		t.Fatalf("row without a required child rejected: %v", err)
 	}
 
 	tests := []struct {
 		name   string
 		values store.Values
-		patch  bool
 		want   string
 	}{
 		{name: "select scalar", values: store.Values{"tags": store.String("alpha")}, want: "does not match field type"},
@@ -522,20 +533,13 @@ func TestMongoRepeatedValuesRequireCanonicalWholeRoots(t *testing.T) {
 			store.Object(store.Values{"_key": store.String("same"), "kind": store.String("a"), "label": store.String("b")}),
 			store.Object(store.Values{"_key": store.String("same"), "kind": store.String("c"), "label": store.String("d")}),
 		)}, want: "duplicates row"},
-		{name: "partial row replacement", patch: true, values: store.Values{"rows": store.List(store.Object(store.Values{"kind": store.String("a")}))}, want: "missing required field"},
 		{name: "block without discriminator", values: store.Values{"layout": store.List(store.Object(store.Values{"heading": store.String("unsafe")}))}, want: "requires schema recovery"},
 		{name: "unknown block discriminator", values: store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("missing")}))}, want: "requires schema recovery"},
 		{name: "wrong block fields", values: store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("quote"), "tone": store.String("unsafe"), "heading": store.String("quote")}))}, want: "not a stored field"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var err error
-			if test.patch {
-				err = validatePatchValues(collection, test.values)
-			} else {
-				err = validateValues(collection, test.values)
-			}
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			if err := validateStoredValues(collection, test.values); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("repeated value error = %v, want containing %q", err, test.want)
 			}
 		})
@@ -583,7 +587,15 @@ func mongoGroupCollection() schema.Collection {
 	}
 }
 
-func mongoRepeatedCollection() schema.Collection {
+func mongoRepeatedCollection(t testing.TB) schema.Collection {
+	t.Helper()
+	return mongoRepeatedCollectionWith(t, nil)
+}
+
+// mongoRepeatedCollectionWith binds the repeated fixture's fields to its hero
+// and quote block definitions, after change edits those definitions when given.
+func mongoRepeatedCollectionWith(t testing.TB, change func(blocks []schema.BlockType)) schema.Collection {
+	t.Helper()
 	path := func(segments ...string) query.Path {
 		value, _ := query.NewPath(segments...)
 		return value
@@ -594,7 +606,11 @@ func mongoRepeatedCollection() schema.Collection {
 			Category: schema.FieldCategoryScalar, Required: required, Text: &schema.TextField{},
 		}
 	}
-	return schema.Collection{
+	blocks := mongoRepeatedFixtureBlocks()
+	if change != nil {
+		change(blocks)
+	}
+	collection := schema.Collection{
 		ID: "repeated-posts", Slug: "repeated-posts",
 		Labels: schema.CollectionLabels{Singular: "Repeated post", Plural: "Repeated posts"},
 		Fields: []schema.Field{
@@ -638,18 +654,45 @@ func mongoRepeatedCollection() schema.Collection {
 			{
 				ID: "repeated-posts-layout", Name: "layout", Path: path("layout"),
 				Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested,
-				Blocks: &schema.BlocksField{Types: []schema.BlockType{
-					{Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{
-						text("repeated-posts-layout-hero-heading", "heading", path("layout", "hero", "heading"), true),
-						text("repeated-posts-layout-hero-tone", "tone", path("layout", "hero", "tone"), false),
-					}},
-					{Slug: "quote", Labels: schema.BlockLabels{Singular: "Quote"}, Fields: []schema.Field{
-						text("repeated-posts-layout-quote-heading", "heading", path("layout", "quote", "heading"), true),
-					}},
-				}},
+				Blocks: &schema.BlocksField{BlockReferences: []string{"hero", "quote"}},
 			},
 		},
 	}
+	collection.Fields = schematest.Bind(t, collection.ID, blocks, collection.Fields...)
+	return collection
+}
+
+// mongoRepeatedFixtureBlocks are the hero and quote definitions the repeated
+// fixture's layout selects.
+func mongoRepeatedFixtureBlocks() []schema.BlockType {
+	text := func(id schema.StableID, name string, required bool) schema.Field {
+		path, _ := query.NewPath(name)
+		return schema.Field{
+			ID: id, Name: name, Path: path, Type: schema.FieldTypeText,
+			Category: schema.FieldCategoryScalar, Required: required, Text: &schema.TextField{},
+		}
+	}
+	return []schema.BlockType{
+		{Slug: "hero", TypeName: "Hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{
+			text("block-hero-heading", "heading", true),
+			text("block-hero-tone", "tone", false),
+		}},
+		{Slug: "quote", TypeName: "Quote", Labels: schema.BlockLabels{Singular: "Quote"}, Fields: []schema.Field{
+			text("block-quote-heading", "heading", true),
+		}},
+	}
+}
+
+// mongoRepeatedManifest records the repeated fixture's collection with the
+// block registry its layout selects.
+func mongoRepeatedManifest(collection schema.Collection) schema.Manifest {
+	return schema.NewManifest(schema.Snapshot{
+		Version:     schema.CurrentVersion,
+		Application: schema.Application{Name: "MongoDB repeated roots"},
+		Blocks:      mongoRepeatedFixtureBlocks(),
+		Collections: []schema.Collection{collection},
+		Plugins:     []schema.Plugin{},
+	})
 }
 
 func mongoRepeatedValues() store.Values {

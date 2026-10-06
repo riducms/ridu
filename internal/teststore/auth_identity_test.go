@@ -7,6 +7,7 @@ import (
 
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestAuthIdentityCanonicalizationAtDirectStoreBoundary(t *testing.T) {
@@ -31,7 +32,7 @@ func TestAuthIdentityCanonicalizationAtDirectStoreBoundary(t *testing.T) {
 	}
 
 	updateValues := store.Values{"email": store.String(" Next@Example.COM ")}
-	updated, err := transaction.Update(ctx, store.UpdateRequest{
+	updated, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: created.ID}, Values: updateValues,
 	})
 	if err != nil {

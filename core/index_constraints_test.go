@@ -65,7 +65,7 @@ func TestResolveRejectsUnsupportedOrAmbiguousIndexes(t *testing.T) {
 		{
 			name:   "block field index",
 			config: ridu.Config{Name: "Blocks", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Blocks("content", field.Block{Slug: "hero", Fields: field.Fields{field.Text("slug").Index()}})}}}},
-			code:   "unsupported_index", path: "collections[0].fields[0].blocks[0].fields[0].index",
+			code:   "unsupported_index", path: "blocks.hero.fields[0].index",
 		},
 		{
 			name: "compound through array",

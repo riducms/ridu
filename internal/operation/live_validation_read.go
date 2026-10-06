@@ -97,7 +97,7 @@ func (engine *Engine) liveExecuteRead(ctx context.Context, request Request) (res
 	base := Context{LiveValidation: true, Context: ctx, Operation: operation.Read, Collection: collection.Schema, ID: request.ID, Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection, Locale: selection.Locale, Locales: selection.Configured}
 	decision, accessError := authorize(collection, base)
 	if accessError != nil {
-		return result, capabilityAccessError("reader access rule failed", accessError)
+		return result, accessRuleError("reader access rule failed", accessError)
 	}
 	if decision.Kind == Deny {
 		return result, liveDenied()
@@ -134,7 +134,7 @@ func (engine *Engine) liveExecuteRead(ctx context.Context, request Request) (res
 		}
 		*document = projected
 		if err := redactBoundFields(collection, base, document); err != nil {
-			return capabilityAccessError("reader field access rule failed", err)
+			return accessRuleError("reader field access rule failed", err)
 		}
 		projectDocumentValues(document, request.Select)
 		return nil

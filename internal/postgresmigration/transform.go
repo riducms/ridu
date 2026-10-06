@@ -4,7 +4,6 @@ package postgresmigration
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -32,16 +31,17 @@ func validateVersionedResources(kind string, before, after []schema.Collection) 
 			continue
 		}
 		current, survives := afterByID[previous.ID]
-		if survives && !reflect.DeepEqual(previous.Fields, current.Fields) {
+		if survives && !schema.EqualFields(previous.Fields, current.Fields) {
 			return fmt.Errorf("PostgreSQL data transforms cannot change fields on versioned %s %q until retained snapshots can be rewritten atomically", kind, previous.ID)
 		}
 	}
 	return nil
 }
 
-// BindDataTransforms inserts checksum-only callback identities immediately
-// before the final PostgreSQL schema assertion without changing the artifact
-// format or physical planner contract.
+// BindDataTransforms inserts checksum-only callback identities into the final
+// transaction phase, immediately before its required-value audit when it has
+// one and otherwise before the final PostgreSQL schema assertion, so the audit
+// sees the values a transform writes.
 func BindDataTransforms(artifact migration.Artifact, transforms []migration.DataTransformDescriptor) (migration.Artifact, error) {
 	if len(transforms) == 0 {
 		return artifact, nil
@@ -63,8 +63,14 @@ func BindDataTransforms(artifact migration.Artifact, transforms []migration.Data
 	if phase.Mode != migration.PhaseTransaction || len(phase.Steps) == 0 || phase.Steps[len(phase.Steps)-1].Kind != migration.StepAssertSchema {
 		return migration.Artifact{}, fmt.Errorf("PostgreSQL data transforms require a final transaction-phase schema assertion")
 	}
-	assertion := phase.Steps[len(phase.Steps)-1]
-	steps := append([]migration.Step(nil), phase.Steps[:len(phase.Steps)-1]...)
+	insertion := len(phase.Steps) - 1
+	for index, step := range phase.Steps {
+		if step.Kind == migration.StepAuditRequiredValues {
+			insertion = index
+			break
+		}
+	}
+	steps := append([]migration.Step(nil), phase.Steps[:insertion]...)
 	for _, transform := range transforms {
 		payload, err := migration.MarshalStepPayload(migration.DataTransformPayload{Transform: transform})
 		if err != nil {
@@ -75,7 +81,7 @@ func BindDataTransforms(artifact migration.Artifact, transforms []migration.Data
 			Name: "run data transform " + transform.Name, Payload: payload,
 		})
 	}
-	phase.Steps = append(steps, assertion)
+	phase.Steps = append(steps, phase.Steps[insertion:]...)
 	stepNumber := 0
 	for phaseIndex := range artifact.Phases {
 		for stepIndex := range artifact.Phases[phaseIndex].Steps {

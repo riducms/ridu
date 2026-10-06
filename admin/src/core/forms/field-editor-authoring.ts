@@ -1,6 +1,6 @@
 import type { FieldAuthoringHost } from "@riducms/plugin";
 import type { FieldEditorProps } from "@riducms/plugin/editor";
-import { cloneFormValue } from "@admin/core/forms/form-schema";
+import { cloneSchemaCollections } from "@admin/core/schema/schema-clone";
 
 type EditorAuthoring = FieldEditorProps["authoring"];
 
@@ -29,7 +29,7 @@ export function guardEditorAuthoring(
 	return {
 		get collections() {
 			assertActive();
-			return cloneFormValue(authoring().collections) as EditorAuthoring["collections"];
+			return cloneSchemaCollections(authoring().collections);
 		},
 		get documentRevision() {
 			assertActive();

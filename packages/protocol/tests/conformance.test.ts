@@ -1,10 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+	isAccessCapabilities,
 	isRecord,
 	isAdminCollectionListData,
 	isAdminPreparedRouteData,
 	isErrorEnvelope,
+	isPageEnvelope,
+	isUncountedPageEnvelope,
 	isValidationIssue,
 } from "../src";
 
@@ -17,6 +20,41 @@ describe("record guard", () => {
 	it("checks only the object container, not its shape or prototype", () => {
 		for (const value of [{}, { arbitrary: undefined }, Object.create(null), new Date(0)])
 			expect(isRecord(value)).toBe(true);
+	});
+});
+
+describe("access capabilities", () => {
+	const operations = Object.fromEntries(
+		[
+			"admin",
+			"create",
+			"read",
+			"readVersions",
+			"update",
+			"delete",
+			"duplicate",
+			"publish",
+			"unpublish",
+			"restoreDeleted",
+			"deletePermanent",
+			"selectAll",
+		].map((key) => [key, true])
+	);
+	const allowed = { read: true, create: true, update: false };
+
+	it("accepts block definition capabilities by slug and definition-relative path", () => {
+		const access = {
+			operations,
+			fields: {},
+			blockFields: { card: { "details.caption": allowed } },
+		};
+		expect(isAccessCapabilities(access)).toBe(true);
+		expect(isAccessCapabilities({ operations, fields: { title: allowed } })).toBe(true);
+	});
+
+	it("rejects malformed block definition capabilities", () => {
+		for (const blockFields of [[], { card: [] }, { card: { caption: { read: true } } }])
+			expect(isAccessCapabilities({ operations, fields: {}, blockFields })).toBe(false);
 	});
 });
 
@@ -156,8 +194,40 @@ describe("semantic collection list wire data", () => {
 				...data,
 				page: { value: { ...data.page.value, access: { collection: access, documents: {} } } },
 			},
+			{
+				...data,
+				page: {
+					value: {
+						...data.page.value,
+						pagination: { page: 1, limit: 10, hasNextPage: false, hasPrevPage: false },
+					},
+				},
+			},
 		])
 			expect(isAdminCollectionListData(candidate)).toBe(false);
+	});
+});
+
+describe("collection page envelopes", () => {
+	const metadata = { page: 2, limit: 10, hasNextPage: true, hasPrevPage: true };
+	const counted = { docs: [], pagination: { ...metadata, totalDocs: 21, totalPages: 3 } };
+	const uncounted = { docs: [], pagination: metadata };
+	it("distinguishes counted pages from pagination=false pages", () => {
+		expect(isPageEnvelope(counted)).toBe(true);
+		expect(isUncountedPageEnvelope(counted)).toBe(false);
+		expect(isUncountedPageEnvelope(uncounted)).toBe(true);
+		expect(isPageEnvelope(uncounted)).toBe(false);
+	});
+	it("rejects partial or malformed totals and metadata", () => {
+		for (const pagination of [
+			{ ...metadata, totalDocs: 21 },
+			{ ...metadata, totalPages: 3 },
+			{ ...metadata, totalDocs: "21", totalPages: 3 },
+			{ ...metadata, hasNextPage: "true", totalDocs: 21, totalPages: 3 },
+		]) {
+			expect(isPageEnvelope({ docs: [], pagination })).toBe(false);
+			expect(isUncountedPageEnvelope({ docs: [], pagination })).toBe(false);
+		}
 	});
 });
 

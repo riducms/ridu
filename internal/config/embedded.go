@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/riducms/ridu/field"
@@ -12,22 +11,18 @@ func (r *fieldResolver) resolveEmbeddedTrees(definition field.View, configPath s
 	trees := definition.EmbeddedTrees()
 	result := make([]schema.EmbeddedTree, len(trees))
 	for i, t := range trees {
-		p := fmt.Sprintf("%s.plugin.embeddedTrees[%d]", configPath, i)
 		resolved := schema.EmbeddedTree{Version: schema.EmbeddedTreeVersion, Key: t.Key, Root: append([]string{}, t.Root...), Children: t.Children, Tag: t.Tag, Cases: make([]schema.EmbeddedTreeCase, len(t.Cases))}
 		for j, c := range t.Cases {
-			// Resolve a schema-only ordinary Blocks definition to retain the exact same
+			// Cases select definitions resolved like any other, retaining the same
 			// field restrictions, stable IDs, naming, defaults, and reference contracts.
 			parent := append(append([]string{}, path...), t.Key)
 			parent = append(parent, c.TagValue)
-			container := &schema.BlocksField{}
-			if len(c.Types)+len(c.BlockReferences) > 0 {
-				container = r.resolveBlocks(c.Types, c.BlockReferences, fmt.Sprintf("%s.cases[%d]", p, j), parent)
+			// An empty selection reserves the envelope while admitting no payloads.
+			for _, block := range c.Types {
+				r.resolver.resolveRegisteredBlock(block)
 			}
-			resolvedCase := schema.EmbeddedTreeCase{TagValue: c.TagValue, Payload: c.Payload, Discriminator: c.Discriminator, Identity: c.Identity, Types: container.Types, BlockReferences: container.BlockReferences}
-			if len(c.BlockReferences) > 0 {
-				resolvedCase = schema.ReferenceCase(resolvedCase, r.resolver.blockTemplates, r.collectionID, parent)
-			}
-			resolved.Cases[j] = resolvedCase
+			resolvedCase := schema.EmbeddedTreeCase{TagValue: c.TagValue, Payload: c.Payload, Discriminator: c.Discriminator, Identity: c.Identity, BlockReferences: c.BlockReferences}
+			resolved.Cases[j] = schema.ReferenceCase(resolvedCase, r.resolver.blockDefinitions, r.collectionID, parent)
 		}
 		result[i] = resolved
 	}

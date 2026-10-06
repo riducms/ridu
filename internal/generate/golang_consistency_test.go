@@ -164,7 +164,7 @@ func TestPopulatedLocalReadsWithoutBlocks(t *testing.T){
  found,err:=posts.Find(ctx,created.ID,core.TypedReadOptions{Populate:populate});if err!=nil{t.Fatal(err)}
  if found.Author==nil||found.Author.Document==nil||found.Author.Document.ID!=author.ID{t.Fatal("Find did not populate through ordinary collection")}
  listed,err:=posts.List(ctx,core.TypedListOptions{Populate:populate});if err!=nil{t.Fatal(err)}
- if listed.Total!=1||len(listed.Documents)!=1||listed.Documents[0].Author.Document==nil{t.Fatal("List did not populate")}
+ if *listed.Total!=1||len(listed.Documents)!=1||listed.Documents[0].Author.Document==nil{t.Fatal("List did not populate")}
  site:=g.SiteGlobal.With(app.Local())
  if _,err:=site.Update(ctx,g.SiteUpdate{Author:core.Set(author.ID)},core.TypedMutationOptions{});err!=nil{t.Fatal(err)}
  global,err:=site.Find(ctx,core.TypedReadOptions{Populate:populate});if err!=nil{t.Fatal(err)}

@@ -10,7 +10,12 @@ import (
 )
 
 func testField() schema.Field {
-	return schema.Field{Name: "content", Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "cards", Root: []string{"outline"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", Types: []schema.BlockType{{Slug: "card"}}}}}}}}
+	content := schema.Field{Name: "content", Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "cards", Root: []string{"outline"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", BlockReferences: []string{"card"}}}}}}}
+	snapshot := schema.Snapshot{Blocks: []schema.BlockType{{Slug: "card", TypeName: "Card"}}, Collections: []schema.Collection{{ID: "pages", Slug: "pages", Fields: []schema.Field{content}}}}
+	if err := schema.BindBlockReferences(&snapshot); err != nil {
+		panic(err)
+	}
+	return snapshot.Collections[0].Fields[0]
 }
 func widget(key string) store.Value {
 	return store.Object(store.Values{"kind": store.String("widget"), "content": store.Object(store.Values{"schema": store.String("card"), "uid": store.String(key)})})

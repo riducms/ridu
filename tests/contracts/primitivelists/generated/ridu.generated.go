@@ -1850,7 +1850,7 @@ func (rows *PrimitiveProductsBodyBlocksBlock) UnmarshalJSON(data []byte) error {
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsBodyBlocksBlockCard
+			var value Card
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsBodyBlocksBlock", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -1866,7 +1866,7 @@ func (rows *PrimitiveProductsBodyBlocksBlock) UnmarshalJSON(data []byte) error {
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsBodyBlocksBlockCard) isPrimitiveProductsBodyBlocksBlockBlock() {}
+func (*Card) isPrimitiveProductsBodyBlocksBlockBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -1889,8 +1889,8 @@ func (rows *PrimitiveProductsBodyBlocksBlock) Retain() (PrimitiveProductsBodyBlo
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *PrimitiveProductsBodyBlocksBlockCard:
-			retained[index] = &PrimitiveProductsBodyBlocksBlockCardUpdate{Key: key}
+		case *Card:
+			retained[index] = &CardUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "PrimitiveProductsBodyBlocksBlock", Reason: "unsupported retained block variant"}, index)
 		}
@@ -1983,7 +1983,7 @@ func (rows *PrimitiveProductsBodyBlocksBlockInput) UnmarshalJSON(data []byte) er
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsBodyBlocksBlockCardInput
+			var value CardInput
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockInput", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -1999,7 +1999,7 @@ func (rows *PrimitiveProductsBodyBlocksBlockInput) UnmarshalJSON(data []byte) er
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsBodyBlocksBlockCardInput) isPrimitiveProductsBodyBlocksBlockInputBlock() {}
+func (*CardInput) isPrimitiveProductsBodyBlocksBlockInputBlock() {}
 
 // PrimitiveProductsBodyBlocksBlockUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
 // Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
@@ -2079,13 +2079,13 @@ func (rows *PrimitiveProductsBodyBlocksBlockUpdate) UnmarshalJSON(data []byte) e
 		switch header.Type {
 		case "card":
 			if header.Key == "" {
-				var value PrimitiveProductsBodyBlocksBlockCardInput
+				var value CardInput
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed new variant", Err: err}, index)
 				}
 				decoded[index] = &value
 			} else {
-				var value PrimitiveProductsBodyBlocksBlockCardUpdate
+				var value CardUpdate
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed keyed update", Err: err}, index)
 				}
@@ -2102,8 +2102,8 @@ func (rows *PrimitiveProductsBodyBlocksBlockUpdate) UnmarshalJSON(data []byte) e
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsBodyBlocksBlockCardUpdate) isPrimitiveProductsBodyBlocksBlockUpdateBlock() {}
-func (*PrimitiveProductsBodyBlocksBlockCardInput) isPrimitiveProductsBodyBlocksBlockUpdateBlock()  {}
+func (*CardUpdate) isPrimitiveProductsBodyBlocksBlockUpdateBlock() {}
+func (*CardInput) isPrimitiveProductsBodyBlocksBlockUpdateBlock()  {}
 
 // PrimitiveProductsBodyBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type PrimitiveProductsBodyBlocksBlockAllLocalesBlock interface {
@@ -2180,7 +2180,7 @@ func (rows *PrimitiveProductsBodyBlocksBlockAllLocales) UnmarshalJSON(data []byt
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsBodyBlocksBlockCardAllLocales
+			var value CardAllLocales
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockAllLocales", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -2196,8 +2196,7 @@ func (rows *PrimitiveProductsBodyBlocksBlockAllLocales) UnmarshalJSON(data []byt
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsBodyBlocksBlockCardAllLocales) isPrimitiveProductsBodyBlocksBlockAllLocalesBlock() {
-}
+func (*CardAllLocales) isPrimitiveProductsBodyBlocksBlockAllLocalesBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -2220,8 +2219,8 @@ func (rows *PrimitiveProductsBodyBlocksBlockAllLocales) Retain() (PrimitiveProdu
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *PrimitiveProductsBodyBlocksBlockCardAllLocales:
-			retained[index] = &PrimitiveProductsBodyBlocksBlockCardUpdate{Key: key}
+		case *CardAllLocales:
+			retained[index] = &CardUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "PrimitiveProductsBodyBlocksBlockAllLocales", Reason: "unsupported retained block variant"}, index)
 		}
@@ -2316,7 +2315,7 @@ func (rows *PrimitiveProductsBodyBlocksBlockAllLocalesValue) UnmarshalJSON(data 
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsBodyBlocksBlockCardAllLocalesValue
+			var value CardAllLocalesValue
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockAllLocalesValue", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -2332,8 +2331,7 @@ func (rows *PrimitiveProductsBodyBlocksBlockAllLocalesValue) UnmarshalJSON(data 
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) isPrimitiveProductsBodyBlocksBlockAllLocalesValueBlock() {
-}
+func (*CardAllLocalesValue) isPrimitiveProductsBodyBlocksBlockAllLocalesValueBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -2356,8 +2354,8 @@ func (rows *PrimitiveProductsBodyBlocksBlockAllLocalesValue) Retain() (Primitive
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *PrimitiveProductsBodyBlocksBlockCardAllLocalesValue:
-			retained[index] = &PrimitiveProductsBodyBlocksBlockCardUpdate{Key: key}
+		case *CardAllLocalesValue:
+			retained[index] = &CardUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "PrimitiveProductsBodyBlocksBlockAllLocalesValue", Reason: "unsupported retained block variant"}, index)
 		}
@@ -2420,13 +2418,13 @@ func (rows *PrimitiveProductsContent) UnmarshalJSON(data []byte) error {
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsContentCard
+			var value Card
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsContent", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
 			decoded[index] = &value
 		case "note":
-			var value PrimitiveProductsContentNote
+			var value Note
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsContent", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -2442,8 +2440,8 @@ func (rows *PrimitiveProductsContent) UnmarshalJSON(data []byte) error {
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsContentCard) isPrimitiveProductsContentBlock() {}
-func (*PrimitiveProductsContentNote) isPrimitiveProductsContentBlock() {}
+func (*Card) isPrimitiveProductsContentBlock() {}
+func (*Note) isPrimitiveProductsContentBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -2466,10 +2464,10 @@ func (rows *PrimitiveProductsContent) Retain() (PrimitiveProductsContentUpdate, 
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *PrimitiveProductsContentCard:
-			retained[index] = &PrimitiveProductsContentCardUpdate{Key: key}
-		case *PrimitiveProductsContentNote:
-			retained[index] = &PrimitiveProductsContentNoteUpdate{Key: key}
+		case *Card:
+			retained[index] = &CardUpdate{Key: key}
+		case *Note:
+			retained[index] = &NoteUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "PrimitiveProductsContent", Reason: "unsupported retained block variant"}, index)
 		}
@@ -2521,13 +2519,13 @@ func (rows *PrimitiveProductsContentInput) UnmarshalJSON(data []byte) error {
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsContentCardInput
+			var value CardInput
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsContentInput", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
 			decoded[index] = &value
 		case "note":
-			var value PrimitiveProductsContentNoteInput
+			var value NoteInput
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsContentInput", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -2543,8 +2541,8 @@ func (rows *PrimitiveProductsContentInput) UnmarshalJSON(data []byte) error {
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsContentCardInput) isPrimitiveProductsContentInputBlock() {}
-func (*PrimitiveProductsContentNoteInput) isPrimitiveProductsContentInputBlock() {}
+func (*CardInput) isPrimitiveProductsContentInputBlock() {}
+func (*NoteInput) isPrimitiveProductsContentInputBlock() {}
 
 // PrimitiveProductsContentUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
 // Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
@@ -2594,13 +2592,13 @@ func (rows *PrimitiveProductsContentUpdate) UnmarshalJSON(data []byte) error {
 		switch header.Type {
 		case "card":
 			if header.Key == "" {
-				var value PrimitiveProductsContentCardInput
+				var value CardInput
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "PrimitiveProductsContentUpdate", Discriminator: header.Type, Reason: "malformed new variant", Err: err}, index)
 				}
 				decoded[index] = &value
 			} else {
-				var value PrimitiveProductsContentCardUpdate
+				var value CardUpdate
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "PrimitiveProductsContentUpdate", Discriminator: header.Type, Reason: "malformed keyed update", Err: err}, index)
 				}
@@ -2608,13 +2606,13 @@ func (rows *PrimitiveProductsContentUpdate) UnmarshalJSON(data []byte) error {
 			}
 		case "note":
 			if header.Key == "" {
-				var value PrimitiveProductsContentNoteInput
+				var value NoteInput
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "PrimitiveProductsContentUpdate", Discriminator: header.Type, Reason: "malformed new variant", Err: err}, index)
 				}
 				decoded[index] = &value
 			} else {
-				var value PrimitiveProductsContentNoteUpdate
+				var value NoteUpdate
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "PrimitiveProductsContentUpdate", Discriminator: header.Type, Reason: "malformed keyed update", Err: err}, index)
 				}
@@ -2631,10 +2629,10 @@ func (rows *PrimitiveProductsContentUpdate) UnmarshalJSON(data []byte) error {
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsContentCardUpdate) isPrimitiveProductsContentUpdateBlock() {}
-func (*PrimitiveProductsContentCardInput) isPrimitiveProductsContentUpdateBlock()  {}
-func (*PrimitiveProductsContentNoteUpdate) isPrimitiveProductsContentUpdateBlock() {}
-func (*PrimitiveProductsContentNoteInput) isPrimitiveProductsContentUpdateBlock()  {}
+func (*CardUpdate) isPrimitiveProductsContentUpdateBlock() {}
+func (*CardInput) isPrimitiveProductsContentUpdateBlock()  {}
+func (*NoteUpdate) isPrimitiveProductsContentUpdateBlock() {}
+func (*NoteInput) isPrimitiveProductsContentUpdateBlock()  {}
 
 // PrimitiveProductsContentAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type PrimitiveProductsContentAllLocalesBlock interface {
@@ -2681,13 +2679,13 @@ func (rows *PrimitiveProductsContentAllLocales) UnmarshalJSON(data []byte) error
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsContentCardAllLocales
+			var value CardAllLocales
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsContentAllLocales", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
 			decoded[index] = &value
 		case "note":
-			var value PrimitiveProductsContentNoteAllLocales
+			var value NoteAllLocales
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsContentAllLocales", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -2703,8 +2701,8 @@ func (rows *PrimitiveProductsContentAllLocales) UnmarshalJSON(data []byte) error
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsContentCardAllLocales) isPrimitiveProductsContentAllLocalesBlock() {}
-func (*PrimitiveProductsContentNoteAllLocales) isPrimitiveProductsContentAllLocalesBlock() {}
+func (*CardAllLocales) isPrimitiveProductsContentAllLocalesBlock() {}
+func (*NoteAllLocales) isPrimitiveProductsContentAllLocalesBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -2727,10 +2725,10 @@ func (rows *PrimitiveProductsContentAllLocales) Retain() (PrimitiveProductsConte
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *PrimitiveProductsContentCardAllLocales:
-			retained[index] = &PrimitiveProductsContentCardUpdate{Key: key}
-		case *PrimitiveProductsContentNoteAllLocales:
-			retained[index] = &PrimitiveProductsContentNoteUpdate{Key: key}
+		case *CardAllLocales:
+			retained[index] = &CardUpdate{Key: key}
+		case *NoteAllLocales:
+			retained[index] = &NoteUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "PrimitiveProductsContentAllLocales", Reason: "unsupported retained block variant"}, index)
 		}
@@ -2784,13 +2782,13 @@ func (rows *PrimitiveProductsContentAllLocalesValue) UnmarshalJSON(data []byte) 
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsContentCardAllLocalesValue
+			var value CardAllLocalesValue
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsContentAllLocalesValue", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
 			decoded[index] = &value
 		case "note":
-			var value PrimitiveProductsContentNoteAllLocalesValue
+			var value NoteAllLocalesValue
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsContentAllLocalesValue", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -2806,10 +2804,8 @@ func (rows *PrimitiveProductsContentAllLocalesValue) UnmarshalJSON(data []byte) 
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsContentCardAllLocalesValue) isPrimitiveProductsContentAllLocalesValueBlock() {
-}
-func (*PrimitiveProductsContentNoteAllLocalesValue) isPrimitiveProductsContentAllLocalesValueBlock() {
-}
+func (*CardAllLocalesValue) isPrimitiveProductsContentAllLocalesValueBlock() {}
+func (*NoteAllLocalesValue) isPrimitiveProductsContentAllLocalesValueBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -2832,10 +2828,10 @@ func (rows *PrimitiveProductsContentAllLocalesValue) Retain() (PrimitiveProducts
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *PrimitiveProductsContentCardAllLocalesValue:
-			retained[index] = &PrimitiveProductsContentCardUpdate{Key: key}
-		case *PrimitiveProductsContentNoteAllLocalesValue:
-			retained[index] = &PrimitiveProductsContentNoteUpdate{Key: key}
+		case *CardAllLocalesValue:
+			retained[index] = &CardUpdate{Key: key}
+		case *NoteAllLocalesValue:
+			retained[index] = &NoteUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "PrimitiveProductsContentAllLocalesValue", Reason: "unsupported retained block variant"}, index)
 		}
@@ -2917,7 +2913,7 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlock) UnmarshalJSON(data []byte
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsLocalizedBodyBlocksBlockCard
+			var value Card
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlock", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -2933,8 +2929,7 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlock) UnmarshalJSON(data []byte
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCard) isPrimitiveProductsLocalizedBodyBlocksBlockBlock() {
-}
+func (*Card) isPrimitiveProductsLocalizedBodyBlocksBlockBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -2957,8 +2952,8 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlock) Retain() (PrimitiveProduc
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *PrimitiveProductsLocalizedBodyBlocksBlockCard:
-			retained[index] = &PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate{Key: key}
+		case *Card:
+			retained[index] = &CardUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "PrimitiveProductsLocalizedBodyBlocksBlock", Reason: "unsupported retained block variant"}, index)
 		}
@@ -3051,7 +3046,7 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockInput) UnmarshalJSON(data [
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsLocalizedBodyBlocksBlockCardInput
+			var value CardInput
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockInput", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -3067,8 +3062,7 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockInput) UnmarshalJSON(data [
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCardInput) isPrimitiveProductsLocalizedBodyBlocksBlockInputBlock() {
-}
+func (*CardInput) isPrimitiveProductsLocalizedBodyBlocksBlockInputBlock() {}
 
 // PrimitiveProductsLocalizedBodyBlocksBlockUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
 // Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
@@ -3148,13 +3142,13 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockUpdate) UnmarshalJSON(data 
 		switch header.Type {
 		case "card":
 			if header.Key == "" {
-				var value PrimitiveProductsLocalizedBodyBlocksBlockCardInput
+				var value CardInput
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed new variant", Err: err}, index)
 				}
 				decoded[index] = &value
 			} else {
-				var value PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate
+				var value CardUpdate
 				if err := json.Unmarshal(data, &value); err != nil {
 					return blockRowError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed keyed update", Err: err}, index)
 				}
@@ -3171,10 +3165,8 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockUpdate) UnmarshalJSON(data 
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate) isPrimitiveProductsLocalizedBodyBlocksBlockUpdateBlock() {
-}
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCardInput) isPrimitiveProductsLocalizedBodyBlocksBlockUpdateBlock() {
-}
+func (*CardUpdate) isPrimitiveProductsLocalizedBodyBlocksBlockUpdateBlock() {}
+func (*CardInput) isPrimitiveProductsLocalizedBodyBlocksBlockUpdateBlock()  {}
 
 // PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesBlock interface {
@@ -3251,7 +3243,7 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockAllLocales) UnmarshalJSON(d
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales
+			var value CardAllLocales
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockAllLocales", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -3267,8 +3259,7 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockAllLocales) UnmarshalJSON(d
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales) isPrimitiveProductsLocalizedBodyBlocksBlockAllLocalesBlock() {
-}
+func (*CardAllLocales) isPrimitiveProductsLocalizedBodyBlocksBlockAllLocalesBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -3291,8 +3282,8 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockAllLocales) Retain() (Primi
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales:
-			retained[index] = &PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate{Key: key}
+		case *CardAllLocales:
+			retained[index] = &CardUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "PrimitiveProductsLocalizedBodyBlocksBlockAllLocales", Reason: "unsupported retained block variant"}, index)
 		}
@@ -3387,7 +3378,7 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValue) UnmarshalJ
 		}
 		switch header.Type {
 		case "card":
-			var value PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue
+			var value CardAllLocalesValue
 			if err := json.Unmarshal(data, &value); err != nil {
 				return blockRowError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValue", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
 			}
@@ -3403,8 +3394,7 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValue) UnmarshalJ
 	*rows = decoded
 	return nil
 }
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue) isPrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValueBlock() {
-}
+func (*CardAllLocalesValue) isPrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValueBlock() {}
 
 // Retain creates fresh key-only updates in the same order, preserving every occurrence.
 // Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
@@ -3427,8 +3417,8 @@ func (rows *PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValue) Retain() (
 		}
 		seen[key] = true
 		switch row.(type) {
-		case *PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue:
-			retained[index] = &PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate{Key: key}
+		case *CardAllLocalesValue:
+			retained[index] = &CardUpdate{Key: key}
 		default:
 			return nil, blockRowError(ContractError{Operation: "retain", Container: "PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValue", Reason: "unsupported retained block variant"}, index)
 		}
@@ -3447,13 +3437,13 @@ func (payload PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValuePayload) R
 	return PrimitiveProductsLocalizedBodyBlocksBlockUpdatePayload{Value: retained[0]}, nil
 }
 
-// PrimitiveProductsBodyBlocksBlockCardBlockType is the immutable stored discriminator.
-const PrimitiveProductsBodyBlocksBlockCardBlockType = "card"
+// CardBlockType is the immutable stored discriminator.
+const CardBlockType = "card"
 
-// PrimitiveProductsBodyBlocksBlockCard is a generated block. Use *PrimitiveProductsBodyBlocksBlockCard in block lists and type switches.
+// Card is a generated block. Use *Card in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-// Create with PrimitiveProductsBodyBlocksBlockCardInput. To edit, retain the read list and modify its PrimitiveProductsBodyBlocksBlockCardUpdate pointers.
-type PrimitiveProductsBodyBlocksBlockCard struct {
+// Create with CardInput. To edit, retain the read list and modify its CardUpdate pointers.
+type Card struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -3465,8 +3455,8 @@ type PrimitiveProductsBodyBlocksBlockCard struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsBodyBlocksBlockCard) BlockType() string { return "card" }
-func (value PrimitiveProductsBodyBlocksBlockCard) MarshalJSON() ([]byte, error) {
+func (*Card) BlockType() string { return "card" }
+func (value Card) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -3481,7 +3471,7 @@ func (value PrimitiveProductsBodyBlocksBlockCard) MarshalJSON() ([]byte, error) 
 			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
 		})(value.Points.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCard", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Card", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -3490,14 +3480,14 @@ func (value PrimitiveProductsBodyBlocksBlockCard) MarshalJSON() ([]byte, error) 
 			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
 		})(value.Sizes.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCard", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Card", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCard", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Card", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -3505,14 +3495,14 @@ func (value PrimitiveProductsBodyBlocksBlockCard) MarshalJSON() ([]byte, error) 
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsBodyBlocksBlockCard) BlockKey() string {
+func (value *Card) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsBodyBlocksBlockCard) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsBodyBlocksBlockCard
+func (value *Card) UnmarshalJSON(data []byte) error {
+	type payload Card
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -3523,7 +3513,7 @@ func (value *PrimitiveProductsBodyBlocksBlockCard) UnmarshalJSON(data []byte) er
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
 	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockCard", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+		return newContractError(ContractError{Container: "Card", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -3603,14 +3593,14 @@ func (value *PrimitiveProductsBodyBlocksBlockCard) UnmarshalJSON(data []byte) er
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = PrimitiveProductsBodyBlocksBlockCard(decoded)
+	*value = Card(decoded)
 	return nil
 }
 
-// PrimitiveProductsBodyBlocksBlockCardInput is a generated block. Use *PrimitiveProductsBodyBlocksBlockCardInput in block lists and type switches.
+// CardInput is a generated block. Use *CardInput in block lists and type switches.
 // Input supplies a new occurrence's required fields. An empty Key requests a server-assigned key.
-// Read this block as PrimitiveProductsBodyBlocksBlockCard; edit an existing occurrence with PrimitiveProductsBodyBlocksBlockCardUpdate.
-type PrimitiveProductsBodyBlocksBlockCardInput struct {
+// Read this block as Card; edit an existing occurrence with CardUpdate.
+type CardInput struct {
 	// Key identifies this occurrence; omit it for a new server-assigned identity.
 	Key string `json:"_key,omitempty"`
 	// Points: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -3622,8 +3612,8 @@ type PrimitiveProductsBodyBlocksBlockCardInput struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsBodyBlocksBlockCardInput) BlockType() string { return "card" }
-func (value PrimitiveProductsBodyBlocksBlockCardInput) MarshalJSON() ([]byte, error) {
+func (*CardInput) BlockType() string { return "card" }
+func (value CardInput) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key,omitempty"`
@@ -3641,7 +3631,7 @@ func (value PrimitiveProductsBodyBlocksBlockCardInput) MarshalJSON() ([]byte, er
 			data, err = (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) })(child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardInput", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardInput", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -3653,7 +3643,7 @@ func (value PrimitiveProductsBodyBlocksBlockCardInput) MarshalJSON() ([]byte, er
 			data, err = (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) })(child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardInput", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardInput", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
@@ -3665,7 +3655,7 @@ func (value PrimitiveProductsBodyBlocksBlockCardInput) MarshalJSON() ([]byte, er
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardInput", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardInput", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -3673,14 +3663,14 @@ func (value PrimitiveProductsBodyBlocksBlockCardInput) MarshalJSON() ([]byte, er
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsBodyBlocksBlockCardInput) BlockKey() string {
+func (value *CardInput) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsBodyBlocksBlockCardInput) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsBodyBlocksBlockCardInput
+func (value *CardInput) UnmarshalJSON(data []byte) error {
+	type payload CardInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -3691,7 +3681,7 @@ func (value *PrimitiveProductsBodyBlocksBlockCardInput) UnmarshalJSON(data []byt
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
 	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockCardInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+		return newContractError(ContractError{Container: "CardInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
@@ -3768,15 +3758,15 @@ func (value *PrimitiveProductsBodyBlocksBlockCardInput) UnmarshalJSON(data []byt
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = PrimitiveProductsBodyBlocksBlockCardInput(decoded)
+	*value = CardInput(decoded)
 	return nil
 }
 
-// PrimitiveProductsBodyBlocksBlockCardUpdate is a generated block. Use *PrimitiveProductsBodyBlocksBlockCardUpdate in block lists and type switches.
+// CardUpdate is a generated block. Use *CardUpdate in block lists and type switches.
 // Update retains an existing occurrence by Key. Omitted children remain unchanged.
 // The engine verifies that the key belongs to an existing occurrence of this variant.
-// Start with the read list's Retain method; use PrimitiveProductsBodyBlocksBlockCardInput for additions.
-type PrimitiveProductsBodyBlocksBlockCardUpdate struct {
+// Start with the read list's Retain method; use CardInput for additions.
+type CardUpdate struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Points: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -3788,10 +3778,10 @@ type PrimitiveProductsBodyBlocksBlockCardUpdate struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsBodyBlocksBlockCardUpdate) BlockType() string { return "card" }
-func (value PrimitiveProductsBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, error) {
+func (*CardUpdate) BlockType() string { return "card" }
+func (value CardUpdate) MarshalJSON() ([]byte, error) {
 	if strings.TrimSpace(value.Key) == "" {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardUpdate", Path: "_key", Reason: "keyed update requires an identity"})
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CardUpdate", Path: "_key", Reason: "keyed update requires an identity"})
 	}
 	var encoded struct {
 		BlockType string          `json:"blockType"`
@@ -3810,7 +3800,7 @@ func (value PrimitiveProductsBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, e
 			data, err = (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) })(child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardUpdate", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardUpdate", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -3822,7 +3812,7 @@ func (value PrimitiveProductsBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, e
 			data, err = (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) })(child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardUpdate", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardUpdate", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
@@ -3834,7 +3824,7 @@ func (value PrimitiveProductsBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, e
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardUpdate", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardUpdate", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -3842,14 +3832,14 @@ func (value PrimitiveProductsBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, e
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsBodyBlocksBlockCardUpdate) BlockKey() string {
+func (value *CardUpdate) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsBodyBlocksBlockCardUpdate) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsBodyBlocksBlockCardUpdate
+func (value *CardUpdate) UnmarshalJSON(data []byte) error {
+	type payload CardUpdate
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -3860,7 +3850,7 @@ func (value *PrimitiveProductsBodyBlocksBlockCardUpdate) UnmarshalJSON(data []by
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
 	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockCardUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+		return newContractError(ContractError{Container: "CardUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -3941,13 +3931,13 @@ func (value *PrimitiveProductsBodyBlocksBlockCardUpdate) UnmarshalJSON(data []by
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = PrimitiveProductsBodyBlocksBlockCardUpdate(decoded)
+	*value = CardUpdate(decoded)
 	return nil
 }
 
-// PrimitiveProductsBodyBlocksBlockCardAllLocales is a generated block. Use *PrimitiveProductsBodyBlocksBlockCardAllLocales in block lists and type switches.
+// CardAllLocales is a generated block. Use *CardAllLocales in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-type PrimitiveProductsBodyBlocksBlockCardAllLocales struct {
+type CardAllLocales struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -3959,8 +3949,8 @@ type PrimitiveProductsBodyBlocksBlockCardAllLocales struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsBodyBlocksBlockCardAllLocales) BlockType() string { return "card" }
-func (value PrimitiveProductsBodyBlocksBlockCardAllLocales) MarshalJSON() ([]byte, error) {
+func (*CardAllLocales) BlockType() string { return "card" }
+func (value CardAllLocales) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -3975,7 +3965,7 @@ func (value PrimitiveProductsBodyBlocksBlockCardAllLocales) MarshalJSON() ([]byt
 			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
 		})(value.Points.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardAllLocales", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardAllLocales", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -3984,14 +3974,14 @@ func (value PrimitiveProductsBodyBlocksBlockCardAllLocales) MarshalJSON() ([]byt
 			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
 		})(value.Sizes.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardAllLocales", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardAllLocales", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -3999,14 +3989,14 @@ func (value PrimitiveProductsBodyBlocksBlockCardAllLocales) MarshalJSON() ([]byt
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsBodyBlocksBlockCardAllLocales) BlockKey() string {
+func (value *CardAllLocales) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsBodyBlocksBlockCardAllLocales) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsBodyBlocksBlockCardAllLocales
+func (value *CardAllLocales) UnmarshalJSON(data []byte) error {
+	type payload CardAllLocales
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4017,7 +4007,7 @@ func (value *PrimitiveProductsBodyBlocksBlockCardAllLocales) UnmarshalJSON(data 
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
 	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockCardAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+		return newContractError(ContractError{Container: "CardAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -4097,13 +4087,13 @@ func (value *PrimitiveProductsBodyBlocksBlockCardAllLocales) UnmarshalJSON(data 
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = PrimitiveProductsBodyBlocksBlockCardAllLocales(decoded)
+	*value = CardAllLocales(decoded)
 	return nil
 }
 
-// PrimitiveProductsBodyBlocksBlockCardAllLocalesValue is a generated block. Use *PrimitiveProductsBodyBlocksBlockCardAllLocalesValue in block lists and type switches.
+// CardAllLocalesValue is a generated block. Use *CardAllLocalesValue in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-type PrimitiveProductsBodyBlocksBlockCardAllLocalesValue struct {
+type CardAllLocalesValue struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -4115,8 +4105,8 @@ type PrimitiveProductsBodyBlocksBlockCardAllLocalesValue struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) BlockType() string { return "card" }
-func (value PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) MarshalJSON() ([]byte, error) {
+func (*CardAllLocalesValue) BlockType() string { return "card" }
+func (value CardAllLocalesValue) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -4131,7 +4121,7 @@ func (value PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) MarshalJSON() (
 			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
 		})(value.Points.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardAllLocalesValue", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardAllLocalesValue", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -4140,14 +4130,14 @@ func (value PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) MarshalJSON() (
 			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
 		})(value.Sizes.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardAllLocalesValue", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardAllLocalesValue", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsBodyBlocksBlockCardAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CardAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -4155,14 +4145,14 @@ func (value PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) MarshalJSON() (
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) BlockKey() string {
+func (value *CardAllLocalesValue) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsBodyBlocksBlockCardAllLocalesValue
+func (value *CardAllLocalesValue) UnmarshalJSON(data []byte) error {
+	type payload CardAllLocalesValue
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4173,7 +4163,7 @@ func (value *PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) UnmarshalJSON(
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
 	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsBodyBlocksBlockCardAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+		return newContractError(ContractError{Container: "CardAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -4253,17 +4243,17 @@ func (value *PrimitiveProductsBodyBlocksBlockCardAllLocalesValue) UnmarshalJSON(
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = PrimitiveProductsBodyBlocksBlockCardAllLocalesValue(decoded)
+	*value = CardAllLocalesValue(decoded)
 	return nil
 }
 
-// PrimitiveProductsContentCardBlockType is the immutable stored discriminator.
-const PrimitiveProductsContentCardBlockType = "card"
+// NoteBlockType is the immutable stored discriminator.
+const NoteBlockType = "note"
 
-// PrimitiveProductsContentCard is a generated block. Use *PrimitiveProductsContentCard in block lists and type switches.
+// Note is a generated block. Use *Note in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-// Create with PrimitiveProductsContentCardInput. To edit, retain the read list and modify its PrimitiveProductsContentCardUpdate pointers.
-type PrimitiveProductsContentCard struct {
+// Create with NoteInput. To edit, retain the read list and modify its NoteUpdate pointers.
+type Note struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -4275,8 +4265,8 @@ type PrimitiveProductsContentCard struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentCard) BlockType() string { return "card" }
-func (value PrimitiveProductsContentCard) MarshalJSON() ([]byte, error) {
+func (*Note) BlockType() string { return "note" }
+func (value Note) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -4284,14 +4274,14 @@ func (value PrimitiveProductsContentCard) MarshalJSON() ([]byte, error) {
 		Sizes     json.RawMessage `json:"sizes,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "card"
+	encoded.BlockType = "note"
 	encoded.Key = value.Key
 	if value.Points != nil {
 		data, err := (func(value *[]string) ([]byte, error) {
 			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
 		})(value.Points.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCard", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Note", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -4300,14 +4290,14 @@ func (value PrimitiveProductsContentCard) MarshalJSON() ([]byte, error) {
 			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
 		})(value.Sizes.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCard", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Note", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCard", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Note", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -4315,14 +4305,14 @@ func (value PrimitiveProductsContentCard) MarshalJSON() ([]byte, error) {
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentCard) BlockKey() string {
+func (value *Note) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsContentCard) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentCard
+func (value *Note) UnmarshalJSON(data []byte) error {
+	type payload Note
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4332,8 +4322,8 @@ func (value *PrimitiveProductsContentCard) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentCard", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "note" {
+		return newContractError(ContractError{Container: "Note", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -4413,14 +4403,14 @@ func (value *PrimitiveProductsContentCard) UnmarshalJSON(data []byte) error {
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = PrimitiveProductsContentCard(decoded)
+	*value = Note(decoded)
 	return nil
 }
 
-// PrimitiveProductsContentCardInput is a generated block. Use *PrimitiveProductsContentCardInput in block lists and type switches.
+// NoteInput is a generated block. Use *NoteInput in block lists and type switches.
 // Input supplies a new occurrence's required fields. An empty Key requests a server-assigned key.
-// Read this block as PrimitiveProductsContentCard; edit an existing occurrence with PrimitiveProductsContentCardUpdate.
-type PrimitiveProductsContentCardInput struct {
+// Read this block as Note; edit an existing occurrence with NoteUpdate.
+type NoteInput struct {
 	// Key identifies this occurrence; omit it for a new server-assigned identity.
 	Key string `json:"_key,omitempty"`
 	// Points: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -4432,8 +4422,8 @@ type PrimitiveProductsContentCardInput struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentCardInput) BlockType() string { return "card" }
-func (value PrimitiveProductsContentCardInput) MarshalJSON() ([]byte, error) {
+func (*NoteInput) BlockType() string { return "note" }
+func (value NoteInput) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key,omitempty"`
@@ -4441,7 +4431,7 @@ func (value PrimitiveProductsContentCardInput) MarshalJSON() ([]byte, error) {
 		Sizes     json.RawMessage `json:"sizes,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "card"
+	encoded.BlockType = "note"
 	encoded.Key = value.Key
 	if value.Points != nil {
 		child, present := value.Points.Get()
@@ -4451,7 +4441,7 @@ func (value PrimitiveProductsContentCardInput) MarshalJSON() ([]byte, error) {
 			data, err = (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) })(child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardInput", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteInput", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -4463,7 +4453,7 @@ func (value PrimitiveProductsContentCardInput) MarshalJSON() ([]byte, error) {
 			data, err = (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) })(child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardInput", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteInput", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
@@ -4475,7 +4465,7 @@ func (value PrimitiveProductsContentCardInput) MarshalJSON() ([]byte, error) {
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardInput", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteInput", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -4483,14 +4473,14 @@ func (value PrimitiveProductsContentCardInput) MarshalJSON() ([]byte, error) {
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentCardInput) BlockKey() string {
+func (value *NoteInput) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsContentCardInput) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentCardInput
+func (value *NoteInput) UnmarshalJSON(data []byte) error {
+	type payload NoteInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4500,8 +4490,8 @@ func (value *PrimitiveProductsContentCardInput) UnmarshalJSON(data []byte) error
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentCardInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "note" {
+		return newContractError(ContractError{Container: "NoteInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
@@ -4578,15 +4568,15 @@ func (value *PrimitiveProductsContentCardInput) UnmarshalJSON(data []byte) error
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = PrimitiveProductsContentCardInput(decoded)
+	*value = NoteInput(decoded)
 	return nil
 }
 
-// PrimitiveProductsContentCardUpdate is a generated block. Use *PrimitiveProductsContentCardUpdate in block lists and type switches.
+// NoteUpdate is a generated block. Use *NoteUpdate in block lists and type switches.
 // Update retains an existing occurrence by Key. Omitted children remain unchanged.
 // The engine verifies that the key belongs to an existing occurrence of this variant.
-// Start with the read list's Retain method; use PrimitiveProductsContentCardInput for additions.
-type PrimitiveProductsContentCardUpdate struct {
+// Start with the read list's Retain method; use NoteInput for additions.
+type NoteUpdate struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Points: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -4598,10 +4588,10 @@ type PrimitiveProductsContentCardUpdate struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentCardUpdate) BlockType() string { return "card" }
-func (value PrimitiveProductsContentCardUpdate) MarshalJSON() ([]byte, error) {
+func (*NoteUpdate) BlockType() string { return "note" }
+func (value NoteUpdate) MarshalJSON() ([]byte, error) {
 	if strings.TrimSpace(value.Key) == "" {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardUpdate", Path: "_key", Reason: "keyed update requires an identity"})
+		return nil, newContractError(ContractError{Operation: "encode", Container: "NoteUpdate", Path: "_key", Reason: "keyed update requires an identity"})
 	}
 	var encoded struct {
 		BlockType string          `json:"blockType"`
@@ -4610,7 +4600,7 @@ func (value PrimitiveProductsContentCardUpdate) MarshalJSON() ([]byte, error) {
 		Sizes     json.RawMessage `json:"sizes,omitempty"`
 		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
-	encoded.BlockType = "card"
+	encoded.BlockType = "note"
 	encoded.Key = value.Key
 	if value.Points != nil {
 		child, present := value.Points.Get()
@@ -4620,7 +4610,7 @@ func (value PrimitiveProductsContentCardUpdate) MarshalJSON() ([]byte, error) {
 			data, err = (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) })(child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardUpdate", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteUpdate", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -4632,7 +4622,7 @@ func (value PrimitiveProductsContentCardUpdate) MarshalJSON() ([]byte, error) {
 			data, err = (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) })(child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardUpdate", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteUpdate", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
@@ -4644,7 +4634,7 @@ func (value PrimitiveProductsContentCardUpdate) MarshalJSON() ([]byte, error) {
 			data, err = encodeBlockValue[string](child)
 		}
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardUpdate", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteUpdate", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -4652,14 +4642,14 @@ func (value PrimitiveProductsContentCardUpdate) MarshalJSON() ([]byte, error) {
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentCardUpdate) BlockKey() string {
+func (value *NoteUpdate) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsContentCardUpdate) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentCardUpdate
+func (value *NoteUpdate) UnmarshalJSON(data []byte) error {
+	type payload NoteUpdate
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -4669,8 +4659,8 @@ func (value *PrimitiveProductsContentCardUpdate) UnmarshalJSON(data []byte) erro
 	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentCardUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	if discriminator != "note" {
+		return newContractError(ContractError{Container: "NoteUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -4751,13 +4741,13 @@ func (value *PrimitiveProductsContentCardUpdate) UnmarshalJSON(data []byte) erro
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
-	*value = PrimitiveProductsContentCardUpdate(decoded)
+	*value = NoteUpdate(decoded)
 	return nil
 }
 
-// PrimitiveProductsContentCardAllLocales is a generated block. Use *PrimitiveProductsContentCardAllLocales in block lists and type switches.
+// NoteAllLocales is a generated block. Use *NoteAllLocales in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-type PrimitiveProductsContentCardAllLocales struct {
+type NoteAllLocales struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -4769,324 +4759,8 @@ type PrimitiveProductsContentCardAllLocales struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentCardAllLocales) BlockType() string { return "card" }
-func (value PrimitiveProductsContentCardAllLocales) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		data, err := (func(value *[]string) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
-		})(value.Points.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardAllLocales", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		data, err := (func(value *[]float64) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
-		})(value.Sizes.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardAllLocales", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentCardAllLocales) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsContentCardAllLocales) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentCardAllLocales
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentCardAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Points); err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = &BlockOptional[[]string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sizes); err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = &BlockOptional[[]float64]{Value: &child}
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = &BlockOptional[[]string]{}
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = &BlockOptional[[]float64]{}
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = &BlockOptional[string]{}
-	}
-	*value = PrimitiveProductsContentCardAllLocales(decoded)
-	return nil
-}
-
-// PrimitiveProductsContentCardAllLocalesValue is a generated block. Use *PrimitiveProductsContentCardAllLocalesValue in block lists and type switches.
-// Authored children may be omitted by access rules or projection, even when required on create.
-type PrimitiveProductsContentCardAllLocalesValue struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Points *BlockOptional[[]string] `json:"points,omitzero"`
-	// Sizes: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sizes *BlockOptional[[]float64] `json:"sizes,omitzero"`
-	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentCardAllLocalesValue) BlockType() string { return "card" }
-func (value PrimitiveProductsContentCardAllLocalesValue) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		data, err := (func(value *[]string) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
-		})(value.Points.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardAllLocalesValue", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		data, err := (func(value *[]float64) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
-		})(value.Sizes.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardAllLocalesValue", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentCardAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentCardAllLocalesValue) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsContentCardAllLocalesValue) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentCardAllLocalesValue
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentCardAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Points); err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = &BlockOptional[[]string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sizes); err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = &BlockOptional[[]float64]{Value: &child}
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = &BlockOptional[[]string]{}
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = &BlockOptional[[]float64]{}
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = &BlockOptional[string]{}
-	}
-	*value = PrimitiveProductsContentCardAllLocalesValue(decoded)
-	return nil
-}
-
-// PrimitiveProductsContentNoteBlockType is the immutable stored discriminator.
-const PrimitiveProductsContentNoteBlockType = "note"
-
-// PrimitiveProductsContentNote is a generated block. Use *PrimitiveProductsContentNote in block lists and type switches.
-// Authored children may be omitted by access rules or projection, even when required on create.
-// Create with PrimitiveProductsContentNoteInput. To edit, retain the read list and modify its PrimitiveProductsContentNoteUpdate pointers.
-type PrimitiveProductsContentNote struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Points *BlockOptional[[]string] `json:"points,omitzero"`
-	// Sizes: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sizes *BlockOptional[[]float64] `json:"sizes,omitzero"`
-	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentNote) BlockType() string { return "note" }
-func (value PrimitiveProductsContentNote) MarshalJSON() ([]byte, error) {
+func (*NoteAllLocales) BlockType() string { return "note" }
+func (value NoteAllLocales) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -5101,7 +4775,7 @@ func (value PrimitiveProductsContentNote) MarshalJSON() ([]byte, error) {
 			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
 		})(value.Points.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNote", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteAllLocales", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -5110,14 +4784,14 @@ func (value PrimitiveProductsContentNote) MarshalJSON() ([]byte, error) {
 			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
 		})(value.Sizes.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNote", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteAllLocales", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNote", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -5125,14 +4799,14 @@ func (value PrimitiveProductsContentNote) MarshalJSON() ([]byte, error) {
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentNote) BlockKey() string {
+func (value *NoteAllLocales) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsContentNote) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentNote
+func (value *NoteAllLocales) UnmarshalJSON(data []byte) error {
+	type payload NoteAllLocales
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -5143,7 +4817,7 @@ func (value *PrimitiveProductsContentNote) UnmarshalJSON(data []byte) error {
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
 	if discriminator != "note" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentNote", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+		return newContractError(ContractError{Container: "NoteAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -5223,351 +4897,13 @@ func (value *PrimitiveProductsContentNote) UnmarshalJSON(data []byte) error {
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = PrimitiveProductsContentNote(decoded)
+	*value = NoteAllLocales(decoded)
 	return nil
 }
 
-// PrimitiveProductsContentNoteInput is a generated block. Use *PrimitiveProductsContentNoteInput in block lists and type switches.
-// Input supplies a new occurrence's required fields. An empty Key requests a server-assigned key.
-// Read this block as PrimitiveProductsContentNote; edit an existing occurrence with PrimitiveProductsContentNoteUpdate.
-type PrimitiveProductsContentNoteInput struct {
-	// Key identifies this occurrence; omit it for a new server-assigned identity.
-	Key string `json:"_key,omitempty"`
-	// Points: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Points *core.Input[[]string] `json:"points,omitempty"`
-	// Sizes: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Sizes *core.Input[[]float64] `json:"sizes,omitempty"`
-	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	BlockName *core.Input[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentNoteInput) BlockType() string { return "note" }
-func (value PrimitiveProductsContentNoteInput) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key,omitempty"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "note"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		child, present := value.Points.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) })(child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteInput", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		child, present := value.Sizes.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) })(child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteInput", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		child, present := value.BlockName.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteInput", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentNoteInput) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsContentNoteInput) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentNoteInput
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "note" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentNoteInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-		if strings.TrimSpace(decoded.Key) == "" {
-			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Points = core.Null[[]string]()
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = core.Set(child)
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Sizes = core.Null[[]float64]()
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = core.Set(child)
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.BlockName = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = core.Set(child)
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = core.Null[[]string]()
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = core.Null[[]float64]()
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = core.Null[string]()
-	}
-	for name := range fields {
-		switch name {
-		case "_key", "blockType", "points", "sizes", "blockName":
-		default:
-			return blockFieldError(name, "unknown input field", nil)
-		}
-	}
-	*value = PrimitiveProductsContentNoteInput(decoded)
-	return nil
-}
-
-// PrimitiveProductsContentNoteUpdate is a generated block. Use *PrimitiveProductsContentNoteUpdate in block lists and type switches.
-// Update retains an existing occurrence by Key. Omitted children remain unchanged.
-// The engine verifies that the key belongs to an existing occurrence of this variant.
-// Start with the read list's Retain method; use PrimitiveProductsContentNoteInput for additions.
-type PrimitiveProductsContentNoteUpdate struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Points: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Points *core.Input[[]string] `json:"points,omitempty"`
-	// Sizes: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Sizes *core.Input[[]float64] `json:"sizes,omitempty"`
-	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	BlockName *core.Input[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentNoteUpdate) BlockType() string { return "note" }
-func (value PrimitiveProductsContentNoteUpdate) MarshalJSON() ([]byte, error) {
-	if strings.TrimSpace(value.Key) == "" {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteUpdate", Path: "_key", Reason: "keyed update requires an identity"})
-	}
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "note"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		child, present := value.Points.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) })(child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteUpdate", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		child, present := value.Sizes.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) })(child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteUpdate", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		child, present := value.BlockName.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteUpdate", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentNoteUpdate) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsContentNoteUpdate) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentNoteUpdate
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "note" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentNoteUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Points = core.Null[[]string]()
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = core.Set(child)
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Sizes = core.Null[[]float64]()
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = core.Set(child)
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.BlockName = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = core.Set(child)
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = core.Null[[]string]()
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = core.Null[[]float64]()
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = core.Null[string]()
-	}
-	for name := range fields {
-		switch name {
-		case "_key", "blockType", "points", "sizes", "blockName":
-		default:
-			return blockFieldError(name, "unknown input field", nil)
-		}
-	}
-	*value = PrimitiveProductsContentNoteUpdate(decoded)
-	return nil
-}
-
-// PrimitiveProductsContentNoteAllLocales is a generated block. Use *PrimitiveProductsContentNoteAllLocales in block lists and type switches.
+// NoteAllLocalesValue is a generated block. Use *NoteAllLocalesValue in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
-type PrimitiveProductsContentNoteAllLocales struct {
+type NoteAllLocalesValue struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
 	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -5579,8 +4915,8 @@ type PrimitiveProductsContentNoteAllLocales struct {
 }
 
 // BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentNoteAllLocales) BlockType() string { return "note" }
-func (value PrimitiveProductsContentNoteAllLocales) MarshalJSON() ([]byte, error) {
+func (*NoteAllLocalesValue) BlockType() string { return "note" }
+func (value NoteAllLocalesValue) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
@@ -5595,7 +4931,7 @@ func (value PrimitiveProductsContentNoteAllLocales) MarshalJSON() ([]byte, error
 			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
 		})(value.Points.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteAllLocales", Path: "points", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteAllLocalesValue", Path: "points", Reason: "invalid value", Err: err})
 		}
 		encoded.Points = data
 	}
@@ -5604,14 +4940,14 @@ func (value PrimitiveProductsContentNoteAllLocales) MarshalJSON() ([]byte, error
 			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
 		})(value.Sizes.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteAllLocales", Path: "sizes", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteAllLocalesValue", Path: "sizes", Reason: "invalid value", Err: err})
 		}
 		encoded.Sizes = data
 	}
 	if value.BlockName != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
 		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
+			return nil, newContractError(ContractError{Operation: "encode", Container: "NoteAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
 		}
 		encoded.BlockName = data
 	}
@@ -5619,14 +4955,14 @@ func (value PrimitiveProductsContentNoteAllLocales) MarshalJSON() ([]byte, error
 }
 
 // BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentNoteAllLocales) BlockKey() string {
+func (value *NoteAllLocalesValue) BlockKey() string {
 	if value == nil {
 		return ""
 	}
 	return value.Key
 }
-func (value *PrimitiveProductsContentNoteAllLocales) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentNoteAllLocales
+func (value *NoteAllLocalesValue) UnmarshalJSON(data []byte) error {
+	type payload NoteAllLocalesValue
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -5637,7 +4973,7 @@ func (value *PrimitiveProductsContentNoteAllLocales) UnmarshalJSON(data []byte) 
 		return blockFieldError("blockType", "invalid discriminator", err)
 	}
 	if discriminator != "note" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentNoteAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+		return newContractError(ContractError{Container: "NoteAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	var key string
 	if err := json.Unmarshal(fields["_key"], &key); err != nil {
@@ -5717,974 +5053,6 @@ func (value *PrimitiveProductsContentNoteAllLocales) UnmarshalJSON(data []byte) 
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
-	*value = PrimitiveProductsContentNoteAllLocales(decoded)
-	return nil
-}
-
-// PrimitiveProductsContentNoteAllLocalesValue is a generated block. Use *PrimitiveProductsContentNoteAllLocalesValue in block lists and type switches.
-// Authored children may be omitted by access rules or projection, even when required on create.
-type PrimitiveProductsContentNoteAllLocalesValue struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Points *BlockOptional[[]string] `json:"points,omitzero"`
-	// Sizes: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sizes *BlockOptional[[]float64] `json:"sizes,omitzero"`
-	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsContentNoteAllLocalesValue) BlockType() string { return "note" }
-func (value PrimitiveProductsContentNoteAllLocalesValue) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "note"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		data, err := (func(value *[]string) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
-		})(value.Points.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteAllLocalesValue", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		data, err := (func(value *[]float64) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
-		})(value.Sizes.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteAllLocalesValue", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsContentNoteAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsContentNoteAllLocalesValue) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsContentNoteAllLocalesValue) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsContentNoteAllLocalesValue
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "note" {
-		return newContractError(ContractError{Container: "PrimitiveProductsContentNoteAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Points); err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = &BlockOptional[[]string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sizes); err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = &BlockOptional[[]float64]{Value: &child}
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = &BlockOptional[[]string]{}
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = &BlockOptional[[]float64]{}
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = &BlockOptional[string]{}
-	}
-	*value = PrimitiveProductsContentNoteAllLocalesValue(decoded)
-	return nil
-}
-
-// PrimitiveProductsLocalizedBodyBlocksBlockCardBlockType is the immutable stored discriminator.
-const PrimitiveProductsLocalizedBodyBlocksBlockCardBlockType = "card"
-
-// PrimitiveProductsLocalizedBodyBlocksBlockCard is a generated block. Use *PrimitiveProductsLocalizedBodyBlocksBlockCard in block lists and type switches.
-// Authored children may be omitted by access rules or projection, even when required on create.
-// Create with PrimitiveProductsLocalizedBodyBlocksBlockCardInput. To edit, retain the read list and modify its PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate pointers.
-type PrimitiveProductsLocalizedBodyBlocksBlockCard struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Points *BlockOptional[[]string] `json:"points,omitzero"`
-	// Sizes: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sizes *BlockOptional[[]float64] `json:"sizes,omitzero"`
-	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCard) BlockType() string { return "card" }
-func (value PrimitiveProductsLocalizedBodyBlocksBlockCard) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		data, err := (func(value *[]string) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
-		})(value.Points.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCard", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		data, err := (func(value *[]float64) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
-		})(value.Sizes.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCard", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCard", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCard) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCard) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsLocalizedBodyBlocksBlockCard
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockCard", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Points); err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = &BlockOptional[[]string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sizes); err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = &BlockOptional[[]float64]{Value: &child}
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = &BlockOptional[[]string]{}
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = &BlockOptional[[]float64]{}
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = &BlockOptional[string]{}
-	}
-	*value = PrimitiveProductsLocalizedBodyBlocksBlockCard(decoded)
-	return nil
-}
-
-// PrimitiveProductsLocalizedBodyBlocksBlockCardInput is a generated block. Use *PrimitiveProductsLocalizedBodyBlocksBlockCardInput in block lists and type switches.
-// Input supplies a new occurrence's required fields. An empty Key requests a server-assigned key.
-// Read this block as PrimitiveProductsLocalizedBodyBlocksBlockCard; edit an existing occurrence with PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate.
-type PrimitiveProductsLocalizedBodyBlocksBlockCardInput struct {
-	// Key identifies this occurrence; omit it for a new server-assigned identity.
-	Key string `json:"_key,omitempty"`
-	// Points: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Points *core.Input[[]string] `json:"points,omitempty"`
-	// Sizes: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Sizes *core.Input[[]float64] `json:"sizes,omitempty"`
-	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	BlockName *core.Input[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCardInput) BlockType() string { return "card" }
-func (value PrimitiveProductsLocalizedBodyBlocksBlockCardInput) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key,omitempty"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		child, present := value.Points.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) })(child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardInput", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		child, present := value.Sizes.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) })(child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardInput", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		child, present := value.BlockName.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardInput", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCardInput) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCardInput) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsLocalizedBodyBlocksBlockCardInput
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-		if strings.TrimSpace(decoded.Key) == "" {
-			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Points = core.Null[[]string]()
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = core.Set(child)
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Sizes = core.Null[[]float64]()
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = core.Set(child)
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.BlockName = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = core.Set(child)
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = core.Null[[]string]()
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = core.Null[[]float64]()
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = core.Null[string]()
-	}
-	for name := range fields {
-		switch name {
-		case "_key", "blockType", "points", "sizes", "blockName":
-		default:
-			return blockFieldError(name, "unknown input field", nil)
-		}
-	}
-	*value = PrimitiveProductsLocalizedBodyBlocksBlockCardInput(decoded)
-	return nil
-}
-
-// PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate is a generated block. Use *PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate in block lists and type switches.
-// Update retains an existing occurrence by Key. Omitted children remain unchanged.
-// The engine verifies that the key belongs to an existing occurrence of this variant.
-// Start with the read list's Retain method; use PrimitiveProductsLocalizedBodyBlocksBlockCardInput for additions.
-type PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Points: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Points *core.Input[[]string] `json:"points,omitempty"`
-	// Sizes: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	Sizes *core.Input[[]float64] `json:"sizes,omitempty"`
-	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
-	BlockName *core.Input[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate) BlockType() string { return "card" }
-func (value PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate) MarshalJSON() ([]byte, error) {
-	if strings.TrimSpace(value.Key) == "" {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate", Path: "_key", Reason: "keyed update requires an identity"})
-	}
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		child, present := value.Points.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) })(child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		child, present := value.Sizes.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) })(child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		child, present := value.BlockName.Get()
-		data := []byte("null")
-		var err error
-		if present {
-			data, err = encodeBlockValue[string](child)
-		}
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Points = core.Null[[]string]()
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = core.Set(child)
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.Sizes = core.Null[[]float64]()
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = core.Set(child)
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			decoded.BlockName = core.Null[string]()
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = core.Set(child)
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = core.Null[[]string]()
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = core.Null[[]float64]()
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = core.Null[string]()
-	}
-	for name := range fields {
-		switch name {
-		case "_key", "blockType", "points", "sizes", "blockName":
-		default:
-			return blockFieldError(name, "unknown input field", nil)
-		}
-	}
-	*value = PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate(decoded)
-	return nil
-}
-
-// PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales is a generated block. Use *PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales in block lists and type switches.
-// Authored children may be omitted by access rules or projection, even when required on create.
-type PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Points *BlockOptional[[]string] `json:"points,omitzero"`
-	// Sizes: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sizes *BlockOptional[[]float64] `json:"sizes,omitzero"`
-	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales) BlockType() string { return "card" }
-func (value PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		data, err := (func(value *[]string) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
-		})(value.Points.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		data, err := (func(value *[]float64) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
-		})(value.Sizes.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Points); err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = &BlockOptional[[]string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sizes); err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = &BlockOptional[[]float64]{Value: &child}
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = &BlockOptional[[]string]{}
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = &BlockOptional[[]float64]{}
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = &BlockOptional[string]{}
-	}
-	*value = PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales(decoded)
-	return nil
-}
-
-// PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue is a generated block. Use *PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue in block lists and type switches.
-// Authored children may be omitted by access rules or projection, even when required on create.
-type PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue struct {
-	// Key is the required identity of this existing occurrence.
-	Key string `json:"_key"`
-	// Points: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Points *BlockOptional[[]string] `json:"points,omitzero"`
-	// Sizes: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	Sizes *BlockOptional[[]float64] `json:"sizes,omitzero"`
-	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
-	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
-}
-
-// BlockType returns the immutable stored discriminator.
-func (*PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue) BlockType() string {
-	return "card"
-}
-func (value PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue) MarshalJSON() ([]byte, error) {
-	var encoded struct {
-		BlockType string          `json:"blockType"`
-		Key       string          `json:"_key"`
-		Points    json.RawMessage `json:"points,omitempty"`
-		Sizes     json.RawMessage `json:"sizes,omitempty"`
-		BlockName json.RawMessage `json:"blockName,omitempty"`
-	}
-	encoded.BlockType = "card"
-	encoded.Key = value.Key
-	if value.Points != nil {
-		data, err := (func(value *[]string) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []string) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[string]) }))
-		})(value.Points.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue", Path: "points", Reason: "invalid value", Err: err})
-		}
-		encoded.Points = data
-	}
-	if value.Sizes != nil {
-		data, err := (func(value *[]float64) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value []float64) ([]byte, error) { return encodeBlockSlice(value, encodeBlockValue[float64]) }))
-		})(value.Sizes.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue", Path: "sizes", Reason: "invalid value", Err: err})
-		}
-		encoded.Sizes = data
-	}
-	if value.BlockName != nil {
-		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
-		if err != nil {
-			return nil, newContractError(ContractError{Operation: "encode", Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
-		}
-		encoded.BlockName = data
-	}
-	return json.Marshal(encoded)
-}
-
-// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue) BlockKey() string {
-	if value == nil {
-		return ""
-	}
-	return value.Key
-}
-func (value *PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue
-	var decoded payload
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	var discriminator string
-	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
-		return blockFieldError("blockType", "invalid discriminator", err)
-	}
-	if discriminator != "card" {
-		return newContractError(ContractError{Container: "PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
-	}
-	var key string
-	if err := json.Unmarshal(fields["_key"], &key); err != nil {
-		return blockFieldError("_key", "invalid identity", err)
-	}
-	if strings.TrimSpace(key) == "" {
-		return blockFieldError("_key", "expected a nonempty block identity", nil)
-	}
-	if raw, ok := fields["_key"]; ok {
-		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-	}
-	if raw, ok := fields["points"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Points); err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]string, error) {
-				return decodeBlockSlice(data, (func(data []byte) (string, error) {
-					var value string
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("points", "invalid value", err)
-			}
-			decoded.Points = &BlockOptional[[]string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["sizes"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.Sizes); err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-		} else {
-			child, err := (func(data []byte) ([]float64, error) {
-				return decodeBlockSlice(data, (func(data []byte) (float64, error) {
-					var value float64
-					if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-						return value, fmt.Errorf("null list items are not allowed")
-					}
-					err := json.Unmarshal(data, &value)
-					return value, err
-				}))
-			})(raw)
-			if err != nil {
-				return blockFieldError("sizes", "invalid value", err)
-			}
-			decoded.Sizes = &BlockOptional[[]float64]{Value: &child}
-		}
-	}
-	if raw, ok := fields["blockName"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-		} else {
-			child, err := decodeBlockValue[string](raw)
-			if err != nil {
-				return blockFieldError("blockName", "invalid value", err)
-			}
-			decoded.BlockName = &BlockOptional[string]{Value: &child}
-		}
-	}
-	if raw, ok := fields["points"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Points = &BlockOptional[[]string]{}
-	}
-	if raw, ok := fields["sizes"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.Sizes = &BlockOptional[[]float64]{}
-	}
-	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		decoded.BlockName = &BlockOptional[string]{}
-	}
-	*value = PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue(decoded)
+	*value = NoteAllLocalesValue(decoded)
 	return nil
 }

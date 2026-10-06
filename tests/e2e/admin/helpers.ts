@@ -10,6 +10,19 @@ export async function chooseRiduSelect(page: Page, trigger: Locator, option: str
 	await page.getByRole("option", { name: option, exact: typeof option === "string" }).click();
 }
 
+/** Opens each container in a collection filter's field picker, then picks the final field. */
+export async function chooseFilterField(page: Page, trigger: Locator, labels: readonly string[]) {
+	await trigger.click();
+	for (const [index, label] of labels.entries()) {
+		const last = index === labels.length - 1;
+		// Containers name their kind after the label, such as "Links Array" or "Hero Block".
+		const name = last
+			? label
+			: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\w+$`);
+		await page.getByRole("option", { name, exact: last }).click();
+	}
+}
+
 export async function expectRiduSelectValue(trigger: Locator, value: string | RegExp) {
 	await expect(trigger).toContainText(value);
 }

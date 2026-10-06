@@ -17,13 +17,23 @@ func Config() core.Config {
 	}
 }
 
+// Block slugs of this contract. A slug names one definition per application,
+// and the browser fixture combines this contract with others that use plain
+// "card" and "note" blocks, so these blocks have their own slugs while keeping
+// the same editor labels.
+const (
+	CardSlug         = "target-card"
+	NoteSlug         = "target-note"
+	EmbeddedCardSlug = "target-embedded-card"
+)
+
 func Collection() core.Collection {
 	linkFields := field.Fields{field.Text("url").Label("URL")}
 	links := field.Array("links", linkFields)
 	sections := field.Array("sections", field.Fields{field.Text("heading"), links}).Validate(validateRows(false))
-	card := field.Block{Slug: "card", Fields: field.Fields{field.Text("heading"), links}}
-	note := field.Block{Slug: "note", Fields: field.Fields{field.Text("heading"), links}}
-	embeddedCard := field.Block{Slug: "card", Fields: field.Fields{
+	card := field.Block{Slug: CardSlug, Labels: field.BlockLabels{Singular: "Card", Plural: "Cards"}, Fields: field.Fields{field.Text("heading"), links}}
+	note := field.Block{Slug: NoteSlug, Labels: field.BlockLabels{Singular: "Note", Plural: "Notes"}, Fields: field.Fields{field.Text("heading"), links}}
+	embeddedCard := field.Block{Slug: EmbeddedCardSlug, Labels: field.BlockLabels{Singular: "Card", Plural: "Cards"}, Fields: field.Fields{
 		field.Text("heading"), links.Validate(validateLinks),
 	}}
 	allow := func(core.AccessContext) (core.AccessDecision, error) { return core.Allow(), nil }

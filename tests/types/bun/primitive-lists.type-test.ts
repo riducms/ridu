@@ -3,7 +3,7 @@ import type {
 	PrimitiveProductsUpdate,
 	PrimitiveProductsWhere,
 	PrimitiveProductsAllLocales,
-	PrimitiveProductsBodyBlocksBlockCardInput,
+	PrimitiveProductsBodyBlocksBlockBlockInput,
 } from "../../contracts/primitivelists/generated/ridu.generated";
 
 const create: PrimitiveProductsCreate = {
@@ -22,7 +22,7 @@ const translations: Partial<PrimitiveProductsAllLocales> = {
 	localizedPoints: { en: ["Oak"], fr: ["Chêne"] },
 	localizedSizes: { en: [0], fr: null },
 };
-const embedded: PrimitiveProductsBodyBlocksBlockCardInput = {
+const embedded: PrimitiveProductsBodyBlocksBlockBlockInput = {
 	blockType: "card",
 	points: ["Oak"],
 	sizes: [0, 10],

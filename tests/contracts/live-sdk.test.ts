@@ -24,6 +24,18 @@ live("generated SDK against the real Go REST server", () => {
 		});
 		expect(page.pagination.totalDocs).toBe(1);
 		expect(page.docs[0]?.id).toBe(created.id);
+		const uncounted = await client.list("posts", {
+			where: { title: { equals: "Live contract" } },
+			limit: 1,
+			pagination: false,
+		});
+		expect(uncounted.pagination).toEqual({
+			page: 1,
+			limit: 1,
+			hasNextPage: false,
+			hasPrevPage: false,
+		});
+		expect(uncounted.docs[0]?.id).toBe(created.id);
 
 		const updated = await client.update("posts", created.id, { status: "published" });
 		expect(updated.status).toBe("published");

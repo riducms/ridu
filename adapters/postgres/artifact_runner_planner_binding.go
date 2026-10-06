@@ -205,6 +205,7 @@ func postgresRenameFromCandidate(candidate schemadiff.RenameCandidate) Rename {
 		Kind:             RenameKind(candidate.Kind),
 		BeforeCollection: candidate.BeforeCollection,
 		AfterCollection:  candidate.AfterCollection,
+		Block:            candidate.Block,
 		BeforeField:      candidate.BeforeField,
 		AfterField:       candidate.AfterField,
 	}
@@ -215,7 +216,7 @@ func postgresRenameFromCandidate(candidate schemadiff.RenameCandidate) Rename {
 }
 
 func sameRenameIntent(left, right ridumigration.Rename) bool {
-	if left.CollectionBefore != right.CollectionBefore || left.CollectionAfter != right.CollectionAfter ||
+	if left.CollectionBefore != right.CollectionBefore || left.CollectionAfter != right.CollectionAfter || left.Block != right.Block ||
 		left.FieldBefore != right.FieldBefore || left.FieldAfter != right.FieldAfter || len(left.Fields) != len(right.Fields) {
 		return false
 	}

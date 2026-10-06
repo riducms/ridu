@@ -51,8 +51,13 @@ func ValidateFieldEditor(kind FieldType, editor *FieldEditor) error {
 
 // ValidateFieldEditors checks local editor declarations before generation or runtime use.
 func ValidateFieldEditors(snapshot Snapshot) error {
+	// A shared block definition is checked once, wherever it is placed.
+	entered := FieldListSet{}
 	var inspect func([]Field, string) error
 	inspect = func(fields []Field, owner string) error {
+		if !entered.Add(fields) {
+			return nil
+		}
 		for _, field := range fields {
 			path := owner + "." + field.Path.String()
 			if err := validateAdminExtensions(field.Admin.Extensions, path+".admin"); err != nil {
@@ -82,7 +87,7 @@ func ValidateFieldEditors(snapshot Snapshot) error {
 					return fmt.Errorf("%s selects both an editor and an admin component", path)
 				}
 			}
-			if err := inspect(EmbeddedBlocks(field), owner); err != nil {
+			if err := inspect(EmbeddedDefinitionBlocks(field), owner); err != nil {
 				return err
 			}
 			if field.Nested != nil {
@@ -99,7 +104,7 @@ func ValidateFieldEditors(snapshot Snapshot) error {
 				}
 			}
 			if field.Blocks != nil {
-				for _, block := range field.Blocks.ResolvedTypes() {
+				for _, block := range field.Blocks.Definitions() {
 					if err := inspect(block.ResolvedFields(), owner); err != nil {
 						return err
 					}

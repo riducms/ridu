@@ -7,6 +7,8 @@ import {
 	submissionFormValues,
 } from "@admin/core/forms/form-schema";
 import { primitiveNumberInput } from "@admin/fields/primitive-list/primitive-number-input";
+import { createAdminI18n } from "@riducms/translations";
+import { ListFilterFields } from "@admin/features/collections/list-filter-fields";
 import {
 	filterOperatorsFor,
 	parseListFilters,
@@ -109,18 +111,25 @@ describe("primitive list form contract", () => {
 	test("list filters offer item membership and presence rather than scalar sorting or equality", () => {
 		for (const type of ["text-list", "number-list"] as const) {
 			const field = list(type);
-			expect(filterOperatorsFor(field)).toEqual(["in", "exists"]);
+			expect(filterOperatorsFor(field)).toEqual(["in", "notIn", "exists"]);
 			expect(sortableField(field)).toBe(false);
+			const fields = new ListFilterFields({
+				fields: [field],
+				metadata: [],
+				i18n: createAdminI18n(),
+			});
 			expect(
-				parseListFilters(JSON.stringify([[{ field: "values", operator: "equals", value: "1" }]]), [
-					field,
-				])
+				parseListFilters(
+					JSON.stringify([[{ field: "values", operator: "equals", value: "1" }]]),
+					fields
+				)
 			).toEqual([]);
 			expect(
-				parseListFilters(JSON.stringify([[{ field: "values", operator: "in", value: "1" }]]), [
-					field,
-				])
-			).toEqual([[{ field: "values", operator: "in", value: "1" }]]);
+				parseListFilters(
+					JSON.stringify([[{ field: "values", operator: "in", value: "1" }]]),
+					fields
+				)
+			).toEqual([[{ field: "values", operator: "in", value: ["1"] }]]);
 		}
 	});
 });

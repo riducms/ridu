@@ -15,16 +15,13 @@ import (
 	"github.com/riducms/ridu/schema"
 )
 
-// Statement is one ordered SQL change in a development schema plan.
-type Statement struct {
-	// Kind is a stable, human-readable description of the planned change.
-	Kind string
-	// SQL is the complete PostgreSQL statement to apply.
-	SQL string
-	// CollectionID identifies the collection affected by the statement, when any.
-	CollectionID schema.StableID
-	// FieldID identifies the top-level field affected by the statement, when any.
-	FieldID schema.StableID
+// developmentStatement is one ordered SQL change in a development schema
+// plan. Only SyncDevelopmentSchema applies one, after auditing stored content.
+type developmentStatement struct {
+	// kind is a stable, human-readable description of the planned change.
+	kind string
+	// sql is the complete PostgreSQL statement to apply.
+	sql string
 }
 
 // RenameKind identifies the address whose storage identity changes.
@@ -35,6 +32,9 @@ const (
 	RenameCollection RenameKind = "collection"
 	// RenameField preserves a field while changing its derived identity.
 	RenameField RenameKind = "field"
+	// RenameBlockField preserves a block definition's field at every
+	// placement of the block while changing its name.
+	RenameBlockField RenameKind = "block-field"
 )
 
 // FieldRename relates one field before and after a confirmed rename.
@@ -53,10 +53,13 @@ type Rename struct {
 	BeforeCollection schema.Collection
 	// AfterCollection is its collection in current executable config.
 	AfterCollection schema.Collection
+	// Block names the block definition of a block field rename, whose
+	// collections are zero and whose fields are the definition's.
+	Block string
 	// BeforeField and AfterField are set for a standalone field rename.
 	BeforeField *schema.Field
 	AfterField  *schema.Field
-	// Fields contains all physical and nested field pairs for a collection rename.
+	// Fields contains a collection rename's own physical and nested field pairs.
 	Fields []FieldRename
 }
 
@@ -90,23 +93,28 @@ type MigrationStepStatus struct {
 	Checkpoint json.RawMessage        `json:"checkpoint,omitempty"`
 }
 
-// Plan inspects the current PostgreSQL schema and returns only a safe
-// development synchronization plan. Production history uses BuildArtifact.
-func (backend *Store) Plan(ctx context.Context, manifest schema.Manifest) ([]Statement, error) {
+// VerifySchema reports, without changing anything, whether the physical
+// PostgreSQL schema exactly matches manifest. It is the check readiness and
+// the migration runner apply; schema changes go only through
+// SyncDevelopmentSchema or immutable artifacts, which also audit stored
+// content against the new schema.
+func (backend *Store) VerifySchema(ctx context.Context, manifest schema.Manifest) error {
 	if err := primitivefield.ValidateManifestIndexes(manifest); err != nil {
-		return nil, err
+		return err
 	}
 	database := stdlib.OpenDB(*backend.pool.Config().ConnConfig)
 	defer database.Close()
-	transaction, err := database.BeginTx(ctx, nil)
+	connection, err := database.Conn(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer transaction.Rollback()
-	return planPostgresDevelopmentSchema(ctx, transaction, manifest)
+	defer connection.Close()
+	return verifyPostgresPhysicalState(ctx, connection, &manifest)
 }
 
-func planPostgresDevelopmentSchema(ctx context.Context, transaction *sql.Tx, manifest schema.Manifest) ([]Statement, error) {
+// planPostgresDevelopmentSchema returns the safe Atlas changes that bring the
+// physical schema to manifest. It refuses destructive changes.
+func planPostgresDevelopmentSchema(ctx context.Context, transaction *sql.Tx, manifest schema.Manifest) ([]developmentStatement, error) {
 	previous, err := readPostgresDevelopmentManifest(ctx, transaction)
 	if err != nil {
 		return nil, err
@@ -121,14 +129,18 @@ func planPostgresDevelopmentSchema(ctx context.Context, transaction *sql.Tx, man
 		}
 		previousSnapshot := previous.Snapshot()
 		previousResources := append(append([]schema.Collection(nil), previousSnapshot.Collections...), previousSnapshot.Globals...)
-		publishedTableExists := true
-		if hasVersionCollections(previousResources) {
-			publishedTableExists, err = transactionTableExists(ctx, transaction, "ridu_published_documents")
+		// Every versioned resource of the current layout has a typed live table.
+		liveTablesCurrent := true
+		for _, resource := range previousResources {
+			if resource.Versions == nil || !liveTablesCurrent {
+				continue
+			}
+			liveTablesCurrent, err = transactionTableExists(ctx, transaction, publishedCollectionTable(resource.ID))
 			if err != nil {
 				return nil, err
 			}
 		}
-		if !referencesCurrent || !publishedTableExists {
+		if !referencesCurrent || !liveTablesCurrent {
 			return nil, fmt.Errorf("unsupported PostgreSQL development schema layout; recreate this development database with the current schema")
 		}
 	}
@@ -168,32 +180,13 @@ func planPostgresDevelopmentSchema(ctx context.Context, transaction *sql.Tx, man
 	if len(blocked) != 0 {
 		return nil, &SafetyError{Risks: blocked}
 	}
-	statements := make([]Statement, 0, len(steps))
+	statements := make([]developmentStatement, 0, len(steps))
 	for _, step := range steps {
 		if step.Kind == ridumigration.StepSQL {
-			statements = append(statements, Statement{Kind: step.Name, SQL: step.SQL})
+			statements = append(statements, developmentStatement{kind: step.Name, sql: step.SQL})
 		}
 	}
 	return statements, nil
-}
-
-// ApplyPlan applies an Atlas-planned, non-destructive development sync in one
-// transaction. It is intentionally separate from production artifact history.
-func (backend *Store) ApplyPlan(ctx context.Context, statements []Statement) error {
-	transaction, err := backend.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rollbackPostgresTransaction(ctx, transaction) }()
-	if _, err := transaction.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", migrationLockID); err != nil {
-		return err
-	}
-	for _, statement := range statements {
-		if _, err := transaction.Exec(ctx, statement.SQL); err != nil {
-			return fmt.Errorf("apply %s: %w", statement.Kind, err)
-		}
-	}
-	return transaction.Commit(ctx)
 }
 
 func hasForeignKey(field schema.Field) bool {

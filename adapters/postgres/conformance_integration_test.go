@@ -25,6 +25,16 @@ func TestPostgresStoreConformance(t *testing.T) {
 	})
 }
 
+func TestPostgresStoreWriteGuards(t *testing.T) {
+	databaseURL := os.Getenv("RIDU_POSTGRES_URL")
+	if databaseURL == "" {
+		t.Skip("set RIDU_POSTGRES_URL to run PostgreSQL store conformance")
+	}
+	conformance.RunWriteGuards(t, func(t *testing.T, manifest schema.Manifest) store.Store {
+		return openPostgresConformanceStore(t, databaseURL, manifest)
+	})
+}
+
 func openPostgresConformanceStore(t *testing.T, databaseURL string, manifest schema.Manifest) *postgres.Store {
 	t.Helper()
 	ctx := t.Context()
@@ -56,11 +66,7 @@ func openPostgresConformanceStore(t *testing.T, databaseURL string, manifest sch
 		t.Fatal(err)
 	}
 	t.Cleanup(backend.Close)
-	plan, err := backend.Plan(ctx, manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, manifest); err != nil {
 		t.Fatal(err)
 	}
 	return backend

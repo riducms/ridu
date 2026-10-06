@@ -30,28 +30,26 @@ func TestFieldProjectionReuseKeepsCurrentPriorAndDeferredSnapshotsDistinct(t *te
 		if ctx.AllLocales || ctx.Locale != "en" && ctx.Locale != "fr" {
 			t.Fatalf("callback locale=%q all=%v", ctx.Locale, ctx.AllLocales)
 		}
-		if got, _ := ctx.Data["title"].StringValue(); got != expectedTitle {
-			t.Fatalf("%s/%s root title=%q, want %q", ctx.FieldPath, ctx.Locale, got, expectedTitle)
+		if got, _ := ctx.Root.Get("title").StringValue(); got != expectedTitle {
+			t.Fatalf("%s/%s root title=%q, want %q", ctx.BoundField().Path.String(), ctx.Locale, got, expectedTitle)
 		}
-		if got, _ := ctx.Data["marker"].StringValue(); got != "unchanged" {
-			t.Fatalf("callback changed a cached root map: marker=%q", got)
+		if got, _ := ctx.Root.Get("marker").StringValue(); got != "unchanged" {
+			t.Fatalf("callback root marker=%q", got)
 		}
-		if got, _ := ctx.OriginalSiblingData["title"].StringValue(); got != "old-"+string(ctx.Locale) {
+		if got, _ := ctx.Prior.Get("title").StringValue(); got != "old-"+string(ctx.Locale) {
 			t.Fatalf("prior title=%q for locale %s", got, ctx.Locale)
 		}
-		retained = append(retained, retainedView{view: operation.Snapshot(ctx.Data), title: expectedTitle})
-		calls = append(calls, ctx.FieldPath+"/"+string(ctx.Locale))
-		// Only the returned own-field value is published. Detached root and prior
-		// maps must not modify another callback or the cached projection.
-		ctx.Data["marker"] = store.String("callback-owned")
-		ctx.OriginalSiblingData["title"] = store.String("callback-owned")
+		// Only the replaced own-field value is published; immutable root and
+		// prior views cannot modify another callback or the cached projection.
+		retained = append(retained, retainedView{view: operation.ObjectView(ctx.Root), title: expectedTitle})
+		calls = append(calls, ctx.BoundField().Path.String()+"/"+string(ctx.Locale))
 	}
 	collection := Collection{Schema: schema.Collection{Fields: fields}, Bindings: []FieldBinding{
-		{ID: "title", Field: title, LocaleOwned: true, Hooks: Hooks{
+		{ID: "title", Field: title, Hooks: Hooks{
 			BeforeChange: []Hook{
 				func(ctx Context) error {
 					observe(ctx, "old-"+string(ctx.Locale))
-					ctx.SiblingData["title"] = store.String("new-" + string(ctx.Locale))
+					ctx.ReplaceValue(store.String("new-" + string(ctx.Locale)))
 					return nil
 				},
 				func(ctx Context) error {
@@ -67,7 +65,7 @@ func TestFieldProjectionReuseKeepsCurrentPriorAndDeferredSnapshotsDistinct(t *te
 				return nil
 			}},
 		}},
-		{ID: "other", Field: other, LocaleOwned: true, Hooks: Hooks{BeforeChange: []Hook{func(ctx Context) error {
+		{ID: "other", Field: other, Hooks: Hooks{BeforeChange: []Hook{func(ctx Context) error {
 			observe(ctx, "new-"+string(ctx.Locale))
 			return nil
 		}}}},
@@ -114,7 +112,7 @@ func TestPopulatedFieldAccessUsesTargetProjectionSchema(t *testing.T) {
 	}}
 	var locales []schema.LocaleCode
 	target.Bindings = []FieldBinding{{ID: "other", Field: localized, Access: FieldRules{Read: func(ctx Context) (bool, error) {
-		if title, _ := ctx.Data["title"].StringValue(); title != "target title" {
+		if title, _ := ctx.Root.Get("title").StringValue(); title != "target title" {
 			t.Fatalf("target field policy root title=%q; source schema leaked into target projection", title)
 		}
 		locales = append(locales, ctx.Locale)

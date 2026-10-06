@@ -115,6 +115,10 @@ func TestGeneratedClientIncludesTypedGlobals(t *testing.T) {
 			t.Fatalf("generated global client missing %q:\n%s", expected, generated)
 		}
 	}
+	// Globals have no list operation, so they have no filter contract.
+	if strings.Contains(string(generated), "SiteSettingsWhere") {
+		t.Fatalf("generated global client has a filter contract:\n%s", generated)
+	}
 }
 
 func TestGeneratedClientDistinguishesSingleAndAllLocaleDocuments(t *testing.T) {
@@ -125,7 +129,7 @@ func TestGeneratedClientDistinguishesSingleAndAllLocaleDocuments(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{
 			{Slug: "authors", Fields: field.Fields{field.Text("name").Localized()}},
-			{Slug: "posts", Fields: field.Fields{field.Text("title").Required().Localized(), field.Relationship("author", "authors").Localized(), field.Group("seo", field.Fields{field.Text("description").Localized(), field.Text("slug")})}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title").Required().Localized(), field.Relationship("author", "authors").Localized(), field.Group("seo", field.Fields{field.Text("description").Localized(), field.Text("slug")}), field.Group("meta", field.Fields{field.Text("summary")}).Localized()}},
 		},
 	})
 	if err != nil {
@@ -143,15 +147,20 @@ func TestGeneratedClientDistinguishesSingleAndAllLocaleDocuments(t *testing.T) {
 		`"title"?: RiduLocalizedValues<string>;`,
 		`"author"?: RiduLocalizedValues<ID | AuthorsAllLocales | null>;`,
 		`"description"?: RiduLocalizedValues<string | null>;`,
-		`export interface PostsAllLocalesPopulateOutput {`,
-		`"author": RiduLocalizedValues<ID | AuthorsAllLocales | null>;`,
 		`allOutput: PostsAllLocales;`,
-		`allPopulateOutput: PostsAllLocalesPopulateOutput;`,
 		`locale: Locale;`,
 		"`title.${Locale}`",
+		// A localized container's descendants are addressed through its locale segment.
+		`"meta.summary"`, "`meta.${Locale}.summary`",
 	} {
 		if !strings.Contains(string(generated), expected) {
 			t.Fatalf("generated localized client missing %q:\n%s", expected, generated)
+		}
+	}
+	// Populated values are derived from the document types themselves.
+	for _, removed := range []string{"PopulateOutput", "populateOutput", `"meta.${Locale}.summary"`} {
+		if strings.Contains(string(generated), removed) {
+			t.Fatalf("generated localized client contains %q:\n%s", removed, generated)
 		}
 	}
 }
@@ -170,6 +179,9 @@ func TestGeneratedClientMatchesRESTSelectAndPopulateShapes(t *testing.T) {
 	manifest := schema.NewManifest(schema.Snapshot{
 		Version:     schema.CurrentVersion,
 		Application: schema.Application{Name: "Query option contracts"},
+		Blocks: []schema.BlockType{{Slug: "quote", TypeName: "Quote", Labels: schema.BlockLabels{Singular: "Quote", Plural: "Quotes"}, Fields: []schema.Field{
+			{ID: "block-quote-source", Name: "source", Path: path("source"), Type: schema.FieldTypeRelationship, Relationship: &people},
+		}}},
 		Collections: []schema.Collection{
 			{ID: "people", Slug: "people", Capabilities: schema.Capabilities{Versions: true}, Versions: &schema.VersionSettings{}, Fields: []schema.Field{
 				{ID: "people-name", Name: "name", Path: path("name"), Type: schema.FieldTypeText},
@@ -193,9 +205,7 @@ func TestGeneratedClientMatchesRESTSelectAndPopulateShapes(t *testing.T) {
 					{ID: "sections", Name: "sections", Path: path("sections"), Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{
 						{ID: "sections-editor", Name: "editor", Path: path("sections", "editor"), Type: schema.FieldTypeRelationship, Relationship: &people},
 					}}},
-					{ID: "layout", Name: "layout", Path: path("layout"), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "quote", Fields: []schema.Field{
-						{ID: "layout-quote-source", Name: "source", Path: path("layout", "quote", "source"), Type: schema.FieldTypeRelationship, Relationship: &people},
-					}}}}},
+					{ID: "layout", Name: "layout", Path: path("layout"), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"quote"}}},
 					{ID: "subject", Name: "subject", Path: path("subject"), Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true, Targets: []schema.RelationshipTarget{
 						{CollectionID: "people", CollectionSlug: "people"},
 						{CollectionID: "media", CollectionSlug: "media"},
@@ -215,8 +225,10 @@ func TestGeneratedClientMatchesRESTSelectAndPopulateShapes(t *testing.T) {
 	}
 	section := func(name string) string {
 		t.Helper()
-		prefix := "export interface " + name + " {"
-		start := strings.Index(text, prefix)
+		start := strings.Index(text, "export interface "+name+" {")
+		if start == -1 {
+			start = strings.Index(text, "export interface "+name+" extends")
+		}
 		if start == -1 {
 			t.Fatalf("generated client has no %s", name)
 		}
@@ -272,11 +284,17 @@ func TestGeneratedClientMatchesRESTSelectAndPopulateShapes(t *testing.T) {
 		`"meta"?: ExistsWhere;`, `"sections"?: ExistsWhere;`, `"layout"?: ExistsWhere;`,
 		`"meta.reviewer"?: ScalarWhere<ID>;`,
 		`"sections.editor"?: ScalarWhere<ID>;`,
-		`"layout.quote.source"?: ScalarWhere<ID>;`,
+		// A polymorphic relationship is filtered by { relationTo, id } membership.
+		`"subject"?: MembershipWhere<{ relationTo: "people"; id: ID } | { relationTo: "media"; id: ID }>;`,
+		// Block rows contribute their own relative filters under the row's path.
+		`RiduPrefixedPaths<"layout.quote.", QuoteWhere>`,
 	} {
 		if !strings.Contains(whereContract, expected) {
 			t.Fatalf("generated where is missing queryable system field %q:\n%s", expected, whereContract)
 		}
+	}
+	if quote := section("QuoteWhere"); !strings.Contains(quote, `"source"?: ScalarWhere<ID>;`) {
+		t.Fatalf("generated block row filter is missing its relationship:\n%s", quote)
 	}
 	for _, unsupported := range []string{`"meta"?: {`, `"sections"?: {`, `"layout"?: ScalarWhere`} {
 		if strings.Contains(whereContract, unsupported) {
@@ -288,13 +306,16 @@ func TestGeneratedClientMatchesRESTSelectAndPopulateShapes(t *testing.T) {
 	for _, expected := range []string{
 		`"meta.reviewer"?: boolean | PeoplePopulationSelect | { depth?: number; select?: PeoplePopulationSelect };`,
 		`"sections.editor"?: boolean | PeoplePopulationSelect | { depth?: number; select?: PeoplePopulationSelect };`,
-		`"layout.quote.source"?: boolean | PeoplePopulationSelect | { depth?: number; select?: PeoplePopulationSelect };`,
+		`RiduPrefixedPaths<"layout.quote.", QuotePopulate>`,
 		`"subject"?: boolean | PeoplePopulationSelect | MediaPopulationSelect | { depth?: number; select?: PeoplePopulationSelect | MediaPopulationSelect };`,
 		`"cover"?: boolean | MediaPopulationSelect | { depth?: number; select?: MediaPopulationSelect };`,
 	} {
 		if !strings.Contains(populateContract, expected) {
 			t.Fatalf("generated populate is missing %q:\n%s", expected, populateContract)
 		}
+	}
+	if quote := section("QuotePopulate"); !strings.Contains(quote, `"source"?: boolean | PeoplePopulationSelect | { depth?: number; select?: PeoplePopulationSelect };`) {
+		t.Fatalf("generated block row population is missing its relationship:\n%s", quote)
 	}
 	for _, unsupported := range []string{`"meta"?: {`, `"people"?: PeoplePopulationSelect`, `"media"?: MediaPopulationSelect`} {
 		if strings.Contains(populateContract, unsupported) {
@@ -327,8 +348,17 @@ func TestGeneratedClientIncludesStoredFieldFamiliesAndOmitsUIFields(t *testing.T
 
 func TestGeneratedClientTypesMultiSelectAsOrderedOptionArray(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
-		Name:        "Multi-select contracts",
-		Collections: []ridu.Collection{{Slug: "users", Fields: field.Fields{field.MultiSelect("roles", "admin", "editor").Default("admin").Required()}}},
+		Name: "Multi-select contracts",
+		Collections: []ridu.Collection{
+			{Slug: "teams", Upload: true, Fields: field.Fields{field.Text("name")}},
+			{Slug: "users", Fields: field.Fields{
+				field.MultiSelect("roles", "admin", "editor").Default("admin").Required(),
+				field.Relationships("teams", "teams"),
+				field.Uploads("badges", "teams"),
+				field.PolymorphicRelationships("follows", "users", "teams"),
+				field.Relationship("manager", "users"),
+			}},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -342,7 +372,12 @@ func TestGeneratedClientTypesMultiSelectAsOrderedOptionArray(t *testing.T) {
 		`"roles"?: Array<"admin" | "editor">;`,
 		"export interface UsersCreate {\n\t\"roles\"?: Array<\"admin\" | \"editor\">;",
 		"export interface UsersUpdate {\n\t\"roles\"?: Array<\"admin\" | \"editor\">;",
-		`"roles"?: MultiSelectWhere<"admin" | "editor">;`,
+		"export interface MembershipWhere<Value> {\n\tin?: readonly Value[];\n\tequals?: null;\n\tnotEquals?: null;\n\texists?: boolean;\n}",
+		`"roles"?: MembershipWhere<"admin" | "editor">;`,
+		`"teams"?: MembershipWhere<ID>;`,
+		`"badges"?: MembershipWhere<ID>;`,
+		`"follows"?: MembershipWhere<{ relationTo: "users"; id: ID } | { relationTo: "teams"; id: ID }>;`,
+		`"manager"?: ScalarWhere<ID>;`,
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("generated multi-select client missing %q:\n%s", expected, text)
@@ -447,7 +482,8 @@ func TestGeneratedClientModelsServerOwnedUploadsDraftsAndValidationPaths(t *test
 		`drafts: false;`,
 		"`sections.${number}.roles.${number}`",
 		"`layout.${number}.blockType`",
-		"`layout.${number}.reviewer`",
+		"`layout.${number}.${QuoteValidationPath}`",
+		`export type QuoteValidationPath = "reviewer" | "blockName";`,
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("generated precision contract missing %q:\n%s", expected, text)

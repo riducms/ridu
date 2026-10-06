@@ -53,7 +53,7 @@ func TestMongoDBRichTextBlocksProductionReplicaSet(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := backend.SyncIndexes(ctx, app.Manifest()); err != nil {
+		if err := backend.syncIndexes(ctx, app.Manifest()); err != nil {
 			t.Fatal(err)
 		}
 		return backend, app
@@ -71,7 +71,7 @@ func mongoRichTextBlocksBackend(t testing.TB, config ridu.Config) (store.Store, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), app.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), app.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	return backend, app

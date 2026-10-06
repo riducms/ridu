@@ -1,4 +1,4 @@
-import { isRecord } from "@riducms/protocol";
+import { blockFieldCapabilities, isRecord } from "@riducms/protocol";
 import {
 	LiveValidationController,
 	type LiveValidationTransport,
@@ -190,6 +190,11 @@ export class FormController {
 	#listEdits = new Map<string, number>();
 	#nextListEdit = 0;
 	#fields: readonly SchemaField[] = [];
+	/**
+	 * The resource fields that canonical access paths name, when they are not this
+	 * form's own fields: a detached draft edits a payload of its parent's resource.
+	 */
+	accessSchema: readonly SchemaField[] | undefined;
 	// Retained edits may remove an occurrence; Discard still needs its latest evaluated denial.
 	#retainedAccess:
 		{ access: AccessCapabilitiesEnvelope; locations: FieldValueLocation[] } | undefined;
@@ -566,7 +571,13 @@ export class FormController {
 	fieldCapabilities(path: string, canonicalPath = authoredPath(path)) {
 		const access = this.access;
 		if (access === undefined) return undefined;
-		return access.fields[path] ?? access.fields[canonicalPath] ?? access.fields[authoredPath(path)];
+		return (
+			access.fields[path] ??
+			access.fields[canonicalPath] ??
+			access.fields[authoredPath(path)] ??
+			// A block definition's field at a placement without values of its own.
+			blockFieldCapabilities(access, this.accessSchema ?? this.#fields, canonicalPath)
+		);
 	}
 
 	canRead(path: string, canonicalPath?: string) {

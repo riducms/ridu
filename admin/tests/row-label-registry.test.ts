@@ -29,7 +29,7 @@ function repeatedField(type: "array" | "blocks", plugin = "curriculum", key = "c
 			fields: [],
 			rowLabelComponent: { plugin, component: key, config: { key: "optionKey" } },
 		},
-		...(type === "blocks" ? { blocks: { types: [] } } : {}),
+		...(type === "blocks" ? { blocks: {} } : {}),
 	} satisfies SchemaField;
 }
 

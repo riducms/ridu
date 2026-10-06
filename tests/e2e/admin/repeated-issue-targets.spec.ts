@@ -44,11 +44,11 @@ for (const field of ["sections", "content"] as const)
 				title: "Aggregate descendants",
 				[field]: [
 					{
-						...(field === "content" ? { blockType: "card" } : {}),
+						...(field === "content" ? { blockType: "target-card" } : {}),
 						heading: "First",
 						links: [{ url: "First URL" }, { url: "Other URL" }],
 					},
-					{ ...(field === "content" ? { blockType: "note" } : {}), heading: "Other" },
+					{ ...(field === "content" ? { blockType: "target-note" } : {}), heading: "Other" },
 				],
 			},
 		});
@@ -65,7 +65,7 @@ for (const field of ["sections", "content"] as const)
 		expect(JSON.parse(nested.target!)).toEqual(
 			expect.arrayContaining([original[field][0]._key, original[field][0].links[0]._key])
 		);
-		if (field === "content") expect(JSON.parse(nested.target!)).toContain("card");
+		if (field === "content") expect(JSON.parse(nested.target!)).toContain("target-card");
 		await expect(page.locator(`input[name="${field}.0.heading"]`)).toHaveAttribute(
 			"aria-invalid",
 			"true"
@@ -158,7 +158,7 @@ for (const field of ["body", "localizedBody"] as const)
 								type: "block",
 								version: 1,
 								fields: {
-									blockType: "card",
+									blockType: "target-embedded-card",
 									heading: "Embedded",
 									links: [{ url: "Original URL" }, { url: "Other URL" }],
 								},
@@ -173,7 +173,7 @@ for (const field of ["body", "localizedBody"] as const)
 		await page.goto(`/admin/collections/issue-targets/${original.id}`);
 		if (field === "localizedBody") await chooseContentLocale(page, "French", "fr");
 		const card = page
-			.locator(`[data-field-path="${field}"] article[data-block-type="card"]`)
+			.locator(`[data-field-path="${field}"] article[data-block-type="target-embedded-card"]`)
 			.first();
 		await card.locator('input[name$=".links.0.url"]').fill("invalid");
 		const rejected = await save(page, original.id);

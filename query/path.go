@@ -107,6 +107,17 @@ func (path Path) Segments() []string {
 	return append([]string(nil), path.segments...)
 }
 
+// Len returns the number of path segments.
+func (path Path) Len() int { return len(path.segments) }
+
+// Segment returns segment index without copying the path.
+func (path Path) Segment(index int) string { return path.segments[index] }
+
+// AppendSegments appends the path segments to segments.
+func (path Path) AppendSegments(segments []string) []string {
+	return append(segments, path.segments...)
+}
+
 func (path Path) String() string {
 	return strings.Join(path.segments, ".")
 }

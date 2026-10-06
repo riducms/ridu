@@ -1066,7 +1066,8 @@ func TestOpenAPIIsDeterministicAndContainsCRUDPaths(t *testing.T) {
 		}
 	}
 	assertOpenAPIIntegerParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), "depth", 0, 5)
-	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), []string{"page", "limit", "where", "sort", "include-access", "depth", "select", "populate", "draft", "locale", "fallback-locale"})
+	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), []string{"page", "limit", "pagination", "where", "sort", "include-access", "depth", "select", "populate", "draft", "locale", "fallback-locale"})
+	assertOpenAPIBooleanParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), "pagination")
 	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/articles/{id}"), "get"), []string{"depth", "select", "populate", "draft"})
 	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/globals/site-settings"), "get"), []string{"depth", "select", "populate", "draft", "locale", "fallback-locale"})
 	assertOpenAPIBooleanParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "post"), "draft")

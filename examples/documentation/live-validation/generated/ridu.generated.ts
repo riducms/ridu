@@ -20,8 +20,11 @@ export interface ScalarWhere<Value> {
 
 export type TimestampWhere = Omit<ScalarWhere<string>, "contains" | "like">;
 
-export interface MultiSelectWhere<Value extends string> {
-	contains?: Value;
+/** Item membership for lists, multi-selects, reference lists and polymorphic relationships; wrap `in` in `not` to exclude. */
+export interface MembershipWhere<Value> {
+	in?: readonly Value[];
+	equals?: null;
+	notEquals?: null;
 	exists?: boolean;
 }
 
@@ -82,8 +85,6 @@ export interface ProductsPopulationSelect {
 
 export type ProductsPopulate = Record<string, never>;
 
-export type ProductsPopulateOutput = Record<string, never>;
-
 export type ProductsValidationPath = "name" | "price" | "salePrice";
 
 export interface RiduConfig {
@@ -102,7 +103,6 @@ export interface RiduConfig {
 			where: ProductsWhere;
 			select: ProductsSelect;
 			populate: ProductsPopulate;
-			populateOutput: ProductsPopulateOutput;
 			validationPath: ProductsValidationPath;
 		};
 	};

@@ -112,7 +112,10 @@ whole group or list. To translate only selected children, leave the parent share
 `.Localized()` to those child fields instead.
 
 A required translated field needs a value only for the language you are saving. You do not have
-to submit every translation at once. `.Unique()` also checks uniqueness within each language.
+to submit every translation at once. `.Unique()` also checks uniqueness within each language. When
+a migration [makes a translated field required](/docs/migrations/#required-fields), it follows the
+same rule: missing translations are allowed, but an empty translation, or no translation in any
+language, stops the migration.
 
 ![A focused Ridu Article editor in the French content locale, showing inherited English title and summary values beside shared relationship and upload fields.](../../../../docs/assets/ridu-admin-localization.png)
 

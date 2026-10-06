@@ -152,13 +152,18 @@ func TestPostgresEmbeddedOwnContractAllowsConfirmedFieldRename(t *testing.T) {
 	content.Path, _ = query.ParsePath("content")
 	snapshot.Collections[0].Fields = []schema.Field{content}
 	before = schema.NewManifest(snapshot)
+	// Block placements derive from a field's path, so the rename pairs the
+	// fields as each manifest binds them.
+	snapshot = before.Snapshot()
 	beforeField := snapshot.Collections[0].Fields[0]
 	afterField := beforeField
 	afterField.ID, afterField.Name = "renamed-content", "body"
 	afterField.Path, _ = query.ParsePath("body")
 	snapshot.Collections[0].Fields[0] = afterField
 	after := schema.NewManifest(snapshot)
-	renames := []Rename{{Kind: RenameField, BeforeCollection: before.Snapshot().Collections[0], AfterCollection: snapshot.Collections[0], BeforeField: &beforeField, AfterField: &afterField}}
+	afterOwner := after.Snapshot().Collections[0]
+	afterField = afterOwner.Fields[0]
+	renames := []Rename{{Kind: RenameField, BeforeCollection: before.Snapshot().Collections[0], AfterCollection: afterOwner, BeforeField: &beforeField, AfterField: &afterField}}
 	artifact, err := BuildArtifact(t.Context(), "rename-embedded-field", &before, after, renames, false)
 	if err != nil {
 		t.Fatalf("confirmed field rename: %v", err)

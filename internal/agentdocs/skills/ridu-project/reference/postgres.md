@@ -253,6 +253,12 @@ migration status and completed-migration preflight. Run `ridu migrate status` fo
 ledger, phase/step, and physical-schema drift report. See [Production](./production.md) for probe
 and drain behaviour.
 
+Every probe checks connectivity, the ledger, incomplete migration work, and a digest of the
+current schema's catalogue rows. The complete physical inspection and the manifest and history
+digests run again only when the ledger, that catalogue digest, or the executable manifest changed
+since the last passing probe. Steady-state probes therefore stay cheap, and drift still fails the
+next probe.
+
 ## Transactions and access remain atomic {#transactions}
 
 Ridu's operation engine owns the lifecycle; PostgreSQL supplies its transactional implementation.
@@ -307,17 +313,24 @@ Creation is offline. The database-backed commands use their own bounded pools, T
 advisory-lock admission, and schema assertions. Read [Migrations](./migrations.md) for exact
 command semantics, destructive and maintenance admission, resumable phases, and recovery.
 
-PostgreSQL accepts only planner `atlas` `1.2.0` artifacts. Separate working and live content is
+PostgreSQL accepts only planner `atlas` `1.3.0` artifacts. Separate working and live content is
 part of this layout from its initial migration. Earlier framework layouts and planner histories
 are unsupported; recreate the database and migration history rather than rewriting old artifacts.
 Startup and readiness never convert an old layout.
 
-Authoring reads use the latest working revision for conflict checks, while
-public reads filter and sort against the independent published snapshot. Saving a newer draft does
-not change the public content or its revision/timestamp. Version-history retention may prune old
-snapshots without removing the active published head. Content rewrites and index rebuilds still
-need the migration maintenance admission and a verified backup, because both working and live
-heads must remain coherent.
+Every collection and global has a typed working table. A versioned resource also has a typed live
+table generated from the same definition, with the same columns, unique constraints, declared
+indexes, and relationship foreign keys. Publishing copies the saved working row into the live
+table; deleting a document deletes both rows. Version history stays in its own snapshot table.
+
+Authoring reads use the latest working revision for conflict checks, while public reads filter,
+sort, count, and paginate against the live table with the same indexes and statistics as working
+reads. Declare `Index()` on fields that public queries filter or sort by; the index exists on both
+tables. Saving a newer draft does not change the public content or its revision/timestamp.
+Version-history retention may prune old snapshots without removing live content. Migrations rename,
+rewrite, and retire both tables together. Content rewrites and index rebuilds still need the
+migration maintenance admission and a verified backup, because working and live content must remain
+coherent.
 
 ## Test against PostgreSQL {#testing}
 

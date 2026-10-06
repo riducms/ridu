@@ -335,6 +335,28 @@ func TestDevelopmentRenameFailureAdvice(t *testing.T) {
 	}
 }
 
+// recordDevRenameSchema replaces the schema record of a PostgreSQL development
+// database and leaves its physical schema as it is.
+func recordDevRenameSchema(t *testing.T, databaseURL string, manifest schema.Manifest) {
+	t.Helper()
+	encoded, err := manifest.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := migration.DigestManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := pgxpool.New(t.Context(), databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if _, err := pool.Exec(t.Context(), `UPDATE ridu_postgres_schema SET manifest_json = $1, manifest_digest = $2`, string(encoded), digest); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func devRenameDatabase(t *testing.T) (string, *postgres.Store) {
 	t.Helper()
 	baseURL := os.Getenv("RIDU_POSTGRES_URL")
@@ -449,8 +471,8 @@ func TestDevelopmentRenameAcceptedMigratesTheDevelopmentDatabase(t *testing.T) {
 		t.Fatalf("renamed document = %#v", kept.Values)
 	}
 	// Ordinary schema sync has nothing left to do.
-	if plan, err := backend.Plan(ctx, current); err != nil || len(plan) != 0 {
-		t.Fatalf("development plan after the rename = %v, %v", plan, err)
+	if err := backend.VerifySchema(ctx, current); err != nil {
+		t.Fatalf("development schema after the rename = %v", err)
 	}
 }
 
@@ -473,20 +495,14 @@ func TestDevelopmentRenameLeavesADriftedDatabaseToSchemaSync(t *testing.T) {
 	if _, err := migrationartifact.Create(directory, "initial", initial, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	// The database has a column neither the schema file nor any migration
+	// The database has a column neither its schema record nor any migration
 	// describes.
 	driftedConfig := devRenameConfig(field.Text("title"), field.Text("stray"))
 	drifted := devRenameManifest(t, driftedConfig)
-	if err := backend.SyncDevelopmentSchema(ctx, previous); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, drifted); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := backend.Plan(ctx, drifted)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
-		t.Fatal(err)
-	}
+	recordDevRenameSchema(t, databaseURL, previous)
 	application, err := core.New(driftedConfig, backend)
 	if err != nil {
 		t.Fatal(err)
@@ -511,8 +527,8 @@ func TestDevelopmentRenameLeavesADriftedDatabaseToSchemaSync(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "explicit safety resolution") {
 		t.Fatalf("schema sync over a drifted database = %v", err)
 	}
-	if plan, err := backend.Plan(ctx, drifted); err != nil || len(plan) != 0 {
-		t.Fatalf("the rejected reload changed the database: %v, %v", plan, err)
+	if err := backend.VerifySchema(ctx, drifted); err != nil {
+		t.Fatalf("the rejected reload changed the database: %v", err)
 	}
 	unchanged, err := application.Local().Find(ctx, "posts", post.ID, core.FindOptions{})
 	if err != nil {

@@ -239,7 +239,7 @@ func TestSQLiteOperationReadsOverlapWhileWriterGateIsHeld(t *testing.T) {
 		if completed.err != nil {
 			t.Fatal(completed.err)
 		}
-		if completed.result.Page == nil || completed.result.Page.Total != 0 {
+		if completed.result.Page == nil || *completed.result.Page.Total != 0 {
 			t.Fatalf("read page = %#v, want an empty page", completed.result.Page)
 		}
 	}

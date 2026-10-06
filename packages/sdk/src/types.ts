@@ -16,12 +16,14 @@ import type {
 	CountEnvelope,
 	LogoutEnvelope,
 	PageEnvelope,
+	Pagination,
 	SchemaManifest,
 	ScheduledPublication,
 	DocumentLockEnvelope,
 	JoinMutationEnvelope,
 	JoinMutationInput,
 	PreviewToken,
+	UncountedPagination,
 } from "@riducms/protocol";
 
 export type {
@@ -54,8 +56,6 @@ export interface CollectionContract {
 	where: unknown;
 	select: unknown;
 	populate: unknown;
-	populateOutput?: unknown;
-	allPopulateOutput?: unknown;
 	validationPath?: string;
 }
 
@@ -74,8 +74,6 @@ export interface GlobalContract {
 	draftUpdate?: unknown;
 	select: unknown;
 	populate: unknown;
-	populateOutput?: unknown;
-	allPopulateOutput?: unknown;
 	validationPath?: string;
 }
 
@@ -142,24 +140,6 @@ export type GlobalPopulateFor<
 	Config extends RiduConfigShape,
 	Slug extends GlobalSlug<Config>,
 > = GlobalContractFor<Config, Slug>["populate"];
-
-/** Mapping used to infer populated relationship values for one generated global. */
-export type GlobalPopulateOutputFor<
-	Config extends RiduConfigShape,
-	Slug extends GlobalSlug<Config>,
-> =
-	GlobalContractFor<Config, Slug> extends { populateOutput: infer Output }
-		? Output
-		: Record<never, never>;
-
-/** All-locales relationship mapping for one generated global. */
-export type GlobalAllLocalesPopulateOutputFor<
-	Config extends RiduConfigShape,
-	Slug extends GlobalSlug<Config>,
-> =
-	GlobalContractFor<Config, Slug> extends { allPopulateOutput: infer Output }
-		? Output
-		: GlobalPopulateOutputFor<Config, Slug>;
 
 /** Canonical field paths returned by validation for one generated global. */
 export type GlobalValidationPathFor<
@@ -240,21 +220,6 @@ export type PopulateFor<
 	Config extends RiduConfigShape,
 	Slug extends CollectionSlug<Config>,
 > = ContractFor<Config, Slug>["populate"];
-
-/** Mapping used to infer populated relationship values for one generated collection. */
-export type PopulateOutputFor<Config extends RiduConfigShape, Slug extends CollectionSlug<Config>> =
-	ContractFor<Config, Slug> extends { populateOutput: infer Output }
-		? Output
-		: Record<never, never>;
-
-/** All-locales relationship mapping for one generated collection. */
-export type AllLocalesPopulateOutputFor<
-	Config extends RiduConfigShape,
-	Slug extends CollectionSlug<Config>,
-> =
-	ContractFor<Config, Slug> extends { allPopulateOutput: infer Output }
-		? Output
-		: PopulateOutputFor<Config, Slug>;
 
 /** Canonical field paths returned by validation for one generated collection. */
 export type ValidationPathFor<Config extends RiduConfigShape, Slug extends CollectionSlug<Config>> =
@@ -617,6 +582,11 @@ export interface ListOptions<
 	page?: number;
 	/** Maximum documents returned in this page. */
 	limit?: number;
+	/**
+	 * Set `false` to skip counting every match. The page then has no `totalDocs` or `totalPages`;
+	 * `hasNextPage` stays exact. Defaults to `true`.
+	 */
+	pagination?: boolean;
 	/** Maximum relationship depth available to explicit population. */
 	depth?: number;
 	/** Typed document filter combined atomically with collection access rules. */
@@ -735,48 +705,42 @@ type IsLocaleMap<Value, Locale extends string> = [Locale] extends [never]
 
 type ApplyPopulationTree<
 	Value,
-	Mapping,
 	Population,
 	Locale extends string,
 	Prefix extends string = "",
 > = Value extends null | undefined
 	? Value
 	: Value extends readonly (infer Item)[]
-		? Array<ApplyPopulationTree<Item, Mapping, Population, Locale, Prefix>>
+		? Array<ApplyPopulationTree<Item, Population, Locale, Prefix>>
 		: Value extends object
 			? IsLocaleMap<Value, Locale> extends true
 				? {
-						[Key in keyof Value]: ApplyPopulationTree<
-							Value[Key],
-							Mapping,
-							Population,
-							Locale,
-							Prefix
-						>;
+						[Key in keyof Value]: ApplyPopulationTree<Value[Key], Population, Locale, Prefix>;
 					}
 				: {
 						[Key in keyof Value]: Key extends string
 							? DataPath<Value, Prefix, Key> extends infer Path extends string
-								? Path extends keyof Mapping
-									? HasDefinitePopulation<Population, Path> extends true
-										? NarrowPopulatedValue<Mapping[Path], Population[Path & keyof Population]>
-										: ApplyPopulationTree<Value[Key], Mapping, Population, Locale, Path>
-									: ApplyPopulationTree<Value[Key], Mapping, Population, Locale, Path>
+								? HasDefinitePopulation<Population, Path> extends true
+									? NarrowPopulatedValue<Value[Key], Population[Path & keyof Population]>
+									: ApplyPopulationTree<Value[Key], Population, Locale, Path>
 								: Value[Key]
 							: Value[Key];
 					}
 			: Value;
 
-/** Applies every explicit canonical populate path, including array and block traversal. */
+/**
+ * Applies every explicit canonical populate path, including array and block traversal. A generated
+ * document already types each relationship as an ID or its target document; a definite population
+ * option narrows that value to the selected target projection.
+ */
 export type ApplyPopulate<
 	Document,
-	Mapping,
 	Population,
 	Locale extends string = never,
 > = Population extends object
-	? [keyof Mapping & string] extends [never]
+	? [keyof Population] extends [never]
 		? Document
-		: ApplyPopulationTree<Document, Mapping, Population, Locale>
+		: ApplyPopulationTree<Document, Population, Locale>
 	: Document;
 
 type OptionProperty<Options, Key extends PropertyKey> = Options extends object
@@ -803,17 +767,12 @@ export type CollectionQueryResult<
 	Options,
 > = LocaleResult<
 	ApplySelect<
-		ApplyPopulate<
-			OutputFor<Config, Slug>,
-			PopulateOutputFor<Config, Slug>,
-			OptionProperty<Options, "populate">
-		>,
+		ApplyPopulate<OutputFor<Config, Slug>, OptionProperty<Options, "populate">>,
 		OptionProperty<Options, "select">
 	>,
 	ApplySelect<
 		ApplyPopulate<
 			AllLocalesOutputFor<Config, Slug>,
-			AllLocalesPopulateOutputFor<Config, Slug>,
 			OptionProperty<Options, "populate">,
 			LocaleFor<Config>
 		>,
@@ -822,18 +781,44 @@ export type CollectionQueryResult<
 	Options
 >;
 
-/** Selects the ordinary or access-enriched page shape from list options. */
-export type CollectionListResult<Document, Options> = Options extends object
+/**
+ * Selects page metadata from a literal `pagination` option: `false` has no totals, an omitted or
+ * `true` option has both, and a widened boolean may have either.
+ */
+export type ListPagination<Options> = Options extends object
+	? "pagination" extends keyof Options
+		? false extends OptionProperty<Options, "pagination">
+			? true extends OptionProperty<Options, "pagination">
+				? Pagination | UncountedPagination
+				: undefined extends OptionProperty<Options, "pagination">
+					? Pagination | UncountedPagination
+					: UncountedPagination
+			: Pagination
+		: Pagination
+	: Pagination;
+
+/** Selects the ordinary or access-enriched page shape and its pagination metadata from list options. */
+export type CollectionListResult<Document, Options> = CollectionListEnvelope<
+	Document,
+	ListPagination<Options>,
+	Options
+>;
+
+type CollectionListEnvelope<
+	Document,
+	Metadata extends Pagination | UncountedPagination,
+	Options,
+> = Options extends object
 	? "includeAccess" extends keyof Options
 		? true extends OptionProperty<Options, "includeAccess">
 			? false extends OptionProperty<Options, "includeAccess">
-				? PageEnvelope<Document> | CollectionPageEnvelope<Document>
+				? PageEnvelope<Document, Metadata> | CollectionPageEnvelope<Document, Metadata>
 				: undefined extends OptionProperty<Options, "includeAccess">
-					? PageEnvelope<Document> | CollectionPageEnvelope<Document>
-					: CollectionPageEnvelope<Document>
-			: PageEnvelope<Document>
-		: PageEnvelope<Document>
-	: PageEnvelope<Document>;
+					? PageEnvelope<Document, Metadata> | CollectionPageEnvelope<Document, Metadata>
+					: CollectionPageEnvelope<Document, Metadata>
+			: PageEnvelope<Document, Metadata>
+		: PageEnvelope<Document, Metadata>
+	: PageEnvelope<Document, Metadata>;
 
 /** Result shape inferred from a global slug and its literal locale, select, and populate options. */
 export type GlobalQueryResult<
@@ -842,17 +827,12 @@ export type GlobalQueryResult<
 	Options,
 > = LocaleResult<
 	ApplySelect<
-		ApplyPopulate<
-			GlobalOutputFor<Config, Slug>,
-			GlobalPopulateOutputFor<Config, Slug>,
-			OptionProperty<Options, "populate">
-		>,
+		ApplyPopulate<GlobalOutputFor<Config, Slug>, OptionProperty<Options, "populate">>,
 		OptionProperty<Options, "select">
 	>,
 	ApplySelect<
 		ApplyPopulate<
 			GlobalAllLocalesOutputFor<Config, Slug>,
-			GlobalAllLocalesPopulateOutputFor<Config, Slug>,
 			OptionProperty<Options, "populate">,
 			LocaleFor<Config>
 		>,

@@ -11,6 +11,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -62,7 +63,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	collections := mongoCollectionsBySlug(application.Manifest().Snapshot().Collections)
@@ -134,7 +135,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		mongoRollback(t, directWrite)
 		t.Fatal(err)
 	}
-	directDocument, err = directWrite.Update(t.Context(), store.UpdateRequest{
+	directDocument, err = conformance.LockedUpdate(t.Context(), directWrite, store.UpdateRequest{
 		Request: store.Request{
 			Collection: collections["posts"], ID: directDocument.ID,
 			Locales: []schema.LocaleCode{"en", "fr"}, LocaleChain: []schema.LocaleCode{"fr", "en"},
@@ -203,7 +204,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		page, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
 			Locale: "fr", Where: query.Equal(test.path, test.want), Limit: 10,
 		})
-		if err != nil || page.Total != 1 || page.Documents[0].ID != primary.ID {
+		if err != nil || *page.Total != 1 || page.Documents[0].ID != primary.ID {
 			t.Fatalf("localized filter %s = %#v, %v", test.path.String(), page, err)
 		}
 	}
@@ -293,7 +294,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	securedPage, err := application.Local().List(t.Context(), "secured", ridu.ListOptions{
 		Locale: "fr", Where: query.Equal(labelPath, "Correspond"), Limit: 10,
 	})
-	if err != nil || securedPage.Total != 1 || securedPage.Documents[0].ID != allowed.ID {
+	if err != nil || *securedPage.Total != 1 || securedPage.Documents[0].ID != allowed.ID {
 		t.Fatalf("atomic localized filter plus access = %#v, %v", securedPage, err)
 	}
 
@@ -378,7 +379,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	strictRequest.Filter = nil
 	strictRequest.Page, strictRequest.Limit = 1, 100
 	strictPage, err := strictRead.List(t.Context(), strictRequest)
-	if err != nil || strictPage.Total != len(strictPage.Documents) {
+	if err != nil || *strictPage.Total != len(strictPage.Documents) {
 		mongoRollback(t, strictRead)
 		t.Fatalf("request-aware List did not fail closed over an unconfigured stored locale: %#v, %v", strictPage, err)
 	}
@@ -395,11 +396,11 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	closedPage, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
 		AllLocales: true, Where: query.Equal(kindPath, "unconfigured"), Limit: 10,
 	})
-	if err != nil || closedPage.Total != 0 || len(closedPage.Documents) != 0 {
+	if err != nil || *closedPage.Total != 0 || len(closedPage.Documents) != 0 {
 		t.Fatalf("operation-engine List did not fail closed over an unconfigured stored locale: %#v, %v", closedPage, err)
 	}
 	rejectedMutation := mongoBegin(t, backend, false)
-	if _, err := rejectedMutation.Update(t.Context(), store.UpdateRequest{
+	if _, err := conformance.LockedUpdate(t.Context(), rejectedMutation, store.UpdateRequest{
 		Request: store.Request{
 			Collection: collections["posts"], ID: unconfigured.ID,
 			Locales: []schema.LocaleCode{"en", "fr"}, LocaleChain: []schema.LocaleCode{"en"},
@@ -425,7 +426,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	closed, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
 		Where: query.Equal(titlePath, "Safe"), Limit: 10,
 	})
-	if err != nil || closed.Total != 0 || len(closed.Documents) != 0 {
+	if err != nil || *closed.Total != 0 || len(closed.Documents) != 0 {
 		t.Fatalf("malformed localized scalar satisfied a typed filter: %#v, %v", closed, err)
 	}
 	if _, err := application.Local().Find(t.Context(), "posts", corrupt.ID, ridu.FindOptions{}); err == nil {
@@ -441,7 +442,7 @@ func TestMongoDBDecoderFreeSparseLocaleEnvelopeRejectsNonCanonicalKeys(t *testin
 		ID: "posts-rank", Name: "rank", Path: rank,
 		Type: schema.FieldTypeNumber, Category: schema.FieldCategoryScalar, Number: &schema.NumberField{},
 	})
-	if err := backend.SyncIndexes(t.Context(), mongoLocalizedIndexTestManifest(collection)); err != nil {
+	if err := backend.syncIndexes(t.Context(), mongoLocalizedIndexTestManifest(collection)); err != nil {
 		t.Fatal(err)
 	}
 	locales := []schema.LocaleCode{"en", "fr"}
@@ -489,7 +490,7 @@ func TestMongoDBDecoderFreeSparseLocaleEnvelopeRejectsNonCanonicalKeys(t *testin
 		mongoRollback(t, read)
 		t.Fatal(err)
 	}
-	if page.Total != 1 || len(page.Documents) != 0 {
+	if *page.Total != 1 || len(page.Documents) != 0 {
 		mongoRollback(t, read)
 		t.Fatalf("sparse locale corruption entered decoder-free list total: %#v", page)
 	}

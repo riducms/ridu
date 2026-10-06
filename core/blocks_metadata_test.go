@@ -50,16 +50,20 @@ func TestParseRejectsInvalidBlocksMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, change := range []func(*schema.BlocksField){
-		func(blocks *schema.BlocksField) { blocks.MinRows = -1 },
-		func(blocks *schema.BlocksField) { blocks.MaxRows = -1 },
-		func(blocks *schema.BlocksField) { blocks.MinRows = 3; blocks.MaxRows = 2 },
-		func(blocks *schema.BlocksField) {
-			blocks.ResolvedTypes()[0].Admin = &schema.BlockAdmin{RowLabel: "missing"}
+	for _, change := range []func(*schema.Snapshot){
+		func(snapshot *schema.Snapshot) { snapshot.Collections[0].Fields[0].Blocks.MinRows = -1 },
+		func(snapshot *schema.Snapshot) { snapshot.Collections[0].Fields[0].Blocks.MaxRows = -1 },
+		func(snapshot *schema.Snapshot) {
+			snapshot.Collections[0].Fields[0].Blocks.MinRows = 3
+			snapshot.Collections[0].Fields[0].Blocks.MaxRows = 2
+		},
+		// Block metadata belongs to the definition in the registry.
+		func(snapshot *schema.Snapshot) {
+			snapshot.Blocks[0].Admin = &schema.BlockAdmin{RowLabel: "missing"}
 		},
 	} {
 		snapshot := manifest.Snapshot()
-		change(snapshot.Collections[0].Fields[0].Blocks)
+		change(&snapshot)
 		encoded, err := schema.NewManifest(snapshot).MarshalJSON()
 		if err != nil {
 			t.Fatal(err)

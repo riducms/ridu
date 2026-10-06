@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { AccessCapabilitiesEnvelope, SchemaField } from "@riducms/protocol";
+import type { AccessCapabilitiesEnvelope, SchemaBlockType, SchemaField } from "@riducms/protocol";
 
 import { normalizeSlug, slugFollowsSource } from "@admin/fields/text/slug";
 import { changedFormValues, reconcileFormSchema } from "@admin/core/forms/form-schema";
-import { tree } from "./draft-fixture";
+import { bindBlockField } from "../block-manifest";
+import { card, tree } from "./draft-fixture";
 
 const { FormController } = await import("@admin/core/forms/form-controller.svelte");
 
@@ -251,9 +252,9 @@ it.each(["remove", "replace", "concurrent structure"] as const)(
 
 it("rebases an embedded plugin leaf onto server-inserted and reordered occurrences", () => {
 	const title: SchemaField = {
-		id: "title",
+		id: "block-card-title",
 		name: "title",
-		path: "body.title",
+		path: "title",
 		type: "text",
 		category: "scalar",
 		required: false,
@@ -261,7 +262,7 @@ it("rebases an embedded plugin leaf onto server-inserted and reordered occurrenc
 		admin: { label: "Title" },
 		text: {},
 	};
-	const body: SchemaField = {
+	const body = bindBlockField([card([title])], {
 		id: "body",
 		name: "body",
 		path: "body",
@@ -270,8 +271,8 @@ it("rebases an embedded plugin leaf onto server-inserted and reordered occurrenc
 		required: false,
 		unique: false,
 		admin: { label: "Body" },
-		plugin: { key: "outline", config: {}, embeddedTrees: [tree([title])] },
-	};
+		plugin: { key: "outline", config: {}, embeddedTrees: [tree()] },
+	} satisfies SchemaField);
 	const row = (uid: string, value: string) => ({
 		kind: "widget",
 		content: { schema: "card", uid, title: value },
@@ -329,6 +330,23 @@ it.each(["reset", "reconcile"] as const)(
 );
 
 describe("form controller field access", () => {
+	it("uses a block definition's capabilities at a placement without its own entry", () => {
+		const values = { layout: [{ _key: "new", blockType: "quote" }] };
+		const form = new FormController(values);
+		form.reset(values, [blocksField()]);
+		const access = accessEnvelope();
+		delete access.fields["layout.quote.secret"];
+		delete access.fields["layout.0.secret"];
+		access.blockFields = { quote: { secret: { read: true, create: false, update: false } } };
+		form.setAccess(access, "update");
+		expect(form.canRead("layout.0.secret", "layout.quote.secret")).toBe(true);
+		expect(form.canWrite("layout.0.secret", "layout.quote.secret")).toBe(false);
+		// A placement holding values keeps its own entry.
+		access.fields["layout.quote.secret"] = { read: true, create: true, update: true };
+		form.setAccess(access, "update");
+		expect(form.canWrite("layout.0.secret", "layout.quote.secret")).toBe(true);
+	});
+
 	it("preserves mixed occurrence permissions and unsaved edits through reorder", async () => {
 		const form = new FormController({
 			layout: [
@@ -540,7 +558,24 @@ function accessEnvelope(): AccessCapabilitiesEnvelope {
 }
 
 function blocksField(): SchemaField {
-	return {
+	const quote: SchemaBlockType = {
+		slug: "quote",
+		labels: { singular: "Quote", plural: "Quotes" },
+		fields: [
+			{
+				id: "block-quote-secret",
+				name: "secret",
+				path: "secret",
+				type: "text",
+				category: "scalar",
+				required: true,
+				unique: false,
+				admin: { label: "Secret" },
+				text: {},
+			},
+		],
+	};
+	return bindBlockField([quote], {
 		id: "layout",
 		name: "layout",
 		path: "layout",
@@ -549,34 +584,14 @@ function blocksField(): SchemaField {
 		required: false,
 		unique: false,
 		admin: { label: "Layout" },
-		blocks: {
-			types: [
-				{
-					slug: "quote",
-					labels: { singular: "Quote", plural: "Quotes" },
-					fields: [
-						{
-							id: "layout-quote-secret",
-							name: "secret",
-							path: "layout.quote.secret",
-							type: "text",
-							category: "scalar",
-							required: true,
-							unique: false,
-							admin: { label: "Secret" },
-							text: {},
-						},
-					],
-				},
-			],
-		},
-	};
+		blocks: { blockReferences: ["quote"] },
+	});
 }
 
 describe("missing block schema recovery", () => {
 	it("preserves raw removed rows through schema reload and prevents saving their deletion", async () => {
 		const previous = blocksField();
-		const next = { ...previous, blocks: { types: [] } };
+		const next = { ...previous, blocks: {} };
 		const values = {
 			layout: [
 				{ _key: "keep", blockType: "quote", secret: "Stored content", extra: { retained: true } },

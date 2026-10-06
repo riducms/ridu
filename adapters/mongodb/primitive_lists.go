@@ -3,7 +3,7 @@ package mongodb
 import (
 	"strings"
 
-	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/membership"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -11,25 +11,16 @@ import (
 
 func mongoPrimitiveListJSONSchema(field schema.Field) bson.D {
 	item := field
-	item.Required = true
 	item.Type = schema.FieldTypeText
 	if field.Type == schema.FieldTypeNumberList {
 		item.Type = schema.FieldTypeNumber
 	}
-	kind := any("array")
-	if !field.Required {
-		kind = bson.A{"array", "null"}
-	}
-	result := bson.D{{Key: "bsonType", Value: kind}, {Key: "items", Value: mongoScalarFieldJSONSchema(item, false)}}
-	if field.Required {
-		result = append(result, bson.E{Key: "minItems", Value: 1})
-	}
-	return result
+	return bson.D{{Key: "bsonType", Value: bson.A{"array", "null"}}, {Key: "items", Value: mongoScalarFieldJSONSchema(item, false)}}
 }
 
 func compileMongoPrimitiveList(path mongoPredicatePath, comparison query.Comparison) (bson.D, error) {
 	field := *path.primitiveList
-	if err := primitivefield.ValidateComparison(field, comparison); err != nil {
+	if err := membership.ValidateComparison(field, comparison); err != nil {
 		return nil, err
 	}
 	value := any("$" + path.storagePath)
@@ -75,7 +66,7 @@ func compileMongoPrimitiveList(path mongoPredicatePath, comparison query.Compari
 // The same guard is hoisted outside Not/Or by the predicate compiler, so
 // negating a failed shape check can never admit a malformed persisted list.
 func mongoPrimitiveListShape(path mongoPredicatePath) bson.D {
-	shape := mongoCollectionFieldJSONSchema(*path.primitiveList, nil)
+	shape := mongoCollectionFieldJSONSchema(*path.primitiveList, nil, mongoRowFields)
 	segments := strings.Split(path.storagePath, ".")
 	for i := len(segments) - 1; i >= 0; i-- {
 		shape = bson.D{{Key: "bsonType", Value: bson.A{"object", "null"}}, {Key: "properties", Value: bson.D{{Key: segments[i], Value: shape}}}}

@@ -32,19 +32,24 @@ func TestCollectionRenameCandidatePairsDerivedFieldIdentities(t *testing.T) {
 }
 
 func TestBlockRowLabelIsPresentationOnlyForRenameMatching(t *testing.T) {
-	blockField := func(owner schema.StableID, admin *schema.BlockAdmin) schema.Field {
+	blockManifest := func(owner schema.StableID, admin *schema.BlockAdmin) schema.Manifest {
 		path, _ := query.NewPath("layout")
-		childPath, _ := query.NewPath("layout", "card", "title")
-		return schema.Field{
-			ID: owner + "-layout", Name: "layout", Path: path, Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Slug: "card", Admin: admin, Labels: schema.BlockLabels{Singular: "Card", Plural: "Cards"},
-				Fields: []schema.Field{{ID: owner + "-layout-card-title", Name: "title", Path: childPath, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}}},
-			}}},
+		childPath, _ := query.NewPath("title")
+		card := schema.BlockType{
+			Slug: "card", TypeName: "Card", Admin: admin, Labels: schema.BlockLabels{Singular: "Card", Plural: "Cards"},
+			Fields: []schema.Field{{ID: "block-card-title", Name: "title", Path: childPath, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}}},
 		}
+		layout := schema.Field{
+			ID: owner + "-layout", Name: "layout", Path: path, Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested,
+			Blocks: &schema.BlocksField{BlockReferences: []string{"card"}},
+		}
+		return schema.NewManifest(schema.Snapshot{
+			Version: schema.CurrentVersion, Application: schema.Application{Name: "Diff"},
+			Blocks: []schema.BlockType{card}, Collections: []schema.Collection{collection(owner, schema.CollectionSlug(owner), layout)}, Plugins: []schema.Plugin{},
+		})
 	}
-	before := manifest(collection("posts", "posts", blockField("posts", nil)))
-	after := manifest(collection("articles", "articles", blockField("articles", &schema.BlockAdmin{RowLabel: "title"})))
+	before := blockManifest("posts", nil)
+	after := blockManifest("articles", &schema.BlockAdmin{RowLabel: "title"})
 	candidates := schemadiff.RenameCandidates(before, after)
 	if len(candidates) != 1 || candidates[0].Kind != schemadiff.RenameCollection {
 		t.Fatalf("presentation-only block row label changed migration matching: %#v", candidates)

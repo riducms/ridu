@@ -28,9 +28,9 @@ population, and application code reads immutable values without first copying th
 | Database round-trip time   | Run Ridu and the database in the same region and private network.                                                                        | Every list, relationship population, access lookup, and nested operation can wait on the database.   |
 | Frequent filters and sorts | Add `.Index()` to suitable stored fields, then create and apply the migration.                                                           | An index avoids scanning every document for common query paths.                                      |
 | Response shape             | Use `select`; use explicit `populate` with the smallest useful `depth` and target `select`.                                              | Less data is read, authorized, transformed, serialized, and transferred.                             |
-| Lists and counts           | Set a bounded `limit`; call `count` when the caller only needs a total.                                                                  | Large pages increase database, operation-engine, JSON, and browser work.                             |
+| Lists and counts           | Set a bounded `limit`; call `count` when the caller only needs a total; pass `pagination: false` when it never shows one.                | Large pages increase database, operation-engine, JSON, and browser work.                             |
 | Hooks and validators       | Return `operation.Keep` when unchanged, read with `Get`, `Lookup`, `Entries`, or `Elements`, and move external effects to `AfterCommit`. | Ridu can retain immutable backing and avoids holding a database transaction open for unrelated work. |
-| Shared blocks              | Register reusable definitions in `Config.Blocks` and select them with `.References(...)`.                                                | The schema and admin can share one definition rather than repeating it at each placement.            |
+| Shared blocks              | Register reusable definitions in `Config.Blocks` and select them with `.References(...)`.                                                | Ridu resolves, stores, types and binds each definition once, however many containers place it.       |
 | Application lifetime       | Construct one `ridu.App` for the process and reuse `app.Local()` and `app.Handler(...)`.                                                 | Rebuilding config, runtime bindings, and database pools per request wastes work and connections.     |
 | Admin extensions           | Keep custom components focused and inspect production chunks after adding a large browser dependency.                                    | Static imports become part of the admin build even though Node is absent at runtime.                 |
 
@@ -95,13 +95,13 @@ cache only when its invalidation and authorization model are explicit.
 
 ## Avoid performance shortcuts that change behavior {#safe-optimizations}
 
-| Shortcut                                    | Problem                                                                                              | Use instead                                                                           |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Query an adapter directly                   | Skips collection access, field redaction, hooks, versions, localization, and operation transactions. | `app.Local()` or a generated typed handle.                                            |
-| Populate every relationship to a high depth | Work grows with every reachable reference and returned document.                                     | Explicit `populate` paths with target `select`.                                       |
-| Start a goroutine from a transaction hook   | The operation may commit, roll back, or exit before that work is safely owned.                       | `AfterCommit`; use a durable [task](/docs/tasks/) when work needs retries.            |
-| Mutate a `store.Value` container            | Nested value backing is immutable and may be shared.                                                 | `CopyObject`, `CopyList`, `CopyDocument`, or `WithListItem` at the mutation boundary. |
-| Cache a caller-specific response globally   | Responses can differ by actor, field access, locale, draft mode, and population.                     | Cache a result only with those dimensions and a clear invalidation rule.              |
+| Shortcut                                    | Problem                                                                                              | Use instead                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Query an adapter directly                   | Skips collection access, field redaction, hooks, versions, localization, and operation transactions. | `app.Local()` or a generated typed handle.                                  |
+| Populate every relationship to a high depth | Work grows with every reachable reference and returned document.                                     | Explicit `populate` paths with target `select`.                             |
+| Start a goroutine from a transaction hook   | The operation may commit, roll back, or exit before that work is safely owned.                       | `AfterCommit`; use a durable [task](/docs/tasks/) when work needs retries.  |
+| Mutate a `store.Value` container            | Nested value backing is immutable and may be shared.                                                 | `CopyObject`, `CopyList`, `CopyDocument`, `WithMembers`, or `WithListItem`. |
+| Cache a caller-specific response globally   | Responses can differ by actor, field access, locale, draft mode, and population.                     | Cache a result only with those dimensions and a clear invalidation rule.    |
 
 ## Continue with production readiness {#next}
 

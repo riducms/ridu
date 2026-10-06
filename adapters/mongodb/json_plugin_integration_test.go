@@ -36,7 +36,7 @@ func TestMongoDBJSONAndPluginFieldEnvelopeUsesStoreJSONVocabulary(t *testing.T) 
 		{name: "boolean", value: store.Boolean(true)},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
-			if err := validateCompleteValues(collection, store.Values{"metadata": fixture.value, "content": content}); err != nil {
+			if err := validateStoredValues(collection, store.Values{"metadata": fixture.value, "content": content}); err != nil {
 				t.Fatalf("JSON root value rejected: %v", err)
 			}
 		})
@@ -69,7 +69,7 @@ func TestMongoDBJSONAndOfficialRichTextLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
+	if err := backend.syncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
 	firstPostID, firstMediaID := createMongoRichTextTargets(t, backend, application.Manifest(), "first")

@@ -70,31 +70,44 @@ func TestUnifiedRichTextConfigurationChecksEveryGraphHost(t *testing.T) {
 	}
 }
 
-// Registered blocks are checked once per definition, so references may expand
-// past the per-walk budget that every placement used to consume.
+// Block definitions are checked once each and the schema has no placement
+// budget, so references may expand past both the former per-walk validation
+// budget (10000) and the former schema-wide placement budget (100000).
 func TestRegisteredBlockReferencesResolveBeyondTheValidationWalkBudget(t *testing.T) {
 	fields := field.Fields{richtext.Field("body")}
 	for index := range 40 {
 		fields = append(fields, field.Text(fmt.Sprintf("text%d", index)))
 	}
+	var sections field.Fields
+	for index := range 50 {
+		sections = append(sections, field.Blocks(fmt.Sprintf("section%d", index)).References("wide"))
+	}
 	var layouts field.Fields
-	for index := range 260 {
-		layouts = append(layouts, field.Blocks(fmt.Sprintf("layout%d", index)).References("wide"))
+	for index := range 60 {
+		layouts = append(layouts, field.Blocks(fmt.Sprintf("layout%d", index)).References("outer"))
 	}
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Wide references", Plugins: []ridu.Plugin{richtext.New()},
-		Blocks:      []field.Block{{Slug: "wide", Fields: fields}},
+		Blocks:      []field.Block{{Slug: "wide", Fields: fields}, {Slug: "outer", Fields: sections}},
 		Collections: []ridu.Collection{{Slug: "pages", Fields: layouts}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	placements := 0
-	for _, layout := range manifest.Snapshot().Collections[0].Fields {
-		placements += 1 + len(layout.Blocks.ResolvedTypes()[0].ResolvedFields())
+	var count func([]schema.Field) int
+	count = func(fields []schema.Field) int {
+		total := len(fields)
+		for _, field := range fields {
+			if field.Blocks != nil {
+				for _, block := range field.Blocks.ResolvedTypes() {
+					total += count(block.ResolvedFields())
+				}
+			}
+		}
+		return total
 	}
-	if placements <= 10000 || placements > schema.MaxFieldPlacements {
-		t.Fatalf("fixture has %d field placements, want more than the former 10000 budget", placements)
+	if placements := count(manifest.Snapshot().Collections[0].Fields); placements <= 100000 {
+		t.Fatalf("fixture has %d field placements, want more than the former 100000 budget", placements)
 	}
 }
 

@@ -11,7 +11,6 @@ func bindConfigBlocks(config *Config) error {
 	if err != nil {
 		return err
 	}
-	config.Blocks = registry.Blocks()
 	for i := range config.Collections {
 		fields, err := registry.BindAt(config.Collections[i].Fields, fmt.Sprintf("collections[%d].fields", i))
 		if err != nil {
@@ -26,5 +25,7 @@ func bindConfigBlocks(config *Config) error {
 		}
 		config.Globals[i].Fields = fields
 	}
+	// Binding interned the inline declarations, so the registry now holds every definition.
+	config.Blocks = registry.Blocks()
 	return nil
 }

@@ -43,9 +43,6 @@ func TestPostgresDevelopmentRejectsEnablingVersionsBeforePlanning(t *testing.T) 
 	afterSnapshot.Collections[0].Versions = &schema.VersionSettings{Drafts: true, MaxPerDocument: 2}
 	afterSnapshot.Collections[0].Capabilities.Versions = true
 	after := schema.NewManifest(afterSnapshot)
-	if _, err := backend.Plan(t.Context(), after); err == nil || !strings.Contains(err.Error(), "RIDU_VERSIONS_ENABLE_UNSUPPORTED") {
-		t.Fatalf("development plan: %v", err)
-	}
 	if err := backend.SyncDevelopmentSchema(t.Context(), after); err == nil || !strings.Contains(err.Error(), "RIDU_VERSIONS_ENABLE_UNSUPPORTED") {
 		t.Fatalf("development sync: %v", err)
 	}

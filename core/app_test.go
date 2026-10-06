@@ -179,7 +179,7 @@ func TestTrashLifecycleHidesRestoresAndPermanentlyDeletes(t *testing.T) {
 		t.Fatalf("ordinary find after trash = %v", err)
 	}
 	trash, err := application.Local().List(context.Background(), "posts", ridu.ListOptions{TrashOnly: true})
-	if err != nil || trash.Total != 1 || trash.Documents[0].ID != document.ID {
+	if err != nil || *trash.Total != 1 || trash.Documents[0].ID != document.ID {
 		t.Fatalf("trash list = %#v, %v", trash, err)
 	}
 	restored, err := application.Local().RestoreDeleted(context.Background(), "posts", document.ID, ridu.MutationOptions{})
@@ -193,7 +193,7 @@ func TestTrashLifecycleHidesRestoresAndPermanentlyDeletes(t *testing.T) {
 		t.Fatal(err)
 	}
 	trash, err = application.Local().List(context.Background(), "posts", ridu.ListOptions{TrashOnly: true})
-	if err != nil || trash.Total != 0 {
+	if err != nil || *trash.Total != 0 {
 		t.Fatalf("trash after permanent delete = %#v, %v", trash, err)
 	}
 	want := []operation.Kind{operation.Create, operation.Delete, operation.Read, operation.RestoreDeleted, operation.Delete, operation.DeletePermanent, operation.Read}
@@ -288,7 +288,7 @@ func TestBulkTrashRestoreAndPermanentDeleteAreAtomic(t *testing.T) {
 		t.Fatalf("empty trash = %#v, %v", emptied, err)
 	}
 	trash, err := application.Local().List(context.Background(), "posts", ridu.ListOptions{TrashOnly: true})
-	if err != nil || trash.Total != 0 {
+	if err != nil || *trash.Total != 0 {
 		t.Fatalf("trash after bulk permanent delete = %#v, %v", trash, err)
 	}
 }
@@ -602,7 +602,7 @@ func TestNestedLocalOperationReusesTransactionAndDefersAfterCommit(t *testing.T)
 		t.Fatalf("after-commit dispatcher effects = %#v", dispatcher.effects)
 	}
 	page, err := application.Local().List(context.Background(), "audits", ridu.ListOptions{})
-	if err != nil || page.Total != 1 {
+	if err != nil || *page.Total != 1 {
 		t.Fatalf("audit page = %#v, %v", page, err)
 	}
 }

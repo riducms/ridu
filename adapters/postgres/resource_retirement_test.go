@@ -21,9 +21,12 @@ func TestFrameworkResourceRetirementAuditsEverySharedAtlasTable(t *testing.T) {
 		}},
 		Plugins: []schema.Plugin{},
 	})
+	// Working and live document tables are dropped with their resource.
 	resourceTables := map[string]bool{
-		collectionTable("users"):           true,
-		collectionTable("global-settings"): true,
+		collectionTable("users"):                    true,
+		publishedCollectionTable("users"):           true,
+		collectionTable("global-settings"):          true,
+		publishedCollectionTable("global-settings"): true,
 	}
 	shared := make(map[string]bool)
 	rateLimitSeen := false

@@ -109,7 +109,7 @@ JOIN ridu_auth_credentials credentials
 WHERE documents.%s = $2 AND documents.%s IS NULL`, selectColumns(collection, collection.Fields, nil), quote(collectionTable(collection.ID)), quote(fieldColumn(identityField.ID)), quote("deleted_at"))
 	row := backend.pool.QueryRow(ctx, statement, string(collection.ID), identity)
 	var credential store.AuthCredential
-	destinations, finish := documentDestinations(&credential.User, collection, collection.Fields)
+	destinations, finish := documentDestinations(&credential.User, collection, collection.Fields, nil)
 	var lockedUntil *time.Time
 	destinations = append(destinations, &credential.PasswordHash, &credential.FailedLoginAttempts, &lockedUntil, &credential.Verified)
 	if err := row.Scan(destinations...); err != nil {

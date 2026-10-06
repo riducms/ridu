@@ -42,7 +42,7 @@ func (engine *Engine) ForceUnlockAuth(ctx context.Context, collectionName, docum
 	}
 	decision, accessError := authorize(collection, operationContext)
 	if accessError != nil {
-		return &Error{Code: "access_failed", Status: 500, Message: "account unlock access rule failed", Cause: accessError}
+		return accessRuleError("account unlock access rule failed", accessError)
 	}
 	if decision.Kind == Deny {
 		return &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}

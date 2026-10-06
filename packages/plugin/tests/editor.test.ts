@@ -85,8 +85,11 @@ test("registration rejects malformed application editor references", () => {
 });
 
 test("validation traverses nested, block, global and embedded schema and reports every owner", () => {
-	const child = (path: string): SchemaField => ({ ...field, path });
+	const child = (path: string): SchemaField => ({ ...structuredClone(field), path });
 	const manifest = {
+		blocks: [
+			{ slug: "hero", labels: { singular: "Hero", plural: "Heroes" }, fields: [child("accent")] },
+		],
 		collections: [
 			{
 				slug: "posts",
@@ -94,14 +97,18 @@ test("validation traverses nested, block, global and embedded schema and reports
 					{ ...field, admin: { label: "Group" }, nested: { fields: [child("group.accent")] } },
 					{
 						...field,
+						path: "layout",
 						admin: { label: "Blocks" },
-						blocks: { types: [{ fields: [child("layout.hero.accent")] }] },
+						blocks: { blockReferences: ["hero"] },
 					},
 					{
 						...field,
+						path: "body",
 						admin: { label: "Embedded" },
 						plugin: {
-							embeddedTrees: [{ cases: [{ types: [{ fields: [child("body.hero.accent")] }] }] }],
+							embeddedTrees: [
+								{ key: "blocks", cases: [{ tagValue: "block", blockReferences: ["hero"] }] },
+							],
 						},
 					},
 				],
@@ -118,7 +125,7 @@ test("validation traverses nested, block, global and embedded schema and reports
 	for (const owner of [
 		"posts.group.accent",
 		"posts.layout.hero.accent",
-		"posts.body.hero.accent",
+		"posts.body.blocks.block.hero.accent",
 		"settings.accent",
 	])
 		expect(diagnostic).toContain(owner);

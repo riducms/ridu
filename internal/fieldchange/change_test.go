@@ -58,6 +58,11 @@ func TestFieldKindRecoveryFollowsOnlyDeclaredContainers(t *testing.T) {
 	if len(changes) != 4 {
 		t.Fatalf("changes = %#v", changes)
 	}
+	// A block definition's change is one change, applied at every placement.
+	if block := changes[3]; block.Block != "paragraph" || len(block.Containers) != 0 || block.TopLevel() || !block.AppliesTo("posts") {
+		t.Fatalf("block change = %#v", block)
+	}
+	posts := before.Snapshot().Collections[0]
 	values := store.Values{
 		"meta":      store.Object(store.Values{"score": store.String("old"), "keep": store.String("kept")}),
 		"localized": store.Object(store.Values{"en": store.Object(store.Values{"score": store.String("old")}), "fr": store.Object(store.Values{"score": store.String("ancien")})}),
@@ -67,7 +72,7 @@ func TestFieldKindRecoveryFollowsOnlyDeclaredContainers(t *testing.T) {
 	}
 	original := store.CloneValues(values)
 	reports := fieldchange.Reports(changes)
-	counted, found, err := fieldchange.Process(changes, reports, "posts", values, false, false)
+	counted, found, err := fieldchange.Process(changes, reports, posts, values, false, false)
 	if err != nil || !found || !reflect.DeepEqual(values, counted) {
 		t.Fatalf("count changed values: %#v, %v", counted, err)
 	}
@@ -76,7 +81,7 @@ func TestFieldKindRecoveryFollowsOnlyDeclaredContainers(t *testing.T) {
 			t.Fatalf("array/locales counted repeatedly: %#v", report)
 		}
 	}
-	cleared, found, err := fieldchange.Process(changes, reports, "posts", values, true, true)
+	cleared, found, err := fieldchange.Process(changes, reports, posts, values, true, true)
 	if err != nil || !found {
 		t.Fatalf("clear = %t, %v", found, err)
 	}
@@ -126,7 +131,7 @@ func TestFieldKindRecoveryIgnoresPresentationAndMissingValues(t *testing.T) {
 	}
 	changes := fieldchange.Detect(before.Snapshot(), changeManifest(t, true).Snapshot())
 	reports := fieldchange.Reports(changes)
-	if _, found, err := fieldchange.Process(changes, reports, "posts", store.Values{}, false, false); err != nil || found {
+	if _, found, err := fieldchange.Process(changes, reports, before.Snapshot().Collections[0], store.Values{}, false, false); err != nil || found {
 		t.Fatalf("absent field = %t, %v", found, err)
 	}
 	for _, report := range reports {
@@ -177,18 +182,20 @@ func TestFieldKindRecoveryIgnoresNullLocalizedLeaves(t *testing.T) {
 		}
 		return manifest
 	}
-	changes := fieldchange.Detect(resolve(field.Text("score").Localized()).Snapshot(), resolve(field.Number("score").Localized()).Snapshot())
+	previous := resolve(field.Text("score").Localized()).Snapshot()
+	changes := fieldchange.Detect(previous, resolve(field.Number("score").Localized()).Snapshot())
+	posts := previous.Collections[0]
 	for _, value := range []store.Value{store.Null(), store.Object(store.Values{}), store.Object(store.Values{"en": store.Null(), "fr": store.Null()})} {
 		values := store.Values{"score": value}
 		reports := fieldchange.Reports(changes)
-		result, found, err := fieldchange.Process(changes, reports, "posts", values, false, true)
+		result, found, err := fieldchange.Process(changes, reports, posts, values, false, true)
 		if err != nil || found || reports[0].Documents != 0 || !reflect.DeepEqual(values, result) {
 			t.Fatalf("empty localized field counted or cleared: %#v, found=%t, reports=%#v, error=%v", value, found, reports, err)
 		}
 	}
 	reports := fieldchange.Reports(changes)
 	values := store.Values{"score": store.Object(store.Values{"en": store.Null(), "fr": store.String("retained")})}
-	result, found, err := fieldchange.Process(changes, reports, "posts", values, true, true)
+	result, found, err := fieldchange.Process(changes, reports, posts, values, true, true)
 	if err != nil || !found || reports[0].Snapshots != 1 {
 		t.Fatalf("populated localized field escaped recovery: found=%t, reports=%#v, error=%v", found, reports, err)
 	}
@@ -254,10 +261,10 @@ func TestFieldKindChangesInsideEmbeddedPayloadsFailClosed(t *testing.T) {
 		t.Fatalf("embedded change = %#v", changes)
 	}
 	report := fieldchange.Reports(changes)[0]
-	if report.Path != "meta.body" || report.Payload != "blocks.block.callout.style.level" || report.Before != "text" || report.After != "number" {
+	if report.Path != "meta.body" || report.Payload != "callout.style.level" || report.Before != "text" || report.After != "number" {
 		t.Fatalf("embedded report = %#v", report)
 	}
-	if err := fieldchange.RequireTransform(before.Snapshot(), after.Snapshot()); err == nil || !strings.Contains(err.Error(), "posts.meta.body embedded field blocks.block.callout.style.level") {
+	if err := fieldchange.RequireTransform(before.Snapshot(), after.Snapshot()); err == nil || !strings.Contains(err.Error(), "posts.meta.body embedded field callout.style.level") {
 		t.Fatalf("migration creation admitted embedded change: %v", err)
 	}
 	if err := fieldchange.ValidateClear(changes); err == nil || !strings.Contains(err.Error(), "every complete posts.meta.body value") {
@@ -266,10 +273,11 @@ func TestFieldKindChangesInsideEmbeddedPayloadsFailClosed(t *testing.T) {
 	// Any stored plugin value counts: adapters never interpret its envelope.
 	reports := fieldchange.Reports(changes)
 	values := store.Values{"meta": store.Object(store.Values{"body": store.Object(store.Values{"root": store.Object(store.Values{})})})}
-	if _, found, err := fieldchange.Process(changes, reports, "posts", values, false, false); err != nil || !found || reports[0].Documents != 1 {
+	posts := before.Snapshot().Collections[0]
+	if _, found, err := fieldchange.Process(changes, reports, posts, values, false, false); err != nil || !found || reports[0].Documents != 1 {
 		t.Fatalf("embedded change count = %t, %#v, %v", found, reports, err)
 	}
-	if _, _, err := fieldchange.Process(changes, reports, "posts", values, false, true); err == nil {
+	if _, _, err := fieldchange.Process(changes, reports, posts, values, false, true); err == nil {
 		t.Fatal("embedded change was cleared")
 	}
 }

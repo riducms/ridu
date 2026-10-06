@@ -52,23 +52,22 @@ it("shares browser schema metadata while extension snapshots retain isolated pla
 	bindSchemaManifest(manifest);
 	const children = fields.flatMap((field) => resolveBlockTypes(field.blocks)[0]!.fields);
 	const afterReferences = memory.memory?.usedJSHeapSize;
-	const inline = fields.map((field) => ({
-		...field,
-		blocks: {
-			types: [
-				{
-					...definition,
-					fields: definition.fields.map((child) => ({
-						...structuredClone(child),
-						path: `${field.path}.card.${child.path}`,
-						id: `${field.id}-card-${child.name}`,
-					})),
-				},
-			],
-		},
-	}));
-	const inlineChildren = inline.flatMap((field) => resolveBlockTypes(field.blocks)[0]!.fields);
-	expect(new Set(inlineChildren.map((child) => child.text)).size).toBe(4000);
+	// The baseline the shared definition avoids: one structurally equal definition per placement.
+	const separate = {
+		...manifest,
+		blocks: fields.map((_, i) => ({ ...structuredClone(definition), slug: `card${i}` })),
+		collections: [
+			{
+				...manifest.collections[0]!,
+				fields: fields.map((field, i) => ({ ...field, blocks: { blockReferences: [`card${i}`] } })),
+			},
+		],
+	};
+	bindSchemaManifest(separate);
+	const separateChildren = separate.collections[0]!.fields.flatMap(
+		(field) => resolveBlockTypes(field.blocks)[0]!.fields
+	);
+	expect(new Set(separateChildren.map((child) => child.text)).size).toBe(4000);
 	expect(new Set(children.map((child) => child.text)).size).toBe(40);
 	expect(new Set(children.map((child) => child.path)).size).toBe(4000);
 	const detached = cloneSchemaField(fields[0]!);
@@ -81,11 +80,12 @@ it("shares browser schema metadata while extension snapshots retain isolated pla
 			placements: 100,
 			fieldViews: children.length,
 			sharedTextMetadata: 40,
-			inlineTextMetadata: 4000,
+			separateDefinitionTextMetadata: 4000,
 			manifestBytes: JSON.stringify(manifest).length,
+			separateDefinitionManifestBytes: JSON.stringify(separate).length,
 			heapBefore: before,
 			heapAfterReferences: afterReferences,
-			heapAfterInline: memory.memory?.usedJSHeapSize,
+			heapAfterSeparateDefinitions: memory.memory?.usedJSHeapSize,
 		}),
 		"schema-memory"
 	);

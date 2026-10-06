@@ -6,7 +6,6 @@ import (
 
 	"github.com/riducms/ridu/store"
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // ListWindow performs one count-free, offset-free range read over the direct
@@ -19,6 +18,9 @@ func (transaction *documentTransaction) ListWindow(ctx context.Context, request 
 	}
 	defer leave()
 
+	if err := transaction.store.validateCollectionEnvelope(request.Collection); err != nil {
+		return store.Window{}, err
+	}
 	path, indexName, predicate, err := mongoListWindowPredicate(request)
 	if err != nil {
 		return store.Window{}, err
@@ -27,14 +29,11 @@ func (transaction *documentTransaction) ListWindow(ctx context.Context, request 
 		return store.Window{}, err
 	}
 
-	cursor, err := transaction.collection(request.Collection).Find(
-		sessionContext,
-		predicate,
-		options.Find().
-			SetSort(bson.D{{Key: path, Value: mongoAscendingDirection}}).
-			SetHint(indexName).
-			SetLimit(int64(request.Limit+1)),
-	)
+	cursor, err := mongoFind(sessionContext, transaction.collection(request.Collection), predicate, mongoFindCommand{
+		sort:  bson.D{{Key: path, Value: mongoAscendingDirection}},
+		hint:  indexName,
+		limit: int64(request.Limit + 1),
+	})
 	if err != nil {
 		return store.Window{}, translateMongoError(ctx, err)
 	}
@@ -64,9 +63,6 @@ func (transaction *documentTransaction) ListWindow(ctx context.Context, request 
 
 func mongoListWindowPredicate(request store.Request) (string, string, bson.D, error) {
 	if err := store.ValidateListWindowRequest(request); err != nil {
-		return "", "", nil, err
-	}
-	if err := validateCollectionEnvelope(request.Collection); err != nil {
 		return "", "", nil, err
 	}
 	if _, err := requestProjection(request); err != nil {

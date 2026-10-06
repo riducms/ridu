@@ -4,18 +4,21 @@ import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
 import { tick } from "svelte";
 import { defineAdminPlugin, definePluginField } from "@riducms/plugin/authoring/v1";
 import type { EmbeddedSchemaDraft } from "@riducms/plugin";
-import type {
-	AccessCapabilitiesEnvelope,
-	FieldCapabilities,
-	SchemaBlockType,
-	SchemaEmbeddedTree,
-	SchemaField,
+import {
+	resolveBlockTypes,
+	type AccessCapabilitiesEnvelope,
+	type FieldCapabilities,
+	type SchemaBlockType,
+	type SchemaEmbeddedTree,
+	type SchemaField,
 } from "@riducms/protocol";
 import { createAdminClient } from "@admin/core/api/admin-client";
 import { FieldEditorBinding } from "@admin/core/forms/field-editor-binding";
 import { FormController } from "@admin/core/forms/form-controller.svelte";
 import { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { scopeRepeatedRowField } from "@admin/fields/nested/scoped-field";
+
+import { bindBlockField, blockDefinition } from "../block-manifest";
 
 const Harness = svelte`
 	<script>
@@ -112,32 +115,21 @@ function block(
 }
 
 function blocks(types = [block()]): SchemaField {
-	return {
-		id: "layout",
-		name: "layout",
-		path: "layout",
-		type: "blocks",
-		category: "nested",
-		required: false,
-		unique: false,
-		admin: { label: "Layout" },
-		nested: { fields: [] },
-		blocks: { types },
-	};
-}
-
-function embeddedNameBlock(treeKey: string): SchemaBlockType {
-	return {
-		slug: "card",
-		labels: { singular: "Card", plural: "Cards" },
-		fields: [
-			{
-				...text("blockName"),
-				id: `${treeKey}-name`,
-				path: `body.${treeKey}.widget.card.blockName`,
-			},
-		],
-	};
+	return bindBlockField(
+		types.map((type) => ({ ...type, fields: blockDefinition(type.slug, type.fields).fields })),
+		{
+			id: "layout",
+			name: "layout",
+			path: "layout",
+			type: "blocks",
+			category: "nested",
+			required: false,
+			unique: false,
+			admin: { label: "Layout" },
+			nested: { fields: [] },
+			blocks: { blockReferences: types.map((type) => type.slug) },
+		}
+	);
 }
 
 function embeddedNameSchema(): SchemaField {
@@ -153,11 +145,13 @@ function embeddedNameSchema(): SchemaField {
 				payload: "content",
 				discriminator: "schema",
 				identity: "uid",
-				types: [embeddedNameBlock(key)],
+				blockReferences: ["card"],
 			},
 		],
 	});
-	return {
+	// Both trees select one definition; each placement derives its own field identity.
+	const card = blockDefinition("card", [text("blockName")], { singular: "Card", plural: "Cards" });
+	return bindBlockField([card], {
 		id: "body",
 		name: "body",
 		path: "body",
@@ -167,7 +161,7 @@ function embeddedNameSchema(): SchemaField {
 		unique: false,
 		admin: { label: "Body" },
 		plugin: { key: "header-test", config: {}, embeddedTrees: [tree("alpha"), tree("beta")] },
-	};
+	});
 }
 
 function headerRuntime() {
@@ -513,7 +507,9 @@ it("checks occurrence lifetime and access before invoking a header apply callbac
 		{ layout: [row("first", { blockName: "First" }), row("second", { blockName: "Second" })] },
 		[field]
 	);
-	const schema = scopeRepeatedRowField(block().fields[0]!, "layout.0", "first");
+	const blockName = resolveBlockTypes(field.blocks)[0]!.fields[0]!;
+	expect(blockName.path).toBe("layout.card.blockName");
+	const schema = scopeRepeatedRowField(blockName, "layout.0", "first");
 	const apply = vi.fn();
 	const binding = new FieldEditorBinding(
 		form,

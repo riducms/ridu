@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SchemaField } from "@riducms/protocol";
+import { resolveBlockTypes, type SchemaBlockType, type SchemaField } from "@riducms/protocol";
 import { embeddedOccurrences } from "@admin/core/forms/embedded-fields";
 import {
 	changedFormValues,
@@ -15,10 +15,15 @@ import { RiduError } from "@riducms/sdk";
 import { evaluateFieldCondition } from "@admin/core/forms/field-condition";
 import { relationshipOptionFilters } from "@admin/fields/relationship/relationship-query";
 
+import { bindBlockField, blockDefinition } from "../block-manifest";
+
+// Card definition fields take definition-relative paths; their placement in `body`
+// gives them canonical paths such as `body.widgets.widget.card.title`.
+const titlePath = "body.widgets.widget.card.title";
 const title: SchemaField = {
-	id: "title",
+	id: "block-card-title",
 	name: "title",
-	path: "body.widgets.widget.card.title",
+	path: "title",
 	type: "text",
 	category: "scalar",
 	required: true,
@@ -29,16 +34,16 @@ const title: SchemaField = {
 };
 const caption: SchemaField = {
 	...title,
-	id: "caption",
+	id: "block-card-settings-caption",
 	name: "caption",
-	path: "body.widgets.widget.card.settings.caption",
+	path: "settings.caption",
 	required: false,
 	default: "Default caption",
 };
 const group: SchemaField = {
-	id: "settings",
+	id: "block-card-settings",
 	name: "settings",
-	path: "body.widgets.widget.card.settings",
+	path: "settings",
 	type: "group",
 	category: "nested",
 	required: false,
@@ -48,51 +53,74 @@ const group: SchemaField = {
 };
 const json: SchemaField = {
 	...title,
-	id: "json",
+	id: "block-card-raw",
 	name: "raw",
-	path: "body.widgets.widget.card.raw",
+	path: "raw",
 	type: "json",
 	localized: false,
 	required: false,
 };
-const field: SchemaField = {
-	id: "body",
-	name: "body",
-	path: "body",
-	type: "plugin",
-	category: "plugin",
-	required: false,
-	unique: false,
-	admin: { label: "Body" },
-	plugin: {
-		key: "outline",
-		config: {},
-		embeddedTrees: [
-			{
-				version: 1,
-				key: "widgets",
-				root: ["outline"],
-				children: "items",
-				tag: "kind",
-				cases: [
-					{
-						tagValue: "widget",
-						payload: "content",
-						discriminator: "schema",
-						identity: "uid",
-						types: [
-							{
-								slug: "card",
-								labels: { singular: "Card", plural: "Cards" },
-								fields: [title, group, json],
-							},
-						],
-					},
-				],
-			},
+/** A plugin field whose `widget` items select the `slugs` block definitions. */
+function outline(name: string, slugs: string[]): SchemaField {
+	return {
+		id: name,
+		name,
+		path: name,
+		type: "plugin",
+		category: "plugin",
+		required: false,
+		unique: false,
+		admin: { label: "Body" },
+		plugin: {
+			key: "outline",
+			config: {},
+			embeddedTrees: [
+				{
+					version: 1,
+					key: "widgets",
+					root: ["outline"],
+					children: "items",
+					tag: "kind",
+					cases: [
+						{
+							tagValue: "widget",
+							payload: "content",
+							discriminator: "schema",
+							identity: "uid",
+							blockReferences: slugs,
+						},
+					],
+				},
+			],
+		},
+	};
+}
+/**
+ * Binds `body`, whose widgets select the `card` definition with `cardFields` and
+ * any further `variants`; `blocks` are definitions that card fields select.
+ */
+function bodyField(
+	cardFields = [title, group, json],
+	variants: SchemaBlockType[] = [],
+	blocks: SchemaBlockType[] = []
+) {
+	return bindBlockField(
+		[
+			blockDefinition("card", cardFields, { singular: "Card", plural: "Cards" }),
+			...variants,
+			...blocks,
 		],
-	},
-};
+		outline("body", ["card", ...variants.map((variant) => variant.slug)])
+	);
+}
+/** A card's nested plugin field selects its own definition; a block cannot contain itself. */
+const innerCard = blockDefinition("inner-card", [title, group, json]);
+function placedCardField(body: SchemaField, name: string) {
+	return resolveBlockTypes(body.plugin!.embeddedTrees![0]!.cases[0])[0]!.fields.find(
+		(child) => child.name === name
+	)!;
+}
+const field = bodyField();
 const card = (uid: string, text = "Hello") => ({
 	kind: "widget",
 	content: {
@@ -355,7 +383,7 @@ describe("public embedded draft host", () => {
 					deletePermanent: true,
 					selectAll: true,
 				},
-				fields: { [title.path]: { read: false, create: false, update: false } },
+				fields: { [titlePath]: { read: false, create: false, update: false } },
 			},
 			"update"
 		);
@@ -365,8 +393,8 @@ describe("public embedded draft host", () => {
 			{ treeKey: "widgets", identity: "one" },
 			createAdminI18n()
 		);
-		expect(session.form.canRead(`${session.draft.id}.title`, title.path)).toBe(false);
-		expect(session.form.canWrite(`${session.draft.id}.title`, title.path)).toBe(false);
+		expect(session.form.canRead(`${session.draft.id}.title`, titlePath)).toBe(false);
+		expect(session.form.canWrite(`${session.draft.id}.title`, titlePath)).toBe(false);
 		expect(session.draft.payload()).toEqual(node.content);
 		session.draft.discard();
 	});
@@ -471,7 +499,7 @@ describe("declarative embedded admin fields", () => {
 		const filtered = submissionFormValues(
 			[field],
 			{ body: envelope(card("first")) },
-			(_runtime, canonical) => canonical !== title.path
+			(_runtime, canonical) => canonical !== titlePath
 		);
 		const payload = embeddedOccurrences(field, filtered.body).occurrences[0]?.payload;
 		expect(payload).toEqual({ uid: "first", schema: "card", raw: card("first").content.raw });
@@ -479,7 +507,7 @@ describe("declarative embedded admin fields", () => {
 			validateFormValues(
 				[field],
 				{ body: envelope(card("first", "")) },
-				{ requireMissing: true, include: (_runtime, canonical) => canonical !== title.path }
+				{ requireMissing: true, include: (_runtime, canonical) => canonical !== titlePath }
 			)
 		).toEqual([]);
 	});
@@ -531,8 +559,7 @@ describe("declarative embedded admin fields", () => {
 		).toBe(true);
 	});
 	it("reconciles added ordinary defaults without changing identities or arbitrary JSON", () => {
-		const previous = structuredClone(field);
-		previous.plugin!.embeddedTrees![0]!.cases[0]!.types![0]!.fields = [title, json];
+		const previous = bodyField([title, json]);
 		const value = { body: envelope(card("first")) };
 		const result = reconcileFormSchema({ values: value, original: value }, [previous], [field], {
 			initializeDefaults: true,
@@ -561,7 +588,7 @@ describe("declarative embedded admin fields", () => {
 				envelope(...Array.from({ length: 10_001 }, () => ({ kind: "text" })))
 			).issues[0]?.code
 		).toBe("embedded_budget");
-		const incompatible = structuredClone(field);
+		const incompatible = bodyField();
 		incompatible.plugin!.embeddedTrees![0]!.version = 9;
 		expect(embeddedOccurrences(incompatible, envelope(card("first"))).issues[0]?.message).toContain(
 			"Unsupported embedded tree metadata version 9"
@@ -570,12 +597,9 @@ describe("declarative embedded admin fields", () => {
 });
 
 it("reconciliation preserves content authored under a newly added embedded variant", () => {
-	const next = structuredClone(field);
-	next.plugin!.embeddedTrees![0]!.cases[0]!.types!.push({
-		slug: "new-card",
-		labels: { singular: "New card", plural: "New cards" },
-		fields: [title],
-	});
+	const next = bodyField(undefined, [
+		blockDefinition("new-card", [title], { singular: "New card", plural: "New cards" }),
+	]);
 	const node = card("new");
 	node.content.schema = "new-card";
 	const values = { body: envelope(node) };
@@ -590,14 +614,18 @@ it("reconciliation preserves content authored under a newly added embedded varia
 });
 
 it("enters nested plugin fields through ordinary schemas without traversing lookalike JSON", () => {
-	const parent = structuredClone(field);
-	const nested = structuredClone(field);
-	nested.name = "nested";
-	nested.path = `${title.path}.nested`;
-	parent.plugin!.embeddedTrees![0]!.cases[0]!.types![0]!.fields.push(nested);
+	const parent = bodyField(
+		[title, group, json, outline("nested", ["inner-card"])],
+		[],
+		[innerCard]
+	);
+	const nested = placedCardField(parent, "nested");
+	expect(nested.path).toBe("body.widgets.widget.card.nested");
+	const inner = card("inner", "");
+	inner.content.schema = "inner-card";
 	const value = envelope({
 		...card("outer"),
-		content: { ...card("outer").content, nested: envelope(card("inner", "")) },
+		content: { ...card("outer").content, nested: envelope(inner) },
 	});
 	const issues = validateFormValues([parent], { body: value }, { requireMissing: true });
 	expect(issues).toHaveLength(1);
@@ -633,7 +661,7 @@ it("the parent controller retains embedded access and localization through struc
 				selectAll: true,
 			},
 			fields: {
-				[title.path]: { read: true, create: true, update: false },
+				[titlePath]: { read: true, create: true, update: false },
 				[`${path}.title`]: { read: true, create: true, update: true },
 				"body.outline.0.items.1.content.title": { read: true, create: false, update: false },
 			},
@@ -641,8 +669,8 @@ it("the parent controller retains embedded access and localization through struc
 		"update"
 	);
 	form.setEmbedded(field, envelope(card("b", "Protected"), card("a", "Inherited")));
-	expect(form.canWrite(`${path}.title`, title.path)).toBe(false);
-	expect(form.canWrite("body.outline.0.items.1.content.title", title.path)).toBe(true);
+	expect(form.canWrite(`${path}.title`, titlePath)).toBe(false);
+	expect(form.canWrite("body.outline.0.items.1.content.title", titlePath)).toBe(true);
 	expect(form.localizationSource("body.outline.0.items.1.content.title")).toBe("en");
 	const submitted = await form.submit([field], false, async (values) => values);
 	expect(
@@ -667,16 +695,15 @@ it("accepts null children and counts literal root segments in its depth limit", 
 
 it("initializes only inserted embedded payloads through the ordinary form defaults", async () => {
 	const { FormController } = await import("@admin/core/forms/form-controller.svelte");
-	const schema = structuredClone(field);
 	const rows: SchemaField = {
 		...group,
-		id: "rows",
+		id: "block-card-rows",
 		name: "rows",
-		path: "body.widgets.widget.card.rows",
+		path: "rows",
 		type: "array",
 		nested: { minRows: 1, fields: [caption] },
 	};
-	schema.plugin!.embeddedTrees![0]!.cases[0]!.types![0]!.fields.push(rows);
+	const schema = bodyField([title, group, json, rows]);
 	const retained = card("retained");
 	const form = new FormController();
 	form.reset({ body: envelope(retained) }, [schema]);
@@ -713,29 +740,34 @@ it("initializes only inserted embedded payloads through the ordinary form defaul
 
 it("initializes supplied array, block and nested plugin children in a new payload", async () => {
 	const { FormController } = await import("@admin/core/forms/form-controller.svelte");
-	const schema = structuredClone(field);
-	const children = schema.plugin!.embeddedTrees![0]!.cases[0]!.types![0]!.fields;
-	children.push({ ...group, name: "rows", type: "array", nested: { fields: [caption] } });
-	children.push({
-		...group,
-		name: "blocks",
-		type: "blocks",
-		nested: undefined,
-		blocks: {
-			types: [
-				{ slug: "nested", labels: { singular: "Nested", plural: "Nesteds" }, fields: [caption] },
-			],
-		},
-	});
-	children.push({ ...field, name: "nested" });
+	const schema = bodyField(
+		[
+			title,
+			group,
+			json,
+			{ ...group, name: "rows", type: "array", nested: { fields: [caption] } },
+			{
+				...group,
+				name: "blocks",
+				type: "blocks",
+				nested: undefined,
+				blocks: { blockReferences: ["nested"] },
+			},
+			outline("nested", ["inner-card"]),
+		],
+		[],
+		[blockDefinition("nested", [caption], { singular: "Nested", plural: "Nesteds" }), innerCard]
+	);
 	const form = new FormController();
+	const inner = card("inner");
+	inner.content.schema = "inner-card";
 	const node = {
 		...card("new"),
 		content: {
 			...card("new").content,
 			rows: [{ _key: "row" }, { _key: "explicit", caption: null }],
 			blocks: [{ _key: "block", blockType: "nested" }],
-			nested: envelope(card("inner")),
+			nested: envelope(inner),
 		},
 	};
 	form.setEmbedded(schema, envelope(node));
@@ -747,7 +779,8 @@ it("initializes supplied array, block and nested plugin children in a new payloa
 	expect(payload.blocks).toEqual([
 		{ _key: "block", blockType: "nested", caption: "Default caption" },
 	]);
-	expect(embeddedOccurrences(field, payload.nested).occurrences[0]?.payload.settings).toEqual({
-		caption: "Default caption",
-	});
+	expect(
+		embeddedOccurrences(placedCardField(schema, "nested"), payload.nested).occurrences[0]?.payload
+			.settings
+	).toEqual({ caption: "Default caption" });
 });

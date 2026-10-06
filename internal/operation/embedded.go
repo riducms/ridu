@@ -113,26 +113,26 @@ func (p *runtimePatch) applyValue(value store.Value) store.Value {
 	return value
 }
 
-func originalFieldValues(ctx Context) store.Values {
+// originalFieldRoot snapshots the persisted document in the callback's locale
+// view once per dispatch. It is the zero Value when there is no original.
+func originalFieldRoot(ctx Context) store.Value {
 	if ctx.originalCanonical != nil {
 		selection := localization.Selection{Locale: ctx.Locale, All: ctx.AllLocales, Configured: append([]schema.LocaleCode(nil), ctx.Locales...), PreserveNull: true}
 		if ctx.Locale != "" {
 			selection.Chain = []schema.LocaleCode{ctx.Locale}
 		}
-		return projectValues(ctx.projections, ctx.Collection.Fields, ctx.originalCanonical.Values, selection)
+		return store.Object(projectValues(ctx.projections, ctx.Collection.Fields, ctx.originalCanonical.Values, selection))
 	}
 	if ctx.Original != nil {
-		return store.CloneValues(ctx.Original.Values)
+		return store.Object(ctx.Original.Values)
 	}
-	return nil
+	return store.Value{}
 }
-func originalFieldLocations(ctx Context, path string, values store.Values) map[string]fieldLocation {
-	result := map[string]fieldLocation{}
+
+// optionalObject snapshots values, preserving nil as the zero Value.
+func optionalObject(values store.Values) store.Value {
 	if values == nil {
-		return result
+		return store.Value{}
 	}
-	for _, location := range fieldLocationsAtPath(ctx.Collection.Fields, values, path, ctx.AllLocales, true) {
-		result[location.identity] = location
-	}
-	return result
+	return store.Object(values)
 }

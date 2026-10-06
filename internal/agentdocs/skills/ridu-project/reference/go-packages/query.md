@@ -86,6 +86,7 @@ Pass the value you compare with as an ordinary Go value of the kind the field ho
 | A select option              | `"published"`, or a named type |
 | A date and time              | `query.DateTime(time.Now())`   |
 | A date only                  | `"2026-09-29"`                 |
+| A polymorphic reference      | `query.Reference("posts", id)` |
 | Null                         | `query.Null()`                 |
 
 Named types work too, so a `type Status string` constant can be compared with a select field
@@ -107,10 +108,15 @@ Compare a date-only field with a `"2026-09-29"` string, such as `t.Format(time.D
 A number is stored as a 64-bit float, which holds integers exactly only up to 2^53. Larger
 integers panic instead of silently losing precision; compare them as strings.
 
+A polymorphic relationship can point into several collections, so its candidates name the
+collection as well as the ID: `query.In("subjects", query.Reference("posts", postID))`. Lists,
+has-many fields and polymorphic relationships take `query.In` only; see
+[Filter by membership](../querying.md#membership).
+
 A `query.Value` is the typed form the helpers build internally. Build one with `query.String`,
-`query.Number`, `query.Boolean`, `query.Null`, or `query.List` when you call `query.Compare` or
-need null. The similarly named `store.Number(50)` is a document value for saving content, not a
-comparison value.
+`query.Number`, `query.Boolean`, `query.Null`, `query.Reference`, or `query.List` when you call
+`query.Compare` or need null. The similarly named `store.Number(50)` is a document value for
+saving content, not a comparison value.
 
 ## Comparisons {#operators}
 
@@ -120,7 +126,7 @@ Each helper takes a field name and a value, and returns a `query.Expression`:
 | ------------------------------------------------ | --------------------------------------------------------- |
 | Equals the value                                 | `query.Equal("status", "published")`                      |
 | Does not equal the value                         | `query.NotEqual("status", "draft")`                       |
-| Equals one of several values                     | `query.In("color", "red", "blue")`                        |
+| Equals one of several values, or holds one item  | `query.In("color", "red", "blue")`                        |
 | Is greater than, or at least, a number or string | `query.GreaterThan("price", 10)`, `GreaterThanEqual`      |
 | Is less than, or at most, a number or string     | `query.LessThan("price", 50)`, `LessThanEqual`            |
 | Contains the text, ignoring case                 | `query.Contains("title", "ridu")`                         |

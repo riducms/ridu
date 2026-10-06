@@ -12,7 +12,7 @@ import (
 func TestArtifactHistoryPreservesBlockSchemaBeforeBlockName(t *testing.T) {
 	current := blockNameHistoryManifest(t)
 	previousSnapshot := current.Snapshot()
-	block := &previousSnapshot.Collections[0].Fields[0].Blocks.Types[0]
+	block := &previousSnapshot.Blocks[0]
 	block.Fields = block.Fields[:1]
 	previous := schema.NewManifest(previousSnapshot)
 	previousBytes, err := previous.Bytes()
@@ -105,21 +105,21 @@ func blockNameHistoryManifest(t *testing.T) schema.Manifest {
 	nameDefault := ""
 	manifest := schema.NewManifest(schema.Snapshot{
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "Block history"},
+		Blocks: []schema.BlockType{{
+			Slug: "card", TypeName: "Card", Labels: schema.BlockLabels{Singular: "Card", Plural: "Cards"},
+			Fields: []schema.Field{{
+				ID: "block-card-title", Name: "title", Path: path("title"),
+				Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{},
+			}, {
+				ID: "block-card-block-name", Name: "blockName", Path: path("blockName"),
+				Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Default: &nameDefault,
+			}},
+		}},
 		Collections: []schema.Collection{{
 			ID: "pages", Slug: "pages", Labels: schema.CollectionLabels{Singular: "Page", Plural: "Pages"},
 			Fields: []schema.Field{{
 				ID: "pages-layout", Name: "layout", Path: path("layout"), Type: schema.FieldTypeBlocks,
-				Category: schema.FieldCategoryNested,
-				Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-					Slug: "card", Labels: schema.BlockLabels{Singular: "Card", Plural: "Cards"},
-					Fields: []schema.Field{{
-						ID: "pages-layout-card-title", Name: "title", Path: path("layout", "card", "title"),
-						Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{},
-					}, {
-						ID: "pages-layout-card-blockName", Name: "blockName", Path: path("layout", "card", "blockName"),
-						Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Default: &nameDefault,
-					}},
-				}}},
+				Category: schema.FieldCategoryNested, Blocks: &schema.BlocksField{BlockReferences: []string{"card"}},
 			}},
 		}},
 		Plugins: []schema.Plugin{},

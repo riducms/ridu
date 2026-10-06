@@ -2,6 +2,7 @@ package formbuilder
 
 import (
 	"fmt"
+	"strings"
 
 	ridu "github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
@@ -26,6 +27,13 @@ func (plugin *Plugin) formFieldBlocks(localized bool) ([]field.Block, error) {
 	definitions[FieldRadio] = optionBlock(FieldRadio, "Radio", localized, false)
 	definitions[FieldUpload] = plugin.uploadBlock(localized)
 	definitions[FieldPayment] = plugin.paymentBlock(localized)
+	// A block slug names one definition for the whole application and its type
+	// name defaults to the slug, so name these generic slugs' generated types
+	// after the form builder: FormTextField rather than Text.
+	for kind, definition := range definitions {
+		definition.TypeName = "Form" + strings.ToUpper(string(kind[:1])) + string(kind[1:]) + "Field"
+		definitions[kind] = definition
+	}
 
 	selected := plugin.enabledFields()
 	blocks := make([]field.Block, 0, len(selected))

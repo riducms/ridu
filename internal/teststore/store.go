@@ -3,6 +3,7 @@
 package teststore
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -15,8 +16,8 @@ import (
 
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/internal/membership"
 	populationwalk "github.com/riducms/ridu/internal/population"
-	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -1254,7 +1255,7 @@ func (transaction *transaction) Create(ctx context.Context, request store.Create
 }
 
 func (transaction *transaction) Find(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.ready(ctx); err != nil {
@@ -1272,7 +1273,7 @@ func (transaction *transaction) Find(ctx context.Context, request store.Request)
 }
 
 func (transaction *transaction) List(ctx context.Context, request store.Request) (store.Page, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Page{}, err
 	}
 	if err := transaction.ready(ctx); err != nil {
@@ -1293,7 +1294,7 @@ func (transaction *transaction) List(ctx context.Context, request store.Request)
 	sort.SliceStable(documents, func(left, right int) bool {
 		return compareDocuments(localizedForRequest(documents[left], sortRequest), localizedForRequest(documents[right], sortRequest), sorts) < 0
 	})
-	page, limit, start, end := store.ListPageBounds(request.Page, request.Limit, len(documents))
+	_, _, start, end := store.ListPageBounds(request.Page, request.Limit, len(documents))
 	if len(request.Populate) != 0 && request.PopulationBudget == nil {
 		request.PopulationBudget = store.NewPopulationBudget(store.MaxPopulationMaterializedDocuments)
 	}
@@ -1305,11 +1306,17 @@ func (transaction *transaction) List(ctx context.Context, request store.Request)
 		}
 		selected[index] = prepared
 	}
-	return store.Page{Documents: selected, Page: page, Limit: limit, Total: len(documents)}, nil
+	// This in-memory fake has every match at hand; a SkipTotal page withholds
+	// the total exactly as a production adapter that never counted.
+	page := store.CountedPage(selected, request.Page, request.Limit, len(documents))
+	if request.SkipTotal {
+		page.Total = nil
+	}
+	return page, nil
 }
 
 func (transaction *transaction) Distinct(ctx context.Context, request store.DistinctRequest) (store.DistinctPage, error) {
-	if err := primitivefield.ValidateRequest(store.Request{Collection: request.Collection, Filter: request.Filter, Access: request.Access}); err != nil {
+	if err := membership.ValidateRequest(store.Request{Collection: request.Collection, Filter: request.Filter, Access: request.Access}); err != nil {
 		return store.DistinctPage{}, err
 	}
 	if err := transaction.ready(ctx); err != nil {
@@ -1409,7 +1416,7 @@ func compareDistinctValues(left, right store.Value) int {
 }
 
 func (transaction *transaction) ListWindow(ctx context.Context, request store.Request) (store.Window, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Window{}, err
 	}
 	if err := transaction.ready(ctx); err != nil {
@@ -1759,7 +1766,7 @@ func (transaction *transaction) Update(ctx context.Context, request store.Update
 		(request.Intent == store.WriteIntentSaveDraft || request.Intent == store.WriteIntentDiscardDraft) {
 		return store.Document{}, fmt.Errorf("draft write intent requires a draft-enabled collection")
 	}
-	if err := primitivefield.ValidateRequest(request.Request); err != nil {
+	if err := membership.ValidateRequest(request.Request); err != nil {
 		return store.Document{}, err
 	}
 	if request.Collection.Versions != nil && request.Collection.Versions.Drafts && request.Intent == store.WriteIntentDefault {
@@ -1768,10 +1775,23 @@ func (transaction *transaction) Update(ctx context.Context, request store.Update
 	if err := transaction.writable(ctx); err != nil {
 		return store.Document{}, err
 	}
+	current, err := request.LockedCurrent()
+	if err != nil {
+		return store.Document{}, err
+	}
 	transaction.event("update")
 	collection := transaction.collection(string(request.Collection.ID))
 	document, exists := collection[request.ID]
-	if !exists || !matchesDeletion(document, request.Deletion) || !matchesRequest(document, request.Request) {
+	if !exists {
+		return store.Document{}, store.ErrNotFound
+	}
+	// Real adapters update from Current without reading the row again, so a
+	// stale Current loses or misattributes writes there. The in-memory row is
+	// authoritative here, which makes the fake able to prove the contract.
+	if mismatch := lockedCurrentMismatch(current, testAuthoringProjection(document, request.Collection)); mismatch != "" {
+		return store.Document{}, fmt.Errorf("teststore: update Current for %q is not the stored row: %s", request.ID, mismatch)
+	}
+	if !matchesDeletion(document, request.Deletion) || !matchesRequest(document, request.Request) {
 		return store.Document{}, store.ErrNotFound
 	}
 	if request.ExpectedRevision > 0 && document.Revision != request.ExpectedRevision {
@@ -1882,6 +1902,16 @@ func (transaction *transaction) SaveVersion(ctx context.Context, collection sche
 	}
 	version := store.Version{ID: fmt.Sprintf("%s:%d", document.ID, document.Revision), DocumentID: document.ID, Revision: document.Revision, Status: document.Status, Snapshot: store.CloneDocument(document), CreatedAt: transaction.store.now().UTC()}
 	items := byDocument[document.ID]
+	if document.Revision == 1 {
+		// Revision 1 starts a document's history; a reused ID inherits nothing.
+		kept := items[:0:0]
+		for _, existing := range items {
+			if existing.Revision == 1 {
+				kept = append(kept, existing)
+			}
+		}
+		items = kept
+	}
 	replaced := false
 	for index, existing := range items {
 		if existing.Revision != document.Revision {
@@ -1903,7 +1933,7 @@ func (transaction *transaction) SaveVersion(ctx context.Context, collection sche
 }
 
 func (transaction *transaction) ListVersions(ctx context.Context, request store.VersionRequest) ([]store.Version, error) {
-	if err := primitivefield.ValidateNode(request.Collection.Fields, request.Access); err != nil {
+	if err := membership.ValidateNode(request.Collection.Fields, request.Access); err != nil {
 		return nil, err
 	}
 	if err := transaction.ready(ctx); err != nil {
@@ -1924,7 +1954,7 @@ func (transaction *transaction) ListVersions(ctx context.Context, request store.
 }
 
 func (transaction *transaction) CountVersions(ctx context.Context, request store.VersionRequest) (int, error) {
-	if err := primitivefield.ValidateNode(request.Collection.Fields, request.Access); err != nil {
+	if err := membership.ValidateNode(request.Collection.Fields, request.Access); err != nil {
 		return 0, err
 	}
 	if err := transaction.ready(ctx); err != nil {
@@ -1956,7 +1986,7 @@ func (transaction *transaction) FindVersion(ctx context.Context, collection sche
 }
 
 func (transaction *transaction) Delete(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.writable(ctx); err != nil {
@@ -2176,7 +2206,7 @@ func (transaction *transaction) DeleteDocumentState(ctx context.Context, referen
 }
 
 func (transaction *transaction) Trash(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.writable(ctx); err != nil {
@@ -2201,7 +2231,7 @@ func (transaction *transaction) Trash(ctx context.Context, request store.Request
 }
 
 func (transaction *transaction) Restore(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.writable(ctx); err != nil {
@@ -2452,6 +2482,37 @@ func testAuthoringProjection(document store.Document, collection schema.Collecti
 		projected.HasDraftChanges = false
 	}
 	return projected
+}
+
+// lockedCurrentMismatch describes how an update's Current differs from the
+// working row an authoring read would return now, or is empty when it does not.
+func lockedCurrentMismatch(current, stored store.Document) string {
+	switch {
+	case current.ID != stored.ID:
+		return fmt.Sprintf("ID %q, stored %q", current.ID, stored.ID)
+	case current.Revision != stored.Revision:
+		return fmt.Sprintf("revision %d, stored %d", current.Revision, stored.Revision)
+	case current.Status != stored.Status:
+		return fmt.Sprintf("status %q, stored %q", current.Status, stored.Status)
+	case current.PublishedRevision != stored.PublishedRevision || current.HasDraftChanges != stored.HasDraftChanges:
+		return fmt.Sprintf("published revision %d (pending %t), stored %d (pending %t)", current.PublishedRevision, current.HasDraftChanges, stored.PublishedRevision, stored.HasDraftChanges)
+	case (current.DeletedAt == nil) != (stored.DeletedAt == nil) || current.DeletedAt != nil && !current.DeletedAt.Equal(*stored.DeletedAt):
+		return "deletion state differs"
+	case !current.CreatedAt.Equal(stored.CreatedAt) || !current.UpdatedAt.Equal(stored.UpdatedAt):
+		return fmt.Sprintf("timestamps %s/%s, stored %s/%s", current.CreatedAt, current.UpdatedAt, stored.CreatedAt, stored.UpdatedAt)
+	}
+	currentValues, err := current.Values.MarshalJSON()
+	if err != nil {
+		return fmt.Sprintf("Current values cannot be encoded: %v", err)
+	}
+	storedValues, err := stored.Values.MarshalJSON()
+	if err != nil {
+		return fmt.Sprintf("stored values cannot be encoded: %v", err)
+	}
+	if !bytes.Equal(currentValues, storedValues) {
+		return fmt.Sprintf("values %s, stored %s", currentValues, storedValues)
+	}
+	return ""
 }
 
 func cloneCollections(source map[string]map[string]store.Document) map[string]map[string]store.Document {
@@ -2738,10 +2799,8 @@ func queryDocumentValues(document store.Document, request store.Request, path qu
 	locales := populationwalk.LocaleSelection{All: request.AllLocales, Chain: request.LocaleChain}
 	visit := func(prefix query.Path, remainder []string) {
 		populationwalk.VisitAtPath(request.Collection.Fields, store.Values{segments[0]: root}, prefix, locales, func(_ schema.Field, value store.Value) {
-			if len(remainder) == 0 {
+			if value, reached := opaqueValueAt(value, remainder); reached {
 				values = append(values, value)
-			} else {
-				values = append(values, valuesBelow(value, remainder)...)
 			}
 		})
 	}
@@ -2763,6 +2822,23 @@ func queryDocumentValues(document store.Document, request store.Request, path qu
 		}
 	}
 	return nil
+}
+
+// opaqueValueAt follows object keys inside a JSON or opaque plugin value, as
+// every store does: a list on the way is a value of its own, never a set of
+// values to reach through, so the path reaches nothing beyond it.
+func opaqueValueAt(value store.Value, segments []string) (store.Value, bool) {
+	for _, segment := range segments {
+		if value.Kind() != store.ValueObject {
+			return store.Value{}, false
+		}
+		child, exists := value.Lookup(segment)
+		if !exists {
+			return store.Value{}, false
+		}
+		value = child
+	}
+	return value, true
 }
 
 func matches(document store.Document, node query.Node) bool {
@@ -2986,20 +3062,10 @@ func compare(actual store.Value, exists bool, operator query.Operator, expected 
 		return false
 	}
 	if operator == query.OperatorContains || operator == query.OperatorLike {
+		// Only a stored string contains text. A list or object, including one in
+		// a JSON value, never matches: membership fields use In instead.
 		expectedText, expectedOK := expected.StringValue()
 		if !exists || !expectedOK {
-			return false
-		}
-		if actual.Kind() == store.ValueList {
-			if operator == query.OperatorLike {
-				return false
-			}
-			for value := range actual.Elements() {
-				text, valid := value.StringValue()
-				if valid && text == expectedText {
-					return true
-				}
-			}
 			return false
 		}
 		actualText, actualOK := actual.StringValue()
@@ -3114,9 +3180,9 @@ var _ store.DistinctTransaction = (*transaction)(nil)
 
 func matchesPrimitiveQuery(document store.Document, fields []schema.Field, node query.Node, values func(query.Path) []store.Value) bool {
 	if node.Kind == query.ExpressionComparison && node.Comparison != nil && node.Comparison.Operator == query.OperatorIn {
-		if field, ok := populationwalk.FieldAtPath(fields, node.Comparison.Path); ok && primitivefield.IsList(field) {
+		if field, ok := populationwalk.FieldAtPath(fields, node.Comparison.Path); ok && membership.KindOf(field) != membership.None {
 			for _, value := range values(node.Comparison.Path) {
-				if primitivefield.Membership(value, node.Comparison.Value) {
+				if membership.Matches(value, node.Comparison.Value) {
 					return true
 				}
 			}

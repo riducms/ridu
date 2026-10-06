@@ -120,23 +120,13 @@ func assertFieldMappings(t *testing.T, snapshot schema.Snapshot, key string) {
 			declared[fieldType.Key] = true
 		}
 	}
-	var inspect func([]schema.Field)
-	inspect = func(fields []schema.Field) {
-		for _, candidate := range fields {
-			if candidate.Plugin != nil && candidate.Plugin.Key == key && !declared[candidate.Plugin.Key] {
-				t.Errorf("plugin field %q has no generated type mapping", candidate.Plugin.Key)
-			}
-			if candidate.Nested != nil {
-				inspect(candidate.Nested.ResolvedFields())
-			}
-			if candidate.Blocks != nil {
-				for _, block := range candidate.Blocks.ResolvedTypes() {
-					inspect(block.ResolvedFields())
-				}
-			}
+	inspect := func(candidate schema.Field) bool {
+		if candidate.Plugin != nil && candidate.Plugin.Key == key && !declared[candidate.Plugin.Key] {
+			t.Errorf("plugin field %q has no generated type mapping", candidate.Plugin.Key)
 		}
+		return true
 	}
 	for _, collection := range snapshot.Collections {
-		inspect(collection.Fields)
+		schema.WalkDefinitionFields(inspect, collection.Fields)
 	}
 }

@@ -1542,1325 +1542,6 @@ func (value *Reference[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// CalloutAsideBlocksBlockBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutAsideBlocksBlockBlock interface {
-	isCalloutAsideBlocksBlockBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutAsideBlocksBlockPayload is one typed detached payload, with scalar JSON encoding.
-type CalloutAsideBlocksBlockPayload struct{ Value CalloutAsideBlocksBlockBlock }
-
-func (p CalloutAsideBlocksBlockPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutAsideBlocksBlockPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutAsideBlocksBlock
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutAsideBlocksBlock is an ordered list of block pointers. Nil rows are invalid.
-type CalloutAsideBlocksBlock []CalloutAsideBlocksBlockBlock
-
-func (rows CalloutAsideBlocksBlock) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlock", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlock", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutAsideBlocksBlock) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlock", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutAsideBlocksBlock, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlock", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlock", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// Retain creates fresh key-only updates in the same order, preserving every occurrence.
-// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
-// No authored fields are copied, including redacted, localized or populated values.
-// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
-// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
-func (rows *CalloutAsideBlocksBlock) Retain() (CalloutAsideBlocksBlockUpdate, error) {
-	if rows == nil || *rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlock", Reason: "cannot retain an absent block list"})
-	}
-	retained := make(CalloutAsideBlocksBlockUpdate, len(*rows))
-	seen := make(map[string]bool, len(*rows))
-	for index, row := range *rows {
-		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlock", Reason: "retained block requires a nonempty identity"}, index)
-		}
-		key := row.BlockKey()
-		if seen[key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlock", Reason: "duplicate retained block identity"}, index)
-		}
-		seen[key] = true
-		switch row.(type) {
-		default:
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlock", Reason: "unsupported retained block variant"}, index)
-		}
-	}
-	return retained, nil
-}
-
-// Retain creates a key-only update for this embedded occurrence, without copying
-// redacted, localized or populated authored fields. Use revision checks when saving.
-func (payload CalloutAsideBlocksBlockPayload) Retain() (CalloutAsideBlocksBlockUpdatePayload, error) {
-	rows := CalloutAsideBlocksBlock{payload.Value}
-	retained, err := rows.Retain()
-	if err != nil {
-		return CalloutAsideBlocksBlockUpdatePayload{}, err
-	}
-	return CalloutAsideBlocksBlockUpdatePayload{Value: retained[0]}, nil
-}
-
-// CalloutAsideBlocksBlockInputBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutAsideBlocksBlockInputBlock interface {
-	isCalloutAsideBlocksBlockInputBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutAsideBlocksBlockInputPayload is one typed detached payload, with scalar JSON encoding.
-type CalloutAsideBlocksBlockInputPayload struct {
-	Value CalloutAsideBlocksBlockInputBlock
-}
-
-func (p CalloutAsideBlocksBlockInputPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutAsideBlocksBlockInputPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockInputPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutAsideBlocksBlockInput
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutAsideBlocksBlockInput is an ordered list of block pointers. Nil rows are invalid.
-type CalloutAsideBlocksBlockInput []CalloutAsideBlocksBlockInputBlock
-
-func (rows CalloutAsideBlocksBlockInput) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockInput", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockInput", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutAsideBlocksBlockInput) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockInput", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutAsideBlocksBlockInput, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockInput", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockInput", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// CalloutAsideBlocksBlockUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
-// Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
-type CalloutAsideBlocksBlockUpdateBlock interface {
-	isCalloutAsideBlocksBlockUpdateBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutAsideBlocksBlockUpdatePayload is one typed detached payload, with scalar JSON encoding.
-type CalloutAsideBlocksBlockUpdatePayload struct {
-	Value CalloutAsideBlocksBlockUpdateBlock
-}
-
-func (p CalloutAsideBlocksBlockUpdatePayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutAsideBlocksBlockUpdatePayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockUpdatePayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutAsideBlocksBlockUpdate
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutAsideBlocksBlockUpdate is an ordered list of block pointers. Nil rows are invalid.
-// Saving this list replaces order and membership: omitted occurrences are removed.
-// Start with a read list's Retain method to preserve untouched blocks.
-type CalloutAsideBlocksBlockUpdate []CalloutAsideBlocksBlockUpdateBlock
-
-func (rows CalloutAsideBlocksBlockUpdate) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockUpdate", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockUpdate", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutAsideBlocksBlockUpdate) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockUpdate", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutAsideBlocksBlockUpdate, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockUpdate", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockUpdate", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// CalloutAsideBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutAsideBlocksBlockDraftBlock interface {
-	isCalloutAsideBlocksBlockDraftBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutAsideBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
-type CalloutAsideBlocksBlockDraftPayload struct {
-	Value CalloutAsideBlocksBlockDraftBlock
-}
-
-func (p CalloutAsideBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutAsideBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutAsideBlocksBlockDraft
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutAsideBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
-type CalloutAsideBlocksBlockDraft []CalloutAsideBlocksBlockDraftBlock
-
-func (rows CalloutAsideBlocksBlockDraft) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutAsideBlocksBlockDraft) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockDraft", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutAsideBlocksBlockDraft, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// CalloutAsideBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutAsideBlocksBlockAllLocalesBlock interface {
-	isCalloutAsideBlocksBlockAllLocalesBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutAsideBlocksBlockAllLocalesPayload is one typed detached payload, with scalar JSON encoding.
-type CalloutAsideBlocksBlockAllLocalesPayload struct {
-	Value CalloutAsideBlocksBlockAllLocalesBlock
-}
-
-func (p CalloutAsideBlocksBlockAllLocalesPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutAsideBlocksBlockAllLocalesPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutAsideBlocksBlockAllLocales
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutAsideBlocksBlockAllLocales is an ordered list of block pointers. Nil rows are invalid.
-// Localized children contain locale-code maps; use ordinary output types for a single locale.
-type CalloutAsideBlocksBlockAllLocales []CalloutAsideBlocksBlockAllLocalesBlock
-
-func (rows CalloutAsideBlocksBlockAllLocales) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutAsideBlocksBlockAllLocales) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockAllLocales", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutAsideBlocksBlockAllLocales, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockAllLocales", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockAllLocales", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// Retain creates fresh key-only updates in the same order, preserving every occurrence.
-// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
-// No authored fields are copied, including redacted, localized or populated values.
-// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
-// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
-func (rows *CalloutAsideBlocksBlockAllLocales) Retain() (CalloutAsideBlocksBlockUpdate, error) {
-	if rows == nil || *rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "cannot retain an absent block list"})
-	}
-	retained := make(CalloutAsideBlocksBlockUpdate, len(*rows))
-	seen := make(map[string]bool, len(*rows))
-	for index, row := range *rows {
-		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "retained block requires a nonempty identity"}, index)
-		}
-		key := row.BlockKey()
-		if seen[key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "duplicate retained block identity"}, index)
-		}
-		seen[key] = true
-		switch row.(type) {
-		default:
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "unsupported retained block variant"}, index)
-		}
-	}
-	return retained, nil
-}
-
-// Retain creates a key-only update for this embedded occurrence, without copying
-// redacted, localized or populated authored fields. Use revision checks when saving.
-func (payload CalloutAsideBlocksBlockAllLocalesPayload) Retain() (CalloutAsideBlocksBlockUpdatePayload, error) {
-	rows := CalloutAsideBlocksBlockAllLocales{payload.Value}
-	retained, err := rows.Retain()
-	if err != nil {
-		return CalloutAsideBlocksBlockUpdatePayload{}, err
-	}
-	return CalloutAsideBlocksBlockUpdatePayload{Value: retained[0]}, nil
-}
-
-// CalloutAsideBlocksBlockAllLocalesValueBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutAsideBlocksBlockAllLocalesValueBlock interface {
-	isCalloutAsideBlocksBlockAllLocalesValueBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutAsideBlocksBlockAllLocalesValuePayload is one typed detached payload, with scalar JSON encoding.
-type CalloutAsideBlocksBlockAllLocalesValuePayload struct {
-	Value CalloutAsideBlocksBlockAllLocalesValueBlock
-}
-
-func (p CalloutAsideBlocksBlockAllLocalesValuePayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutAsideBlocksBlockAllLocalesValuePayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesValuePayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutAsideBlocksBlockAllLocalesValue
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutAsideBlocksBlockAllLocalesValue is an ordered list of block pointers. Nil rows are invalid.
-// This is one locale's value beneath a localized container in an all-locales response.
-// Children are ordinary values; populated target documents still have all-locales shapes.
-type CalloutAsideBlocksBlockAllLocalesValue []CalloutAsideBlocksBlockAllLocalesValueBlock
-
-func (rows CalloutAsideBlocksBlockAllLocalesValue) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutAsideBlocksBlockAllLocalesValue) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutAsideBlocksBlockAllLocalesValue, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesValue", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// Retain creates fresh key-only updates in the same order, preserving every occurrence.
-// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
-// No authored fields are copied, including redacted, localized or populated values.
-// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
-// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
-func (rows *CalloutAsideBlocksBlockAllLocalesValue) Retain() (CalloutAsideBlocksBlockUpdate, error) {
-	if rows == nil || *rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "cannot retain an absent block list"})
-	}
-	retained := make(CalloutAsideBlocksBlockUpdate, len(*rows))
-	seen := make(map[string]bool, len(*rows))
-	for index, row := range *rows {
-		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "retained block requires a nonempty identity"}, index)
-		}
-		key := row.BlockKey()
-		if seen[key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "duplicate retained block identity"}, index)
-		}
-		seen[key] = true
-		switch row.(type) {
-		default:
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "unsupported retained block variant"}, index)
-		}
-	}
-	return retained, nil
-}
-
-// Retain creates a key-only update for this embedded occurrence, without copying
-// redacted, localized or populated authored fields. Use revision checks when saving.
-func (payload CalloutAsideBlocksBlockAllLocalesValuePayload) Retain() (CalloutAsideBlocksBlockUpdatePayload, error) {
-	rows := CalloutAsideBlocksBlockAllLocalesValue{payload.Value}
-	retained, err := rows.Retain()
-	if err != nil {
-		return CalloutAsideBlocksBlockUpdatePayload{}, err
-	}
-	return CalloutAsideBlocksBlockUpdatePayload{Value: retained[0]}, nil
-}
-
-// CalloutDetailBlocksBlockBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutDetailBlocksBlockBlock interface {
-	isCalloutDetailBlocksBlockBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutDetailBlocksBlockPayload is one typed detached payload, with scalar JSON encoding.
-type CalloutDetailBlocksBlockPayload struct{ Value CalloutDetailBlocksBlockBlock }
-
-func (p CalloutDetailBlocksBlockPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutDetailBlocksBlockPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutDetailBlocksBlock
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutDetailBlocksBlock is an ordered list of block pointers. Nil rows are invalid.
-type CalloutDetailBlocksBlock []CalloutDetailBlocksBlockBlock
-
-func (rows CalloutDetailBlocksBlock) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlock", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlock", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutDetailBlocksBlock) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlock", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutDetailBlocksBlock, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlock", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		case "cta":
-			var value CTA
-			if err := json.Unmarshal(data, &value); err != nil {
-				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlock", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
-			}
-			decoded[index] = &value
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlock", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-func (*CTA) isCalloutDetailBlocksBlockBlock() {}
-
-// Retain creates fresh key-only updates in the same order, preserving every occurrence.
-// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
-// No authored fields are copied, including redacted, localized or populated values.
-// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
-// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
-func (rows *CalloutDetailBlocksBlock) Retain() (CalloutDetailBlocksBlockUpdate, error) {
-	if rows == nil || *rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlock", Reason: "cannot retain an absent block list"})
-	}
-	retained := make(CalloutDetailBlocksBlockUpdate, len(*rows))
-	seen := make(map[string]bool, len(*rows))
-	for index, row := range *rows {
-		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlock", Reason: "retained block requires a nonempty identity"}, index)
-		}
-		key := row.BlockKey()
-		if seen[key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlock", Reason: "duplicate retained block identity"}, index)
-		}
-		seen[key] = true
-		switch row.(type) {
-		case *CTA:
-			retained[index] = &CTAUpdate{Key: key}
-		default:
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlock", Reason: "unsupported retained block variant"}, index)
-		}
-	}
-	return retained, nil
-}
-
-// Retain creates a key-only update for this embedded occurrence, without copying
-// redacted, localized or populated authored fields. Use revision checks when saving.
-func (payload CalloutDetailBlocksBlockPayload) Retain() (CalloutDetailBlocksBlockUpdatePayload, error) {
-	rows := CalloutDetailBlocksBlock{payload.Value}
-	retained, err := rows.Retain()
-	if err != nil {
-		return CalloutDetailBlocksBlockUpdatePayload{}, err
-	}
-	return CalloutDetailBlocksBlockUpdatePayload{Value: retained[0]}, nil
-}
-
-// CalloutDetailBlocksBlockInputBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutDetailBlocksBlockInputBlock interface {
-	isCalloutDetailBlocksBlockInputBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutDetailBlocksBlockInputPayload is one typed detached payload, with scalar JSON encoding.
-type CalloutDetailBlocksBlockInputPayload struct {
-	Value CalloutDetailBlocksBlockInputBlock
-}
-
-func (p CalloutDetailBlocksBlockInputPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutDetailBlocksBlockInputPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockInputPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutDetailBlocksBlockInput
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutDetailBlocksBlockInput is an ordered list of block pointers. Nil rows are invalid.
-type CalloutDetailBlocksBlockInput []CalloutDetailBlocksBlockInputBlock
-
-func (rows CalloutDetailBlocksBlockInput) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockInput", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockInput", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutDetailBlocksBlockInput) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockInput", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutDetailBlocksBlockInput, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockInput", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		case "cta":
-			var value CTAInput
-			if err := json.Unmarshal(data, &value); err != nil {
-				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockInput", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
-			}
-			decoded[index] = &value
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockInput", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-func (*CTAInput) isCalloutDetailBlocksBlockInputBlock() {}
-
-// CalloutDetailBlocksBlockUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
-// Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
-type CalloutDetailBlocksBlockUpdateBlock interface {
-	isCalloutDetailBlocksBlockUpdateBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutDetailBlocksBlockUpdatePayload is one typed detached payload, with scalar JSON encoding.
-type CalloutDetailBlocksBlockUpdatePayload struct {
-	Value CalloutDetailBlocksBlockUpdateBlock
-}
-
-func (p CalloutDetailBlocksBlockUpdatePayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutDetailBlocksBlockUpdatePayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockUpdatePayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutDetailBlocksBlockUpdate
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutDetailBlocksBlockUpdate is an ordered list of block pointers. Nil rows are invalid.
-// Saving this list replaces order and membership: omitted occurrences are removed.
-// Start with a read list's Retain method to preserve untouched blocks.
-type CalloutDetailBlocksBlockUpdate []CalloutDetailBlocksBlockUpdateBlock
-
-func (rows CalloutDetailBlocksBlockUpdate) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockUpdate", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockUpdate", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutDetailBlocksBlockUpdate) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutDetailBlocksBlockUpdate, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		case "cta":
-			if header.Key == "" {
-				var value CTAInput
-				if err := json.Unmarshal(data, &value); err != nil {
-					return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed new variant", Err: err}, index)
-				}
-				decoded[index] = &value
-			} else {
-				var value CTAUpdate
-				if err := json.Unmarshal(data, &value); err != nil {
-					return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed keyed update", Err: err}, index)
-				}
-				decoded[index] = &value
-			}
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-func (*CTAUpdate) isCalloutDetailBlocksBlockUpdateBlock() {}
-func (*CTAInput) isCalloutDetailBlocksBlockUpdateBlock()  {}
-
-// CalloutDetailBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutDetailBlocksBlockDraftBlock interface {
-	isCalloutDetailBlocksBlockDraftBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutDetailBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
-type CalloutDetailBlocksBlockDraftPayload struct {
-	Value CalloutDetailBlocksBlockDraftBlock
-}
-
-func (p CalloutDetailBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutDetailBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutDetailBlocksBlockDraft
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutDetailBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
-type CalloutDetailBlocksBlockDraft []CalloutDetailBlocksBlockDraftBlock
-
-func (rows CalloutDetailBlocksBlockDraft) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutDetailBlocksBlockDraft) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutDetailBlocksBlockDraft, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		case "cta":
-			var value CTADraft
-			if err := json.Unmarshal(data, &value); err != nil {
-				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
-			}
-			decoded[index] = &value
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-func (*CTADraft) isCalloutDetailBlocksBlockDraftBlock() {}
-
-// CalloutDetailBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutDetailBlocksBlockAllLocalesBlock interface {
-	isCalloutDetailBlocksBlockAllLocalesBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutDetailBlocksBlockAllLocalesPayload is one typed detached payload, with scalar JSON encoding.
-type CalloutDetailBlocksBlockAllLocalesPayload struct {
-	Value CalloutDetailBlocksBlockAllLocalesBlock
-}
-
-func (p CalloutDetailBlocksBlockAllLocalesPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutDetailBlocksBlockAllLocalesPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutDetailBlocksBlockAllLocales
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutDetailBlocksBlockAllLocales is an ordered list of block pointers. Nil rows are invalid.
-// Localized children contain locale-code maps; use ordinary output types for a single locale.
-type CalloutDetailBlocksBlockAllLocales []CalloutDetailBlocksBlockAllLocalesBlock
-
-func (rows CalloutDetailBlocksBlockAllLocales) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutDetailBlocksBlockAllLocales) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockAllLocales", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutDetailBlocksBlockAllLocales, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocales", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		case "cta":
-			var value CTAAllLocales
-			if err := json.Unmarshal(data, &value); err != nil {
-				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocales", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
-			}
-			decoded[index] = &value
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocales", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-func (*CTAAllLocales) isCalloutDetailBlocksBlockAllLocalesBlock() {}
-
-// Retain creates fresh key-only updates in the same order, preserving every occurrence.
-// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
-// No authored fields are copied, including redacted, localized or populated values.
-// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
-// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
-func (rows *CalloutDetailBlocksBlockAllLocales) Retain() (CalloutDetailBlocksBlockUpdate, error) {
-	if rows == nil || *rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "cannot retain an absent block list"})
-	}
-	retained := make(CalloutDetailBlocksBlockUpdate, len(*rows))
-	seen := make(map[string]bool, len(*rows))
-	for index, row := range *rows {
-		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "retained block requires a nonempty identity"}, index)
-		}
-		key := row.BlockKey()
-		if seen[key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "duplicate retained block identity"}, index)
-		}
-		seen[key] = true
-		switch row.(type) {
-		case *CTAAllLocales:
-			retained[index] = &CTAUpdate{Key: key}
-		default:
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "unsupported retained block variant"}, index)
-		}
-	}
-	return retained, nil
-}
-
-// Retain creates a key-only update for this embedded occurrence, without copying
-// redacted, localized or populated authored fields. Use revision checks when saving.
-func (payload CalloutDetailBlocksBlockAllLocalesPayload) Retain() (CalloutDetailBlocksBlockUpdatePayload, error) {
-	rows := CalloutDetailBlocksBlockAllLocales{payload.Value}
-	retained, err := rows.Retain()
-	if err != nil {
-		return CalloutDetailBlocksBlockUpdatePayload{}, err
-	}
-	return CalloutDetailBlocksBlockUpdatePayload{Value: retained[0]}, nil
-}
-
-// CalloutDetailBlocksBlockAllLocalesValueBlock admits only generated block pointers; decoding returns those same pointer types.
-type CalloutDetailBlocksBlockAllLocalesValueBlock interface {
-	isCalloutDetailBlocksBlockAllLocalesValueBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// CalloutDetailBlocksBlockAllLocalesValuePayload is one typed detached payload, with scalar JSON encoding.
-type CalloutDetailBlocksBlockAllLocalesValuePayload struct {
-	Value CalloutDetailBlocksBlockAllLocalesValueBlock
-}
-
-func (p CalloutDetailBlocksBlockAllLocalesValuePayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *CalloutDetailBlocksBlockAllLocalesValuePayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValuePayload", Reason: "embedded payload must be an object"})
-	}
-	var rows CalloutDetailBlocksBlockAllLocalesValue
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// CalloutDetailBlocksBlockAllLocalesValue is an ordered list of block pointers. Nil rows are invalid.
-// This is one locale's value beneath a localized container in an all-locales response.
-// Children are ordinary values; populated target documents still have all-locales shapes.
-type CalloutDetailBlocksBlockAllLocalesValue []CalloutDetailBlocksBlockAllLocalesValueBlock
-
-func (rows CalloutDetailBlocksBlockAllLocalesValue) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *CalloutDetailBlocksBlockAllLocalesValue) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(CalloutDetailBlocksBlockAllLocalesValue, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		case "cta":
-			var value CTAAllLocalesValue
-			if err := json.Unmarshal(data, &value); err != nil {
-				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValue", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
-			}
-			decoded[index] = &value
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValue", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-func (*CTAAllLocalesValue) isCalloutDetailBlocksBlockAllLocalesValueBlock() {}
-
-// Retain creates fresh key-only updates in the same order, preserving every occurrence.
-// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
-// No authored fields are copied, including redacted, localized or populated values.
-// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
-// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
-func (rows *CalloutDetailBlocksBlockAllLocalesValue) Retain() (CalloutDetailBlocksBlockUpdate, error) {
-	if rows == nil || *rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "cannot retain an absent block list"})
-	}
-	retained := make(CalloutDetailBlocksBlockUpdate, len(*rows))
-	seen := make(map[string]bool, len(*rows))
-	for index, row := range *rows {
-		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "retained block requires a nonempty identity"}, index)
-		}
-		key := row.BlockKey()
-		if seen[key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "duplicate retained block identity"}, index)
-		}
-		seen[key] = true
-		switch row.(type) {
-		case *CTAAllLocalesValue:
-			retained[index] = &CTAUpdate{Key: key}
-		default:
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "unsupported retained block variant"}, index)
-		}
-	}
-	return retained, nil
-}
-
-// Retain creates a key-only update for this embedded occurrence, without copying
-// redacted, localized or populated authored fields. Use revision checks when saving.
-func (payload CalloutDetailBlocksBlockAllLocalesValuePayload) Retain() (CalloutDetailBlocksBlockUpdatePayload, error) {
-	rows := CalloutDetailBlocksBlockAllLocalesValue{payload.Value}
-	retained, err := rows.Retain()
-	if err != nil {
-		return CalloutDetailBlocksBlockUpdatePayload{}, err
-	}
-	return CalloutDetailBlocksBlockUpdatePayload{Value: retained[0]}, nil
-}
-
 // ArticlesBodyBlocksBlockBlock admits only generated block pointers; decoding returns those same pointer types.
 type ArticlesBodyBlocksBlockBlock interface {
 	isArticlesBodyBlocksBlockBlock()
@@ -4467,6 +3148,1956 @@ func (payload ArticlesLocalizedBodyBlocksBlockAllLocalesValuePayload) Retain() (
 	return ArticlesLocalizedBodyBlocksBlockUpdatePayload{Value: retained[0]}, nil
 }
 
+// CalloutAsideBlocksBlockBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutAsideBlocksBlockBlock interface {
+	isCalloutAsideBlocksBlockBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutAsideBlocksBlockPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutAsideBlocksBlockPayload struct{ Value CalloutAsideBlocksBlockBlock }
+
+func (p CalloutAsideBlocksBlockPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutAsideBlocksBlockPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutAsideBlocksBlock
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutAsideBlocksBlock is an ordered list of block pointers. Nil rows are invalid.
+type CalloutAsideBlocksBlock []CalloutAsideBlocksBlockBlock
+
+func (rows CalloutAsideBlocksBlock) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlock", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlock", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutAsideBlocksBlock) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlock", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutAsideBlocksBlock, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlock", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlock", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// Retain creates fresh key-only updates in the same order, preserving every occurrence.
+// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
+// No authored fields are copied, including redacted, localized or populated values.
+// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
+// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
+func (rows *CalloutAsideBlocksBlock) Retain() (CalloutAsideBlocksBlockUpdate, error) {
+	if rows == nil || *rows == nil {
+		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlock", Reason: "cannot retain an absent block list"})
+	}
+	retained := make(CalloutAsideBlocksBlockUpdate, len(*rows))
+	seen := make(map[string]bool, len(*rows))
+	for index, row := range *rows {
+		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlock", Reason: "retained block requires a nonempty identity"}, index)
+		}
+		key := row.BlockKey()
+		if seen[key] {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlock", Reason: "duplicate retained block identity"}, index)
+		}
+		seen[key] = true
+		switch row.(type) {
+		default:
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlock", Reason: "unsupported retained block variant"}, index)
+		}
+	}
+	return retained, nil
+}
+
+// Retain creates a key-only update for this embedded occurrence, without copying
+// redacted, localized or populated authored fields. Use revision checks when saving.
+func (payload CalloutAsideBlocksBlockPayload) Retain() (CalloutAsideBlocksBlockUpdatePayload, error) {
+	rows := CalloutAsideBlocksBlock{payload.Value}
+	retained, err := rows.Retain()
+	if err != nil {
+		return CalloutAsideBlocksBlockUpdatePayload{}, err
+	}
+	return CalloutAsideBlocksBlockUpdatePayload{Value: retained[0]}, nil
+}
+
+// CalloutAsideBlocksBlockInputBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutAsideBlocksBlockInputBlock interface {
+	isCalloutAsideBlocksBlockInputBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutAsideBlocksBlockInputPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutAsideBlocksBlockInputPayload struct {
+	Value CalloutAsideBlocksBlockInputBlock
+}
+
+func (p CalloutAsideBlocksBlockInputPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutAsideBlocksBlockInputPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockInputPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutAsideBlocksBlockInput
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutAsideBlocksBlockInput is an ordered list of block pointers. Nil rows are invalid.
+type CalloutAsideBlocksBlockInput []CalloutAsideBlocksBlockInputBlock
+
+func (rows CalloutAsideBlocksBlockInput) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockInput", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockInput", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutAsideBlocksBlockInput) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockInput", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutAsideBlocksBlockInput, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockInput", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockInput", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// CalloutAsideBlocksBlockUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
+// Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
+type CalloutAsideBlocksBlockUpdateBlock interface {
+	isCalloutAsideBlocksBlockUpdateBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutAsideBlocksBlockUpdatePayload is one typed detached payload, with scalar JSON encoding.
+type CalloutAsideBlocksBlockUpdatePayload struct {
+	Value CalloutAsideBlocksBlockUpdateBlock
+}
+
+func (p CalloutAsideBlocksBlockUpdatePayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutAsideBlocksBlockUpdatePayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockUpdatePayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutAsideBlocksBlockUpdate
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutAsideBlocksBlockUpdate is an ordered list of block pointers. Nil rows are invalid.
+// Saving this list replaces order and membership: omitted occurrences are removed.
+// Start with a read list's Retain method to preserve untouched blocks.
+type CalloutAsideBlocksBlockUpdate []CalloutAsideBlocksBlockUpdateBlock
+
+func (rows CalloutAsideBlocksBlockUpdate) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockUpdate", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockUpdate", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutAsideBlocksBlockUpdate) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockUpdate", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutAsideBlocksBlockUpdate, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockUpdate", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockUpdate", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// CalloutAsideBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutAsideBlocksBlockDraftBlock interface {
+	isCalloutAsideBlocksBlockDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutAsideBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutAsideBlocksBlockDraftPayload struct {
+	Value CalloutAsideBlocksBlockDraftBlock
+}
+
+func (p CalloutAsideBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutAsideBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutAsideBlocksBlockDraft
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutAsideBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
+type CalloutAsideBlocksBlockDraft []CalloutAsideBlocksBlockDraftBlock
+
+func (rows CalloutAsideBlocksBlockDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutAsideBlocksBlockDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutAsideBlocksBlockDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// CalloutAsideBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutAsideBlocksBlockAllLocalesBlock interface {
+	isCalloutAsideBlocksBlockAllLocalesBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutAsideBlocksBlockAllLocalesPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutAsideBlocksBlockAllLocalesPayload struct {
+	Value CalloutAsideBlocksBlockAllLocalesBlock
+}
+
+func (p CalloutAsideBlocksBlockAllLocalesPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutAsideBlocksBlockAllLocalesPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutAsideBlocksBlockAllLocales
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutAsideBlocksBlockAllLocales is an ordered list of block pointers. Nil rows are invalid.
+// Localized children contain locale-code maps; use ordinary output types for a single locale.
+type CalloutAsideBlocksBlockAllLocales []CalloutAsideBlocksBlockAllLocalesBlock
+
+func (rows CalloutAsideBlocksBlockAllLocales) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutAsideBlocksBlockAllLocales) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockAllLocales", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutAsideBlocksBlockAllLocales, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockAllLocales", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockAllLocales", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// Retain creates fresh key-only updates in the same order, preserving every occurrence.
+// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
+// No authored fields are copied, including redacted, localized or populated values.
+// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
+// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
+func (rows *CalloutAsideBlocksBlockAllLocales) Retain() (CalloutAsideBlocksBlockUpdate, error) {
+	if rows == nil || *rows == nil {
+		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "cannot retain an absent block list"})
+	}
+	retained := make(CalloutAsideBlocksBlockUpdate, len(*rows))
+	seen := make(map[string]bool, len(*rows))
+	for index, row := range *rows {
+		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "retained block requires a nonempty identity"}, index)
+		}
+		key := row.BlockKey()
+		if seen[key] {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "duplicate retained block identity"}, index)
+		}
+		seen[key] = true
+		switch row.(type) {
+		default:
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocales", Reason: "unsupported retained block variant"}, index)
+		}
+	}
+	return retained, nil
+}
+
+// Retain creates a key-only update for this embedded occurrence, without copying
+// redacted, localized or populated authored fields. Use revision checks when saving.
+func (payload CalloutAsideBlocksBlockAllLocalesPayload) Retain() (CalloutAsideBlocksBlockUpdatePayload, error) {
+	rows := CalloutAsideBlocksBlockAllLocales{payload.Value}
+	retained, err := rows.Retain()
+	if err != nil {
+		return CalloutAsideBlocksBlockUpdatePayload{}, err
+	}
+	return CalloutAsideBlocksBlockUpdatePayload{Value: retained[0]}, nil
+}
+
+// CalloutAsideBlocksBlockAllLocalesValueBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutAsideBlocksBlockAllLocalesValueBlock interface {
+	isCalloutAsideBlocksBlockAllLocalesValueBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutAsideBlocksBlockAllLocalesValuePayload is one typed detached payload, with scalar JSON encoding.
+type CalloutAsideBlocksBlockAllLocalesValuePayload struct {
+	Value CalloutAsideBlocksBlockAllLocalesValueBlock
+}
+
+func (p CalloutAsideBlocksBlockAllLocalesValuePayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutAsideBlocksBlockAllLocalesValuePayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesValuePayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutAsideBlocksBlockAllLocalesValue
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutAsideBlocksBlockAllLocalesValue is an ordered list of block pointers. Nil rows are invalid.
+// This is one locale's value beneath a localized container in an all-locales response.
+// Children are ordinary values; populated target documents still have all-locales shapes.
+type CalloutAsideBlocksBlockAllLocalesValue []CalloutAsideBlocksBlockAllLocalesValueBlock
+
+func (rows CalloutAsideBlocksBlockAllLocalesValue) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutAsideBlocksBlockAllLocalesValue) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutAsideBlocksBlockAllLocalesValue, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockAllLocalesValue", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// Retain creates fresh key-only updates in the same order, preserving every occurrence.
+// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
+// No authored fields are copied, including redacted, localized or populated values.
+// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
+// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
+func (rows *CalloutAsideBlocksBlockAllLocalesValue) Retain() (CalloutAsideBlocksBlockUpdate, error) {
+	if rows == nil || *rows == nil {
+		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "cannot retain an absent block list"})
+	}
+	retained := make(CalloutAsideBlocksBlockUpdate, len(*rows))
+	seen := make(map[string]bool, len(*rows))
+	for index, row := range *rows {
+		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "retained block requires a nonempty identity"}, index)
+		}
+		key := row.BlockKey()
+		if seen[key] {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "duplicate retained block identity"}, index)
+		}
+		seen[key] = true
+		switch row.(type) {
+		default:
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutAsideBlocksBlockAllLocalesValue", Reason: "unsupported retained block variant"}, index)
+		}
+	}
+	return retained, nil
+}
+
+// Retain creates a key-only update for this embedded occurrence, without copying
+// redacted, localized or populated authored fields. Use revision checks when saving.
+func (payload CalloutAsideBlocksBlockAllLocalesValuePayload) Retain() (CalloutAsideBlocksBlockUpdatePayload, error) {
+	rows := CalloutAsideBlocksBlockAllLocalesValue{payload.Value}
+	retained, err := rows.Retain()
+	if err != nil {
+		return CalloutAsideBlocksBlockUpdatePayload{}, err
+	}
+	return CalloutAsideBlocksBlockUpdatePayload{Value: retained[0]}, nil
+}
+
+// CalloutDetailBlocksBlockBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutDetailBlocksBlockBlock interface {
+	isCalloutDetailBlocksBlockBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutDetailBlocksBlockPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutDetailBlocksBlockPayload struct{ Value CalloutDetailBlocksBlockBlock }
+
+func (p CalloutDetailBlocksBlockPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutDetailBlocksBlockPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutDetailBlocksBlock
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutDetailBlocksBlock is an ordered list of block pointers. Nil rows are invalid.
+type CalloutDetailBlocksBlock []CalloutDetailBlocksBlockBlock
+
+func (rows CalloutDetailBlocksBlock) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlock", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlock", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutDetailBlocksBlock) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlock", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutDetailBlocksBlock, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlock", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "cta":
+			var value CTA
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlock", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlock", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*CTA) isCalloutDetailBlocksBlockBlock() {}
+
+// Retain creates fresh key-only updates in the same order, preserving every occurrence.
+// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
+// No authored fields are copied, including redacted, localized or populated values.
+// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
+// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
+func (rows *CalloutDetailBlocksBlock) Retain() (CalloutDetailBlocksBlockUpdate, error) {
+	if rows == nil || *rows == nil {
+		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlock", Reason: "cannot retain an absent block list"})
+	}
+	retained := make(CalloutDetailBlocksBlockUpdate, len(*rows))
+	seen := make(map[string]bool, len(*rows))
+	for index, row := range *rows {
+		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlock", Reason: "retained block requires a nonempty identity"}, index)
+		}
+		key := row.BlockKey()
+		if seen[key] {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlock", Reason: "duplicate retained block identity"}, index)
+		}
+		seen[key] = true
+		switch row.(type) {
+		case *CTA:
+			retained[index] = &CTAUpdate{Key: key}
+		default:
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlock", Reason: "unsupported retained block variant"}, index)
+		}
+	}
+	return retained, nil
+}
+
+// Retain creates a key-only update for this embedded occurrence, without copying
+// redacted, localized or populated authored fields. Use revision checks when saving.
+func (payload CalloutDetailBlocksBlockPayload) Retain() (CalloutDetailBlocksBlockUpdatePayload, error) {
+	rows := CalloutDetailBlocksBlock{payload.Value}
+	retained, err := rows.Retain()
+	if err != nil {
+		return CalloutDetailBlocksBlockUpdatePayload{}, err
+	}
+	return CalloutDetailBlocksBlockUpdatePayload{Value: retained[0]}, nil
+}
+
+// CalloutDetailBlocksBlockInputBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutDetailBlocksBlockInputBlock interface {
+	isCalloutDetailBlocksBlockInputBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutDetailBlocksBlockInputPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutDetailBlocksBlockInputPayload struct {
+	Value CalloutDetailBlocksBlockInputBlock
+}
+
+func (p CalloutDetailBlocksBlockInputPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutDetailBlocksBlockInputPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockInputPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutDetailBlocksBlockInput
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutDetailBlocksBlockInput is an ordered list of block pointers. Nil rows are invalid.
+type CalloutDetailBlocksBlockInput []CalloutDetailBlocksBlockInputBlock
+
+func (rows CalloutDetailBlocksBlockInput) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockInput", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockInput", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutDetailBlocksBlockInput) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockInput", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutDetailBlocksBlockInput, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockInput", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "cta":
+			var value CTAInput
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockInput", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockInput", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*CTAInput) isCalloutDetailBlocksBlockInputBlock() {}
+
+// CalloutDetailBlocksBlockUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
+// Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
+type CalloutDetailBlocksBlockUpdateBlock interface {
+	isCalloutDetailBlocksBlockUpdateBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutDetailBlocksBlockUpdatePayload is one typed detached payload, with scalar JSON encoding.
+type CalloutDetailBlocksBlockUpdatePayload struct {
+	Value CalloutDetailBlocksBlockUpdateBlock
+}
+
+func (p CalloutDetailBlocksBlockUpdatePayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutDetailBlocksBlockUpdatePayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockUpdatePayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutDetailBlocksBlockUpdate
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutDetailBlocksBlockUpdate is an ordered list of block pointers. Nil rows are invalid.
+// Saving this list replaces order and membership: omitted occurrences are removed.
+// Start with a read list's Retain method to preserve untouched blocks.
+type CalloutDetailBlocksBlockUpdate []CalloutDetailBlocksBlockUpdateBlock
+
+func (rows CalloutDetailBlocksBlockUpdate) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockUpdate", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockUpdate", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutDetailBlocksBlockUpdate) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutDetailBlocksBlockUpdate, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "cta":
+			if header.Key == "" {
+				var value CTAInput
+				if err := json.Unmarshal(data, &value); err != nil {
+					return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed new variant", Err: err}, index)
+				}
+				decoded[index] = &value
+			} else {
+				var value CTAUpdate
+				if err := json.Unmarshal(data, &value); err != nil {
+					return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Discriminator: header.Type, Reason: "malformed keyed update", Err: err}, index)
+				}
+				decoded[index] = &value
+			}
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockUpdate", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*CTAUpdate) isCalloutDetailBlocksBlockUpdateBlock() {}
+func (*CTAInput) isCalloutDetailBlocksBlockUpdateBlock()  {}
+
+// CalloutDetailBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutDetailBlocksBlockDraftBlock interface {
+	isCalloutDetailBlocksBlockDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutDetailBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutDetailBlocksBlockDraftPayload struct {
+	Value CalloutDetailBlocksBlockDraftBlock
+}
+
+func (p CalloutDetailBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutDetailBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutDetailBlocksBlockDraft
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutDetailBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
+type CalloutDetailBlocksBlockDraft []CalloutDetailBlocksBlockDraftBlock
+
+func (rows CalloutDetailBlocksBlockDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutDetailBlocksBlockDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutDetailBlocksBlockDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "cta":
+			var value CTADraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*CTADraft) isCalloutDetailBlocksBlockDraftBlock() {}
+
+// CalloutDetailBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutDetailBlocksBlockAllLocalesBlock interface {
+	isCalloutDetailBlocksBlockAllLocalesBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutDetailBlocksBlockAllLocalesPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutDetailBlocksBlockAllLocalesPayload struct {
+	Value CalloutDetailBlocksBlockAllLocalesBlock
+}
+
+func (p CalloutDetailBlocksBlockAllLocalesPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutDetailBlocksBlockAllLocalesPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutDetailBlocksBlockAllLocales
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutDetailBlocksBlockAllLocales is an ordered list of block pointers. Nil rows are invalid.
+// Localized children contain locale-code maps; use ordinary output types for a single locale.
+type CalloutDetailBlocksBlockAllLocales []CalloutDetailBlocksBlockAllLocalesBlock
+
+func (rows CalloutDetailBlocksBlockAllLocales) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutDetailBlocksBlockAllLocales) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockAllLocales", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutDetailBlocksBlockAllLocales, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocales", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "cta":
+			var value CTAAllLocales
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocales", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocales", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*CTAAllLocales) isCalloutDetailBlocksBlockAllLocalesBlock() {}
+
+// Retain creates fresh key-only updates in the same order, preserving every occurrence.
+// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
+// No authored fields are copied, including redacted, localized or populated values.
+// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
+// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
+func (rows *CalloutDetailBlocksBlockAllLocales) Retain() (CalloutDetailBlocksBlockUpdate, error) {
+	if rows == nil || *rows == nil {
+		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "cannot retain an absent block list"})
+	}
+	retained := make(CalloutDetailBlocksBlockUpdate, len(*rows))
+	seen := make(map[string]bool, len(*rows))
+	for index, row := range *rows {
+		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "retained block requires a nonempty identity"}, index)
+		}
+		key := row.BlockKey()
+		if seen[key] {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "duplicate retained block identity"}, index)
+		}
+		seen[key] = true
+		switch row.(type) {
+		case *CTAAllLocales:
+			retained[index] = &CTAUpdate{Key: key}
+		default:
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocales", Reason: "unsupported retained block variant"}, index)
+		}
+	}
+	return retained, nil
+}
+
+// Retain creates a key-only update for this embedded occurrence, without copying
+// redacted, localized or populated authored fields. Use revision checks when saving.
+func (payload CalloutDetailBlocksBlockAllLocalesPayload) Retain() (CalloutDetailBlocksBlockUpdatePayload, error) {
+	rows := CalloutDetailBlocksBlockAllLocales{payload.Value}
+	retained, err := rows.Retain()
+	if err != nil {
+		return CalloutDetailBlocksBlockUpdatePayload{}, err
+	}
+	return CalloutDetailBlocksBlockUpdatePayload{Value: retained[0]}, nil
+}
+
+// CalloutDetailBlocksBlockAllLocalesValueBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutDetailBlocksBlockAllLocalesValueBlock interface {
+	isCalloutDetailBlocksBlockAllLocalesValueBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutDetailBlocksBlockAllLocalesValuePayload is one typed detached payload, with scalar JSON encoding.
+type CalloutDetailBlocksBlockAllLocalesValuePayload struct {
+	Value CalloutDetailBlocksBlockAllLocalesValueBlock
+}
+
+func (p CalloutDetailBlocksBlockAllLocalesValuePayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutDetailBlocksBlockAllLocalesValuePayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValuePayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutDetailBlocksBlockAllLocalesValue
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutDetailBlocksBlockAllLocalesValue is an ordered list of block pointers. Nil rows are invalid.
+// This is one locale's value beneath a localized container in an all-locales response.
+// Children are ordinary values; populated target documents still have all-locales shapes.
+type CalloutDetailBlocksBlockAllLocalesValue []CalloutDetailBlocksBlockAllLocalesValueBlock
+
+func (rows CalloutDetailBlocksBlockAllLocalesValue) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutDetailBlocksBlockAllLocalesValue) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutDetailBlocksBlockAllLocalesValue, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "cta":
+			var value CTAAllLocalesValue
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValue", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockAllLocalesValue", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*CTAAllLocalesValue) isCalloutDetailBlocksBlockAllLocalesValueBlock() {}
+
+// Retain creates fresh key-only updates in the same order, preserving every occurrence.
+// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
+// No authored fields are copied, including redacted, localized or populated values.
+// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
+// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
+func (rows *CalloutDetailBlocksBlockAllLocalesValue) Retain() (CalloutDetailBlocksBlockUpdate, error) {
+	if rows == nil || *rows == nil {
+		return nil, newContractError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "cannot retain an absent block list"})
+	}
+	retained := make(CalloutDetailBlocksBlockUpdate, len(*rows))
+	seen := make(map[string]bool, len(*rows))
+	for index, row := range *rows {
+		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "retained block requires a nonempty identity"}, index)
+		}
+		key := row.BlockKey()
+		if seen[key] {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "duplicate retained block identity"}, index)
+		}
+		seen[key] = true
+		switch row.(type) {
+		case *CTAAllLocalesValue:
+			retained[index] = &CTAUpdate{Key: key}
+		default:
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "CalloutDetailBlocksBlockAllLocalesValue", Reason: "unsupported retained block variant"}, index)
+		}
+	}
+	return retained, nil
+}
+
+// Retain creates a key-only update for this embedded occurrence, without copying
+// redacted, localized or populated authored fields. Use revision checks when saving.
+func (payload CalloutDetailBlocksBlockAllLocalesValuePayload) Retain() (CalloutDetailBlocksBlockUpdatePayload, error) {
+	rows := CalloutDetailBlocksBlockAllLocalesValue{payload.Value}
+	retained, err := rows.Retain()
+	if err != nil {
+		return CalloutDetailBlocksBlockUpdatePayload{}, err
+	}
+	return CalloutDetailBlocksBlockUpdatePayload{Value: retained[0]}, nil
+}
+
+// ContentBodyBlocksBlockBlock admits only generated block pointers; decoding returns those same pointer types.
+type ContentBodyBlocksBlockBlock interface {
+	isContentBodyBlocksBlockBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// ContentBodyBlocksBlockPayload is one typed detached payload, with scalar JSON encoding.
+type ContentBodyBlocksBlockPayload struct{ Value ContentBodyBlocksBlockBlock }
+
+func (p ContentBodyBlocksBlockPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *ContentBodyBlocksBlockPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows ContentBodyBlocksBlock
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// ContentBodyBlocksBlock is an ordered list of block pointers. Nil rows are invalid.
+type ContentBodyBlocksBlock []ContentBodyBlocksBlockBlock
+
+func (rows ContentBodyBlocksBlock) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlock", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlock", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *ContentBodyBlocksBlock) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlock", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(ContentBodyBlocksBlock, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlock", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlock", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// Retain creates fresh key-only updates in the same order, preserving every occurrence.
+// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
+// No authored fields are copied, including redacted, localized or populated values.
+// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
+// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
+func (rows *ContentBodyBlocksBlock) Retain() (ContentBodyBlocksBlockUpdate, error) {
+	if rows == nil || *rows == nil {
+		return nil, newContractError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlock", Reason: "cannot retain an absent block list"})
+	}
+	retained := make(ContentBodyBlocksBlockUpdate, len(*rows))
+	seen := make(map[string]bool, len(*rows))
+	for index, row := range *rows {
+		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlock", Reason: "retained block requires a nonempty identity"}, index)
+		}
+		key := row.BlockKey()
+		if seen[key] {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlock", Reason: "duplicate retained block identity"}, index)
+		}
+		seen[key] = true
+		switch row.(type) {
+		default:
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlock", Reason: "unsupported retained block variant"}, index)
+		}
+	}
+	return retained, nil
+}
+
+// Retain creates a key-only update for this embedded occurrence, without copying
+// redacted, localized or populated authored fields. Use revision checks when saving.
+func (payload ContentBodyBlocksBlockPayload) Retain() (ContentBodyBlocksBlockUpdatePayload, error) {
+	rows := ContentBodyBlocksBlock{payload.Value}
+	retained, err := rows.Retain()
+	if err != nil {
+		return ContentBodyBlocksBlockUpdatePayload{}, err
+	}
+	return ContentBodyBlocksBlockUpdatePayload{Value: retained[0]}, nil
+}
+
+// ContentBodyBlocksBlockInputBlock admits only generated block pointers; decoding returns those same pointer types.
+type ContentBodyBlocksBlockInputBlock interface {
+	isContentBodyBlocksBlockInputBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// ContentBodyBlocksBlockInputPayload is one typed detached payload, with scalar JSON encoding.
+type ContentBodyBlocksBlockInputPayload struct {
+	Value ContentBodyBlocksBlockInputBlock
+}
+
+func (p ContentBodyBlocksBlockInputPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *ContentBodyBlocksBlockInputPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockInputPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows ContentBodyBlocksBlockInput
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// ContentBodyBlocksBlockInput is an ordered list of block pointers. Nil rows are invalid.
+type ContentBodyBlocksBlockInput []ContentBodyBlocksBlockInputBlock
+
+func (rows ContentBodyBlocksBlockInput) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockInput", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockInput", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *ContentBodyBlocksBlockInput) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockInput", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(ContentBodyBlocksBlockInput, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockInput", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockInput", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// ContentBodyBlocksBlockUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
+// Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
+type ContentBodyBlocksBlockUpdateBlock interface {
+	isContentBodyBlocksBlockUpdateBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// ContentBodyBlocksBlockUpdatePayload is one typed detached payload, with scalar JSON encoding.
+type ContentBodyBlocksBlockUpdatePayload struct {
+	Value ContentBodyBlocksBlockUpdateBlock
+}
+
+func (p ContentBodyBlocksBlockUpdatePayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *ContentBodyBlocksBlockUpdatePayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockUpdatePayload", Reason: "embedded payload must be an object"})
+	}
+	var rows ContentBodyBlocksBlockUpdate
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// ContentBodyBlocksBlockUpdate is an ordered list of block pointers. Nil rows are invalid.
+// Saving this list replaces order and membership: omitted occurrences are removed.
+// Start with a read list's Retain method to preserve untouched blocks.
+type ContentBodyBlocksBlockUpdate []ContentBodyBlocksBlockUpdateBlock
+
+func (rows ContentBodyBlocksBlockUpdate) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockUpdate", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockUpdate", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *ContentBodyBlocksBlockUpdate) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockUpdate", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(ContentBodyBlocksBlockUpdate, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockUpdate", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockUpdate", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// ContentBodyBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type ContentBodyBlocksBlockDraftBlock interface {
+	isContentBodyBlocksBlockDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// ContentBodyBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
+type ContentBodyBlocksBlockDraftPayload struct {
+	Value ContentBodyBlocksBlockDraftBlock
+}
+
+func (p ContentBodyBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *ContentBodyBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows ContentBodyBlocksBlockDraft
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// ContentBodyBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
+type ContentBodyBlocksBlockDraft []ContentBodyBlocksBlockDraftBlock
+
+func (rows ContentBodyBlocksBlockDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *ContentBodyBlocksBlockDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(ContentBodyBlocksBlockDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// ContentBodyBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
+type ContentBodyBlocksBlockAllLocalesBlock interface {
+	isContentBodyBlocksBlockAllLocalesBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// ContentBodyBlocksBlockAllLocalesPayload is one typed detached payload, with scalar JSON encoding.
+type ContentBodyBlocksBlockAllLocalesPayload struct {
+	Value ContentBodyBlocksBlockAllLocalesBlock
+}
+
+func (p ContentBodyBlocksBlockAllLocalesPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *ContentBodyBlocksBlockAllLocalesPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows ContentBodyBlocksBlockAllLocales
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// ContentBodyBlocksBlockAllLocales is an ordered list of block pointers. Nil rows are invalid.
+// Localized children contain locale-code maps; use ordinary output types for a single locale.
+type ContentBodyBlocksBlockAllLocales []ContentBodyBlocksBlockAllLocalesBlock
+
+func (rows ContentBodyBlocksBlockAllLocales) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocales", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocales", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *ContentBodyBlocksBlockAllLocales) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockAllLocales", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(ContentBodyBlocksBlockAllLocales, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockAllLocales", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockAllLocales", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// Retain creates fresh key-only updates in the same order, preserving every occurrence.
+// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
+// No authored fields are copied, including redacted, localized or populated values.
+// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
+// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
+func (rows *ContentBodyBlocksBlockAllLocales) Retain() (ContentBodyBlocksBlockUpdate, error) {
+	if rows == nil || *rows == nil {
+		return nil, newContractError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocales", Reason: "cannot retain an absent block list"})
+	}
+	retained := make(ContentBodyBlocksBlockUpdate, len(*rows))
+	seen := make(map[string]bool, len(*rows))
+	for index, row := range *rows {
+		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocales", Reason: "retained block requires a nonempty identity"}, index)
+		}
+		key := row.BlockKey()
+		if seen[key] {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocales", Reason: "duplicate retained block identity"}, index)
+		}
+		seen[key] = true
+		switch row.(type) {
+		default:
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocales", Reason: "unsupported retained block variant"}, index)
+		}
+	}
+	return retained, nil
+}
+
+// Retain creates a key-only update for this embedded occurrence, without copying
+// redacted, localized or populated authored fields. Use revision checks when saving.
+func (payload ContentBodyBlocksBlockAllLocalesPayload) Retain() (ContentBodyBlocksBlockUpdatePayload, error) {
+	rows := ContentBodyBlocksBlockAllLocales{payload.Value}
+	retained, err := rows.Retain()
+	if err != nil {
+		return ContentBodyBlocksBlockUpdatePayload{}, err
+	}
+	return ContentBodyBlocksBlockUpdatePayload{Value: retained[0]}, nil
+}
+
+// ContentBodyBlocksBlockAllLocalesValueBlock admits only generated block pointers; decoding returns those same pointer types.
+type ContentBodyBlocksBlockAllLocalesValueBlock interface {
+	isContentBodyBlocksBlockAllLocalesValueBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// ContentBodyBlocksBlockAllLocalesValuePayload is one typed detached payload, with scalar JSON encoding.
+type ContentBodyBlocksBlockAllLocalesValuePayload struct {
+	Value ContentBodyBlocksBlockAllLocalesValueBlock
+}
+
+func (p ContentBodyBlocksBlockAllLocalesValuePayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *ContentBodyBlocksBlockAllLocalesValuePayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesValuePayload", Reason: "embedded payload must be an object"})
+	}
+	var rows ContentBodyBlocksBlockAllLocalesValue
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// ContentBodyBlocksBlockAllLocalesValue is an ordered list of block pointers. Nil rows are invalid.
+// This is one locale's value beneath a localized container in an all-locales response.
+// Children are ordinary values; populated target documents still have all-locales shapes.
+type ContentBodyBlocksBlockAllLocalesValue []ContentBodyBlocksBlockAllLocalesValueBlock
+
+func (rows ContentBodyBlocksBlockAllLocalesValue) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *ContentBodyBlocksBlockAllLocalesValue) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(ContentBodyBlocksBlockAllLocalesValue, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesValue", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// Retain creates fresh key-only updates in the same order, preserving every occurrence.
+// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
+// No authored fields are copied, including redacted, localized or populated values.
+// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
+// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
+func (rows *ContentBodyBlocksBlockAllLocalesValue) Retain() (ContentBodyBlocksBlockUpdate, error) {
+	if rows == nil || *rows == nil {
+		return nil, newContractError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "cannot retain an absent block list"})
+	}
+	retained := make(ContentBodyBlocksBlockUpdate, len(*rows))
+	seen := make(map[string]bool, len(*rows))
+	for index, row := range *rows {
+		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "retained block requires a nonempty identity"}, index)
+		}
+		key := row.BlockKey()
+		if seen[key] {
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "duplicate retained block identity"}, index)
+		}
+		seen[key] = true
+		switch row.(type) {
+		default:
+			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "unsupported retained block variant"}, index)
+		}
+	}
+	return retained, nil
+}
+
+// Retain creates a key-only update for this embedded occurrence, without copying
+// redacted, localized or populated authored fields. Use revision checks when saving.
+func (payload ContentBodyBlocksBlockAllLocalesValuePayload) Retain() (ContentBodyBlocksBlockUpdatePayload, error) {
+	rows := ContentBodyBlocksBlockAllLocalesValue{payload.Value}
+	retained, err := rows.Retain()
+	if err != nil {
+		return ContentBodyBlocksBlockUpdatePayload{}, err
+	}
+	return ContentBodyBlocksBlockUpdatePayload{Value: retained[0]}, nil
+}
+
 // CampaignsLayoutBlock admits only generated block pointers; decoding returns those same pointer types.
 type CampaignsLayoutBlock interface {
 	isCampaignsLayoutBlock()
@@ -5647,637 +6278,6 @@ func (rows *PagesLayoutAllLocalesValue) Retain() (PagesLayoutUpdate, error) {
 		}
 	}
 	return retained, nil
-}
-
-// ContentBodyBlocksBlockBlock admits only generated block pointers; decoding returns those same pointer types.
-type ContentBodyBlocksBlockBlock interface {
-	isContentBodyBlocksBlockBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// ContentBodyBlocksBlockPayload is one typed detached payload, with scalar JSON encoding.
-type ContentBodyBlocksBlockPayload struct{ Value ContentBodyBlocksBlockBlock }
-
-func (p ContentBodyBlocksBlockPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *ContentBodyBlocksBlockPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows ContentBodyBlocksBlock
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// ContentBodyBlocksBlock is an ordered list of block pointers. Nil rows are invalid.
-type ContentBodyBlocksBlock []ContentBodyBlocksBlockBlock
-
-func (rows ContentBodyBlocksBlock) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlock", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlock", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *ContentBodyBlocksBlock) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlock", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(ContentBodyBlocksBlock, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlock", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlock", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// Retain creates fresh key-only updates in the same order, preserving every occurrence.
-// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
-// No authored fields are copied, including redacted, localized or populated values.
-// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
-// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
-func (rows *ContentBodyBlocksBlock) Retain() (ContentBodyBlocksBlockUpdate, error) {
-	if rows == nil || *rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlock", Reason: "cannot retain an absent block list"})
-	}
-	retained := make(ContentBodyBlocksBlockUpdate, len(*rows))
-	seen := make(map[string]bool, len(*rows))
-	for index, row := range *rows {
-		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlock", Reason: "retained block requires a nonempty identity"}, index)
-		}
-		key := row.BlockKey()
-		if seen[key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlock", Reason: "duplicate retained block identity"}, index)
-		}
-		seen[key] = true
-		switch row.(type) {
-		default:
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlock", Reason: "unsupported retained block variant"}, index)
-		}
-	}
-	return retained, nil
-}
-
-// Retain creates a key-only update for this embedded occurrence, without copying
-// redacted, localized or populated authored fields. Use revision checks when saving.
-func (payload ContentBodyBlocksBlockPayload) Retain() (ContentBodyBlocksBlockUpdatePayload, error) {
-	rows := ContentBodyBlocksBlock{payload.Value}
-	retained, err := rows.Retain()
-	if err != nil {
-		return ContentBodyBlocksBlockUpdatePayload{}, err
-	}
-	return ContentBodyBlocksBlockUpdatePayload{Value: retained[0]}, nil
-}
-
-// ContentBodyBlocksBlockInputBlock admits only generated block pointers; decoding returns those same pointer types.
-type ContentBodyBlocksBlockInputBlock interface {
-	isContentBodyBlocksBlockInputBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// ContentBodyBlocksBlockInputPayload is one typed detached payload, with scalar JSON encoding.
-type ContentBodyBlocksBlockInputPayload struct {
-	Value ContentBodyBlocksBlockInputBlock
-}
-
-func (p ContentBodyBlocksBlockInputPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockInputPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *ContentBodyBlocksBlockInputPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockInputPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows ContentBodyBlocksBlockInput
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// ContentBodyBlocksBlockInput is an ordered list of block pointers. Nil rows are invalid.
-type ContentBodyBlocksBlockInput []ContentBodyBlocksBlockInputBlock
-
-func (rows ContentBodyBlocksBlockInput) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockInput", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockInput", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *ContentBodyBlocksBlockInput) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockInput", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(ContentBodyBlocksBlockInput, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockInput", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockInput", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// ContentBodyBlocksBlockUpdateBlock admits only generated block pointers; decoding returns those same pointer types.
-// Use keyed Update pointers for existing occurrences and Input pointers for new occurrences.
-type ContentBodyBlocksBlockUpdateBlock interface {
-	isContentBodyBlocksBlockUpdateBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// ContentBodyBlocksBlockUpdatePayload is one typed detached payload, with scalar JSON encoding.
-type ContentBodyBlocksBlockUpdatePayload struct {
-	Value ContentBodyBlocksBlockUpdateBlock
-}
-
-func (p ContentBodyBlocksBlockUpdatePayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockUpdatePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *ContentBodyBlocksBlockUpdatePayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockUpdatePayload", Reason: "embedded payload must be an object"})
-	}
-	var rows ContentBodyBlocksBlockUpdate
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// ContentBodyBlocksBlockUpdate is an ordered list of block pointers. Nil rows are invalid.
-// Saving this list replaces order and membership: omitted occurrences are removed.
-// Start with a read list's Retain method to preserve untouched blocks.
-type ContentBodyBlocksBlockUpdate []ContentBodyBlocksBlockUpdateBlock
-
-func (rows ContentBodyBlocksBlockUpdate) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockUpdate", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockUpdate", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *ContentBodyBlocksBlockUpdate) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockUpdate", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(ContentBodyBlocksBlockUpdate, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockUpdate", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockUpdate", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// ContentBodyBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
-type ContentBodyBlocksBlockDraftBlock interface {
-	isContentBodyBlocksBlockDraftBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// ContentBodyBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
-type ContentBodyBlocksBlockDraftPayload struct {
-	Value ContentBodyBlocksBlockDraftBlock
-}
-
-func (p ContentBodyBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *ContentBodyBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows ContentBodyBlocksBlockDraft
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// ContentBodyBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
-type ContentBodyBlocksBlockDraft []ContentBodyBlocksBlockDraftBlock
-
-func (rows ContentBodyBlocksBlockDraft) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *ContentBodyBlocksBlockDraft) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockDraft", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(ContentBodyBlocksBlockDraft, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// ContentBodyBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
-type ContentBodyBlocksBlockAllLocalesBlock interface {
-	isContentBodyBlocksBlockAllLocalesBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// ContentBodyBlocksBlockAllLocalesPayload is one typed detached payload, with scalar JSON encoding.
-type ContentBodyBlocksBlockAllLocalesPayload struct {
-	Value ContentBodyBlocksBlockAllLocalesBlock
-}
-
-func (p ContentBodyBlocksBlockAllLocalesPayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesPayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *ContentBodyBlocksBlockAllLocalesPayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesPayload", Reason: "embedded payload must be an object"})
-	}
-	var rows ContentBodyBlocksBlockAllLocales
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// ContentBodyBlocksBlockAllLocales is an ordered list of block pointers. Nil rows are invalid.
-// Localized children contain locale-code maps; use ordinary output types for a single locale.
-type ContentBodyBlocksBlockAllLocales []ContentBodyBlocksBlockAllLocalesBlock
-
-func (rows ContentBodyBlocksBlockAllLocales) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocales", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocales", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *ContentBodyBlocksBlockAllLocales) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockAllLocales", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(ContentBodyBlocksBlockAllLocales, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockAllLocales", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockAllLocales", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// Retain creates fresh key-only updates in the same order, preserving every occurrence.
-// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
-// No authored fields are copied, including redacted, localized or populated values.
-// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
-// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
-func (rows *ContentBodyBlocksBlockAllLocales) Retain() (ContentBodyBlocksBlockUpdate, error) {
-	if rows == nil || *rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocales", Reason: "cannot retain an absent block list"})
-	}
-	retained := make(ContentBodyBlocksBlockUpdate, len(*rows))
-	seen := make(map[string]bool, len(*rows))
-	for index, row := range *rows {
-		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocales", Reason: "retained block requires a nonempty identity"}, index)
-		}
-		key := row.BlockKey()
-		if seen[key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocales", Reason: "duplicate retained block identity"}, index)
-		}
-		seen[key] = true
-		switch row.(type) {
-		default:
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocales", Reason: "unsupported retained block variant"}, index)
-		}
-	}
-	return retained, nil
-}
-
-// Retain creates a key-only update for this embedded occurrence, without copying
-// redacted, localized or populated authored fields. Use revision checks when saving.
-func (payload ContentBodyBlocksBlockAllLocalesPayload) Retain() (ContentBodyBlocksBlockUpdatePayload, error) {
-	rows := ContentBodyBlocksBlockAllLocales{payload.Value}
-	retained, err := rows.Retain()
-	if err != nil {
-		return ContentBodyBlocksBlockUpdatePayload{}, err
-	}
-	return ContentBodyBlocksBlockUpdatePayload{Value: retained[0]}, nil
-}
-
-// ContentBodyBlocksBlockAllLocalesValueBlock admits only generated block pointers; decoding returns those same pointer types.
-type ContentBodyBlocksBlockAllLocalesValueBlock interface {
-	isContentBodyBlocksBlockAllLocalesValueBlock()
-	BlockType() string
-	BlockKey() string
-}
-
-// ContentBodyBlocksBlockAllLocalesValuePayload is one typed detached payload, with scalar JSON encoding.
-type ContentBodyBlocksBlockAllLocalesValuePayload struct {
-	Value ContentBodyBlocksBlockAllLocalesValueBlock
-}
-
-func (p ContentBodyBlocksBlockAllLocalesValuePayload) MarshalJSON() ([]byte, error) {
-	if p.Value == nil {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	data, err := json.Marshal(p.Value)
-	if err != nil {
-		return nil, err
-	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesValuePayload", Reason: "nil embedded payload is not allowed"})
-	}
-	return data, nil
-}
-func (p *ContentBodyBlocksBlockAllLocalesValuePayload) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesValuePayload", Reason: "embedded payload must be an object"})
-	}
-	var rows ContentBodyBlocksBlockAllLocalesValue
-	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
-		return err
-	}
-	p.Value = rows[0]
-	return nil
-}
-
-// ContentBodyBlocksBlockAllLocalesValue is an ordered list of block pointers. Nil rows are invalid.
-// This is one locale's value beneath a localized container in an all-locales response.
-// Children are ordinary values; populated target documents still have all-locales shapes.
-type ContentBodyBlocksBlockAllLocalesValue []ContentBodyBlocksBlockAllLocalesValueBlock
-
-func (rows ContentBodyBlocksBlockAllLocalesValue) MarshalJSON() ([]byte, error) {
-	if rows == nil {
-		return []byte("null"), nil
-	}
-	encoded := make([]json.RawMessage, len(rows))
-	for index, row := range rows {
-		data, err := json.Marshal(row)
-		if err != nil {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "cannot encode variant", Err: err}, index)
-		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "nil block row is not allowed"}, index)
-		}
-		encoded[index] = data
-	}
-	return json.Marshal(encoded)
-}
-func (rows *ContentBodyBlocksBlockAllLocalesValue) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return newContractError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "malformed block list", Err: err})
-	}
-	if raw == nil {
-		*rows = nil
-		return nil
-	}
-	decoded := make(ContentBodyBlocksBlockAllLocalesValue, len(raw))
-	for index, data := range raw {
-		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
-		if err != nil {
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "malformed discriminator", Err: err}, index)
-		}
-		switch header.Type {
-		default:
-			reason := "unknown discriminator"
-			if header.Type == "" {
-				reason = "missing discriminator"
-			}
-			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockAllLocalesValue", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
-		}
-	}
-	*rows = decoded
-	return nil
-}
-
-// Retain creates fresh key-only updates in the same order, preserving every occurrence.
-// Edit the returned update pointers, append new input pointers, or explicitly remove/reorder entries.
-// No authored fields are copied, including redacted, localized or populated values.
-// An absent list, nil row, empty key or duplicate key returns an error and no partial list.
-// An explicitly empty list returns an empty update list. Use revision checks when saving edits.
-func (rows *ContentBodyBlocksBlockAllLocalesValue) Retain() (ContentBodyBlocksBlockUpdate, error) {
-	if rows == nil || *rows == nil {
-		return nil, newContractError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "cannot retain an absent block list"})
-	}
-	retained := make(ContentBodyBlocksBlockUpdate, len(*rows))
-	seen := make(map[string]bool, len(*rows))
-	for index, row := range *rows {
-		if row == nil || strings.TrimSpace(row.BlockKey()) == "" {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "retained block requires a nonempty identity"}, index)
-		}
-		key := row.BlockKey()
-		if seen[key] {
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "duplicate retained block identity"}, index)
-		}
-		seen[key] = true
-		switch row.(type) {
-		default:
-			return nil, blockRowError(ContractError{Operation: "retain", Container: "ContentBodyBlocksBlockAllLocalesValue", Reason: "unsupported retained block variant"}, index)
-		}
-	}
-	return retained, nil
-}
-
-// Retain creates a key-only update for this embedded occurrence, without copying
-// redacted, localized or populated authored fields. Use revision checks when saving.
-func (payload ContentBodyBlocksBlockAllLocalesValuePayload) Retain() (ContentBodyBlocksBlockUpdatePayload, error) {
-	rows := ContentBodyBlocksBlockAllLocalesValue{payload.Value}
-	retained, err := rows.Retain()
-	if err != nil {
-		return ContentBodyBlocksBlockUpdatePayload{}, err
-	}
-	return ContentBodyBlocksBlockUpdatePayload{Value: retained[0]}, nil
 }
 
 // CTABlockType is the immutable stored discriminator.

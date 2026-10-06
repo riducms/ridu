@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/internal/population"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -58,6 +59,9 @@ func (engine *Engine) Distinct(ctx context.Context, request DistinctRequest) (re
 		return store.DistinctPage{}, &Error{Code: "bad_operation", Status: 400, Message: "trash distinct reads require a trash-enabled collection"}
 	}
 	if validationError := store.ValidateDistinctRequest(store.DistinctRequest{Collection: collection.Schema, Field: request.Field}); validationError != nil {
+		if _, found := population.FieldAtPath(collection.Schema.Fields, request.Field); found {
+			return store.DistinctPage{}, unsupportedPathError(request.Field, validationError.Error(), validationError)
+		}
 		return store.DistinctPage{}, &Error{Code: "bad_query", Status: 400, Message: validationError.Error(), Cause: validationError}
 	}
 	selection, localeError := localization.Resolve(engine.localization, request.Locale, request.FallbackLocales, request.DisableFallback, false)
@@ -88,7 +92,7 @@ func (engine *Engine) Distinct(ctx context.Context, request DistinctRequest) (re
 		if errors.As(accessError, &operationError) && operationError.Code == "operation_recursion" {
 			return store.DistinctPage{}, operationError
 		}
-		return store.DistinctPage{}, &Error{Code: "access_failed", Status: 500, Message: "read access rule failed", Cause: accessError}
+		return store.DistinctPage{}, accessRuleError("read access rule failed", accessError)
 	}
 	if decision.Kind == Deny {
 		return store.DistinctPage{}, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}

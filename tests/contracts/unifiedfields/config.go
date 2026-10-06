@@ -25,6 +25,15 @@ func Config() core.Config {
 	}
 }
 
+// Block slugs of this contract. A slug names one definition per application,
+// and the admin fixture mounts this collection beside other contracts' plain
+// "card" and "note" blocks, so these keep the same editor labels under their
+// own slugs.
+const (
+	CardSlug = "unified-card"
+	NoteSlug = "unified-note"
+)
+
 // Collection is also mounted in the real Go-backed admin fixture.
 func Collection() core.Collection {
 	accent := field.Text("accent").Label("Accent").Admin(field.Admin{
@@ -36,7 +45,7 @@ func Collection() core.Collection {
 	rowLabel := field.Component("app:unifiedRowLabel", store.Object(store.Values{"prefix": store.String("Row")}))
 	label := field.Text("label").Admin(field.Admin{Editor: field.Component("app:text")})
 	products := field.Array("products", field.Fields{label, sku, accent}).Admin(field.Admin{RowLabel: rowLabel})
-	card := field.Block{Slug: "card", Fields: field.Fields{label, sku, accent, products}}
+	card := field.Block{Slug: CardSlug, Labels: field.BlockLabels{Singular: "Card", Plural: "Cards"}, Fields: field.Fields{label, sku, accent, products}}
 	// The same block carries its behavior and presentation into both hosts.
 	embedded := richtext.Field("body", richtext.Config{Blocks: []field.Block{card}})
 	return core.Collection{
@@ -48,7 +57,7 @@ func Collection() core.Collection {
 			field.Text("defaulted").Required().Default("Ready"),
 			field.Group("meta", field.Fields{field.Text("description"), accent}),
 			field.Array("sections", field.Fields{label, sku, accent, products}).Admin(field.Admin{RowLabel: rowLabel}),
-			field.Blocks("content", card, field.Block{Slug: "note", Fields: field.Fields{label, accent}}).Admin(field.Admin{RowLabel: rowLabel}),
+			field.Blocks("content", card, field.Block{Slug: NoteSlug, Labels: field.BlockLabels{Singular: "Note", Plural: "Notes"}, Fields: field.Fields{label, accent}}).Admin(field.Admin{RowLabel: rowLabel}),
 			field.Relationship("author", "users"), accent,
 			accent.Rename("localizedAccent").Label("Localized accent").Localized(),
 			field.Text("localizedTitle").Localized(),

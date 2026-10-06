@@ -7,7 +7,7 @@ import (
 
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
-	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/querypath"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -59,15 +59,19 @@ func TestPrimitiveListsPostgresMigrationAndIndexes(t *testing.T) {
 	}
 }
 
-func TestPrimitiveListPostgresUnsupportedQueryMarkerIsCallerOnly(t *testing.T) {
+func TestPostgresUnsupportedQueryPathMarkerIsCallerOnly(t *testing.T) {
 	manifest, err := core.Resolve(core.Config{Name: "Query bounds", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{
+		field.Text("title"),
 		field.Array("sections", field.Fields{field.Array("links", field.Fields{field.TextList("labels"), field.Text("title")})}),
 	}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"labels", "title"} {
-		path, _ := query.ParsePath("sections.links." + name)
+	for _, test := range []struct {
+		name      string
+		supported bool
+	}{{"sections.links.labels", true}, {"sections.links.title", true}, {"title.missing", false}} {
+		path, _ := query.ParsePath(test.name)
 		node := query.In(path, "value").Node()
 		for _, caller := range []bool{false, true} {
 			request := store.Request{Collection: manifest.Snapshot().Collections[0]}
@@ -77,9 +81,9 @@ func TestPrimitiveListPostgresUnsupportedQueryMarkerIsCallerOnly(t *testing.T) {
 				request.Access = &node
 			}
 			_, _, err := requestPredicate(request, false)
-			var unsupported *primitivefield.UnsupportedQueryError
-			if err == nil || errors.As(err, &unsupported) != (caller && name == "labels") {
-				t.Fatalf("field %s caller=%v marked incorrectly: %v", name, caller, err)
+			var unsupported *querypath.UnsupportedError
+			if (err == nil) != test.supported || errors.As(err, &unsupported) != (caller && !test.supported) {
+				t.Fatalf("path %s caller=%v marked incorrectly: %v", test.name, caller, err)
 			}
 		}
 	}

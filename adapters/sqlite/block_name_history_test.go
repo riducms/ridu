@@ -12,6 +12,7 @@ import (
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestSQLiteBlockNameTransitionPreservesContentAndHistory(t *testing.T) {
@@ -33,7 +34,7 @@ func TestSQLiteBlockNameTransitionPreservesContentAndHistory(t *testing.T) {
 				t.Fatal(err)
 			}
 			previousSnapshot := current.Snapshot()
-			block := &previousSnapshot.Collections[0].Fields[1].Blocks.Types[0]
+			block := &previousSnapshot.Blocks[0]
 			block.Fields = block.Fields[:1]
 			previous := schema.NewManifest(previousSnapshot)
 			encoded, err := previous.Bytes()
@@ -88,7 +89,7 @@ func TestSQLiteBlockNameTransitionPreservesContentAndHistory(t *testing.T) {
 			if _, err := write.(store.VersionTransaction).SaveVersion(ctx, collection, published, 10); err != nil {
 				t.Fatal(err)
 			}
-			working, err := write.Update(ctx, store.UpdateRequest{
+			working, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{
 				Request: store.Request{Collection: collection, ID: published.ID, ExpectedRevision: published.Revision},
 				Intent:  store.WriteIntentSaveDraft, Values: values("Working content"),
 			})

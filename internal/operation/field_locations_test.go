@@ -3,6 +3,7 @@ package operation
 import (
 	"testing"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -44,12 +45,12 @@ func TestDuplicateLegacyRowKeysCannotCollapseChangedFieldLocations(t *testing.T)
 		},
 		{
 			name: "blocks",
-			fields: []schema.Field{{
+			fields: schematest.Bind(t, "pages", []schema.BlockType{{
+				Slug: "quote", TypeName: "Quote", Fields: []schema.Field{{Name: "secret", Path: path("secret"), Type: schema.FieldTypeText}},
+			}}, schema.Field{
 				Name: "content", Path: path("content"), Type: schema.FieldTypeBlocks,
-				Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-					Slug: "quote", Fields: []schema.Field{{Name: "secret", Path: path("content.quote.secret"), Type: schema.FieldTypeText}},
-				}}},
-			}},
+				Blocks: &schema.BlocksField{BlockReferences: []string{"quote"}},
+			}),
 			fieldPath: "content.quote.secret",
 			beforeData: store.Values{"content": store.List(
 				store.Object(store.Values{"_key": store.String("duplicate"), "blockType": store.String("quote"), "secret": secret("first")}),

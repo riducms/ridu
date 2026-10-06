@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/internal/datatransform"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
-	"github.com/riducms/ridu/store"
 )
 
 func buildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, transforms []ridumigration.DataTransformDescriptor, allowTransformedSchema bool) (ridumigration.Artifact, error) {
@@ -90,7 +89,7 @@ func validateSQLiteTransformedCollections(before, after []schema.Collection) err
 		if len(current.Indexes) < len(previous.Indexes) || !reflect.DeepEqual(previous.Indexes, current.Indexes[:len(previous.Indexes)]) {
 			return fmt.Errorf("SQLite data transforms cannot change or remove an existing index on collection %q", previous.ID)
 		}
-		if previous.Versions != nil && !reflect.DeepEqual(previous.Fields, current.Fields) {
+		if previous.Versions != nil && !schema.EqualFields(previous.Fields, current.Fields) {
 			return fmt.Errorf("SQLite data transforms cannot change fields on versioned collection %q until retained snapshots can be rewritten atomically", previous.ID)
 		}
 	}
@@ -112,7 +111,7 @@ func validateSQLiteTransformedResources(kind string, before, after []schema.Coll
 		if !reflect.DeepEqual(previous, comparison) {
 			return fmt.Errorf("SQLite data transforms cannot change %s %q outside its fields", kind, previous.ID)
 		}
-		if previous.Versions != nil && !reflect.DeepEqual(previous.Fields, current.Fields) {
+		if previous.Versions != nil && !schema.EqualFields(previous.Fields, current.Fields) {
 			return fmt.Errorf("SQLite data transforms cannot change fields on versioned %s %q until retained snapshots can be rewritten atomically", kind, previous.ID)
 		}
 	}
@@ -178,8 +177,16 @@ func bindSQLiteDataTransforms(artifact ridumigration.Artifact, transforms []ridu
 	if len(phase.Steps) == 0 || phase.Steps[len(phase.Steps)-1].Kind != ridumigration.StepAssertSchema {
 		return ridumigration.Artifact{}, fmt.Errorf("SQLite data transforms require a final schema assertion")
 	}
-	assertion := phase.Steps[len(phase.Steps)-1]
-	steps := append([]ridumigration.Step(nil), phase.Steps[:len(phase.Steps)-1]...)
+	// Transforms run before the required-value audit, so it sees the values
+	// they write, and otherwise immediately before the schema assertion.
+	insertion := len(phase.Steps) - 1
+	for index, step := range phase.Steps {
+		if step.Kind == ridumigration.StepAuditRequiredValues {
+			insertion = index
+			break
+		}
+	}
+	steps := append([]ridumigration.Step(nil), phase.Steps[:insertion]...)
 	for _, transform := range transforms {
 		payload, err := ridumigration.MarshalStepPayload(ridumigration.DataTransformPayload{Transform: transform})
 		if err != nil {
@@ -190,7 +197,7 @@ func bindSQLiteDataTransforms(artifact ridumigration.Artifact, transforms []ridu
 			Name: "run data transform " + transform.Name, Payload: payload,
 		})
 	}
-	steps = append(steps, assertion)
+	steps = append(steps, phase.Steps[insertion:]...)
 	for index := range steps {
 		steps[index].ID = fmt.Sprintf("step-%04d", index+1)
 	}
@@ -305,7 +312,12 @@ func (backend *Store) executeSQLiteDataTransform(ctx context.Context, connection
 	return backend.executeSQLiteDataTransformWithTransaction(ctx, file, descriptor, registry, down, transaction)
 }
 
-func (backend *Store) executeSQLiteDataTransformWithTransaction(ctx context.Context, file migrationartifact.File, descriptor ridumigration.DataTransformDescriptor, registry sqliteDataTransformRegistry, down bool, transaction sqliteMigrationDataTransaction) error {
+func newSQLiteMigrationDataTransaction(backend *Store, connection *sql.Conn, artifact ridumigration.Artifact) ridumigration.DataTransaction {
+	documents := &documentTransaction{store: backend, connection: connection}
+	return datatransform.New(documents, artifact, datatransform.Options{Engine: "SQLite"})
+}
+
+func (backend *Store) executeSQLiteDataTransformWithTransaction(ctx context.Context, file migrationartifact.File, descriptor ridumigration.DataTransformDescriptor, registry sqliteDataTransformRegistry, down bool, transaction ridumigration.DataTransaction) error {
 	registered, exists := registry[descriptor.Name]
 	if !exists {
 		return fmt.Errorf("SQLite migration %s requires unregistered data transform %q", file.Name, descriptor.Name)
@@ -324,238 +336,6 @@ func (backend *Store) executeSQLiteDataTransformWithTransaction(ctx context.Cont
 	}
 	return nil
 }
-
-type sqliteMigrationDataTransaction struct {
-	transaction                 *documentTransaction
-	versionedResourceIdentities map[schema.StableID]struct{}
-	resourceShapes              map[schema.StableID][]schema.Collection
-	locales                     map[string]struct{}
-}
-
-func newSQLiteMigrationDataTransaction(backend *Store, connection *sql.Conn, artifact ridumigration.Artifact) sqliteMigrationDataTransaction {
-	versioned := make(map[schema.StableID]struct{})
-	resourceShapes := make(map[schema.StableID][]schema.Collection)
-	locales := make(map[string]struct{})
-	collect := func(snapshot schema.Snapshot) {
-		if snapshot.Application.Localization != nil {
-			for _, locale := range snapshot.Application.Localization.Locales {
-				locales[string(locale.Code)] = struct{}{}
-			}
-		}
-		resources := append(append([]schema.Collection(nil), snapshot.Collections...), snapshot.Globals...)
-		for _, resource := range resources {
-			if resource.Versions != nil || resource.Capabilities.Versions {
-				versioned[resource.ID] = struct{}{}
-			}
-			known := false
-			for _, shape := range resourceShapes[resource.ID] {
-				if reflect.DeepEqual(shape, resource) {
-					known = true
-					break
-				}
-			}
-			if !known {
-				resourceShapes[resource.ID] = append(resourceShapes[resource.ID], resource)
-			}
-		}
-	}
-	if artifact.Before != nil {
-		collect(*artifact.Before)
-	}
-	collect(artifact.After)
-	return sqliteMigrationDataTransaction{
-		transaction:                 &documentTransaction{store: backend, connection: connection},
-		versionedResourceIdentities: versioned,
-		resourceShapes:              resourceShapes,
-		locales:                     locales,
-	}
-}
-
-func (transaction sqliteMigrationDataTransaction) Create(ctx context.Context, request store.CreateRequest) (store.Document, error) {
-	if err := transaction.validateMutation(request.Collection, request.Values); err != nil {
-		return store.Document{}, err
-	}
-	return transaction.transaction.Create(ctx, request)
-}
-func (transaction sqliteMigrationDataTransaction) Find(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := transaction.requireResource(request.Collection); err != nil {
-		return store.Document{}, err
-	}
-	return transaction.transaction.Find(ctx, request)
-}
-func (transaction sqliteMigrationDataTransaction) List(ctx context.Context, request store.Request) (store.Page, error) {
-	if err := transaction.requireResource(request.Collection); err != nil {
-		return store.Page{}, err
-	}
-	return transaction.transaction.List(ctx, request)
-}
-func (transaction sqliteMigrationDataTransaction) Update(ctx context.Context, request store.UpdateRequest) (store.Document, error) {
-	if err := transaction.validateMutation(request.Collection, request.Values); err != nil {
-		return store.Document{}, err
-	}
-	return transaction.transaction.Update(ctx, request)
-}
-func (transaction sqliteMigrationDataTransaction) Trash(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := transaction.validateMutation(request.Collection, nil); err != nil {
-		return store.Document{}, err
-	}
-	return transaction.transaction.Trash(ctx, request)
-}
-func (transaction sqliteMigrationDataTransaction) Restore(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := transaction.validateMutation(request.Collection, nil); err != nil {
-		return store.Document{}, err
-	}
-	return transaction.transaction.Restore(ctx, request)
-}
-func (transaction sqliteMigrationDataTransaction) Delete(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := transaction.validateMutation(request.Collection, nil); err != nil {
-		return store.Document{}, err
-	}
-	return transaction.transaction.Delete(ctx, request)
-}
-
-func (transaction sqliteMigrationDataTransaction) validateMutation(collection schema.Collection, values store.Values) error {
-	if err := transaction.requireResource(collection); err != nil {
-		return err
-	}
-	if _, versioned := transaction.versionedResourceIdentities[collection.ID]; versioned {
-		return fmt.Errorf("SQLite data transforms cannot mutate versioned resource %q until retained snapshots can be rewritten atomically", collection.ID)
-	}
-	if values != nil {
-		if err := transaction.validateValues(collection.Fields, values, string(collection.ID), nil); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (transaction sqliteMigrationDataTransaction) requireResource(collection schema.Collection) error {
-	shapes := transaction.resourceShapes[collection.ID]
-	if len(shapes) == 0 {
-		return fmt.Errorf("SQLite data transform resource %q is outside the immutable artifact manifests", collection.ID)
-	}
-	for _, shape := range shapes {
-		if reflect.DeepEqual(shape, collection) {
-			return nil
-		}
-	}
-	return fmt.Errorf("SQLite data transform resource %q must exactly match its immutable before or after manifest shape", collection.ID)
-}
-
-func (transaction sqliteMigrationDataTransaction) validateValues(fields []schema.Field, values store.Values, path string, special map[string]struct{}) error {
-	byName := make(map[string]schema.Field, len(fields))
-	for _, field := range fields {
-		if field.Category != schema.FieldCategoryPresentation {
-			byName[field.Name] = field
-		}
-	}
-	for name, value := range values {
-		if _, allowed := special[name]; allowed {
-			continue
-		}
-		field, exists := byName[name]
-		if !exists {
-			return fmt.Errorf("SQLite data transform value %q is outside the immutable resource shape", path+"."+name)
-		}
-		if err := transaction.validateValue(field, value, path+"."+name); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (transaction sqliteMigrationDataTransaction) validateValue(field schema.Field, value store.Value, path string) error {
-	if value.Kind() == store.ValueNull {
-		return nil
-	}
-	if field.Localized {
-		localized, valid := value.CopyObject()
-		if !valid {
-			return fmt.Errorf("SQLite data transform localized value %q must be an object", path)
-		}
-		field.Localized = false
-		for locale, localizedValue := range localized {
-			if _, allowed := transaction.locales[locale]; !allowed {
-				return fmt.Errorf("SQLite data transform locale %q at %q is outside the immutable manifests", locale, path)
-			}
-			if err := transaction.validateValue(field, localizedValue, path+"."+locale); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if embedded.HasFields(field) {
-		if err := embedded.ValidateValue(field, value, path, true, nil); err != nil {
-			return err
-		}
-		_, err := embedded.Transform(field, value, path, embedded.NewBudget(), func(o embedded.Occurrence) (store.Values, error) {
-			return o.Payload, transaction.validateValues(o.Fields, o.Payload, o.RuntimePath, map[string]struct{}{o.Case.Identity: {}, o.Case.Discriminator: {}})
-		})
-		return err
-	}
-
-	switch field.Type {
-	case schema.FieldTypeGroup:
-		object, valid := value.CopyObject()
-		if !valid || field.Nested == nil {
-			return fmt.Errorf("SQLite data transform group value %q must match its immutable resource shape", path)
-		}
-		return transaction.validateValues(field.Nested.ResolvedFields(), object, path, nil)
-	case schema.FieldTypeArray:
-		items, valid := value.CopyList()
-		if !valid || field.Nested == nil {
-			return fmt.Errorf("SQLite data transform array value %q must match its immutable resource shape", path)
-		}
-		special := map[string]struct{}{"_key": {}}
-		for index, item := range items {
-			object, valid := item.CopyObject()
-			if !valid {
-				return fmt.Errorf("SQLite data transform array row %q must be an object", fmt.Sprintf("%s.%d", path, index))
-			}
-			if err := transaction.validateValues(field.Nested.ResolvedFields(), object, fmt.Sprintf("%s.%d", path, index), special); err != nil {
-				return err
-			}
-		}
-	case schema.FieldTypeBlocks:
-		items, valid := value.CopyList()
-		if !valid || field.Blocks == nil {
-			return fmt.Errorf("SQLite data transform blocks value %q must match its immutable resource shape", path)
-		}
-		if len(items) < field.Blocks.MinRows || field.Blocks.MaxRows > 0 && len(items) > field.Blocks.MaxRows {
-			return fmt.Errorf("SQLite data transform blocks value %q violates its row bounds", path)
-		}
-		special := map[string]struct{}{"_key": {}, "blockType": {}}
-		for index, item := range items {
-			itemPath := fmt.Sprintf("%s.%d", path, index)
-			object, valid := item.CopyObject()
-			if !valid {
-				return fmt.Errorf("SQLite data transform block %q must be an object", itemPath)
-			}
-			blockKey, valid := object["blockType"].StringValue()
-			if !valid {
-				return fmt.Errorf("SQLite data transform block %q must name an immutable block type", itemPath)
-			}
-			var blockFields []schema.Field
-			found := false
-			for _, block := range field.Blocks.ResolvedTypes() {
-				if block.Slug == blockKey {
-					blockFields = block.ResolvedFields()
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("SQLite data transform block type %q at %q is outside the immutable resource shape", blockKey, itemPath)
-			}
-			if err := transaction.validateValues(blockFields, object, itemPath, special); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-var _ ridumigration.DataTransaction = sqliteMigrationDataTransaction{}
 
 type sqliteProjectMigrationDriver struct {
 	transforms []ridumigration.DataTransform

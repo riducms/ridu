@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -36,12 +37,12 @@ func TestImmutableValidationRetainsLocalizedRowMembershipAndSnapshots(t *testing
 			}
 			if shape == "blocks" {
 				owner.Type, owner.Nested = schema.FieldTypeBlocks, nil
-				owner.Blocks = &schema.BlocksField{Types: []schema.BlockType{{Slug: "card", Fields: children}}}
+				owner.Blocks = &schema.BlocksField{BlockReferences: []string{"card"}}
 			} else if shape == "embedded" {
 				owner.Type, owner.Nested = schema.FieldTypePlugin, nil
-				owner.Plugin = &schema.PluginField{Key: "fixture", EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "widgets", Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", Types: []schema.BlockType{{Slug: "card", Fields: children}}}}}}}
+				owner.Plugin = &schema.PluginField{Key: "fixture", EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "widgets", Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", BlockReferences: []string{"card"}}}}}}
 			}
-			fields := []schema.Field{owner}
+			fields := schematest.Bind(t, "pages", []schema.BlockType{{Slug: "card", TypeName: "Card", Fields: children}}, owner)
 			validators := map[string]PluginValidator{"fixture": func(schema.Field, store.Value, string) []schema.Issue { return nil }}
 			previous := store.Values{"items": list(row("first", nil), row("second", nil))}
 			input := store.Values{"items": list(row("second", store.Values{"translation": store.Null()}), row("new", nil), row("first", nil))}

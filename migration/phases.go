@@ -126,6 +126,34 @@ type RetireResourcesPayload struct {
 // artifact's immutable after manifest.
 type AssertSchemaPayload struct{}
 
+// AuditRequiredValuesPayload lists the fields whose stored values the audit
+// checks, in planner order. Each field is newly required by the artifact.
+type AuditRequiredValuesPayload struct {
+	Fields []RequiredFieldAddress `json:"fields"`
+}
+
+// RequiredFieldAddress identifies a field of the artifact's after manifest.
+// With a resource stable ID, Path is its canonical path in that resource: a
+// path through a blocks field names the block type, as in layout.hero.heading.
+// Without one, Path starts with a "**" segment and the field belongs to a block
+// definition, checked in every stored block of it: **.hero.heading. A "**"
+// segment finds the block it precedes at any depth beneath the preceding
+// segment, so layout.**.hero.heading reaches every hero block stored in layout
+// and **.card.items.**.hero.heading every hero block stored in a card's items.
+// Scope, when set, limits the first block found to placements beneath a
+// localized ancestor ("localized") or not ("unlocalized").
+type RequiredFieldAddress struct {
+	ResourceID schema.StableID `json:"resourceId,omitempty"`
+	Path       string          `json:"path"`
+	Scope      string          `json:"scope,omitempty"`
+}
+
+// Required-value audit scopes of a block definition's field.
+const (
+	RequiredScopeLocalized   = "localized"
+	RequiredScopeUnlocalized = "unlocalized"
+)
+
 // ConcurrentIndexAction selects typed concurrent index creation or removal.
 type ConcurrentIndexAction string
 
@@ -464,6 +492,13 @@ func (artifact Artifact) collectionRenameBindings() (map[schema.StableID]schema.
 			if err := json.Unmarshal(step.Payload, &payload); err != nil {
 				return nil, fmt.Errorf("step %s has malformed content-rename payload", step.ID)
 			}
+			if payload.Rename.Block != "" {
+				// A block field rename keeps every resource identity.
+				if !blockExists(artifact.Before, payload.Rename.Block) || !blockExists(&artifact.After, payload.Rename.Block) {
+					return nil, fmt.Errorf("step %s addresses absent block %q", step.ID, payload.Rename.Block)
+				}
+				continue
+			}
 			before, beforeFound := collectionBySlug(artifact.Before, payload.Rename.CollectionBefore)
 			after, afterFound := collectionBySlug(&artifact.After, payload.Rename.CollectionAfter)
 			if !beforeFound || !afterFound {
@@ -505,6 +540,18 @@ func (artifact Artifact) collectionRenameBindings() (map[schema.StableID]schema.
 		return nil, fmt.Errorf("field rename crosses unconfirmed collection identity %s -> %s", field.before.ID, field.after.ID)
 	}
 	return bindings, nil
+}
+
+func blockExists(snapshot *schema.Snapshot, slug string) bool {
+	if snapshot == nil {
+		return false
+	}
+	for _, block := range snapshot.Blocks {
+		if block.Slug == slug {
+			return true
+		}
+	}
+	return false
 }
 
 func collectionBySlug(snapshot *schema.Snapshot, slug schema.CollectionSlug) (schema.Collection, bool) {
@@ -580,6 +627,14 @@ func validateStepPayload(mode PhaseMode, step Step) error {
 		var payload DataTransformPayload
 		if err := decodeStrictJSON(step.Payload, &payload); err != nil || payload.Transform.Validate() != nil {
 			return fmt.Errorf("malformed data-transform payload")
+		}
+	case StepAuditRequiredValues:
+		if mode != PhaseTransaction {
+			return fmt.Errorf("required-value audit is allowed only in a transaction phase")
+		}
+		var payload AuditRequiredValuesPayload
+		if err := decodeStrictJSON(step.Payload, &payload); err != nil || validateRequiredFieldAddresses(payload.Fields) != nil {
+			return fmt.Errorf("malformed required-value audit payload")
 		}
 	case StepConcurrentIndex:
 		if mode != PhaseNoTransaction {
@@ -681,7 +736,36 @@ func validateRetireResources(payload RetireResourcesPayload) error {
 	return nil
 }
 
+func validateRequiredFieldAddresses(fields []RequiredFieldAddress) error {
+	if len(fields) == 0 {
+		return fmt.Errorf("fields are required")
+	}
+	seen := make(map[RequiredFieldAddress]struct{}, len(fields))
+	for _, field := range fields {
+		anchored := field.ResourceID != ""
+		if anchored && !schema.IsValidStableID(string(field.ResourceID)) || !anchored && !strings.HasPrefix(field.Path, "**.") ||
+			strings.TrimSpace(field.Path) != field.Path || field.Path == "" {
+			return fmt.Errorf("invalid field address")
+		}
+		if field.Scope != "" && (anchored || field.Scope != RequiredScopeLocalized && field.Scope != RequiredScopeUnlocalized) {
+			return fmt.Errorf("invalid field address scope")
+		}
+		if _, duplicate := seen[field]; duplicate {
+			return fmt.Errorf("duplicate field address")
+		}
+		seen[field] = struct{}{}
+	}
+	return nil
+}
+
 func validateRename(rename Rename) error {
+	if rename.Block != "" {
+		if rename.CollectionBefore != "" || rename.CollectionAfter != "" || len(rename.Fields) != 0 || !schema.IsValidPluginKey(rename.Block) ||
+			rename.FieldBefore == "" || rename.FieldAfter == "" || rename.FieldBefore == rename.FieldAfter {
+			return fmt.Errorf("malformed block field intent")
+		}
+		return nil
+	}
 	if rename.CollectionBefore == "" || rename.CollectionAfter == "" {
 		return fmt.Errorf("incomplete collection intent")
 	}

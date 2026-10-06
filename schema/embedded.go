@@ -22,43 +22,275 @@ type EmbeddedTree struct {
 	Cases    []EmbeddedTreeCase `json:"cases"`
 }
 
+// EmbeddedTreeCase declares schema-owned payloads for one structural node tag.
+// Like a Blocks field, it selects block definitions by slug; an
+// empty selection reserves the envelope while admitting no payloads.
 type EmbeddedTreeCase struct {
 	BlockReferences []string `json:"blockReferences,omitempty"`
 	bound           *boundBlocks
-	TagValue        string      `json:"tagValue"`
-	Payload         string      `json:"payload"`
-	Discriminator   string      `json:"discriminator"`
-	Identity        string      `json:"identity"`
-	Types           []BlockType `json:"types,omitempty"`
+	TagValue        string `json:"tagValue"`
+	Payload         string `json:"payload"`
+	Discriminator   string `json:"discriminator"`
+	Identity        string `json:"identity"`
 }
 
 // ChildFields enumerates immediate ordinary schema children, including those
 // declared by plugins. It never examines document values or plugin settings.
+// Like ResolvedFields, the result is a read-only view: when one declaration
+// supplies every child it shares that declaration's slice instead of copying.
 func ChildFields(field Field) []Field {
-	var result []Field
+	var single []Field
+	sources, total := 0, 0
+	eachChildFieldSource(field, func(fields []Field) {
+		if len(fields) != 0 {
+			sources++
+			total += len(fields)
+			single = fields
+		}
+	})
+	if sources <= 1 {
+		// The full slice expression keeps a caller's append from writing into
+		// the shared declaration.
+		return single[:len(single):len(single)]
+	}
+	result := make([]Field, 0, total)
+	eachChildFieldSource(field, func(fields []Field) { result = append(result, fields...) })
+	return result
+}
+
+// DefinitionChildFields is ChildFields for processing that needs only field
+// structure: it enters blocks through their shared definitions
+// (see BlocksField.Definitions), so it never creates placement views and its
+// results are the same values wherever a definition is placed. Paths and IDs
+// beneath a block are definition-relative.
+func DefinitionChildFields(field Field) []Field {
+	var single []Field
+	sources, total := 0, 0
+	eachDefinitionChildSource(field, func(fields []Field) {
+		if len(fields) != 0 {
+			sources++
+			total += len(fields)
+			single = fields
+		}
+	})
+	if sources <= 1 {
+		return single[:len(single):len(single)]
+	}
+	result := make([]Field, 0, total)
+	eachDefinitionChildSource(field, func(fields []Field) { result = append(result, fields...) })
+	return result
+}
+
+// FieldListSet records field lists a definition traversal has entered. A shared
+// definition passes the same slice wherever it is placed, so a traversal that
+// enters each list once does work proportional to definitions.
+type FieldListSet map[*Field]struct{}
+
+// Add reports whether fields were not yet in the set, adding them. An empty
+// list is never recorded and always reports true.
+func (set FieldListSet) Add(fields []Field) bool {
+	if len(fields) == 0 {
+		return true
+	}
+	if _, seen := set[&fields[0]]; seen {
+		return false
+	}
+	set[&fields[0]] = struct{}{}
+	return true
+}
+
+// WalkDefinitionFields calls visit for each field reachable from the roots
+// through DefinitionChildFields, in pre-order. Each shared definition's fields
+// are visited once, however often the definition is placed, so the walk is
+// proportional to definitions. It stops and returns false when visit does.
+func WalkDefinitionFields(visit func(Field) bool, roots ...[]Field) bool {
+	seen := FieldListSet{}
+	var walk func([]Field) bool
+	walk = func(fields []Field) bool {
+		if !seen.Add(fields) {
+			return true
+		}
+		for _, field := range fields {
+			if !visit(field) {
+				return false
+			}
+			complete := true
+			eachDefinitionChildSource(field, func(children []Field) {
+				complete = complete && walk(children)
+			})
+			if !complete {
+				return false
+			}
+		}
+		return true
+	}
+	for _, fields := range roots {
+		if !walk(fields) {
+			return false
+		}
+	}
+	return true
+}
+
+func eachChildFieldSource(field Field, visit func([]Field)) {
 	if field.Nested != nil {
-		result = append(result, field.Nested.ResolvedFields()...)
+		visit(field.Nested.ResolvedFields())
 	}
 	if field.Blocks != nil {
 		for _, block := range field.Blocks.ResolvedTypes() {
-			result = append(result, block.ResolvedFields()...)
+			visit(block.ResolvedFields())
+		}
+	}
+	if field.Plugin != nil {
+		for _, tree := range field.Plugin.EmbeddedTrees {
+			for _, treeCase := range tree.Cases {
+				for _, block := range treeCase.ResolvedTypes() {
+					visit(block.ResolvedFields())
+				}
+			}
+		}
+	}
+}
+
+// WalkPlacements calls visit for every field placement beneath a resource's
+// fields, with the placement's absolute path segments, without creating
+// placement views. shared reports a field of a block definition, whose own
+// Path and ID are definition-relative; PlacementFieldID derives its placement
+// ID from the segments. visit reports whether to visit the field's
+// descendants. A complete walk is proportional to placements, so use it only
+// for work that is inherently per placement, and prune it; segments is reused
+// between calls.
+func WalkPlacements(fields []Field, visit func(segments []string, field Field, shared bool) bool) {
+	var segments []string
+	// base is the placement of the definition whose fields' paths are relative
+	// to it, or -1 for a resource's own fields, whose paths are absolute.
+	var walk func(fields []Field, base int)
+	walk = func(fields []Field, base int) {
+		for _, field := range fields {
+			if base < 0 {
+				segments = field.Path.AppendSegments(segments[:0])
+			} else {
+				segments = field.Path.AppendSegments(segments[:base])
+			}
+			if !visit(segments, field, base >= 0) {
+				continue
+			}
+			own := len(segments)
+			if field.Nested != nil {
+				walk(field.Nested.ResolvedFields(), base)
+			}
+			if field.Blocks != nil {
+				for _, block := range field.Blocks.Definitions() {
+					segments = append(segments[:own], block.Slug)
+					walk(block.ResolvedFields(), own+1)
+				}
+			}
+			if field.Plugin != nil {
+				for _, tree := range field.Plugin.EmbeddedTrees {
+					for _, c := range tree.Cases {
+						for _, block := range c.Definitions() {
+							segments = append(segments[:own], tree.Key, c.TagValue, block.Slug)
+							walk(block.ResolvedFields(), own+3)
+						}
+					}
+				}
+			}
+		}
+	}
+	walk(fields, -1)
+}
+
+// FieldTraits summarizes the fields of a list or beneath a field, so a value
+// traversal can skip a subtree whose schema cannot need it.
+type FieldTraits uint8
+
+const (
+	// FieldTraitLocalized marks a localized field.
+	FieldTraitLocalized FieldTraits = 1 << iota
+	// FieldTraitEmbedded marks a plugin field that declares embedded schemas.
+	FieldTraitEmbedded
+)
+
+// ListTraits summarizes fields and all of their descendants. Each
+// block definition is summarized once, however often it is placed.
+func ListTraits(fields []Field) FieldTraits {
+	var traits FieldTraits
+	for _, field := range fields {
+		if field.Localized {
+			traits |= FieldTraitLocalized
+		}
+		if field.Plugin != nil && len(field.Plugin.EmbeddedTrees) != 0 {
+			traits |= FieldTraitEmbedded
+		}
+		traits |= DescendantTraits(field)
+	}
+	return traits
+}
+
+// DescendantTraits summarizes the fields beneath field, as ListTraits does.
+func DescendantTraits(field Field) FieldTraits {
+	var traits FieldTraits
+	blockTraits := func(block BlockType) {
+		if block.shared == nil {
+			traits |= ListTraits(block.ResolvedFields())
+			return
+		}
+		block.shared.traitsOnce.Do(func() { block.shared.traits = ListTraits(block.Fields) })
+		traits |= block.shared.traits
+	}
+	if field.Nested != nil {
+		traits |= ListTraits(field.Nested.ResolvedFields())
+	}
+	if field.Blocks != nil {
+		for _, block := range field.Blocks.Definitions() {
+			blockTraits(block)
 		}
 	}
 	if field.Plugin != nil {
 		for _, tree := range field.Plugin.EmbeddedTrees {
 			for _, c := range tree.Cases {
-				for _, block := range c.ResolvedTypes() {
-					result = append(result, block.ResolvedFields()...)
+				for _, block := range c.Definitions() {
+					blockTraits(block)
 				}
 			}
 		}
 	}
-	return result
+	return traits
+}
+
+// EachDefinitionChildList calls visit with each immediate child field list of
+// field: a group or array's fields and each selectable block definition's
+// fields, as DefinitionChildFields enters them. A shared definition passes the
+// same slice at every placement, so callers can memoize by its first element.
+func EachDefinitionChildList(field Field, visit func([]Field)) {
+	eachDefinitionChildSource(field, visit)
+}
+
+func eachDefinitionChildSource(field Field, visit func([]Field)) {
+	if field.Nested != nil {
+		visit(field.Nested.ResolvedFields())
+	}
+	if field.Blocks != nil {
+		for _, block := range field.Blocks.Definitions() {
+			visit(block.ResolvedFields())
+		}
+	}
+	if field.Plugin != nil {
+		for _, tree := range field.Plugin.EmbeddedTrees {
+			for _, treeCase := range tree.Cases {
+				for _, block := range treeCase.Definitions() {
+					visit(block.ResolvedFields())
+				}
+			}
+		}
+	}
 }
 
 // EmbeddedBlocks supplies virtual schema-only Blocks containers for each
 // descriptor case. These do not represent stored fields or queryable columns.
-// They allow schema consumers to reuse the ordinary variant catalog.
+// They allow schema consumers to reuse the ordinary variant catalog. Each
+// container shares its case's selection: ResolvedTypes returns the case's
+// placement views and Definitions its shared definition views.
 func EmbeddedBlocks(field Field) []Field {
 	if field.Plugin == nil {
 		return nil
@@ -67,11 +299,15 @@ func EmbeddedBlocks(field Field) []Field {
 	for _, tree := range field.Plugin.EmbeddedTrees {
 		for _, c := range tree.Cases {
 			path, _ := query.ParsePath(field.Path.String() + "." + tree.Key + "." + c.TagValue)
-			result = append(result, Field{ID: StableID(string(field.ID) + "_embedded_" + tree.Key + "_" + c.TagValue), Name: tree.Key + "_" + c.TagValue, Path: path, Type: FieldTypeBlocks, Category: FieldCategoryNested, Blocks: &BlocksField{Types: c.ResolvedTypes()}})
+			result = append(result, Field{ID: StableID(string(field.ID) + "_embedded_" + tree.Key + "_" + c.TagValue), Name: tree.Key + "_" + c.TagValue, Path: path, Type: FieldTypeBlocks, Category: FieldCategoryNested, Blocks: &BlocksField{BlockReferences: c.BlockReferences, bound: c.bound}})
 		}
 	}
 	return result
 }
+
+// EmbeddedDefinitionBlocks is EmbeddedBlocks for definition traversal.
+// Definitions and ResolvedTypes of the virtual containers are the case's.
+func EmbeddedDefinitionBlocks(field Field) []Field { return EmbeddedBlocks(field) }
 
 func cloneEmbeddedTrees(trees []EmbeddedTree) []EmbeddedTree {
 	result := append([]EmbeddedTree(nil), trees...)
@@ -81,18 +317,6 @@ func cloneEmbeddedTrees(trees []EmbeddedTree) []EmbeddedTree {
 		for j := range result[i].Cases {
 			result[i].Cases[j].bound = nil
 			result[i].Cases[j].BlockReferences = append([]string(nil), trees[i].Cases[j].BlockReferences...)
-			result[i].Cases[j].Types = append([]BlockType(nil), trees[i].Cases[j].Types...)
-			for k := range result[i].Cases[j].Types {
-				b := &result[i].Cases[j].Types[k]
-				b.bound = nil
-				b.Fields = cloneFields(b.Fields)
-				b.Labels.SingularTranslations = cloneStringMap(b.Labels.SingularTranslations)
-				b.Labels.PluralTranslations = cloneStringMap(b.Labels.PluralTranslations)
-				if b.Admin != nil {
-					a := *b.Admin
-					b.Admin = &a
-				}
-			}
 		}
 	}
 	return result
@@ -100,7 +324,7 @@ func cloneEmbeddedTrees(trees []EmbeddedTree) []EmbeddedTree {
 
 // ValidateEmbeddedMetadata validates descriptor structure before consumers can
 // interpret it. Finite schema depth also rejects recursive/cyclic schema graphs.
-// A registered block's fields are the same at every placement, so each block is
+// A block definition's fields are the same at every placement, so each block is
 // checked at its first placement only; issue paths name that placement.
 func ValidateEmbeddedMetadata(snapshot Snapshot) error {
 	fieldTypes := map[string]PluginFieldType{}
@@ -109,7 +333,6 @@ func ValidateEmbeddedMetadata(snapshot Snapshot) error {
 			fieldTypes[fieldType.Key] = fieldType
 		}
 	}
-	count := 0
 	checkedBlocks := map[string]bool{}
 	var walk func([]Field, string, int, int) error
 	var walkChildren func(Field, string, int) error
@@ -118,10 +341,6 @@ func ValidateEmbeddedMetadata(snapshot Snapshot) error {
 			return fmt.Errorf("embedded schema depth exceeds 64 at %s (recursive schemas are unsupported)", path)
 		}
 		for i, f := range fields {
-			count++
-			if count > MaxFieldPlacements {
-				return fmt.Errorf("schema work budget exceeded at %s", path)
-			}
 			p := fmt.Sprintf("%s[%d]", path, offset+i)
 			if f.Plugin != nil {
 				if mapping, exists := fieldTypes[f.Plugin.Key]; exists {
@@ -152,15 +371,15 @@ func ValidateEmbeddedMetadata(snapshot Snapshot) error {
 		return nil
 	}
 	// walkChildren visits ChildFields in order, keeping its child indexes while
-	// skipping the fields of registered blocks that were already checked.
+	// skipping the fields of block definitions that were already checked.
 	walkChildren = func(f Field, path string, depth int) error {
 		if depth > 64 {
 			return fmt.Errorf("embedded schema depth exceeds 64 at %s (recursive schemas are unsupported)", path)
 		}
 		offset := 0
-		walkBlocks := func(types []BlockType, referenced bool) error {
+		walkBlocks := func(types []BlockType) error {
 			for _, block := range types {
-				if referenced && checkedBlocks[block.Slug] {
+				if checkedBlocks[block.Slug] {
 					offset += block.fieldCount()
 					continue
 				}
@@ -168,9 +387,7 @@ func ValidateEmbeddedMetadata(snapshot Snapshot) error {
 				if err := walk(fields, path, depth, offset); err != nil {
 					return err
 				}
-				if referenced {
-					checkedBlocks[block.Slug] = true
-				}
+				checkedBlocks[block.Slug] = true
 				offset += len(fields)
 			}
 			return nil
@@ -183,14 +400,14 @@ func ValidateEmbeddedMetadata(snapshot Snapshot) error {
 			offset += len(fields)
 		}
 		if f.Blocks != nil {
-			if err := walkBlocks(f.Blocks.ResolvedTypes(), len(f.Blocks.BlockReferences) > 0); err != nil {
+			if err := walkBlocks(f.Blocks.Definitions()); err != nil {
 				return err
 			}
 		}
 		if f.Plugin != nil {
 			for _, tree := range f.Plugin.EmbeddedTrees {
 				for _, c := range tree.Cases {
-					if err := walkBlocks(c.ResolvedTypes(), len(c.BlockReferences) > 0); err != nil {
+					if err := walkBlocks(c.Definitions()); err != nil {
 						return err
 					}
 				}
@@ -268,7 +485,7 @@ func ValidateEmbeddedTrees(trees []EmbeddedTree, path string) error {
 			}
 			// An empty allowlist reserves the envelope while admitting no payloads.
 			variants := map[string]bool{}
-			for k, b := range c.ResolvedTypes() {
+			for k, b := range c.Definitions() {
 				if !IsValidPluginKey(b.Slug) || variants[b.Slug] {
 					return fmt.Errorf("%s.types[%d].key: expected distinct lowercase kebab-case variant", q, k)
 				}
@@ -288,7 +505,7 @@ func ValidateEmbeddedTrees(trees []EmbeddedTree, path string) error {
 func EmbeddedTypeFields(field Field, selectors []string) []Field {
 	var result []Field
 	for _, selector := range selectors {
-		for _, f := range EmbeddedBlocks(field) {
+		for _, f := range EmbeddedDefinitionBlocks(field) {
 			if strings.HasSuffix(f.Path.String(), "."+selector) {
 				result = append(result, f)
 				break

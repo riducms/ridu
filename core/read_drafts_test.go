@@ -56,7 +56,7 @@ func TestOnlyEditorsReadDraftsUnlessReadDraftsSaysOtherwise(t *testing.T) {
 		t.Fatalf("a learner read a draft by default: %v", err)
 	}
 	learnerPage, err := local.List(ctx, "articles", ridu.ListOptions{Actor: &learner, ActorCollection: "learners"})
-	if err != nil || learnerPage.Total != 0 {
+	if err != nil || *learnerPage.Total != 0 {
 		t.Fatalf("a learner listed drafts: %#v, %v", learnerPage, err)
 	}
 	include := true

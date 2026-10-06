@@ -20,7 +20,12 @@ import {
 	type RevisionOptions,
 } from "@riducms/sdk";
 import type { ApplyPopulate } from "../../../packages/sdk/src/types";
-import type { CollectionPageEnvelope, PageEnvelope } from "../../../packages/protocol/src/index";
+import type {
+	CollectionPageEnvelope,
+	PageEnvelope,
+	Pagination,
+	UncountedPagination,
+} from "../../../packages/protocol/src/index";
 
 const author: Authors = {
 	id: "author_1",
@@ -111,6 +116,37 @@ const enrichedPage = client.list("posts", { includeAccess: true });
 void enrichedPage.then((page) => page.access.collection.operations.read);
 declare const includeAccess: boolean;
 const conditionalPage = client.list("posts", { includeAccess });
+void plainPage.then((page) => {
+	const total: number = page.pagination.totalDocs;
+	const pages: number = page.pagination.totalPages;
+	void total;
+	void pages;
+});
+const uncountedPage = client.list("posts", { pagination: false, limit: 20 });
+void uncountedPage.then((page) => {
+	const hasNextPage: boolean = page.pagination.hasNextPage;
+	void hasNextPage;
+	// @ts-expect-error pagination: false pages carry no total.
+	const total: number = page.pagination.totalDocs;
+	void total;
+});
+const uncountedAccessPage = client.list("posts", { pagination: false, includeAccess: true });
+void uncountedAccessPage.then((page) => {
+	void page.access.collection.operations.read;
+	// @ts-expect-error pagination: false pages carry no page count.
+	const pages: number = page.pagination.totalPages;
+	void pages;
+});
+const explicitlyCountedPage = client.list("posts", { pagination: true });
+declare const pagination: boolean;
+const conditionallyCountedPage = client.list("posts", { pagination });
+void conditionallyCountedPage.then((page) => {
+	const total: number | undefined = page.pagination.totalDocs;
+	// @ts-expect-error a widened pagination option may omit totals.
+	const counted: number = page.pagination.totalDocs;
+	void total;
+	void counted;
+});
 void client.create("posts", create, { locale: "fr", draft: true });
 void client.create("history", { event: "generated" }, { draft: false }).then((document) => {
 	const published: "published" = document._status;
@@ -173,6 +209,21 @@ type Expect<Value extends true> = Value;
 type ConditionalPage = Expect<
 	Equal<Awaited<typeof conditionalPage>, PageEnvelope<Posts> | CollectionPageEnvelope<Posts>>
 >;
+type UncountedPage = Expect<
+	Equal<Awaited<typeof uncountedPage>, PageEnvelope<Posts, UncountedPagination>>
+>;
+type UncountedAccessPage = Expect<
+	Equal<Awaited<typeof uncountedAccessPage>, CollectionPageEnvelope<Posts, UncountedPagination>>
+>;
+type ExplicitlyCountedPage = Expect<
+	Equal<Awaited<typeof explicitlyCountedPage>, PageEnvelope<Posts, Pagination>>
+>;
+type ConditionallyCountedPage = Expect<
+	Equal<
+		Awaited<typeof conditionallyCountedPage>,
+		PageEnvelope<Posts, Pagination | UncountedPagination>
+	>
+>;
 type CollisionTarget = {
 	id: string;
 	createdAt: string;
@@ -181,10 +232,9 @@ type CollisionTarget = {
 	select?: string;
 	other?: string;
 };
-type CollisionDocument = { id: string; author: string };
-type CollisionPopulation = { author: string | CollisionTarget };
+type CollisionDocument = { id: string; author: string | CollisionTarget };
 type PopulatedAuthor<Population> = Exclude<
-	ApplyPopulate<CollisionDocument, CollisionPopulation, Population>["author"],
+	ApplyPopulate<CollisionDocument, Population>["author"],
 	string
 >;
 
@@ -228,7 +278,7 @@ type BooleanPopulation = Expect<
 	Equal<keyof PopulatedAuthor<{ author: true }>, keyof CollisionTarget>
 >;
 type DisabledPopulation = Expect<
-	Equal<ApplyPopulate<CollisionDocument, CollisionPopulation, { author: false }>, CollisionDocument>
+	Equal<ApplyPopulate<CollisionDocument, { author: false }>, CollisionDocument>
 >;
 
 void (0 as unknown as AuthoredDepthPopulation);
@@ -241,6 +291,10 @@ void (0 as unknown as EmptySelectOptionPopulation);
 void (0 as unknown as BooleanPopulation);
 void (0 as unknown as DisabledPopulation);
 void (0 as unknown as ConditionalPage);
+void (0 as unknown as UncountedPage);
+void (0 as unknown as UncountedAccessPage);
+void (0 as unknown as ExplicitlyCountedPage);
+void (0 as unknown as ConditionallyCountedPage);
 
 const repeatedPopulation = client.find("posts", post.id, {
 	select: { sections: true, layout: true },
@@ -437,6 +491,38 @@ const invalidNestedWhere: PostsWhere = {
 	seo: { description: { exists: true } },
 };
 void invalidNestedWhere;
+
+// A polymorphic relationship is filtered by membership of { relationTo, id } references.
+const subjectWhere: PostsWhere = {
+	or: [
+		{ subject: { in: [{ relationTo: "authors", id: author.id }] } },
+		{ not: { subject: { in: [{ relationTo: "posts", id: post.id }] } } },
+		{ subject: { exists: false } },
+	],
+};
+void client.list("posts", { where: subjectWhere });
+// @ts-expect-error a bare ID does not say which collection it belongs to.
+const subjectByID: PostsWhere = { subject: { in: [author.id] } };
+const subjectEquality: PostsWhere = {
+	// @ts-expect-error references compare by membership, not scalar equality.
+	subject: { equals: { relationTo: "authors", id: author.id } },
+};
+// @ts-expect-error relationTo names one of the relationship's target collections.
+const subjectTarget: PostsWhere = { subject: { in: [{ relationTo: "media", id: author.id }] } };
+void [subjectByID, subjectEquality, subjectTarget];
+
+// Block row filters are composed from each block definition under the row's dotted path.
+const blockWhere: PostsWhere = {
+	"layout.quote.source": { in: [author.id] },
+	or: [{ "layout.quote.blockName": { like: "Pull" } }, { layout: { exists: false } }],
+};
+void client.list("posts", { where: blockWhere });
+// @ts-expect-error block row filters keep the block slug segment.
+const sluglessBlockWhere: PostsWhere = { "layout.source": { exists: true } };
+// @ts-expect-error block row filters keep each field's operators.
+const invalidBlockOperator: PostsWhere = { "layout.quote.source": { equals: 1 } };
+void sluglessBlockWhere;
+void invalidBlockOperator;
 
 const invalidPolymorphicPopulate: PostsPopulate = {
 	// @ts-expect-error polymorphic population uses one flat target selection, not per-target maps.

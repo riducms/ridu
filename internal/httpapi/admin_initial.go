@@ -329,13 +329,13 @@ func (api *API) prepareAdminRuntime(ctx context.Context, request *http.Request, 
 
 	// Visibility is identity-bound before any navigation or loader selection.
 	// The resulting manifest is presentation metadata, never authorization.
-	snapshot := api.config.Manifest.Snapshot()
-	if api.config.ManifestForRequest != nil {
-		var err error
-		snapshot, err = api.config.ManifestForRequest(ctx, preparedIdentity.identity)
-		if err != nil {
-			return nil, preparedIdentity, "", err
-		}
+	snapshot, localization, err := api.presentedManifest(ctx, preparedIdentity.identity)
+	if err != nil {
+		return nil, preparedIdentity, "", err
+	}
+	manifest, err := api.encodedManifest()
+	if err != nil {
+		return nil, preparedIdentity, "", err
 	}
 	runtime := &protocol.AdminPreparedRuntimeV1{
 		AdminPreparedNavigationV1: protocol.AdminPreparedNavigationV1{
@@ -344,6 +344,9 @@ func (api *API) prepareAdminRuntime(ctx context.Context, request *http.Request, 
 		},
 		Manifest: snapshot, Theme: "system",
 		Preferences: map[string]json.RawMessage{},
+	}
+	if localization == nil {
+		runtime.EncodedManifest = manifest.encoded
 	}
 	if snapshot.Application.Admin != nil && api.config.AuthBootstrapAvailable != nil {
 		available, err := api.config.AuthBootstrapAvailable(ctx, string(snapshot.Application.Admin.UserCollectionSlug))
@@ -419,7 +422,7 @@ func (api *API) prepareAdminRuntime(ctx context.Context, request *http.Request, 
 		}
 		runtime.GlobalOperations[string(global.Slug)] = accessCapabilitiesJSON(capabilities).Operations
 	}
-	contextKey := adminContextKey(snapshot, runtime, preparedIdentity.identity, buildID)
+	contextKey := adminContextKey(manifest.digest, localization, runtime, preparedIdentity.identity, buildID)
 	return runtime, preparedIdentity, contextKey, nil
 }
 
@@ -448,7 +451,7 @@ func (api *API) resolveAdminPreparedIdentity(request *http.Request) adminPrepare
 	return adminPreparedIdentity{identity: state.identity, session: &safe, resolvedSession: &session}
 }
 
-func adminContextKey(snapshot schema.Snapshot, runtime *protocol.AdminPreparedRuntimeV1, identity *AuthIdentity, buildID string) string {
+func adminContextKey(manifestDigest string, localization *schema.LocalizationSettings, runtime *protocol.AdminPreparedRuntimeV1, identity *AuthIdentity, buildID string) string {
 	actor := "anonymous"
 	if identity != nil {
 		actor = string(identity.Collection) + ":" + identity.Actor.ID
@@ -459,14 +462,17 @@ func adminContextKey(snapshot schema.Snapshot, runtime *protocol.AdminPreparedRu
 	}
 	// Only the digest crosses the reuse boundary. Including both the safe session
 	// payload and ID invalidates cached runtime state when identity metadata changes.
+	// The presented manifest is the immutable base manifest, identified by its
+	// digest, with at most an identity-specific localization replacement.
 	encoded, _ := json.Marshal(struct {
-		BuildID       string                                 `json:"buildId"`
-		Manifest      schema.Snapshot                        `json:"manifest"`
-		Actor         string                                 `json:"actor"`
-		SessionID     string                                 `json:"sessionId"`
-		Session       *protocol.AuthSession[json.RawMessage] `json:"session,omitempty"`
-		AuthBootstrap bool                                   `json:"authBootstrap"`
-	}{buildID, snapshot, actor, sessionID, runtime.Session, runtime.AuthBootstrap})
+		BuildID        string                                 `json:"buildId"`
+		ManifestDigest string                                 `json:"manifestDigest"`
+		Localization   *schema.LocalizationSettings           `json:"localization,omitempty"`
+		Actor          string                                 `json:"actor"`
+		SessionID      string                                 `json:"sessionId"`
+		Session        *protocol.AuthSession[json.RawMessage] `json:"session,omitempty"`
+		AuthBootstrap  bool                                   `json:"authBootstrap"`
+	}{buildID, manifestDigest, localization, actor, sessionID, runtime.Session, runtime.AuthBootstrap})
 	digest := sha256.Sum256(encoded)
 	return hex.EncodeToString(digest[:16])
 }
@@ -1085,16 +1091,9 @@ func adminRouteModuleGroups(route adminRouteClassification, snapshot schema.Snap
 	return groups
 }
 
+// adminFieldsUseDate inspects each block definition once.
 func adminFieldsUseDate(fields []schema.Field) bool {
-	for _, field := range fields {
-		if field.Type == schema.FieldTypeDate {
-			return true
-		}
-		if adminFieldsUseDate(schema.ChildFields(field)) {
-			return true
-		}
-	}
-	return false
+	return !schema.WalkDefinitionFields(func(field schema.Field) bool { return field.Type != schema.FieldTypeDate }, fields)
 }
 
 // Reuse only a runtime that this request has independently resolved to the same
@@ -1172,4 +1171,43 @@ func adminHTMLPrefix(index []byte, metadata adminBootstrapMetadata, state protoc
 		prefix = append(prefix, head...)
 	}
 	return prefix, suffix, true
+}
+
+// encodedAdminManifest is the canonical encoding of the shared presentation
+// manifest and its digest. The manifest is immutable, so it is encoded once.
+type encodedAdminManifest struct {
+	encoded json.RawMessage
+	digest  string
+}
+
+func (api *API) encodedManifest() (encodedAdminManifest, error) {
+	api.manifestEncoding.once.Do(func() {
+		encoded, err := json.Marshal(api.manifest)
+		if err != nil {
+			api.manifestEncoding.err = fmt.Errorf("encode presentation manifest: %w", err)
+			return
+		}
+		digest := sha256.Sum256(encoded)
+		api.manifestEncoding.value = encodedAdminManifest{encoded: encoded, digest: hex.EncodeToString(digest[:])}
+	})
+	return api.manifestEncoding.value, api.manifestEncoding.err
+}
+
+// presentedManifest returns the manifest presented to one identity. It shares
+// the immutable base manifest; only an identity-specific localization override
+// replaces the application's localization settings, which is also returned.
+// Callers must treat the result as read-only.
+func (api *API) presentedManifest(ctx context.Context, identity *AuthIdentity) (schema.Snapshot, *schema.LocalizationSettings, error) {
+	snapshot := api.manifest
+	if api.config.LocalizationForRequest == nil {
+		return snapshot, nil, nil
+	}
+	localization, err := api.config.LocalizationForRequest(ctx, identity)
+	if err != nil {
+		return schema.Snapshot{}, nil, err
+	}
+	if localization != nil {
+		snapshot.Application.Localization = localization
+	}
+	return snapshot, localization, nil
 }

@@ -96,7 +96,7 @@ func StoragePatch(fields []schema.Field, values store.Values, selection Selectio
 		if !exists {
 			continue
 		}
-		localized, _, err := storageValue(field, value, selection)
+		localized, _, err := storageValue(field, value, selection, field.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -111,23 +111,22 @@ func ProjectDocument(document store.Document, fields []schema.Field, selection S
 	if selection.Locale == "" && !selection.All {
 		return store.CloneDocument(document)
 	}
+	document.LocalizationSources = nil
 	projected := store.CloneDocument(document)
-	projected.LocalizationSources = make(map[string]schema.LocaleCode)
+	var sources localeSources
 	for _, field := range fields {
 		canonical, exists := projected.Values[field.Name]
 		if !exists {
 			continue
 		}
-		value, visible, _ := projectValueAt(field, canonical, selection, field.Name, projected.LocalizationSources)
+		value, visible, _ := projectValueAt(field, canonical, selection, field.Name, &sources)
 		if !visible {
 			delete(projected.Values, field.Name)
 			continue
 		}
 		projected.Values[field.Name] = value
 	}
-	if len(projected.LocalizationSources) == 0 {
-		projected.LocalizationSources = nil
-	}
+	projected.LocalizationSources = sources.detachedMap()
 	return projected
 }
 
@@ -252,7 +251,7 @@ func copyLocaleIssues(fields []schema.Field, lookup func(string) (store.Value, b
 				continue
 			}
 			hasLocalization := false
-			for _, block := range field.Blocks.ResolvedTypes() {
+			for _, block := range field.Blocks.Definitions() {
 				hasLocalization = hasLocalization || fieldsHaveLocalization(block.ResolvedFields())
 			}
 			if !hasLocalization {
@@ -266,7 +265,7 @@ func copyLocaleIssues(fields []schema.Field, lookup func(string) (store.Value, b
 					continue
 				}
 				blockType, _ := row.Get("blockType").StringValue()
-				for _, block := range field.Blocks.ResolvedTypes() {
+				for _, block := range field.Blocks.Definitions() {
 					if block.Slug == blockType {
 						issues = append(issues, copyLocaleIssues(block.ResolvedFields(), row.Lookup, fmt.Sprintf("%s.%d", path, index))...)
 						break
@@ -344,7 +343,7 @@ func localizedValue(field schema.Field, value store.Value) (store.Value, bool) {
 			return store.Value{}, false
 		}
 		hasLocalizedBlock := false
-		for _, block := range field.Blocks.ResolvedTypes() {
+		for _, block := range field.Blocks.Definitions() {
 			hasLocalizedBlock = hasLocalizedBlock || fieldsHaveLocalization(block.ResolvedFields())
 		}
 		if !hasLocalizedBlock {
@@ -357,7 +356,7 @@ func localizedValue(field schema.Field, value store.Value) (store.Value, bool) {
 			}
 			blockType, _ := item.Get("blockType").StringValue()
 			row := store.Values{}
-			for _, block := range field.Blocks.ResolvedTypes() {
+			for _, block := range field.Blocks.Definitions() {
 				if block.Slug == blockType {
 					row = localizedValues(block.ResolvedFields(), item.Lookup)
 					break
@@ -374,12 +373,7 @@ func localizedValue(field schema.Field, value store.Value) (store.Value, bool) {
 }
 
 func fieldsHaveLocalization(fields []schema.Field) bool {
-	for _, field := range fields {
-		if field.Localized || hasLocalizedDescendant(field) {
-			return true
-		}
-	}
-	return false
+	return schema.ListTraits(fields)&schema.FieldTraitLocalized != 0
 }
 
 func copyReserved(source store.Value, target store.Values, name string) {
@@ -391,67 +385,96 @@ func copyReserved(source store.Value, target store.Values, name string) {
 // Schema-only checks avoid inspecting wide ordinary values when no descendant
 // needs localization. Embedded descriptors still require traversal for their
 // envelope validation and budgets, even when their payloads are not localized.
+// Their summaries are kept per block definition, so a check never revisits
+// every placement beneath a field.
 func hasLocalizedDescendant(field schema.Field) bool {
-	return childFieldsMatch(field, fieldsHaveLocalization)
+	return schema.DescendantTraits(field)&schema.FieldTraitLocalized != 0
 }
+
+const traversalTraits = schema.FieldTraitLocalized | schema.FieldTraitEmbedded
 
 func fieldsNeedTraversal(fields []schema.Field) bool {
-	for _, field := range fields {
-		if field.Localized || embedded.HasFields(field) || childFieldsMatch(field, fieldsNeedTraversal) {
-			return true
-		}
-	}
-	return false
+	return schema.ListTraits(fields)&traversalTraits != 0
 }
 
-func childFieldsMatch(field schema.Field, matches func([]schema.Field) bool) bool {
-	if field.Nested != nil && matches(field.Nested.ResolvedFields()) {
-		return true
-	}
-	if field.Blocks != nil {
-		for _, block := range field.Blocks.ResolvedTypes() {
-			if matches(block.ResolvedFields()) {
-				return true
-			}
-		}
-	}
-	if field.Plugin != nil {
-		for _, tree := range field.Plugin.EmbeddedTrees {
-			for _, c := range tree.Cases {
-				for _, block := range c.ResolvedTypes() {
-					if matches(block.ResolvedFields()) {
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
+func descendantsNeedTraversal(field schema.Field) bool {
+	return schema.DescendantTraits(field)&traversalTraits != 0
 }
 
-func storageValue(field schema.Field, value store.Value, selection Selection) (store.Value, bool, error) {
+// storageValue converts field's value at runtime path.
+func storageValue(field schema.Field, value store.Value, selection Selection, path string) (store.Value, bool, error) {
 	if field.Localized {
 		if selection.All {
 			if value.Kind() != store.ValueObject {
-				return store.Value{}, false, fmt.Errorf("localized field %q must be a locale-keyed object for an all-locales write", field.Path.String())
+				return store.Value{}, false, fmt.Errorf("localized field %q must be a locale-keyed object for an all-locales write", path)
 			}
 			for code := range value.Entries() {
 				if !contains(selection.Configured, schema.LocaleCode(code)) {
-					return store.Value{}, false, fmt.Errorf("localized field %q contains unknown locale %q", field.Path.String(), code)
+					return store.Value{}, false, fmt.Errorf("localized field %q contains unknown locale %q", path, code)
 				}
 			}
 			return value, false, nil
 		}
 		return store.Object(store.Values{string(selection.Locale): value}), true, nil
 	}
-	return mapChildObjects(field, value, "", func(fields []schema.Field, object store.Value, _ string) (store.Value, bool, error) {
+	return mapChildObjects(field, value, path, func(fields []schema.Field, object store.Value, objectPath string) (store.Value, bool, error) {
 		return transformObject(fields, object, func(child schema.Field, childValue store.Value) (store.Value, bool, error) {
-			return storageValue(child, childValue, selection)
+			return storageValue(child, childValue, selection, objectPath+"."+child.Name)
 		})
 	})
 }
 
-func projectValueAt(field schema.Field, value store.Value, selection Selection, path string, sources map[string]schema.LocaleCode) (store.Value, bool, bool) {
+// localeSources records the locale that supplied each projected localized
+// path. One record, the common case of a localized root field, is held inline;
+// a map is allocated only for a second record.
+type localeSources struct {
+	path   string
+	locale schema.LocaleCode
+	more   map[string]schema.LocaleCode
+}
+
+func (sources *localeSources) record(path string, locale schema.LocaleCode) {
+	if sources.more == nil && (sources.path == "" || sources.path == path) {
+		sources.path, sources.locale = path, locale
+		return
+	}
+	if sources.more == nil {
+		sources.more = map[string]schema.LocaleCode{sources.path: sources.locale}
+	}
+	sources.more[path] = locale
+}
+
+func (sources localeSources) len() int {
+	if sources.more != nil {
+		return len(sources.more)
+	}
+	if sources.path != "" {
+		return 1
+	}
+	return 0
+}
+
+func (sources localeSources) copyInto(target map[string]schema.LocaleCode) {
+	if sources.more != nil {
+		for path, locale := range sources.more {
+			target[path] = locale
+		}
+	} else if sources.path != "" {
+		target[sources.path] = sources.locale
+	}
+}
+
+// detachedMap returns the records as a map the caller owns, or nil.
+func (sources localeSources) detachedMap() map[string]schema.LocaleCode {
+	if sources.len() == 0 {
+		return nil
+	}
+	result := make(map[string]schema.LocaleCode, sources.len())
+	sources.copyInto(result)
+	return result
+}
+
+func projectValueAt(field schema.Field, value store.Value, selection Selection, path string, sources *localeSources) (store.Value, bool, bool) {
 	if field.Localized {
 		if selection.All {
 			return value, true, false
@@ -465,11 +488,15 @@ func projectValueAt(field schema.Field, value store.Value, selection Selection, 
 				if text, stringValue := candidate.StringValue(); stringValue && text == "" && index < len(selection.Chain)-1 {
 					continue
 				}
-				sources[path] = locale
+				sources.record(path, locale)
 				return candidate, true, true
 			}
 		}
 		return store.Value{}, false, true
+	}
+	if field.Nested == nil && field.Blocks == nil && field.Plugin == nil {
+		// A scalar without locale branches is retained as is.
+		return value, true, false
 	}
 	transformed, changed, err := mapChildObjects(field, value, path, func(fields []schema.Field, object store.Value, objectPath string) (store.Value, bool, error) {
 		projected, changed := projectObject(fields, object, selection, objectPath, sources)
@@ -478,10 +505,10 @@ func projectValueAt(field schema.Field, value store.Value, selection Selection, 
 	return transformed, err == nil, changed
 }
 
-func projectObject(fields []schema.Field, object store.Value, selection Selection, parentPath string, sources map[string]schema.LocaleCode) (store.Value, bool) {
+func projectObject(fields []schema.Field, object store.Value, selection Selection, parentPath string, sources *localeSources) (store.Value, bool) {
 	var result store.Values
 	for _, field := range fields {
-		if !field.Localized && !embedded.HasFields(field) && !childFieldsMatch(field, fieldsNeedTraversal) {
+		if !field.Localized && !embedded.HasFields(field) && !descendantsNeedTraversal(field) {
 			continue
 		}
 		value, exists := object.Lookup(field.Name)
@@ -525,7 +552,7 @@ func mapChildObjects(field schema.Field, value store.Value, path string, transfo
 		})
 		return transformed, changed, err
 	}
-	if !childFieldsMatch(field, fieldsNeedTraversal) {
+	if !descendantsNeedTraversal(field) {
 		return value, false, nil
 	}
 	if field.Type == schema.FieldTypeGroup {
@@ -549,7 +576,7 @@ func mapChildObjects(field schema.Field, value store.Value, path string, transfo
 			fields = field.Nested.ResolvedFields()
 		} else if field.Type == schema.FieldTypeBlocks && field.Blocks != nil {
 			blockType, _ := item.Get("blockType").StringValue()
-			for _, block := range field.Blocks.ResolvedTypes() {
+			for _, block := range field.Blocks.Definitions() {
 				if block.Slug == blockType {
 					fields = block.ResolvedFields()
 					break
@@ -841,7 +868,7 @@ func mergeRows(nested *schema.NestedField, blocks *schema.BlocksField, current, 
 			fields = nested.ResolvedFields()
 		} else if blocks != nil {
 			blockType, _ := row.Get("blockType").StringValue()
-			for _, block := range blocks.ResolvedTypes() {
+			for _, block := range blocks.Definitions() {
 				if block.Slug == blockType {
 					fields = block.ResolvedFields()
 					break

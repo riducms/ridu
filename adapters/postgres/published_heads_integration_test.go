@@ -9,6 +9,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestPostgresPublishedHeadAndDraftLifecycle(t *testing.T) {
@@ -62,14 +63,14 @@ func TestPostgresPublishedHeadAndDraftLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transaction.Update(ctx, store.UpdateRequest{
+	if _, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: "legacy", ExpectedRevision: 1},
 		Values:  store.Values{"title": store.String("Implicit publication")},
 	}); err == nil {
 		transaction.Rollback(ctx)
 		t.Fatal("draft-capable default update accepted an implicit publication")
 	}
-	staged, err := transaction.Update(ctx, store.UpdateRequest{
+	staged, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: "legacy", ExpectedRevision: 1},
 		Intent:  store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("Pending title")},
 	})
@@ -103,7 +104,7 @@ func TestPostgresPublishedHeadAndDraftLifecycle(t *testing.T) {
 	}{{"Original title", 1}, {"Pending title", 0}} {
 		filter := query.Equal(titlePath, candidate.value).Node()
 		page, err := transaction.List(ctx, store.Request{Collection: collection, PublishedOnly: true, Filter: &filter, Page: 1, Limit: 10})
-		if err != nil || page.Total != candidate.want {
+		if err != nil || *page.Total != candidate.want {
 			transaction.Rollback(ctx)
 			t.Fatalf("public filter %q = %#v, %v", candidate.value, page, err)
 		}
@@ -113,7 +114,7 @@ func TestPostgresPublishedHeadAndDraftLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "legacy", ExpectedRevision: 2}, Intent: store.WriteIntentPublish})
+	_, err = conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: collection, ID: "legacy", ExpectedRevision: 2}, Intent: store.WriteIntentPublish})
 	if err != nil {
 		transaction.Rollback(ctx)
 		t.Fatal(err)
@@ -141,7 +142,8 @@ func TestPostgresPublishedCompoundUniqueAcrossHeads(t *testing.T) {
 	manifest := schema.NewManifest(schema.Snapshot{
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "Published compound unique"}, Plugins: []schema.Plugin{},
 		Collections: []schema.Collection{{ID: "posts", Slug: "posts", Versions: &schema.VersionSettings{Drafts: true}, Fields: []schema.Field{x, y},
-			Indexes: []schema.CollectionIndex{{Fields: []query.Path{xPath, yPath}, Unique: true}}}},
+			Capabilities: schema.Capabilities{Versions: true, Trash: true},
+			Indexes:      []schema.CollectionIndex{{Fields: []query.Path{xPath, yPath}, Unique: true}}}},
 	})
 	collection := manifest.Snapshot().Collections[0]
 	directory := t.TempDir()
@@ -168,7 +170,7 @@ func TestPostgresPublishedCompoundUniqueAcrossHeads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: one.ID, ExpectedRevision: one.Revision},
+	if _, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: collection, ID: one.ID, ExpectedRevision: one.Revision},
 		Intent: store.WriteIntentSaveDraft, Values: store.Values{"x": store.String("pending"), "y": store.String("pair")}}); err != nil {
 		transaction.Rollback(ctx)
 		t.Fatal(err)
@@ -327,7 +329,7 @@ func TestPostgresPublishedReferencesRespectNullifyAndCascade(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collections["owners"], ID: owner.ID, ExpectedRevision: owner.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"target": store.Null()}}); err != nil {
+			if _, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{Request: store.Request{Collection: collections["owners"], ID: owner.ID, ExpectedRevision: owner.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"target": store.Null()}}); err != nil {
 				transaction.Rollback(ctx)
 				t.Fatal(err)
 			}

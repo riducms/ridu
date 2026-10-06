@@ -11,9 +11,9 @@ test("names stay separate from content through collapse, reorder, duplicate and 
 		data: {
 			title: "Named layout",
 			layout: [
-				{ blockType: "cta", heading: "Published heading" },
+				{ blockType: "named-cta", heading: "Published heading" },
 				{
-					blockType: "cta",
+					blockType: "named-cta",
 					heading: "Protected heading",
 					blockName: "Protected name",
 					nameLocked: true,
@@ -83,8 +83,8 @@ test("rich-text names retain focus and history beside inline block fields", asyn
 		data: {
 			title: "Named rich text",
 			body: richDocument([
-				block("callout", { heading: "Content heading", detail: richDocument([]) }),
-				block("cta", { heading: "Second heading", blockName: "Second name" }),
+				block("named-callout", { heading: "Content heading", detail: richDocument([]) }),
+				block("named-cta", { heading: "Second heading", blockName: "Second name" }),
 				block("hidden-name", {
 					heading: "Visible hidden-name content",
 					blockName: "Secret rich-text editorial name",
@@ -202,7 +202,7 @@ test("server name validation focuses the header without mounting collapsed conte
 }) => {
 	await loginAsEditor(page);
 	const created = await page.request.post("/api/collections/block-names?draft=true", {
-		data: { title: "Header validation", layout: [{ blockType: "cta", heading: "Heading" }] },
+		data: { title: "Header validation", layout: [{ blockType: "named-cta", heading: "Heading" }] },
 	});
 	expect(created.ok(), await created.text()).toBe(true);
 	const original = (await created.json()).doc;

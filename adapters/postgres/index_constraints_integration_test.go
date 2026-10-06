@@ -27,8 +27,8 @@ func TestPostgresCompoundIndexesUseExactLocaleNullAndTrashSemantics(t *testing.T
 	}
 	backend, manifest := integrationBackend(t, ctx, config)
 	applyInitialArtifact(t, ctx, backend, manifest)
-	if plan, err := backend.Plan(ctx, manifest); err != nil || len(plan) != 0 {
-		t.Fatalf("post-index migration plan = %#v, %v", plan, err)
+	if err := backend.VerifySchema(ctx, manifest); err != nil {
+		t.Fatalf("post-index migration schema = %v", err)
 	}
 	application, err := ridu.New(config, backend)
 	if err != nil {

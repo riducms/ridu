@@ -86,7 +86,9 @@ test("embedded rich-text insertion defers required dynamic defaults until the pa
 		.click();
 	const picker = page.getByRole("dialog", { name: "Insert block", exact: true });
 	await picker.getByRole("option", { name: "Card", exact: true }).click();
-	const card = body.locator('.ridu-richtext-embedded > article[data-block-type="card"]').first();
+	const card = body
+		.locator('.ridu-richtext-embedded > article[data-block-type="default-embedded-card"]')
+		.first();
 	await expect(card.locator('input[name$=".title"]')).toHaveValue("");
 	await expect(card.locator('input[name$=".note"]')).toHaveValue("");
 	await card.locator('input[name$=".note"]').fill("Draft");

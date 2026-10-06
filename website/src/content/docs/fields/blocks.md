@@ -1,17 +1,20 @@
 ---
-title: "Blocks field"
-description: "Build pages from different content sections, such as heroes, quotes, and image galleries."
+title: 'Blocks field'
+description: 'Build pages from different content sections, such as heroes, quotes, and image galleries.'
 product: core
-eyebrow: "Structured fields"
+eyebrow: 'Structured fields'
 order: 75
-aliases: ["field.Blocks", "page builder", "BlockType", "BlockTypes"]
+aliases: ['field.Blocks', 'page builder', 'BlockType', 'BlockTypes']
 relatedSymbolIds:
-  ["go:github.com/riducms/ridu/field#Blocks", "go:github.com/riducms/ridu/field#Block"]
+  [
+    'go:github.com/riducms/ridu/field#Blocks',
+    'go:github.com/riducms/ridu/field#Block'
+  ]
 navigation:
-  section: "Model content"
+  section: 'Model content'
   parent: fields
   order: 150
-  title: "Blocks"
+  title: 'Blocks'
 ---
 
 Use `field.Blocks` when authors need to combine different kinds of content in one list. A page
@@ -94,9 +97,9 @@ field.Block{
 
 Each omitted form is generated independently from the slug. Defaults use English inflection;
 translations use the admin language and do not affect content localization. The same defaults
-and overrides apply to inline blocks, registered definitions and rich text. Labels on registered
-definitions are shared by every reference. Block-type labels are separate from list/container
-labels and from a row heading derived from its values.
+and overrides apply to blocks declared inline, registered definitions and rich text. Labels belong
+to the block definition and are shared by every place it is used. Block-type labels are separate
+from list/container labels and from a row heading derived from its values.
 
 Authors can add any configured block type, edit its fields, and reorder the list. Set
 `BlockAdmin.RowLabelPath` to a direct scalar child to provide a content summary for
@@ -232,17 +235,38 @@ registrations, repeated or missing references, mixed declarations and reference 
 Definitions can reference other registered definitions, including inside rich text. Registration
 order does not matter.
 
+Declaring a block inline and registering it produce the same block. A slug names one block for the
+whole application, so every declaration of a slug must be identical: reuse one `field.Block` value
+wherever it appears, and give a different block its own slug. Ridu reports a conflicting
+declaration with both locations. Callbacks are identical only when they come from the same value,
+so a block whose fields have hooks, validators or access rules should be built once and reused, or
+registered. `References` selects only blocks registered in `Config.Blocks`.
+
 Edit the central definition to change it everywhere. Resource-local field edits may inspect its
 children but cannot modify them. Register a different slug for a customized variant. Requiredness,
 row limits, localization and container access remain settings of each referencing field.
 
-Registered definitions appear once in the generated schema and `/api/schema`. Without an explicit
-`TypeName`, registered names derive from the slug; inline names derive from the resource and path.
-The stored `blockType`, row `_key` and field persistence identities behave the same in either form.
+Each block appears once in the generated schema and `/api/schema`, however many fields and other
+blocks use it. Without an explicit `TypeName`, its generated name derives from the slug:
+`hero-banner` becomes `HeroBanner`. Type names must be unique, so set `TypeName` when a slug's name
+collides with another generated name. The stored `blockType`, row `_key` and field persistence
+identities are the same whether a block is declared inline or registered.
 
 Access callbacks still receive the current document, row, actor and locale. Ridu evaluates them for
-each occurrence, and the admin uses the same document-aware capabilities as inline blocks. Sharing a
-definition does not cache an access decision across documents or rows.
+each occurrence, and the admin uses the same document-aware capabilities everywhere a block is used.
+Sharing a definition does not cache an access decision across documents or rows.
+
+Large layout builders whose blocks nest other blocks are cheap: Ridu checks, stores and generates
+each block once, however many paths through the graph place it. Placement paths may nest fields at
+most 48 levels and stay within 64 path segments. Fields with hooks, validators, access rules,
+dynamic defaults or visibility conditions are bound once with their block too. A request runs them
+only for the values the document holds, so a hook on a widely shared block adds no cost for the
+many places the block could appear.
+
+Field capabilities, such as those the admin reads, list each value of such a field and each place
+in the document that holds values. Everywhere else, for example a block row the editor has yet to
+add, one entry per block field applies: `blockFields` maps the block's slug and the field's path
+within the block to it. Its access rule runs without row siblings there.
 
 ## Use blocks in TypeScript
 

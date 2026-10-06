@@ -40,12 +40,14 @@ type BoundTypedCollection[Document, Create, Update, Draft any] struct {
 	local      *LocalAPI
 }
 
-// TypedPage is the typed equivalent of store.Page.
+// TypedPage is the typed equivalent of store.Page. Total is nil when the list
+// set SkipTotal; HasNextPage is always exact.
 type TypedPage[Document any] struct {
-	Documents []Document
-	Page      int
-	Limit     int
-	Total     int
+	Documents   []Document
+	Page        int
+	Limit       int
+	Total       *int
+	HasNextPage bool
 }
 
 func (collection BoundTypedCollection[Document, Create, Update, Draft]) Create(ctx context.Context, input Create, options TypedMutationOptions) (Document, error) {

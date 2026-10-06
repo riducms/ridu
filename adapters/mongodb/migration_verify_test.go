@@ -48,7 +48,7 @@ func TestMongoDBArtifactReplayPrecompilesEveryBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(replay) != 3 || len(replay[0].steps) != 22 || len(replay[1].steps) != 2 || len(replay[2].steps) != 1 {
+	if len(replay) != 3 || len(replay[0].steps) != 23 || len(replay[1].steps) != 2 || len(replay[2].steps) != 1 {
 		t.Fatalf("MongoDB replay topology = %#v", replay)
 	}
 	for artifactIndex, artifact := range replay {

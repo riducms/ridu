@@ -31,7 +31,7 @@ func TestCollectionListAccessUsesFullDocumentSnapshots(t *testing.T) {
 		Bindings: []FieldBinding{{
 			ID: "title", Field: title,
 			Access: FieldRules{Read: func(ctx Context) (bool, error) {
-				isLocked, _ := ctx.SiblingData["locked"].BooleanValue()
+				isLocked, _ := ctx.Siblings.Get("locked").BooleanValue()
 				return !isLocked, nil
 			}},
 		}},

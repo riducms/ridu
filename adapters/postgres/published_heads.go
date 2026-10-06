@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,117 +12,222 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-// Published reads join the live head before evaluating caller and access
-// predicates. The existing snapshot-aware compiler then filters and sorts the
-// immutable live values in SQL, not the mutable working columns.
+// A versioned resource stores its live content in a typed table with the
+// working table's physical layout: the same columns, constraints and indexes.
+// Published reads therefore use the ordinary predicate compiler, scanner,
+// planner statistics and indexes; only the source table differs. The live row
+// references its working row and is deleted with it.
+
+// readAlias names every document read source so correlated subqueries can
+// address the outer row without depending on the physical table name.
+const readAlias = "ridu_read"
+
 func readSource(request store.Request) string {
-	table := quote(collectionTable(request.Collection.ID))
+	working := quote(collectionTable(request.Collection.ID))
 	if !request.PublishedOnly || request.Collection.Versions == nil {
-		return table
+		return working + " AS " + readAlias
 	}
-	collectionID := strings.ReplaceAll(string(request.Collection.ID), "'", "''")
-	return fmt.Sprintf(`(SELECT working.*, head.snapshot FROM %s AS working
-JOIN ridu_published_documents AS head ON head.collection_id = '%s' AND head.document_id = working.id) AS ridu_read`, table, collectionID)
+	live := quote(publishedCollectionTable(request.Collection.ID))
+	if request.Lock == store.LockNone {
+		return live + " AS " + readAlias
+	}
+	// A locked live read also locks the working row, so reference admission
+	// coordinates with mutation and deletion of the document as a whole.
+	return fmt.Sprintf(`(SELECT live.* FROM %s AS live JOIN %s AS working ON working.id = live.id) AS %s`, live, working, readAlias)
+}
+
+// readsPublishedMetadata reports whether a working read carries the live
+// revision and pending-draft state of a draft-enabled resource.
+func readsPublishedMetadata(request store.Request) bool {
+	return !request.PublishedOnly && request.Collection.Versions != nil && request.Collection.Versions.Drafts
 }
 
 func readColumns(request store.Request, fields []schema.Field) string {
-	if request.PublishedOnly && request.Collection.Versions != nil {
-		return quote("snapshot")
+	columns := selectColumns(request.Collection, fields, request.Locales)
+	if readsPublishedMetadata(request) {
+		columns += ", " + publishedStateColumn(request.Collection, readAlias)
 	}
-	return selectColumns(request.Collection, fields, request.Locales)
+	return columns
+}
+
+// publishedStateColumn reads the live revision and pending-draft flag as one
+// correlated array for unlocked reads. A scalar subquery costs one primary-key
+// probe per returned row.
+//
+// A locking read must not use it. When a locking read waits for a concurrent
+// writer, READ COMMITTED returns the newest version of the locked row, but the
+// subquery still reads the live table with the statement's original snapshot:
+// a publication or unpublication committed during the wait would be invisible.
+// findLockedWorking reads the live state in a statement of its own instead.
+func publishedStateColumn(collection schema.Collection, outer string) string {
+	return fmt.Sprintf(`(SELECT ARRAY[live._revision, CASE WHEN live.has_draft_changes THEN 1 ELSE 0 END]
+FROM %s AS live WHERE live.id = %s.id)`, quote(publishedCollectionTable(collection.ID)), outer)
+}
+
+// liveStateStatement reads one document's live revision and pending-draft flag.
+func liveStateStatement(collection schema.Collection) string {
+	return fmt.Sprintf(`SELECT _revision, has_draft_changes FROM %s WHERE id = $1`, quote(publishedCollectionTable(collection.ID)))
+}
+
+// findLockedWorking performs a locking working read of a draft-enabled
+// resource. The live state is read by a second statement in the same
+// pipeline, so it costs no extra round trip. PostgreSQL executes pipelined
+// statements in order and, in READ COMMITTED, takes each statement's snapshot
+// when that statement starts, which is after the first statement holds the
+// row lock. Every writer of the live state holds the working row lock, so the
+// live state read then is the state the locked row belongs to.
+func (transaction *documentTransaction) findLockedWorking(ctx context.Context, request store.Request, fields []schema.Field, predicate, lock string, arguments []any) (store.Document, error) {
+	batch := &pgx.Batch{}
+	batch.Queue(fmt.Sprintf("SELECT %s FROM %s WHERE %s%s", selectColumns(request.Collection, fields, request.Locales), readSource(request), predicate, lock), arguments...)
+	batch.Queue(liveStateStatement(request.Collection), request.ID)
+	results := transaction.transaction.SendBatch(ctx, batch)
+	document, err := scanDocument(results.QueryRow(), request.Collection, fields, request.Locales)
+	if err == nil {
+		err = scanLiveState(results.QueryRow(), &document)
+	}
+	if closeErr := results.Close(); err == nil {
+		err = closeErr
+	}
+	return document, translateError(err)
+}
+
+// scanLiveState applies a liveStateStatement result; no row means no live head.
+func scanLiveState(row pgx.Row, document *store.Document) error {
+	var revision int
+	var pending bool
+	switch err := row.Scan(&revision, &pending); {
+	case errors.Is(err, pgx.ErrNoRows):
+		document.PublishedRevision, document.HasDraftChanges = 0, false
+		return nil
+	case err != nil:
+		return err
+	}
+	document.PublishedRevision, document.HasDraftChanges = revision, pending
+	return nil
+}
+
+func applyPublishedState(document *store.Document, state []int32) {
+	if len(state) != 2 {
+		document.PublishedRevision, document.HasDraftChanges = 0, false
+		return
+	}
+	document.PublishedRevision, document.HasDraftChanges = int(state[0]), state[1] == 1
 }
 
 func scanRequestedDocument(row rowScanner, request store.Request, fields []schema.Field) (store.Document, error) {
-	if !request.PublishedOnly || request.Collection.Versions == nil {
-		return scanDocument(row, request.Collection, fields)
+	if !readsPublishedMetadata(request) {
+		return scanDocument(row, request.Collection, fields, request.Locales)
 	}
-	var encoded []byte
-	if err := row.Scan(&encoded); err != nil {
+	return scanDocumentWithPublishedState(row, request.Collection, fields, request.Locales)
+}
+
+func scanDocumentWithPublishedState(row rowScanner, collection schema.Collection, fields []schema.Field, locales []schema.LocaleCode) (store.Document, error) {
+	var document store.Document
+	var state []int32
+	destinations, finish := documentDestinations(&document, collection, fields, locales)
+	destinations = append(destinations, &state)
+	if err := row.Scan(destinations...); err != nil {
 		return store.Document{}, err
 	}
-	var document store.Document
-	if err := json.Unmarshal(encoded, &document); err != nil {
-		return store.Document{}, fmt.Errorf("decode PostgreSQL published head: %w", err)
+	if err := finish(); err != nil {
+		return store.Document{}, err
 	}
-	document.PublishedRevision = 0
-	document.HasDraftChanges = false
-	document.LocalizationSources = nil
+	applyPublishedState(&document, state)
 	return document, nil
 }
 
-func (transaction *documentTransaction) attachPublishedMetadata(ctx context.Context, collection schema.Collection, documents []store.Document) error {
-	if collection.Versions == nil || !collection.Versions.Drafts || len(documents) == 0 {
-		return nil
+// physicalDocumentColumns lists a resource's document columns. The working
+// and live tables are generated from the same definition; the live table adds
+// only has_draft_changes. Locales are the application's configured locales,
+// which every engine write supplies.
+func physicalDocumentColumns(collection schema.Collection, locales []schema.LocaleCode) []string {
+	columns := []string{"id", "created_at", "updated_at", "deleted_at"}
+	if collection.Versions != nil {
+		columns = append(columns, "_status")
 	}
-	ids := make([]string, len(documents))
-	index := make(map[string]int, len(documents))
-	for position := range documents {
-		ids[position] = documents[position].ID
-		index[documents[position].ID] = position
+	if collection.Versions != nil || collection.Upload != nil {
+		columns = append(columns, "_revision")
 	}
-	rows, err := transaction.transaction.Query(ctx, `SELECT document_id, revision, has_draft_changes
-FROM ridu_published_documents WHERE collection_id = $1 AND document_id = ANY($2::text[])`, string(collection.ID), ids)
-	if err != nil {
-		return translateError(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id string
-		var revision int
-		var pending bool
-		if err := rows.Scan(&id, &revision, &pending); err != nil {
-			return translateError(err)
+	for _, field := range storedSchemaFields(collection) {
+		if !field.Localized {
+			columns = append(columns, fieldColumn(field.ID))
+			continue
 		}
-		position := index[id]
-		documents[position].PublishedRevision = revision
-		documents[position].HasDraftChanges = pending
+		for _, locale := range locales {
+			columns = append(columns, localizedFieldColumn(field.ID, locale))
+		}
 	}
-	return translateError(rows.Err())
+	return columns
 }
 
-func (transaction *documentTransaction) publishedHead(ctx context.Context, collection schema.Collection, id string) (store.Document, bool, error) {
+func (transaction *documentTransaction) publishedHead(ctx context.Context, collection schema.Collection, id string, locales []schema.LocaleCode) (store.Document, bool, error) {
 	if collection.Versions == nil {
 		return store.Document{}, false, nil
 	}
-	var encoded []byte
+	fields := storedSchemaFields(collection)
+	return scanPublishedHead(transaction.transaction.QueryRow(ctx, fmt.Sprintf(`SELECT %s, has_draft_changes FROM %s WHERE id = $1`,
+		selectColumns(collection, fields, locales), quote(publishedCollectionTable(collection.ID))), id), collection, fields, locales)
+}
+
+// restorePublishedHead clears the live row's mirrored trash state and returns
+// the restored live head in the same statement.
+func (transaction *documentTransaction) restorePublishedHead(ctx context.Context, collection schema.Collection, id string, locales []schema.LocaleCode) (store.Document, bool, error) {
+	if collection.Versions == nil {
+		return store.Document{}, false, nil
+	}
+	fields := storedSchemaFields(collection)
+	return scanPublishedHead(transaction.transaction.QueryRow(ctx, fmt.Sprintf(`UPDATE %s SET deleted_at = NULL WHERE id = $1 RETURNING %s, has_draft_changes`,
+		quote(publishedCollectionTable(collection.ID)), selectColumns(collection, fields, locales)), id), collection, fields, locales)
+}
+
+func scanPublishedHead(row pgx.Row, collection schema.Collection, fields []schema.Field, locales []schema.LocaleCode) (store.Document, bool, error) {
+	var document store.Document
 	var pending bool
-	err := transaction.transaction.QueryRow(ctx, `SELECT snapshot, has_draft_changes FROM ridu_published_documents
-WHERE collection_id = $1 AND document_id = $2`, string(collection.ID), id).Scan(&encoded, &pending)
+	destinations, finish := documentDestinations(&document, collection, fields, locales)
+	destinations = append(destinations, &pending)
+	err := row.Scan(destinations...)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.Document{}, false, nil
+	}
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return store.Document{}, false, nil
-		}
 		return store.Document{}, false, translateError(err)
 	}
-	var document store.Document
-	if err := json.Unmarshal(encoded, &document); err != nil {
-		return store.Document{}, false, fmt.Errorf("decode PostgreSQL published head: %w", err)
+	if err := finish(); err != nil {
+		return store.Document{}, false, err
 	}
 	document.HasDraftChanges = pending
 	return document, true, nil
 }
 
-func (transaction *documentTransaction) putPublishedHead(ctx context.Context, collection schema.Collection, document store.Document) error {
-	document.PublishedRevision = 0
-	document.HasDraftChanges = false
-	document.LocalizationSources = nil
-	encoded, err := json.Marshal(document)
-	if err != nil {
-		return fmt.Errorf("encode PostgreSQL published head: %w", err)
+// putPublishedHead copies the saved working row into the live table with one
+// statement. The live row is exactly the working row; no value is re-encoded.
+func (transaction *documentTransaction) putPublishedHead(ctx context.Context, collection schema.Collection, document store.Document, locales []schema.LocaleCode) error {
+	columns := physicalDocumentColumns(collection, locales)
+	quoted := make([]string, len(columns))
+	assignments := make([]string, 0, len(columns))
+	for index, column := range columns {
+		quoted[index] = quote(column)
+		if column != "id" {
+			assignments = append(assignments, quote(column)+" = excluded."+quote(column))
+		}
 	}
-	_, err = transaction.transaction.Exec(ctx, `INSERT INTO ridu_published_documents
-(collection_id, document_id, revision, snapshot, has_draft_changes) VALUES ($1, $2, $3, $4, false)
-ON CONFLICT (collection_id, document_id) DO UPDATE SET revision = excluded.revision,
-snapshot = excluded.snapshot, has_draft_changes = false`, string(collection.ID), document.ID, document.Revision, encoded)
+	list := strings.Join(quoted, ", ")
+	statement := fmt.Sprintf(`INSERT INTO %s (%s, has_draft_changes) SELECT %s, false FROM %s WHERE id = $1
+ON CONFLICT (id) DO UPDATE SET %s, has_draft_changes = false`,
+		quote(publishedCollectionTable(collection.ID)), list, list, quote(collectionTable(collection.ID)), strings.Join(assignments, ", "))
+	command, err := transaction.transaction.Exec(ctx, statement, document.ID)
 	if err != nil {
 		return translateError(err)
+	}
+	if command.RowsAffected() != 1 {
+		return store.ErrConflict
 	}
 	return transaction.replacePublishedReferences(ctx, collection, document)
 }
 
 func (transaction *documentTransaction) setPublishedPending(ctx context.Context, collection schema.Collection, id string, pending bool) error {
-	command, err := transaction.transaction.Exec(ctx, `UPDATE ridu_published_documents SET has_draft_changes = $3
-WHERE collection_id = $1 AND document_id = $2`, string(collection.ID), id, pending)
+	command, err := transaction.transaction.Exec(ctx, fmt.Sprintf(`UPDATE %s SET has_draft_changes = $2 WHERE id = $1`,
+		quote(publishedCollectionTable(collection.ID))), id, pending)
 	if err != nil {
 		return translateError(err)
 	}
@@ -133,49 +237,21 @@ WHERE collection_id = $1 AND document_id = $2`, string(collection.ID), id, pendi
 	return nil
 }
 
-func (transaction *documentTransaction) setPublishedDeletion(ctx context.Context, collection schema.Collection, document store.Document) error {
-	if collection.Versions == nil {
-		return nil
-	}
-	_, err := transaction.transaction.Exec(ctx, `UPDATE ridu_published_documents SET snapshot = jsonb_set(
-snapshot, '{DeletedAt}', CASE WHEN $3::timestamptz IS NULL THEN 'null'::jsonb ELSE to_jsonb($3::timestamptz) END, true)
-WHERE collection_id = $1 AND document_id = $2`, string(collection.ID), document.ID, document.DeletedAt)
-	return translateError(err)
-}
-
 func (transaction *documentTransaction) deletePublishedHead(ctx context.Context, collection schema.Collection, id string) error {
 	if collection.Versions == nil {
 		return nil
 	}
-	_, err := transaction.transaction.Exec(ctx, `DELETE FROM ridu_published_documents
-WHERE collection_id = $1 AND document_id = $2`, string(collection.ID), id)
-	if err != nil {
-		return translateError(err)
-	}
-	_, err = transaction.transaction.Exec(ctx, `DELETE FROM ridu_document_references
-WHERE owner_collection_id = $1 AND owner_document_id = $2 AND published_head = true`, string(collection.ID), id)
+	// The live row and its index rows leave together in one statement.
+	_, err := transaction.transaction.Exec(ctx, fmt.Sprintf(`WITH removed AS (DELETE FROM %s WHERE id = $2)
+DELETE FROM ridu_document_references
+WHERE owner_collection_id = $1 AND owner_document_id = $2 AND published_head = true`, quote(publishedCollectionTable(collection.ID))), string(collection.ID), id)
 	return translateError(err)
 }
 
 func (transaction *documentTransaction) replacePublishedReferences(ctx context.Context, collection schema.Collection, document store.Document) error {
-	_, err := transaction.transaction.Exec(ctx, `DELETE FROM ridu_document_references
-WHERE owner_collection_id = $1 AND owner_document_id = $2 AND published_head = true`, string(collection.ID), document.ID)
-	if err != nil {
-		return translateError(err)
-	}
 	entries, err := referenceindex.Collect(collection, document)
 	if err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		_, err := transaction.transaction.Exec(ctx, `INSERT INTO ridu_document_references (
-owner_collection_id, owner_document_id, field_id, target_collection_id, target_document_id, locale, occurrence, published_head
-) VALUES ($1, $2, $3, $4, $5, $6, $7, true)`,
-			string(entry.Owner.CollectionID), entry.Owner.DocumentID, string(entry.FieldID),
-			string(entry.Target.CollectionID), entry.Target.DocumentID, string(entry.Locale), entry.Occurrence)
-		if err != nil {
-			return translateError(err)
-		}
-	}
-	return nil
+	return transaction.replaceReferenceSet(ctx, store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}, entries, true)
 }

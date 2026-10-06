@@ -320,13 +320,13 @@ for (const field of ["sections", "content"] as const)
 		const product = await createProduct(page, {
 			[field]: [
 				{
-					...(field === "content" ? { blockType: "card" } : {}),
+					...(field === "content" ? { blockType: "live-card" } : {}),
 					supplier: "acme",
 					sku: "A-first",
 					links: [{ url: "Original URL" }, { url: "Other URL" }],
 				},
 				{
-					...(field === "content" ? { blockType: "note" } : {}),
+					...(field === "content" ? { blockType: "live-note" } : {}),
 					supplier: "globex",
 					sku: "G-other",
 				},
@@ -408,11 +408,16 @@ test("packaged generic embedded fields receive live feedback through the standar
 			outline: [
 				{
 					kind: "widget",
-					content: { schema: "card", uid: "card-a", supplier: "acme", sku: "A-first" },
+					content: { schema: "live-outline-card", uid: "card-a", supplier: "acme", sku: "A-first" },
 				},
 				{
 					kind: "widget",
-					content: { schema: "card", uid: "card-b", supplier: "globex", sku: "G-second" },
+					content: {
+						schema: "live-outline-card",
+						uid: "card-b",
+						supplier: "globex",
+						sku: "G-second",
+					},
 				},
 			],
 		},
@@ -450,7 +455,7 @@ test("global ordinary and inline rich-text fields use the global live-validation
 						{
 							type: "block",
 							version: 1,
-							fields: { blockType: "card", supplier: "acme", sku: "A-card" },
+							fields: { blockType: "live-global-card", supplier: "acme", sku: "A-card" },
 						},
 					],
 				},
@@ -480,7 +485,9 @@ test("global ordinary and inline rich-text fields use the global live-validation
 	await page.locator('input[name="sku"]').fill("A-global");
 	await check;
 	await expect(page.locator('input[name="sku"]')).not.toHaveAttribute("aria-invalid", "true");
-	const card = page.locator('[data-field-path="body"] article[data-block-type="card"]').first();
+	const card = page
+		.locator('[data-field-path="body"] article[data-block-type="live-global-card"]')
+		.first();
 	const cardSKU = card.locator('input[name$=".sku"]');
 	check = nextGlobalCheck();
 	await cardSKU.fill("wrong");
@@ -515,7 +522,7 @@ for (const field of ["body", "localizedBody"] as const)
 							type: "block",
 							version: 1,
 							fields: {
-								blockType: "card",
+								blockType: "live-embedded-card",
 								supplier: "acme",
 								sku: "A-original",
 								links: [{ url: "Original URL" }],
@@ -528,7 +535,7 @@ for (const field of ["body", "localizedBody"] as const)
 		await page.goto(`/admin/collections/live-validation/${product.id}`);
 		if (field === "localizedBody") await chooseContentLocale(page, "French", "fr");
 		const card = page
-			.locator(`[data-field-path="${field}"] article[data-block-type="card"]`)
+			.locator(`[data-field-path="${field}"] article[data-block-type="live-embedded-card"]`)
 			.first();
 		const url = card.locator('input[name$=".links.0.url"]');
 		let check = nextCheck(page);

@@ -16,7 +16,7 @@ import (
 func TestMongoDBTaskStoreLifecycleUsesServerTimeAndStrictLeases(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	_, _, _, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	backend.now = func() time.Time { return time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC) }
@@ -72,7 +72,7 @@ func TestMongoDBTaskClaimsAreAtomicAcrossClientsAndDoNotStarveIndependentKeys(t 
 	backend := mongoIntegrationStore(t)
 	peer := mongoSystemStorePeer(t, backend)
 	_, _, _, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := peer.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -166,7 +166,7 @@ func TestMongoDBTaskClaimsAreAtomicAcrossClientsAndDoNotStarveIndependentKeys(t 
 func TestMongoDBTaskLeaseReclaimFencesStaleWorkers(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	_, _, _, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	task, err := backend.EnqueueTask(t.Context(), mongoTaskFixture(time.Now().Add(-time.Second), "reclaim", "account"))
@@ -206,7 +206,7 @@ func TestMongoDBTaskLeaseReclaimFencesStaleWorkers(t *testing.T) {
 func TestMongoDBTaskGuardLogicalDriftFailsPromptly(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	_, _, _, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	task, err := backend.EnqueueTask(t.Context(), mongoTaskFixture(time.Now().Add(-time.Second), "drift", "account"))
@@ -243,7 +243,7 @@ func TestMongoDBTaskGuardLogicalDriftFailsPromptly(t *testing.T) {
 func TestMongoDBTaskClaimRejectsCorruptActiveGuardBeforeMutation(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	_, _, _, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	task, err := backend.EnqueueTask(t.Context(), mongoTaskFixture(time.Now().Add(-time.Second), "corrupt-blocker", "account"))
@@ -289,7 +289,7 @@ func TestMongoDBTaskReferencesCleanupAndFenceSameIDRecreation(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	peer := mongoSystemStorePeer(t, backend)
 	users, _, posts, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := peer.VerifyIndexes(t.Context(), manifest); err != nil {
@@ -401,7 +401,7 @@ func TestMongoDBTaskReferencesCleanupAndFenceSameIDRecreation(t *testing.T) {
 func TestMongoDBTaskCancellationFailureReleaseAndTargetedDismissal(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	users, _, posts, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	seedMongoSystemDocuments(t, backend,
@@ -490,7 +490,7 @@ func TestMongoDBTaskIndexesFailClosedAcrossBothCollections(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			backend := mongoIntegrationStore(t)
 			_, _, _, manifest := mongoSystemStoreManifest()
-			if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+			if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 				t.Fatal(err)
 			}
 			if err := backend.database.Collection(test.collection).Indexes().DropOne(t.Context(), test.index); err != nil {
@@ -520,7 +520,7 @@ func TestMongoDBTaskIndexesFailClosedAcrossBothCollections(t *testing.T) {
 func TestMongoDBTaskCleanupGatePrecedesEveryDocumentStateMutation(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	users, _, _, manifest := mongoSystemStoreManifest()
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	seedMongoSystemDocuments(t, backend, mongoSystemDocuments(users, "cleanup-owner"))

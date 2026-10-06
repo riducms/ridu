@@ -1302,7 +1302,7 @@ func runMongoDBMigrate(ctx context.Context, request mongoDBMigrationCLIOptions, 
 func sqliteRenameCandidates(before, after schema.Manifest) []schemadiff.RenameCandidate {
 	var fields []schemadiff.RenameCandidate
 	for _, candidate := range schemadiff.RenameCandidates(before, after) {
-		if candidate.Kind == schemadiff.RenameField {
+		if candidate.Kind != schemadiff.RenameCollection {
 			fields = append(fields, candidate)
 		}
 	}
@@ -1647,8 +1647,11 @@ func confirmRenameCandidates(candidates []schemadiff.RenameCandidate, input io.R
 }
 
 func renameDescription(candidate schemadiff.RenameCandidate) string {
-	if candidate.Kind == schemadiff.RenameCollection {
+	switch candidate.Kind {
+	case schemadiff.RenameCollection:
 		return fmt.Sprintf("collection rename %q -> %q", candidate.BeforeCollection.Slug, candidate.AfterCollection.Slug)
+	case schemadiff.RenameBlockField:
+		return fmt.Sprintf("block field rename %q.%s -> %q.%s in every %q block", candidate.Block, candidate.BeforeField.Path, candidate.Block, candidate.AfterField.Path, candidate.Block)
 	}
 	return fmt.Sprintf("field rename %q.%s -> %q.%s", candidate.BeforeCollection.Slug, candidate.BeforeField.Path, candidate.AfterCollection.Slug, candidate.AfterField.Path)
 }
@@ -1660,6 +1663,7 @@ func postgresRenames(candidates []schemadiff.RenameCandidate) []postgres.Rename 
 			Kind:             postgres.RenameKind(candidate.Kind),
 			BeforeCollection: candidate.BeforeCollection,
 			AfterCollection:  candidate.AfterCollection,
+			Block:            candidate.Block,
 			BeforeField:      candidate.BeforeField,
 			AfterField:       candidate.AfterField,
 		}
@@ -1678,8 +1682,9 @@ func contentRenames(candidates []schemadiff.RenameCandidate) []migration.Rename 
 		renamed[index] = migration.Rename{
 			CollectionBefore: candidate.BeforeCollection.Slug,
 			CollectionAfter:  candidate.AfterCollection.Slug,
+			Block:            candidate.Block,
 		}
-		if candidate.Kind == schemadiff.RenameField {
+		if candidate.Kind == schemadiff.RenameField || candidate.Kind == schemadiff.RenameBlockField {
 			renamed[index].FieldBefore = candidate.BeforeField.Path.String()
 			renamed[index].FieldAfter = candidate.AfterField.Path.String()
 			continue

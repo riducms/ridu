@@ -352,11 +352,7 @@ func TestPostgresMigrationsExplainADevelopmentSyncedDatabase(t *testing.T) {
 	ctx := context.Background()
 	backend := migrationArtifactTestBackend(t)
 	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
-	statements, err := backend.Plan(ctx, manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, statements); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, manifest); err != nil {
 		t.Fatal(err)
 	}
 	directory := t.TempDir()

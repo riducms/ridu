@@ -16,7 +16,7 @@ import (
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/localization"
 	"github.com/riducms/ridu/internal/population"
-	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/querypath"
 	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
@@ -60,23 +60,39 @@ type Context struct {
 	ID              string
 	Actor           *store.Document
 	ActorCollection schema.CollectionSlug
+	// actorView shares one immutable view of Actor across an operation's
+	// callbacks; see ActorValues.
+	actorView *actorView
 	// System marks trusted server code that skips collection and field access
 	// rules. Only the Local API sets it; transports never do.
-	System              bool
-	Data                store.Values
-	Value               store.Value
-	SiblingData         store.Values
-	InputSiblingData    store.Values
-	RootData            store.Values
-	LiveValidation      bool
-	OriginalValue       store.Value
-	OriginalSiblingData store.Values
-	originalCanonical   *store.Document
-	projections         *localization.Projector
-	Document            *store.Document
-	Original            *store.Document
-	FieldPath           string
+	System bool
+	Data   store.Values
+	Value  store.Value
+	// Root, Siblings and Prior are a field callback's immutable object views of
+	// the document, the enclosing object or row, and that object's previous
+	// persisted state. Root is zero outside field callbacks; Prior is zero when
+	// no previous object exists. Input is a live validator's submitted object.
+	Root     store.Value
+	Siblings store.Value
+	Prior    store.Value
+	Input    store.Value
+	// enclosingRoot, when set, is the Root of every field callback scoped from
+	// this context: an embedded live-validation scope keeps its document root.
+	enclosingRoot store.Value
+	// Replacement receives a field hook's new value for its own field. The
+	// engine sets it for each field hook; other contexts leave it nil.
+	Replacement       *FieldReplacement
+	LiveValidation    bool
+	originalCanonical *store.Document
+	projections       *localization.Projector
+	Document          *store.Document
+	Original          *store.Document
+	// bound is the field a field callback is bound to; see BoundField.
+	bound boundField
+	// OccurrenceID correlates a field callback's value; SchemaOccurrenceID
+	// names the configured field at the value's placement.
 	OccurrenceID        string
+	SchemaOccurrenceID  string
 	ValuePresent        bool
 	submittedData       store.Values
 	submittedAllLocales bool
@@ -122,6 +138,11 @@ type Collection struct {
 	Access   map[operation.Kind]Access
 	Hooks    Hooks
 	Bindings []FieldBinding
+	// plan is derived from Schema and Bindings by New; see runtimePlan.
+	plan *collectionPlan
+	// placement locates Schema.Fields in a collection narrowed to an embedded
+	// payload's fields, whose bindings keep their full canonical paths.
+	placement fieldPlacement
 }
 
 type Config struct {
@@ -154,9 +175,12 @@ type Request struct {
 	// System runs the request as trusted server code: collection, field, draft
 	// and reference access rules are skipped, while validation, hooks, versions
 	// and reference integrity still apply. Only the Local API sets it.
-	System      bool
-	Page        int
-	Limit       int
+	System bool
+	Page   int
+	Limit  int
+	// SkipTotal reads a collection list page without counting every match:
+	// the page has no Total and an exact HasNextPage. Index windows never count.
+	SkipTotal   bool
 	IndexWindow *store.IndexWindow
 	Sort        []query.Sort
 	Select      []query.Path
@@ -171,7 +195,11 @@ type Request struct {
 	OutputFields []query.Path
 	// Draft overrides versioned read visibility or selects the status written
 	// by create/update. Nil preserves the caller's existing behavior.
-	Draft            *bool
+	Draft *bool
+	// ExpectedRevision, when nonzero, must equal the revision of the document
+	// as the operation locks it, before any hook runs; otherwise the operation
+	// fails with a conflict. Writes the operation's own hooks make in its
+	// transaction do not conflict with it.
 	ExpectedRevision int
 	Status           *store.Status
 	ImportID         string
@@ -228,10 +256,9 @@ func (resource *TransactionResource) Claimed() bool {
 }
 
 type Result struct {
-	Document      *store.Document
-	Page          *store.Page
-	PageAccess    *CollectionPageAccess
-	WindowHasMore bool
+	Document   *store.Document
+	Page       *store.Page
+	PageAccess *CollectionPageAccess
 }
 
 type CollectionPageAccess struct {
@@ -353,7 +380,7 @@ func (engine *Engine) readsDrafts(collection Collection, ctx Context) (bool, err
 	if collection.Access[operation.ReadDrafts] != nil {
 		decision, err := authorize(collection, ctx)
 		if err != nil {
-			return false, &Error{Code: "access_failed", Status: 500, Message: "draft read access rule failed", Cause: err}
+			return false, accessRuleError("draft read access rule failed", err)
 		}
 		switch decision.Kind {
 		case Allow:
@@ -375,7 +402,7 @@ func (engine *Engine) readsDrafts(collection Collection, ctx Context) (bool, err
 	ctx.Operation, ctx.Collection = operation.Admin, editors.Schema
 	decision, err := authorize(editors, ctx)
 	if err != nil {
-		return false, &Error{Code: "access_failed", Status: 500, Message: "admin access rule failed", Cause: err}
+		return false, accessRuleError("admin access rule failed", err)
 	}
 	return decision.Kind == Allow, nil
 }
@@ -428,11 +455,15 @@ func New(config Config) (*Engine, error) {
 		localization:              cloneLocalization(config.Localization),
 		editorCollection:          config.EditorCollection,
 	}
+	// One planner shares each block definition's plan across every placement
+	// and collection.
+	planner := newOutputPlanner()
 	for _, collection := range config.Collections {
 		key := collection.Key
 		if key == "" {
 			key = string(collection.Schema.Slug)
 		}
+		collection.plan = newCollectionPlan(collection, planner)
 		engine.collections[string(collection.Schema.ID)] = collection
 		engine.collections[key] = collection
 		engine.schemas[collection.Schema.ID] = collection.Schema
@@ -546,15 +577,73 @@ func (engine *Engine) deleteCascadeOwners(ctx context.Context, state *transactio
 	return nil
 }
 
+// lockedRow is the working document an operation read with LockMutation and
+// what the operation derives from it.
+type lockedRow struct {
+	// document is the row as read, which a store update receives as Current.
+	document store.Document
+	// canonical is a detached copy for hooks, projections and merges.
+	canonical store.Document
+	// live is a discard's live head values.
+	live store.Values
+	// mark is the transaction's write position when the row was read.
+	mark uint64
+}
+
+// admitLockedRow checks the working row an operation locked through lock and
+// reads what the operation needs alongside it. Execute admits a row again when
+// a nested operation in the same transaction wrote it after the first read.
+func (engine *Engine) admitLockedRow(ctx context.Context, state *transactionState, collection Collection, request Request, lock store.Request, updateAccess *Decision, document store.Document) (lockedRow, error) {
+	row := lockedRow{document: document, mark: state.writes.mark()}
+	if request.Operation == operation.DiscardDraft {
+		if document.PublishedRevision == 0 || !document.HasDraftChanges {
+			return lockedRow{}, &Error{Code: "conflict", Status: 409, Message: "document has no working draft to discard"}
+		}
+		liveRequest := lock
+		liveRequest.PublishedOnly = true
+		live, err := state.transaction.Find(ctx, liveRequest)
+		if err != nil {
+			return lockedRow{}, translateStoreError(err)
+		}
+		row.live = store.CloneValues(live.Values)
+	}
+	if request.Operation == operation.Unpublish && document.Status != store.StatusPublished {
+		return lockedRow{}, &Error{Code: "validation", Status: 422, Message: "only a published document can be unpublished"}
+	}
+	row.canonical = store.CloneDocument(document)
+	if recoveryError := unknownBlockRecoveryError(collection.Schema.Fields, row.canonical.Values, true); recoveryError != nil {
+		return lockedRow{}, recoveryError
+	}
+	if request.Operation == operation.Update && collection.Schema.Versions != nil &&
+		(document.Status == store.StatusPublished && (request.Draft == nil || !*request.Draft) || request.Status != nil) {
+		return lockedRow{}, publishRequired(collection.Schema, request.Status != nil)
+	}
+	if updateAccess != nil {
+		accessRequest := lock
+		accessRequest.Access = updateAccess.Access
+		if _, err := state.transaction.Find(ctx, accessRequest); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return lockedRow{}, &Error{Code: "access_denied", Status: 403, Message: "editing during a publication transition is not permitted"}
+			}
+			return lockedRow{}, translateStoreError(err)
+		}
+	}
+	return row, nil
+}
+
 func (engine *Engine) Execute(ctx context.Context, request Request) (result Result, err error) {
 	if _, live := ctx.Value(liveContextKey{}).(*liveEvaluationContext); live {
 		return engine.liveExecuteRead(ctx, request)
 	}
 	submittedData := store.CloneValues(request.Data)
 	hasSubmittedChanges := len(submittedData) != 0
+	// One detached actor serves every context of this operation: the engine
+	// only reads it, and resource callbacks receive their own copies.
+	actor := cloneDocumentPointer(request.Actor)
+	actorView := newActorView(actor)
 	failureContext := Context{
 		Context: context.WithoutCancel(ctx), Operation: request.Operation, ID: request.ID,
-		Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection, System: request.System, Data: store.CloneValues(request.Data),
+		Actor: actor, actorView: actorView, ActorCollection: request.ActorCollection, System: request.System, Data: store.CloneValues(request.Data),
 	}
 	var resourceAfterError []Hook
 	defer func() {
@@ -593,7 +682,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	}
 	request.Data = store.CloneValues(request.Data)
 	if request.Operation != operation.Read {
-		if identityError := prepareRowIdentities(collection.Schema.Fields, request.Data, request.LocalizationPrepared, false); identityError != nil {
+		if _, identityError := prepareRowIdentities(collection.Schema.Fields, request.Data, request.LocalizationPrepared, false); identityError != nil {
 			return Result{}, identityError
 		}
 	}
@@ -664,6 +753,9 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	if request.IncludeAccess && (request.Operation != operation.Read || request.ID != "" || request.IndexWindow != nil) {
 		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "access enrichment requires an ordinary collection list read"}
 	}
+	if request.SkipTotal && (request.Operation != operation.Read || request.ID != "") {
+		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "skipping the total requires a collection list read"}
+	}
 	if request.Operation == operation.Unpublish && collection.Schema.Versions != nil && !collection.Schema.Versions.Drafts {
 		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "collection does not support drafts"}
 	}
@@ -725,7 +817,8 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		WritePhase:      writePhaseForRequest(collection.Schema, request),
 		Collection:      collection.Schema,
 		ID:              request.ID,
-		Actor:           cloneDocumentPointer(request.Actor),
+		Actor:           actor,
+		actorView:       actorView,
 		ActorCollection: request.ActorCollection,
 		System:          request.System,
 		Data:            store.CloneValues(request.Data),
@@ -749,7 +842,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			decision, err = authorize(collection, authorizationContext)
 		}
 		if err != nil {
-			return Result{}, &Error{Code: "access_failed", Status: 500, Message: "access rule failed", Cause: err}
+			return Result{}, accessRuleError("access rule failed", err)
 		}
 		if decision.Kind == Deny || request.Operation == operation.Create && decision.Kind == Where {
 			return Result{}, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
@@ -764,7 +857,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				updateDecision, err = authorize(collection, updateContext)
 			}
 			if err != nil {
-				return Result{}, &Error{Code: "access_failed", Status: 500, Message: "update access rule failed", Cause: err}
+				return Result{}, accessRuleError("update access rule failed", err)
 			}
 			if updateDecision.Kind == Deny {
 				return Result{}, &Error{Code: "access_denied", Status: 403, Message: "editing during a publication transition is not permitted"}
@@ -777,7 +870,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			publishContext.Operation = operation.Publish
 			publishDecision, publishError := authorize(collection, publishContext)
 			if publishError != nil {
-				return Result{}, &Error{Code: "access_failed", Status: 500, Message: "publish access rule failed", Cause: publishError}
+				return Result{}, accessRuleError("publish access rule failed", publishError)
 			}
 			if publishDecision.Kind != Allow {
 				return Result{}, &Error{Code: "access_denied", Status: 403, Message: "publishing on create is not permitted"}
@@ -802,6 +895,15 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	var duplicateReadContext Context
 	var duplicatePublishedOnly bool
 	var discardLiveCanonical store.Values
+	// locked is the working row this transaction read with LockMutation
+	// through lockRequest; store updates receive it as Current instead of
+	// locking and reading again. visibleSelection projects it for hooks.
+	var locked *lockedRow
+	var lockRequest store.Request
+	visibleSelection := selection
+	if request.LocalizationPrepared || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
+		visibleSelection = hookSelection
+	}
 	if request.Operation == operation.Duplicate || request.Operation == operation.Update || request.Operation == operation.Delete || request.Operation == operation.RestoreDeleted || request.Operation == operation.DeletePermanent || request.Operation == operation.Publish || request.Operation == operation.Unpublish || request.Operation == operation.DiscardDraft {
 		deletion := store.DeletionActive
 		if request.Operation == operation.RestoreDeleted || request.Operation == operation.DeletePermanent {
@@ -816,7 +918,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			readContext.Operation, readContext.Data = operation.Read, store.Values{}
 			readDecision, accessError := authorize(collection, readContext)
 			if accessError != nil {
-				return Result{}, &Error{Code: "access_failed", Status: 500, Message: "source read access rule failed", Cause: accessError}
+				return Result{}, accessRuleError("source read access rule failed", accessError)
 			}
 			if readDecision.Kind == Deny {
 				return Result{}, &Error{Code: "access_denied", Status: 403, Message: "source document may not be read"}
@@ -829,11 +931,12 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				return Result{}, draftError
 			}
 		}
-		original, findError := state.transaction.Find(transactionContext, store.Request{
+		lockRequest = store.Request{
 			Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: findAccess, Deletion: deletion,
 			Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: accessAllLocales, Lock: store.LockMutation,
 			PublishedOnly: duplicatePublishedOnly,
-		})
+		}
+		original, findError := state.transaction.Find(transactionContext, lockRequest)
 		if findError != nil {
 			if collection.Schema.Capabilities.Global && request.Operation == operation.Update && decision.Kind == Allow && errors.Is(findError, store.ErrNotFound) {
 				originalMissing = true
@@ -841,46 +944,21 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				return Result{}, translateStoreError(findError)
 			}
 		} else {
-			if request.Operation == operation.DiscardDraft {
-				if original.PublishedRevision == 0 || !original.HasDraftChanges {
-					return Result{}, &Error{Code: "conflict", Status: 409, Message: "document has no working draft to discard"}
-				}
-				live, liveError := state.transaction.Find(transactionContext, store.Request{
-					Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: decision.Access,
-					Deletion: deletion, PublishedOnly: true, Locales: selection.Configured,
-					LocaleChain: selection.Chain, AllLocales: accessAllLocales, Lock: store.LockMutation,
-				})
-				if liveError != nil {
-					return Result{}, translateStoreError(liveError)
-				}
-				discardLiveCanonical = store.CloneValues(live.Values)
-			}
-			if request.Operation == operation.Duplicate && request.ExpectedRevision != 0 && original.Revision != request.ExpectedRevision {
+			// ExpectedRevision names the document as the caller saw it, so it is
+			// checked once, against the row as locked before any hook runs. The
+			// lock keeps other transactions out until commit, and writes this
+			// operation's own hooks make are part of the operation, so store
+			// requests below carry no expected revision.
+			if request.ExpectedRevision != 0 && original.Revision != request.ExpectedRevision {
 				return Result{}, translateStoreError(store.ErrConflict)
 			}
-			if request.Operation == operation.Unpublish && original.Status != store.StatusPublished {
-				return Result{}, &Error{Code: "validation", Status: 422, Message: "only a published document can be unpublished"}
+			row, admissionError := engine.admitLockedRow(transactionContext, state, collection, request, lockRequest, submittedUpdateDecision, original)
+			if admissionError != nil {
+				return Result{}, admissionError
 			}
-			canonicalDocument := store.CloneDocument(original)
-			if recoveryError := unknownBlockRecoveryError(collection.Schema.Fields, canonicalDocument.Values, true); recoveryError != nil {
-				return Result{}, recoveryError
-			}
-			if request.Operation == operation.Update && collection.Schema.Versions != nil &&
-				(original.Status == store.StatusPublished && (request.Draft == nil || !*request.Draft) || request.Status != nil) {
-				return Result{}, publishRequired(collection.Schema, request.Status != nil)
-			}
-			if submittedUpdateDecision != nil {
-				if _, accessError := state.transaction.Find(transactionContext, store.Request{
-					Collection: collection.Schema, Collections: engine.schemas, ID: request.ID,
-					Access: submittedUpdateDecision.Access, Deletion: deletion,
-					Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: accessAllLocales, Lock: store.LockMutation,
-				}); accessError != nil {
-					if errors.Is(accessError, store.ErrNotFound) {
-						return Result{}, &Error{Code: "access_denied", Status: 403, Message: "editing during a publication transition is not permitted"}
-					}
-					return Result{}, translateStoreError(accessError)
-				}
-			}
+			locked = &row
+			discardLiveCanonical = row.live
+			canonicalDocument := row.canonical
 			if request.Operation == operation.Duplicate {
 				// The canonical source contains every locale, so each retained locale
 				// must independently pass collection Read access before it can be
@@ -890,7 +968,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 					localeContext.Locale, localeContext.AllLocales = locale, true
 					localeDecision, accessError := authorize(collection, localeContext)
 					if accessError != nil {
-						return Result{}, &Error{Code: "access_failed", Status: 500, Message: "source locale read access rule failed", Cause: accessError}
+						return Result{}, accessRuleError("source locale read access rule failed", accessError)
 					}
 					if localeDecision.Kind == Deny {
 						return Result{}, &Error{Code: "access_denied", Status: 403, Message: "every retained source locale must be readable"}
@@ -919,16 +997,14 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 					return Result{}, redactError
 				}
 			}
-			originalCanonical = store.CloneValues(canonicalDocument.Values)
+			// From here the canonical and visible originals are only read: merges
+			// and projections build new maps, and resource hooks receive copies.
+			originalCanonical = canonicalDocument.Values
 			originalCanonicalDocument = &canonicalDocument
 			operationContext.originalCanonical = originalCanonicalDocument
-			visibleSelection := selection
-			if request.LocalizationPrepared || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
-				visibleSelection = hookSelection
-			}
 			visibleOriginal := projections.Document(canonicalDocument, visibleSelection)
-			originalVisible = store.CloneValues(visibleOriginal.Values)
-			operationContext.Original = cloneDocumentPointer(&visibleOriginal)
+			originalVisible = visibleOriginal.Values
+			operationContext.Original = &visibleOriginal
 			if request.Operation == operation.DiscardDraft {
 				request.LocalizationPrepared = true
 				preparedValidationSelection = exactUpdateSelection(selection)
@@ -963,7 +1039,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				}
 				// Merge selected-locale overrides while source keys still correlate,
 				// then rekey the complete copied tree exactly once across all locales.
-				if identityError := prepareRowIdentities(collection.Schema.Fields, candidate, true, true); identityError != nil {
+				if _, identityError := prepareRowIdentities(collection.Schema.Fields, candidate, true, true); identityError != nil {
 					return Result{}, identityError
 				}
 				duplicateCanonical = store.CloneValues(candidate)
@@ -995,7 +1071,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 					}
 					localeDecision, accessError := authorize(collection, createContext)
 					if accessError != nil {
-						return Result{}, &Error{Code: "access_failed", Status: 500, Message: "access rule failed", Cause: accessError}
+						return Result{}, accessRuleError("access rule failed", accessError)
 					}
 					if localeDecision.Kind != Allow {
 						return Result{}, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted for every retained locale"}
@@ -1014,16 +1090,17 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	operationContext.submittedData = store.CloneValues(submittedData)
 	operationContext.submittedAllLocales = request.LocalizationPrepared
 	operationContext.submittedLocale = selection.Locale
+	var identitySelection localization.Selection
 	if request.Operation == operation.Update || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
 		// A fallback occurrence belongs to another whole-field translation. Only
 		// the exact write locale can establish a retained occurrence's identity.
-		identitySelection := exactUpdateSelection(hookSelection)
+		identitySelection = exactUpdateSelection(hookSelection)
 		if request.copyLocaleSource != "" {
 			identitySelection.Locale = request.copyLocaleSource
 			identitySelection.Chain = []schema.LocaleCode{request.copyLocaleSource}
 		}
 		originalIdentity = projections.Values(originalCanonical, identitySelection)
-		if identityError := validateBlockTypeIdentity(collection.Schema.Fields, originalIdentity, operationContext.Data, false); identityError != nil {
+		if identityError := validateBlockTypeIdentity(collection.Schema.Fields, originalIdentity, operationContext.Data); identityError != nil {
 			return Result{}, identityError
 		}
 	}
@@ -1057,7 +1134,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}
 	}
 	if request.Operation != operation.Read {
-		if identityError := prepareRowIdentities(collection.Schema.Fields, operationContext.Data, false, false); identityError != nil {
+		if _, identityError := prepareRowIdentities(collection.Schema.Fields, operationContext.Data, false, false); identityError != nil {
 			return Result{}, identityError
 		}
 	}
@@ -1067,14 +1144,14 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}
 	}
 	if request.Operation != operation.Read {
-		if identityError := prepareRowIdentities(collection.Schema.Fields, operationContext.Data, false, false); identityError != nil {
+		if _, identityError := prepareRowIdentities(collection.Schema.Fields, operationContext.Data, false, false); identityError != nil {
 			return Result{}, identityError
 		}
 	}
 	normalizeSlugFields(collection.Schema.Fields, operationContext.Data, submittedData, operationContext.Original, request.Operation)
 	request.Data = store.CloneValues(operationContext.Data)
 	if request.Operation == operation.Update || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
-		if identityError := validateBlockTypeIdentity(collection.Schema.Fields, originalIdentity, request.Data, false); identityError != nil {
+		if identityError := validateBlockTypeIdentity(collection.Schema.Fields, originalIdentity, request.Data); identityError != nil {
 			return Result{}, identityError
 		}
 	}
@@ -1110,12 +1187,15 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		request.Data = initialized
 		validated, validationIssues := validateWithOptions(collection.Schema.Fields, request.Data, mutationValidation, engine.pluginValidators)
 		validationIssues = append(validationIssues, validateAuthIdentity(collection.Schema, validated, retainedIdentity, mutationValidation.deferCompleteness)...)
-		correlatePrimitiveListIssues(collection.Schema, request.Data, operationContext, validationIssues)
+		correlatePrimitiveListIssues(collection, request.Data, operationContext, validationIssues)
 		if len(validationIssues) != 0 {
 			return Result{}, &Error{Code: "validation", Status: 422, Message: "document validation failed", Issues: validationIssues}
 		}
+		// Field admission below only reads the candidate. Change hooks then edit
+		// operationContext.Data, and request.Data is next taken from that map, so
+		// the two need not be separate copies here.
 		request.Data = validated
-		operationContext.Data = store.CloneValues(validated)
+		operationContext.Data = validated
 	}
 	fieldAuthorizationContext := operationContext
 	fieldAuthorizationBefore := store.Values(nil)
@@ -1193,6 +1273,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		Access:                  decision.Access,
 		Page:                    request.Page,
 		Limit:                   request.Limit,
+		SkipTotal:               request.SkipTotal,
 		Sort:                    append([]query.Sort(nil), request.Sort...),
 		IndexWindow:             cloneIndexWindow(request.IndexWindow),
 		Select:                  storeSelection,
@@ -1200,10 +1281,13 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		PopulationAccess:        make(map[schema.StableID]*query.Node),
 		PopulationPublishedOnly: make(map[schema.StableID]bool),
 		PublishedOnly:           readPublishedOnly,
-		ExpectedRevision:        request.ExpectedRevision,
 		Locales:                 append([]schema.LocaleCode(nil), selection.Configured...),
 		LocaleChain:             append([]schema.LocaleCode(nil), selection.Chain...),
 		AllLocales:              accessAllLocales,
+	}
+	if locked == nil {
+		// A locked row's expected revision was checked when it was read.
+		storeRequest.ExpectedRevision = request.ExpectedRevision
 	}
 	if request.TrashOnly {
 		storeRequest.Deletion = store.DeletionTrash
@@ -1248,8 +1332,47 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		// may inspect the candidate, but cannot transform what the store restores.
 		operationContext.Data = projections.Values(discardLiveCanonical, preparedValidationSelection)
 	}
+	// Hooks run inside this transaction and may write this very document
+	// through a nested operation. The locked row is then stale, so rebase the
+	// operation on the document as it now stands: this write applies on top of
+	// the nested one. The operation's own changes stay a patch. Top-level fields
+	// it writes replace the current values (other locales of a localized field
+	// are kept), every other field keeps the nested write's value, and the
+	// checks below judge the rebased candidate. A restore still replaces the
+	// whole document with its snapshot. Hooks keep the Original they saw;
+	// later callbacks see the rebased one. Without a nested write, no row is
+	// read twice.
+	documentReference := store.DocumentReference{CollectionID: collection.Schema.ID, DocumentID: request.ID}
+	if locked != nil && request.Operation != operation.Duplicate && state.writes.changedSince(documentReference, locked.mark) {
+		current, findError := state.transaction.Find(transactionContext, lockRequest)
+		if findError != nil {
+			return Result{}, translateStoreError(findError)
+		}
+		row, admissionError := engine.admitLockedRow(transactionContext, state, collection, request, lockRequest, submittedUpdateDecision, current)
+		if admissionError != nil {
+			return Result{}, admissionError
+		}
+		locked = &row
+		canonicalDocument := row.canonical
+		originalCanonical, originalCanonicalDocument = canonicalDocument.Values, &canonicalDocument
+		operationContext.originalCanonical = originalCanonicalDocument
+		visibleOriginal := projections.Document(canonicalDocument, visibleSelection)
+		operationContext.Original = &visibleOriginal
+		if request.Operation == operation.Update || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
+			retainedIdentity = originalCanonical
+			originalIdentity = projections.Values(originalCanonical, identitySelection)
+			if !request.LocalizationPrepared {
+				mutationValidation.previous = projections.Values(originalCanonical, exactUpdateSelection(hookSelection))
+			}
+		}
+		if request.Operation == operation.DiscardDraft {
+			discardLiveCanonical = row.live
+			localizationPreparedData = store.CloneValues(discardLiveCanonical)
+			operationContext.Data = projections.Values(discardLiveCanonical, preparedValidationSelection)
+		}
+	}
 	if request.Operation != operation.Read {
-		if identityError := prepareRowIdentities(collection.Schema.Fields, operationContext.Data, false, false); identityError != nil {
+		if _, identityError := prepareRowIdentities(collection.Schema.Fields, operationContext.Data, false, false); identityError != nil {
 			return Result{}, identityError
 		}
 	}
@@ -1261,7 +1384,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	}
 	request.Data = store.CloneValues(operationContext.Data)
 	if request.Operation == operation.Update || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
-		if identityError := validateBlockTypeIdentity(collection.Schema.Fields, originalIdentity, request.Data, false); identityError != nil {
+		if identityError := validateBlockTypeIdentity(collection.Schema.Fields, originalIdentity, request.Data); identityError != nil {
 			return Result{}, identityError
 		}
 	}
@@ -1281,7 +1404,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		request.Data = initialized
 		validated, validationIssues := validateWithOptions(collection.Schema.Fields, request.Data, mutationValidation, engine.pluginValidators)
 		validationIssues = append(validationIssues, validateAuthIdentity(collection.Schema, validated, retainedIdentity, mutationValidation.deferCompleteness)...)
-		correlatePrimitiveListIssues(collection.Schema, request.Data, operationContext, validationIssues)
+		correlatePrimitiveListIssues(collection, request.Data, operationContext, validationIssues)
 		if len(validationIssues) != 0 {
 			return Result{}, &Error{Code: "validation", Status: 422, Message: "document validation failed after before-operation hooks", Issues: validationIssues}
 		}
@@ -1448,6 +1571,11 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			return Result{}, &Error{Code: "validation", Status: 422, Message: "document validation failed", Issues: slugIssues}
 		}
 	}
+	if locked != nil && request.Operation != operation.Duplicate && state.writes.changedSince(documentReference, locked.mark) {
+		// Hook writes were rebased above. Validators, access rules and defaults
+		// only judge the candidate; a write from one would bypass those checks.
+		return Result{}, &Error{Code: "conflict", Status: 409, Message: "the document was written while it was being saved; write it only from a before-change or before-operation hook"}
+	}
 	hardDelete := request.Operation == operation.DeletePermanent || request.Operation == operation.Delete && !collection.Schema.Capabilities.Trash
 	if hardDelete {
 		target := store.DocumentReference{CollectionID: collection.Schema.ID, DocumentID: request.ID}
@@ -1476,6 +1604,8 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}); err != nil {
 			return Result{}, engine.referenceDeleteError(err)
 		}
+		// Nullified owners are rows the engine cannot name.
+		state.writes.recordUnnamed()
 	}
 	switch request.Operation {
 	case operation.Create:
@@ -1510,8 +1640,8 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				if storeError != nil {
 					return Result{}, translateStoreError(storeError)
 				}
-				result.Page = &store.Page{Documents: window.Documents, Page: 1, Limit: request.Limit, Total: -1}
-				result.WindowHasMore = window.HasMore
+				// A window is one count-free page: no total, an exact next-page flag.
+				result.Page = &store.Page{Documents: window.Documents, Page: 1, Limit: request.Limit, HasNextPage: window.HasMore}
 			} else {
 				page, storeError := state.transaction.List(transactionContext, storeRequest)
 				result.Page, err = pageResult(page, storeError)
@@ -1557,7 +1687,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			if collection.Schema.Versions != nil && collection.Schema.Versions.Drafts {
 				intent = store.WriteIntentSaveDraft
 			}
-			document, storeError = state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Values: storageValues, Intent: intent, ReplaceValues: request.replaceValues})
+			document, storeError = state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Values: storageValues, Intent: intent, ReplaceValues: request.replaceValues, Current: &locked.document})
 		}
 		result.Document, err = documentResult(document, storeError)
 	case operation.Publish, operation.Unpublish:
@@ -1583,10 +1713,10 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		if request.Operation == operation.Unpublish {
 			intent = store.WriteIntentUnpublish
 		}
-		document, storeError := state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Values: storageValues, Intent: intent, ReplaceValues: request.replaceValues})
+		document, storeError := state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Values: storageValues, Intent: intent, ReplaceValues: request.replaceValues, Current: &locked.document})
 		result.Document, err = documentResult(document, storeError)
 	case operation.DiscardDraft:
-		document, storeError := state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Intent: store.WriteIntentDiscardDraft})
+		document, storeError := state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Intent: store.WriteIntentDiscardDraft, Current: &locked.document})
 		result.Document, err = documentResult(document, storeError)
 	case operation.Delete:
 		var document store.Document
@@ -1624,6 +1754,9 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			err = withUniqueCandidate(err, uniqueCandidate{collection: collection.Schema, documentID: excludeID, values: store.CloneValues(request.Data), locales: selection.Configured})
 		}
 		return Result{}, err
+	}
+	if request.Operation != operation.Read && result.Document != nil {
+		state.writes.record(store.DocumentReference{CollectionID: collection.Schema.ID, DocumentID: result.Document.ID})
 	}
 	if request.IncludeAccess {
 		result.PageAccess, err = engine.collectionPageAccess(
@@ -1750,7 +1883,9 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			return Result{}, translateStoreError(err)
 		}
 	}
-	if result.Document != nil {
+	divergentHookProjection := hookSelection.Locale != selection.Locale || hookSelection.All != selection.All
+	if result.Document != nil && divergentHookProjection {
+		// Otherwise the response is the hook document, copied after the hooks.
 		projected := projections.Document(*result.Document, selection)
 		result.Document = &projected
 	}
@@ -1760,25 +1895,25 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}
 	}
 	if hookDocumentBase != nil {
-		document := store.CloneDocument(*hookDocumentBase)
-		operationContext.Document = &document
+		document := hookDocumentBase
+		if divergentHookProjection {
+			// Keep the base unchanged so hook edits can be found below.
+			copied := store.CloneDocument(*hookDocumentBase)
+			document = &copied
+		}
+		operationContext.Document = document
 		if document.ID != "" {
 			// Later callbacks, including field AfterCommit hooks, identify the
 			// saved document: a create's new ID, or a duplicate's copy.
 			operationContext.ID = document.ID
 		}
 	}
-	divergentHookProjection := hookSelection.Locale != selection.Locale || hookSelection.All != selection.All
 	if changesDocument(request.Operation) {
 		if err := runHooks(collection.Hooks.AfterChange, operationContext); err != nil {
 			return Result{}, hookError("after change", err)
 		}
 		if err := runFieldHooks(collection, operationContext, func(hooks Hooks) []Hook { return hooks.AfterChange }); err != nil {
 			return Result{}, hookError("field after change", err)
-		}
-		if !divergentHookProjection && result.Document != nil && operationContext.Document != nil {
-			document := store.CloneDocument(*operationContext.Document)
-			result.Document = &document
 		}
 	}
 	if request.Operation == operation.Delete || request.Operation == operation.DeletePermanent {
@@ -2130,7 +2265,7 @@ func (engine *Engine) readVersions(ctx context.Context, collectionName, document
 	}()
 	decision, err := authorize(collection, operationContext)
 	if err != nil {
-		return nil, 0, &Error{Code: "access_failed", Status: 500, Message: "access rule failed", Cause: err}
+		return nil, 0, accessRuleError("access rule failed", err)
 	}
 	if decision.Kind == Deny {
 		return nil, 0, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
@@ -2287,7 +2422,7 @@ func (engine *Engine) RestorePopulated(ctx context.Context, collectionName, docu
 		decision, err = authorize(collection, versionContext)
 	}
 	if err != nil {
-		return Result{}, &Error{Code: "access_failed", Status: 500, Message: "version access rule failed", Cause: err}
+		return Result{}, accessRuleError("version access rule failed", err)
 	}
 	if decision.Kind == Deny {
 		return Result{}, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
@@ -2481,7 +2616,7 @@ func (engine *Engine) redactResult(collection Collection, operationContext Conte
 			if failure, ok := err.(*Error); ok && failure.Code == "block_recovery_required" {
 				return failure
 			}
-			return &Error{Code: "access_failed", Status: 500, Message: "field access rule failed", Cause: err}
+			return accessRuleError("field access rule failed", err)
 		}
 	}
 	if result.Page != nil {
@@ -2490,7 +2625,7 @@ func (engine *Engine) redactResult(collection Collection, operationContext Conte
 				if failure, ok := err.(*Error); ok && failure.Code == "block_recovery_required" {
 					return failure
 				}
-				return &Error{Code: "access_failed", Status: 500, Message: "field access rule failed", Cause: err}
+				return accessRuleError("field access rule failed", err)
 			}
 		}
 	}
@@ -2517,12 +2652,14 @@ func pruneLocalizationSources(document *store.Document) {
 }
 
 func valueExistsAtRuntimePath(values store.Values, path string) bool {
-	segments := strings.Split(path, ".")
-	current, exists := values[segments[0]]
+	name, rest, nested := strings.Cut(path, ".")
+	current, exists := values[name]
 	if !exists {
 		return false
 	}
-	for _, segment := range segments[1:] {
+	for nested {
+		var segment string
+		segment, rest, nested = strings.Cut(rest, ".")
 		if current.Kind() == store.ValueObject {
 			current, exists = current.Lookup(segment)
 		} else {
@@ -2566,12 +2703,13 @@ func (engine *Engine) resolveOutputFields(transaction store.Transaction, collect
 				var resolver Computed
 				resolverContext := operationContext
 				for _, binding := range collection.Bindings {
-					if binding.Field.ID == candidate.ID && binding.Computed != nil {
+					if binding.Block == "" && binding.Field.ID == candidate.ID && binding.Computed != nil {
 						resolver = binding.Computed
 						resolverContext.Document, resolverContext.Data = document, document.Values
+						resolverContext.SchemaOccurrenceID = binding.ID
 						locations := fieldLocationsAtPath(collection.Schema.Fields, document.Values, candidate.Path.String(), operationContext.AllLocales, true)
 						if len(locations) != 0 {
-							resolverContext = scopedBindingContext(resolverContext, binding, locations[0], nil)
+							resolverContext = scopedBindingContext(resolverContext, binding, locations[0], nil, nil)
 						}
 						break
 					}
@@ -2595,12 +2733,12 @@ func (engine *Engine) resolveOutputFields(transaction store.Transaction, collect
 				joinContext := operationContext
 				joinContext.projections = nil
 				joinContext.Operation, joinContext.Collection, joinContext.ID = operation.Read, target.Schema, ""
-				joinContext.Data, joinContext.Value, joinContext.SiblingData = store.Values{}, store.Value{}, nil
+				joinContext.Data, joinContext.Value, joinContext.Siblings = store.Values{}, store.Value{}, store.Value{}
 				joinContext.Document, joinContext.Original = nil, nil
-				joinContext.FieldPath, joinContext.RuntimePath, joinContext.Error = "", "", nil
+				joinContext.bound, joinContext.RuntimePath, joinContext.Error = boundField{}, "", nil
 				decision, err := authorize(target, joinContext)
 				if err != nil {
-					return &Error{Code: "access_failed", Status: 500, Message: "join access rule failed", Cause: err}
+					return accessRuleError("join access rule failed", err)
 				}
 				if decision.Kind == Deny {
 					document.Values[candidate.Name] = store.List()
@@ -2611,9 +2749,10 @@ func (engine *Engine) resolveOutputFields(transaction store.Transaction, collect
 				if draftError != nil {
 					return draftError
 				}
+				// Output values carry only the documents, so no total is counted.
 				page, err := transaction.List(operationContext.Context, store.Request{
 					Collection: target.Schema, Collections: engine.schemas, Filter: &filter, Access: decision.Access,
-					Page: 1, Limit: candidate.Join.Limit, Sort: joinDefaultSort(candidate.Join.DefaultSort),
+					Page: 1, Limit: candidate.Join.Limit, SkipTotal: true, Sort: joinDefaultSort(candidate.Join.DefaultSort),
 					PublishedOnly: !targetReadsDrafts,
 					Locales:       append([]schema.LocaleCode(nil), selection.Configured...), LocaleChain: append([]schema.LocaleCode(nil), selection.Chain...), AllLocales: selection.All,
 				})
@@ -2697,17 +2836,41 @@ func projectDocumentValues(document *store.Document, selected []query.Path) {
 	if selected == nil {
 		return
 	}
+	// A store applies the same selection, so its result usually needs no change.
+	retained := 0
+	for name := range document.Values {
+		if !rootSelected(name, selected) {
+			break
+		}
+		retained++
+	}
+	if document.Values != nil && retained == len(document.Values) {
+		return
+	}
+	// The document is already a detached projection, so the selected members
+	// move into a new root map without another copy.
 	values := make(store.Values, len(selected))
 	for _, path := range selected {
-		segments := path.Segments()
-		if len(segments) != 1 {
+		name := path.String()
+		if strings.Contains(name, ".") {
 			continue
 		}
-		if value, exists := document.Values[segments[0]]; exists {
-			values[segments[0]] = value
+		if value, exists := document.Values[name]; exists {
+			values[name] = value
 		}
 	}
-	document.Values = store.CloneValues(values)
+	document.Values = values
+}
+
+// rootSelected reports whether a root member is one of the selected
+// single-segment paths.
+func rootSelected(name string, selected []query.Path) bool {
+	for _, path := range selected {
+		if path.String() == name {
+			return true
+		}
+	}
+	return false
 }
 
 func appendOptionalPaths(paths []query.Path) []query.Path {
@@ -2804,11 +2967,16 @@ func validVirtualValue(field schema.Field, value store.Value) bool {
 }
 
 func runReadHooks(collection Collection, operationContext Context, result *Result) error {
+	hooked := readHooksChangeValues(collection)
 	run := func(document *store.Document) error {
 		readContext := operationContext
 		readContext.ID = document.ID
 		readContext.Data = document.Values
 		readContext.Document = document
+		var storedNulls map[string]struct{}
+		if hooked && document.Status != store.StatusDraft && !document.HasDraftChanges {
+			storedNulls = storedRequiredNulls(collection, document.Values, readContext.AllLocales)
+		}
 		if err := runHooks(collection.Hooks.AfterRead, readContext); err != nil {
 			return hookError("after read", err)
 		}
@@ -2824,11 +2992,7 @@ func runReadHooks(collection Collection, operationContext Context, result *Resul
 			}
 		}
 		allowIncomplete := document.Status == store.StatusDraft || document.HasDraftChanges
-		identityField := ""
-		if collection.Schema.Auth != nil {
-			identityField = collection.Schema.Auth.IdentityField
-		}
-		return validateReadOutput(collection.Schema.Fields, collection.Schema.Fields, document.Values, readContext.AllLocales, allowIncomplete, identityField)
+		return validateReadOutput(collection, document.Values, readContext.AllLocales, allowIncomplete, hooked, storedNulls)
 	}
 	if result.Document != nil {
 		return run(result.Document)
@@ -2838,33 +3002,6 @@ func runReadHooks(collection Collection, operationContext Context, result *Resul
 			if err := run(&result.Page.Documents[index]); err != nil {
 				return err
 			}
-		}
-	}
-	return nil
-}
-
-// Selection/redaction may omit a property, but a published read transform
-// cannot return explicit null for a required output field. Working drafts may
-// carry incomplete editorial values; an auth identity remains non-nullable.
-// Primitive lists also retain their declared element type and finite numbers.
-// Authoring length/range rules remain write validation, not output formatting rules.
-func validateReadOutput(fields, root []schema.Field, values store.Values, allLocales, allowIncomplete bool, identityField string) error {
-	for _, field := range fields {
-		identity := identityField != "" && field.Path.String() == identityField
-		if field.Required || identity || primitivefield.IsList(field) {
-			for _, location := range fieldLocationsAtPath(root, values, field.Path.String(), allLocales) {
-				if (identity || field.Required && !allowIncomplete) && location.value.Kind() == store.ValueNull {
-					return &Error{Code: "invalid_field_output", Status: 500, Message: fmt.Sprintf("required field %q returned null after read hooks", location.runtimePath)}
-				}
-				if primitivefield.IsList(field) {
-					if err := validatePrimitiveListReadOutput(field, location.value, location.runtimePath); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		if err := validateReadOutput(schema.ChildFields(field), root, values, allLocales, allowIncomplete, identityField); err != nil {
-			return err
 		}
 	}
 	return nil
@@ -2883,14 +3020,61 @@ func valueAtPath(fields []schema.Field, values store.Values, path string, allLoc
 }
 
 type fieldLocation struct {
-	value           store.Value
-	siblings        store.Value
-	runtimePath     string
-	parentPath      string
+	value       store.Value
+	siblings    store.Value
+	runtimePath string
+	// fields is the field list of the object holding the value.
 	fields          []schema.Field
 	identity        string
 	bindingIdentity string
 	locale          schema.LocaleCode
+	// field is the located field as its list declares it. A block
+	// definition's field carries definition-relative path and ID; base, the
+	// canonical path of the definition's placement, then names the field's
+	// placement with it. base is empty for a resource's own field.
+	field *schema.Field
+	base  string
+	// root reports a value of the collection's root object.
+	root bool
+	// localeOwned reports a localized field or one inside a localized field,
+	// whose values differ by locale.
+	localeOwned bool
+}
+
+// shared reports a field of a block definition.
+func (location fieldLocation) shared() bool { return location.base != "" }
+
+// canonical is the canonical path that names the location's placement.
+func (location fieldLocation) canonical() string { return canonicalPath(location.base, location.field) }
+
+// samePlacement reports whether two locations are values of one placement.
+func (location fieldLocation) samePlacement(other fieldLocation) bool {
+	return location.field == other.field && location.base == other.base
+}
+
+// bound describes the location's field to a callback bound to it.
+func (location fieldLocation) bound() boundField {
+	return boundField{field: location.field, base: location.base}
+}
+
+// boundField is the field a field callback is bound to, as a document walk
+// located it: see fieldLocation.
+type boundField struct {
+	field *schema.Field
+	base  string
+}
+
+// BoundField returns the field a field callback is bound to, named by its
+// placement: a block definition's field takes the placement's canonical path
+// and stable ID. It is the zero Field outside field callbacks.
+func (ctx Context) BoundField() schema.Field {
+	switch {
+	case ctx.bound.field == nil:
+		return schema.Field{}
+	case ctx.bound.base == "":
+		return *ctx.bound.field
+	}
+	return placementField(ctx.Collection.ID, *ctx.bound.field, strings.Split(canonicalPath(ctx.bound.base, ctx.bound.field), "."), true)
 }
 
 func fieldLocationSiblings(fields []schema.Field, values store.Value, allLocales bool, locale schema.LocaleCode) store.Value {
@@ -2905,22 +3089,35 @@ func fieldLocationSiblings(fields []schema.Field, values store.Value, allLocales
 }
 
 func fieldLocationsAtPath(fields []schema.Field, values store.Values, path string, allLocales bool, includeMissing ...bool) []fieldLocation {
-	return collectFieldLocations(fields, store.Object(values), path, "", "", "", allLocales, "", includeMissing...)
+	return fieldLocationsInValue(fields, store.Object(values), path, allLocales, includeMissing...)
 }
 
-func collectFieldLocations(fields []schema.Field, values store.Value, path, runtimePrefix, identityPrefix, bindingPrefix string, allLocales bool, locale schema.LocaleCode, includeMissing ...bool) []fieldLocation {
-	for _, field := range fields {
-		canonicalPath := field.Path.String()
-		if path != canonicalPath && !strings.HasPrefix(path, canonicalPath+".") {
+// fieldLocationsInValue reads locations from an already detached root, so
+// read-only traversals of many paths copy the document once. path is a
+// canonical schema path beneath a resource's fields: field names, with the
+// block slug after a Blocks field and the tree key, case tag and block slug
+// after an embedding plugin field. The walk follows document values along
+// that path, entering blocks through their shared definitions, so it never
+// depends on placement views.
+func fieldLocationsInValue(fields []schema.Field, root store.Value, path string, allLocales bool, includeMissing ...bool) []fieldLocation {
+	return collectFieldLocations(fields, root, strings.Split(path, "."), walkPosition{}, allLocales, includeMissing...)
+}
+
+func collectFieldLocations(fields []schema.Field, values store.Value, path []string, at walkPosition, allLocales bool, includeMissing ...bool) []fieldLocation {
+	if len(path) == 0 {
+		return nil
+	}
+	for index := range fields {
+		field := &fields[index]
+		if field.Name != path[0] {
 			continue
 		}
+		terminal := len(path) == 1
 		value, exists := values.Lookup(field.Name)
-		if !exists && !(path == canonicalPath && len(includeMissing) > 0 && includeMissing[0]) {
+		if !exists && !(terminal && len(includeMissing) > 0 && includeMissing[0]) {
 			return nil
 		}
-		runtimePath := joinFieldPath(runtimePrefix, field.Name)
-		identityPath := joinFieldPath(identityPrefix, field.Name)
-		bindingPath := joinFieldPath(bindingPrefix, field.Name)
+		member := at.member(field)
 		if allLocales && field.Localized {
 			if value.Kind() != store.ValueObject {
 				return nil
@@ -2932,34 +3129,38 @@ func collectFieldLocations(fields []schema.Field, values store.Value, path, runt
 			sort.Strings(locales)
 			var locations []fieldLocation
 			for _, code := range locales {
-				localizedPath := joinFieldPath(runtimePath, code)
-				localizedIdentity := joinFieldPath(identityPath, code)
-				localizedLocale := schema.LocaleCode(code)
-				if path == canonicalPath {
-					locations = append(locations, fieldLocation{
-						parentPath: runtimePrefix, fields: fields, value: value.Get(code), siblings: fieldLocationSiblings(fields, values, allLocales, localizedLocale),
-						runtimePath: localizedPath, identity: localizedIdentity, bindingIdentity: bindingPath, locale: localizedLocale,
-					})
+				localized := schema.LocaleCode(code)
+				translated := member.translation(localized)
+				if terminal {
+					locations = append(locations, translated.location(fields, value.Get(code), fieldLocationSiblings(fields, values, allLocales, localized), at.runtime))
 					continue
 				}
-				locations = append(locations, collectFieldDescendantLocations(field, value.Get(code), path, localizedPath, localizedIdentity, bindingPath, allLocales, localizedLocale, includeMissing...)...)
+				locations = append(locations, collectFieldDescendantLocations(field, value.Get(code), path[1:], translated, allLocales, includeMissing...)...)
 			}
 			return locations
 		}
-		if path == canonicalPath {
-			return []fieldLocation{{parentPath: runtimePrefix, fields: fields, value: value, siblings: fieldLocationSiblings(fields, values, allLocales, locale), runtimePath: runtimePath, identity: identityPath, bindingIdentity: bindingPath, locale: locale}}
+		if terminal {
+			return []fieldLocation{member.location(fields, value, fieldLocationSiblings(fields, values, allLocales, at.locale), at.runtime)}
 		}
-		return collectFieldDescendantLocations(field, value, path, runtimePath, identityPath, bindingPath, allLocales, locale, includeMissing...)
+		return collectFieldDescendantLocations(field, value, path[1:], member, allLocales, includeMissing...)
 	}
 	return nil
 }
 
-func collectFieldDescendantLocations(field schema.Field, value store.Value, path, runtimePath, identityPath, bindingPath string, allLocales bool, locale schema.LocaleCode, includeMissing ...bool) []fieldLocation {
+// collectFieldDescendantLocations follows path, the canonical segments below
+// field, through field's value at position at.
+func collectFieldDescendantLocations(field *schema.Field, value store.Value, path []string, at walkPosition, allLocales bool, includeMissing ...bool) []fieldLocation {
 	switch field.Type {
 	case schema.FieldTypePlugin:
+		if len(path) < 4 {
+			return nil
+		}
 		var locations []fieldLocation
-		err := embedded.Visit(field, value, runtimePath, nil, func(occurrence embedded.ReadOccurrence) error {
-			locations = append(locations, collectFieldLocations(occurrence.Fields, occurrence.Payload, path, occurrence.RuntimePath, joinFieldPath(identityPath, occurrence.Identity), joinFieldPath(bindingPath, occurrence.Identity), allLocales, locale, includeMissing...)...)
+		bases := placementBases{}
+		err := embedded.Visit(*field, value, at.runtime, nil, func(occurrence embedded.ReadOccurrence) error {
+			if occurrence.Tree.Key == path[0] && occurrence.Case.TagValue == path[1] && occurrence.Type.Slug == path[2] {
+				locations = append(locations, collectFieldLocations(occurrence.Fields, occurrence.Payload, path[3:], at.payload(occurrence, bases), allLocales, includeMissing...)...)
+			}
 			return nil
 		})
 		if err != nil {
@@ -2970,7 +3171,7 @@ func collectFieldDescendantLocations(field schema.Field, value store.Value, path
 		if value.Kind() != store.ValueObject || field.Nested == nil {
 			return nil
 		}
-		return collectFieldLocations(field.Nested.ResolvedFields(), value, path, runtimePath, identityPath, bindingPath, allLocales, locale, includeMissing...)
+		return collectFieldLocations(field.Nested.ResolvedFields(), value, path, at, allLocales, includeMissing...)
 	case schema.FieldTypeArray:
 		if value.Kind() != store.ValueList || field.Nested == nil {
 			return nil
@@ -2988,17 +3189,19 @@ func collectFieldDescendantLocations(field schema.Field, value store.Value, path
 				rowIdentity = keyedRowIdentity(key, keyOccurrences[key])
 				keyOccurrences[key]++
 			}
-			locations = append(locations, collectFieldLocations(
-				field.Nested.ResolvedFields(), item, path, fmt.Sprintf("%s.%d", runtimePath, index), joinFieldPath(identityPath, rowIdentity), joinFieldPath(bindingPath, rowIdentity), allLocales, locale, includeMissing...,
-			)...)
+			locations = append(locations, collectFieldLocations(field.Nested.ResolvedFields(), item, path, at.row(index, rowIdentity), allLocales, includeMissing...)...)
 		}
 		return locations
 	case schema.FieldTypeBlocks:
-		if value.Kind() != store.ValueList || field.Blocks == nil {
+		if value.Kind() != store.ValueList || field.Blocks == nil || len(path) < 2 {
+			return nil
+		}
+		target, found := field.Blocks.Definition(path[0])
+		if !found {
 			return nil
 		}
 		var locations []fieldLocation
-		keyOccurrences := make(map[string]int, value.Len())
+		keyOccurrences, bases := make(map[string]int, value.Len()), placementBases{}
 		index := -1
 		for item := range value.Elements() {
 			index++
@@ -3009,20 +3212,22 @@ func collectFieldDescendantLocations(field schema.Field, value store.Value, path
 			if !valid {
 				continue
 			}
-			for _, block := range field.Blocks.ResolvedTypes() {
-				if block.Slug != blockType {
-					continue
-				}
-				rowIdentity := fmt.Sprintf("#%d", index)
+			if blockType != target.Slug {
+				// Row identities count every recognized row, so a duplicate key
+				// keeps the same occurrence number whichever type is located.
 				if key, valid := item.Get("_key").StringValue(); valid && key != "" {
-					rowIdentity = keyedRowIdentity(key, keyOccurrences[key])
-					keyOccurrences[key]++
+					if _, known := field.Blocks.Definition(blockType); known {
+						keyOccurrences[key]++
+					}
 				}
-				locations = append(locations, collectFieldLocations(
-					block.ResolvedFields(), item, path, fmt.Sprintf("%s.%d", runtimePath, index), joinFieldPath(identityPath, rowIdentity), joinFieldPath(bindingPath, rowIdentity), allLocales, locale, includeMissing...,
-				)...)
-				break
+				continue
 			}
+			rowIdentity := fmt.Sprintf("#%d", index)
+			if key, valid := item.Get("_key").StringValue(); valid && key != "" {
+				rowIdentity = keyedRowIdentity(key, keyOccurrences[key])
+				keyOccurrences[key]++
+			}
+			locations = append(locations, collectFieldLocations(target.ResolvedFields(), item, path[1:], at.row(index, rowIdentity).enterVia(bases, placementKey{2: target.Slug}), allLocales, includeMissing...)...)
 		}
 		return locations
 	default:
@@ -3108,8 +3313,46 @@ type transactionState struct {
 	transactionResources     []*TransactionResource
 	uploadObjectLockReleases []func()
 	uploadObjectLockedKeys   map[string]struct{}
-	rollbackOnly             error
-	finished                 bool
+	// writes records which documents this transaction's operations wrote, so
+	// an operation can tell whether the row it locked has changed since.
+	writes       documentWrites
+	rollbackOnly error
+	finished     bool
+}
+
+// documentWrites orders the document writes of one transaction. Hooks receive
+// the transaction, so a nested operation can write the very document an
+// enclosing operation locked and is about to save.
+type documentWrites struct {
+	// sequence counts writes; each write takes the next value.
+	sequence uint64
+	// documents holds the sequence of each document's latest write.
+	documents map[store.DocumentReference]uint64
+	// unnamed is the sequence of the latest write that may have changed
+	// documents the engine cannot name: a hard delete's reference cleanup
+	// nullifies owners inside the store.
+	unnamed uint64
+}
+
+// mark returns the position that later writes are compared against.
+func (writes *documentWrites) mark() uint64 { return writes.sequence }
+
+func (writes *documentWrites) record(document store.DocumentReference) {
+	writes.sequence++
+	if writes.documents == nil {
+		writes.documents = make(map[store.DocumentReference]uint64)
+	}
+	writes.documents[document] = writes.sequence
+}
+
+func (writes *documentWrites) recordUnnamed() {
+	writes.sequence++
+	writes.unnamed = writes.sequence
+}
+
+// changedSince reports whether document may have been written after mark.
+func (writes *documentWrites) changedSince(document store.DocumentReference, mark uint64) bool {
+	return writes.unnamed > mark || writes.documents[document] > mark
 }
 
 func (state *transactionState) pendingDeleteOwners() []store.DocumentReference {
@@ -3362,7 +3605,7 @@ func authorize(collection Collection, ctx Context) (Decision, error) {
 		for index, locale := range ctx.Locales {
 			current := ctx
 			current.Locale = locale
-			decision, err := evaluateAccessRule(rule, current)
+			decision, err := evaluateAccessRule(collection, kind, rule, current)
 			if err != nil {
 				return Decision{}, err
 			}
@@ -3376,10 +3619,13 @@ func authorize(collection Collection, ctx Context) (Decision, error) {
 		}
 		return combined, nil
 	}
-	return evaluateAccessRule(rule, ctx)
+	return evaluateAccessRule(collection, kind, rule, ctx)
 }
 
-func evaluateAccessRule(rule Access, ctx Context) (Decision, error) {
+// evaluateAccessRule runs the collection's rule for role. A predicate the
+// rule returns is checked against the collection's query contract here,
+// before any store receives it.
+func evaluateAccessRule(collection Collection, role operation.Kind, rule Access, ctx Context) (Decision, error) {
 	if ctx.System {
 		return Decision{Kind: Allow}, nil
 	}
@@ -3389,6 +3635,11 @@ func evaluateAccessRule(rule Access, ctx Context) (Decision, error) {
 	}
 	if decision.Kind == "" {
 		return Decision{Kind: Deny}, nil
+	}
+	if decision.Kind == Where && decision.Access != nil {
+		if err := validateAccessPredicate(collection, role, ctx.Operation, *decision.Access); err != nil {
+			return Decision{}, err
+		}
 	}
 	return decision, nil
 }
@@ -3444,10 +3695,12 @@ func runHooks(hooks []Hook, ctx Context) error {
 	return nil
 }
 
+// Store results are detached (see store.Values). Execute projects every result
+// into a new document before hooks, redaction or callers can change it, so the
+// raw store result is not copied here.
 func documentResult(document store.Document, err error) (*store.Document, error) {
 	if err == nil {
-		cloned := store.CloneDocument(document)
-		return &cloned, nil
+		return &document, nil
 	}
 	return nil, translateStoreError(err)
 }
@@ -3456,7 +3709,6 @@ func pageResult(page store.Page, err error) (*store.Page, error) {
 	if err != nil {
 		return nil, translateStoreError(err)
 	}
-	page.Documents = cloneDocuments(page.Documents)
 	return &page, nil
 }
 
@@ -3534,9 +3786,9 @@ func rollbackOperationError(message string, operationError, rollbackError error)
 }
 
 func translateStoreError(err error) error {
-	var unsupportedListQuery *primitivefield.UnsupportedQueryError
-	if errors.As(err, &unsupportedListQuery) {
-		return &Error{Code: "bad_query", Status: 400, Message: unsupportedListQuery.Error(), Issues: []schema.Issue{{Code: "unsupported_path", Path: unsupportedListQuery.Path.String(), Message: unsupportedListQuery.Error()}}, Cause: err}
+	var unsupported *querypath.UnsupportedError
+	if errors.As(err, &unsupported) {
+		return unsupportedPathError(unsupported.Path, unsupported.Error(), err)
 	}
 	var recovery *store.SchemaRecoveryError
 	if errors.As(err, &recovery) {
@@ -3593,14 +3845,6 @@ func hookError(phase string, err error) error {
 
 func committedHookError(err error) error {
 	return &Error{Code: "hook_failed", Status: 500, Message: "after commit hook failed", Cause: err, Committed: true}
-}
-
-func cloneDocuments(documents []store.Document) []store.Document {
-	cloned := make([]store.Document, len(documents))
-	for index, document := range documents {
-		cloned[index] = store.CloneDocument(document)
-	}
-	return cloned
 }
 
 func cloneDocumentPointer(document *store.Document) *store.Document {

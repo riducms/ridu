@@ -324,7 +324,7 @@ func decodeCollectionDocument(raw bson.Raw, collection schema.Collection) (store
 	if err := validateMongoVersionMetadata(collection, document.Status, document.Revision); err != nil {
 		return store.Document{}, fmt.Errorf("stored MongoDB document has invalid version metadata: %w", err)
 	}
-	if err := validateCompleteValues(collection, document.Values); err != nil {
+	if err := validateStoredValues(collection, document.Values); err != nil {
 		return store.Document{}, fmt.Errorf("stored MongoDB document does not match collection %q: %w", collection.ID, storedSchemaRecoveryError(err))
 	}
 	return document, nil
@@ -343,7 +343,7 @@ func decodeCollectionDocumentForLocales(raw bson.Raw, collection schema.Collecti
 	if len(locales) == 0 {
 		return document, nil
 	}
-	if err := validateCompleteValuesForLocales(collection, document.Values, locales); err != nil {
+	if err := validateStoredValuesForLocales(collection, document.Values, locales); err != nil {
 		return store.Document{}, fmt.Errorf("stored MongoDB document does not match configured locales for collection %q: %w", collection.ID, storedSchemaRecoveryError(err))
 	}
 	return document, nil
