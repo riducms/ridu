@@ -344,7 +344,7 @@ lookups here.
 A read hook cannot set a required field to `null` in a published or unversioned document: Ridu
 rejects that response with `invalid_field_output`. A `null` that was already stored, for example in
 a document saved before the field became required, is returned unchanged; the
-[migration that requires the field](../migrations.md#required-fields) checks stored documents.
+[migration that requires the field](../migrations/required-fields.md) checks stored documents.
 
 ## BeforeDuplicate {#before-duplicate}
 

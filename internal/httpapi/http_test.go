@@ -1151,8 +1151,8 @@ func TestCollectionListPaginationFalseOmitsTotals(t *testing.T) {
 		"/api/collections/posts/count?pagination=false": `unknown query parameter "pagination"`,
 	} {
 		failure, _ := request(target, http.StatusBadRequest)["error"].(map[string]any)
-		if failure["code"] != "bad_request" || failure["message"] != message {
-			t.Fatalf("GET %s error = %#v, want bad_request %q", target, failure, message)
+		if failure["code"] != "bad_query" || failure["message"] != message {
+			t.Fatalf("GET %s error = %#v, want bad_query %q", target, failure, message)
 		}
 	}
 }

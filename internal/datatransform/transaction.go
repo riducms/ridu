@@ -39,6 +39,8 @@ type Options struct {
 
 // Transaction implements migration.DataTransaction over Documents.
 type Transaction struct {
+	before         *schema.Snapshot
+	after          schema.Snapshot
 	documents      Documents
 	engine         string
 	admit          func(schema.Collection, []schema.LocaleCode) error
@@ -52,6 +54,7 @@ var _ migration.DataTransaction = (*Transaction)(nil)
 // New returns the data transaction for one artifact's transform.
 func New(documents Documents, artifact migration.Artifact, options Options) *Transaction {
 	transaction := &Transaction{
+		before: artifact.Before, after: artifact.After,
 		documents: documents, engine: options.Engine, admit: options.Admit,
 		versioned:      make(map[schema.StableID]struct{}),
 		resourceShapes: make(map[schema.StableID][]schema.Collection),
@@ -86,6 +89,36 @@ func (transaction *Transaction) collect(snapshot schema.Snapshot) {
 			transaction.resourceShapes[resource.ID] = append(transaction.resourceShapes[resource.ID], resource)
 		}
 	}
+}
+
+// Collection returns the collection with slug from the artifact's after
+// manifest, or from its before manifest when the artifact removes it.
+func (transaction *Transaction) Collection(slug string) (schema.Collection, error) {
+	return transaction.resource("collection", slug, func(snapshot schema.Snapshot) []schema.Collection {
+		return snapshot.Collections
+	})
+}
+
+// Global returns the global with slug, resolved like Collection.
+func (transaction *Transaction) Global(slug string) (schema.Collection, error) {
+	return transaction.resource("global", slug, func(snapshot schema.Snapshot) []schema.Collection {
+		return snapshot.Globals
+	})
+}
+
+func (transaction *Transaction) resource(kind, slug string, resources func(schema.Snapshot) []schema.Collection) (schema.Collection, error) {
+	snapshots := []schema.Snapshot{transaction.after}
+	if transaction.before != nil {
+		snapshots = append(snapshots, *transaction.before)
+	}
+	for _, snapshot := range snapshots {
+		for _, resource := range resources(snapshot) {
+			if string(resource.Slug) == slug {
+				return resource, nil
+			}
+		}
+	}
+	return schema.Collection{}, fmt.Errorf("%s data transform %s %q is not in this migration's before or after manifest", transaction.engine, kind, slug)
 }
 
 func (transaction *Transaction) Create(ctx context.Context, request store.CreateRequest) (store.Document, error) {

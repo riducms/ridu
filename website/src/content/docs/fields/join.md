@@ -79,7 +79,7 @@ field.Join("posts", "posts", "category").
 
 `Limit` accepts 1 through 100. Use `DefaultColumns` and `DefaultSort` to configure the table,
 and `AllowCreate` to let authors create a related document from it. `DefaultSort` must name a
-[sortable path](/docs/querying/#sort) of the target collection; a group, list, has-many, JSON or
+[sortable path](/docs/querying/sorting-and-pagination/#sort) of the target collection; a group, list, has-many, JSON or
 plugin field fails configuration with `invalid_join_sort`. Authors still need read or
 create access to the target collection. Joins must live at a collection root
 and are not supported on globals.

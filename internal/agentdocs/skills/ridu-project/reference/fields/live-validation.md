@@ -293,7 +293,7 @@ document validation flow.
 
 The framework admin needs no client setup. A separate application can use
 `collectionLiveValidation` or `globalLiveValidation`; the
-[SDK example](../typescript-sdk.md#live-validation) shows the request, cancellation, and results.
+[SDK example](../typescript-sdk/live-validation.md) shows the request, cancellation, and results.
 The REST routes are `POST /api/collections/{slug}/validate` and
 `POST /api/globals/{slug}/validate`.
 

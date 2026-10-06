@@ -1,22 +1,71 @@
 <script>
+	// A reader who picks a tab, such as TypeScript, sees that label in every group that offers it,
+	// on this page and later pages. Groups without the label keep their own selection.
+	const preferenceKey = 'ridu:docs:code-tabs';
+	const preferenceLimit = 8;
+
+	// Most recent first, so a choice in an unrelated group, such as "In a hook", does not replace
+	// the reader's language when a group offers both.
+	function readPreferences(): string[] {
+		try {
+			const value: unknown = JSON.parse(window.localStorage.getItem(preferenceKey) ?? '[]');
+			return Array.isArray(value)
+				? value.filter((label): label is string => typeof label === 'string')
+				: [];
+		} catch {
+			return [];
+		}
+	}
+
+	function writePreference(label: string) {
+		const labels = [label, ...readPreferences().filter((other) => other !== label)];
+		try {
+			window.localStorage.setItem(preferenceKey, JSON.stringify(labels.slice(0, preferenceLimit)));
+		} catch {
+			// Storage can be unavailable in privacy-restricted browsing contexts.
+		}
+	}
+
+	function selectIndex(group: HTMLElement, index: number) {
+		const tabs = [...group.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+		const panels = [...group.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+		tabs.forEach((tab, position) => {
+			tab.setAttribute('aria-selected', String(position === index));
+			tab.tabIndex = position === index ? 0 : -1;
+		});
+		panels.forEach((panel, position) => {
+			panel.hidden = position !== index;
+		});
+	}
+
+	function selectInGroup(group: HTMLElement, label: string): boolean {
+		const tabs = [...group.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+		const index = tabs.findIndex((tab) => tab.dataset.codeFileTab === label);
+		if (index === -1) return false;
+		selectIndex(group, index);
+		return true;
+	}
+
+	function selectEverywhere(label: string, persist = true) {
+		document
+			.querySelectorAll<HTMLElement>('[data-code-file-tabs]')
+			.forEach((group) => selectInGroup(group, label));
+		if (persist) writePreference(label);
+	}
+
 	function initializeCodeFileTabs() {
+		const preferences = readPreferences();
 		for (const group of document.querySelectorAll<HTMLElement>('[data-code-file-tabs]')) {
 			if (group.dataset.codeFileReady !== undefined) continue;
 			group.dataset.codeFileReady = '';
 			const tablist = group.querySelector<HTMLElement>('[role="tablist"]');
 			const tabs = [...group.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-			const panels = [...group.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
-			function select(index: number) {
-				tabs.forEach((tab, position) => {
-					tab.setAttribute('aria-selected', String(position === index));
-					tab.tabIndex = position === index ? 0 : -1;
-				});
-				panels.forEach((panel, position) => {
-					panel.hidden = position !== index;
-				});
-			}
 			tabs.forEach((tab, index) => {
-				tab.addEventListener('click', () => select(index));
+				tab.addEventListener('click', () => {
+					const label = tab.dataset.codeFileTab;
+					if (label) selectEverywhere(label);
+					else selectIndex(group, index);
+				});
 				tab.addEventListener('keydown', (event) => {
 					let next: number;
 					switch (event.key) {
@@ -36,14 +85,21 @@
 							return;
 					}
 					event.preventDefault();
-					select(next);
+					const label = tabs[next].dataset.codeFileTab;
+					if (label) selectEverywhere(label);
+					else selectIndex(group, next);
 					tabs[next].focus();
 				});
 			});
-			select(0);
+			if (!preferences.some((label) => selectInGroup(group, label))) selectIndex(group, 0);
 			if (tablist) tablist.hidden = false;
 		}
 	}
+
 	initializeCodeFileTabs();
 	document.addEventListener('astro:page-load', initializeCodeFileTabs);
+	window.addEventListener('storage', (event) => {
+		const [latest] = event.key === preferenceKey ? readPreferences() : [];
+		if (latest) selectEverywhere(latest, false);
+	});
 </script>

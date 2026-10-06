@@ -182,3 +182,50 @@ func TestBlockRowBoundsAreValidated(t *testing.T) {
 		t.Fatalf("localized bounds: %v", err)
 	}
 }
+
+// A transform looks resources up in its own artifact: the after shape when the
+// resource survives the migration, the before shape when the migration removes
+// it, and an error for a slug the artifact never had. A looked-up shape is
+// admitted by every request.
+func TestResourcesResolveFromTheArtifactManifests(t *testing.T) {
+	before := schema.Snapshot{
+		Collections: []schema.Collection{
+			{ID: "notes", Slug: "notes", Fields: []schema.Field{textField("title")}},
+			{ID: "drafts", Slug: "drafts", Fields: []schema.Field{textField("title")}},
+		},
+		Globals: []schema.Collection{{ID: "settings", Slug: "settings", Fields: []schema.Field{textField("title")}}},
+	}
+	after := schema.Snapshot{
+		Collections: []schema.Collection{{ID: "notes", Slug: "notes", Fields: []schema.Field{textField("title"), textField("body")}}},
+		Globals:     []schema.Collection{{ID: "settings", Slug: "settings", Fields: []schema.Field{textField("title")}}},
+	}
+	documents := &recordedDocuments{}
+	transaction := New(documents, migration.Artifact{Before: &before, After: after}, Options{Engine: "Test"})
+
+	notes, err := transaction.Collection("notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notes.Fields) != 2 {
+		t.Fatalf("notes fields = %d, want the after shape's 2", len(notes.Fields))
+	}
+	removed, err := transaction.Collection("drafts")
+	if err != nil || removed.ID != "drafts" {
+		t.Fatalf("removed collection = %v, %v; want its before shape", removed.ID, err)
+	}
+	settings, err := transaction.Global("settings")
+	if err != nil || settings.ID != "settings" {
+		t.Fatalf("global = %v, %v; want settings", settings.ID, err)
+	}
+	if _, err := transaction.Collection("settings"); err == nil {
+		t.Fatal("Collection found a global")
+	}
+	if _, err := transaction.Global("missing"); err == nil || !strings.Contains(err.Error(), `global "missing" is not in this migration`) {
+		t.Fatalf("missing global error = %v", err)
+	}
+	for _, resource := range []schema.Collection{notes, removed, settings} {
+		if _, err := transaction.Find(context.Background(), store.Request{Collection: resource, ID: "one"}); err != nil {
+			t.Fatalf("Find with looked-up %s: %v", resource.ID, err)
+		}
+	}
+}

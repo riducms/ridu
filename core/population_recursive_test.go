@@ -304,7 +304,7 @@ func TestPopulationMaterializationBudgetRejectsDenseRecursiveGraphs(t *testing.T
 	}
 	var envelope protocol.ErrorEnvelope
 	decodeResponse(t, response, &envelope)
-	if envelope.Error.Code != protocol.ErrorBadRequest || envelope.Error.Message != "population materializes more than 4096 related documents" {
+	if envelope.Error.Code != protocol.ErrorBadQuery || envelope.Error.Message != "population materializes more than 4096 related documents" {
 		t.Fatalf("dense REST population error = %#v", envelope.Error)
 	}
 }

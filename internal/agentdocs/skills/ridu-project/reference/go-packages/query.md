@@ -111,7 +111,7 @@ integers panic instead of silently losing precision; compare them as strings.
 A polymorphic relationship can point into several collections, so its candidates name the
 collection as well as the ID: `query.In("subjects", query.Reference("posts", postID))`. Lists,
 has-many fields and polymorphic relationships take `query.In` only; see
-[Filter by membership](../querying.md#membership).
+[Filter by membership](../querying/filters.md#membership).
 
 A `query.Value` is the typed form the helpers build internally. Build one with `query.String`,
 `query.Number`, `query.Boolean`, `query.Null`, `query.Reference`, or `query.List` when you call
@@ -138,7 +138,7 @@ To pass a list you built, spread it: `query.In("color", colors...)`.
 The helpers expect a valid name and a matching value, and panic otherwise. That is fine for
 filters written in your code. When the operator or value comes from user input, use
 [`query.Compare`](https://riducms.com/reference/query/compare/), which returns an error instead. The
-[operator table](../querying.md#where) shows the matching REST and TypeScript names.
+[operator table](../querying/filters.md) shows the matching REST and TypeScript names.
 
 ## And, Or, and Not {#combine-filters}
 
@@ -263,5 +263,5 @@ return local.List(ctx, "products", ridu.ListOptions{
 ```
 
 When the direction comes from input, use `query.NewSort`, which returns an error for an unknown
-direction. Some fields, such as arrays and blocks, cannot be sorted. See [sorting](../querying.md#sort) and [pagination](../querying.md#pagination) for
+direction. Some fields, such as arrays and blocks, cannot be sorted. See [sorting](../querying/sorting-and-pagination.md#sort) and [pagination](../querying/sorting-and-pagination.md#paginate) for
 limits, and the [`query` reference](https://riducms.com/reference/query/) for every function.

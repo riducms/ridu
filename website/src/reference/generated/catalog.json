@@ -4960,6 +4960,11 @@
 							"description": "The stable public Ridu code for a failed request."
 						},
 						{
+							"name": "ErrorReason",
+							"type": "string",
+							"description": "ErrorReason is the specific code behind ErrorCode, such as origin_denied\nbehind access_denied or body_too_large behind bad_request. Responses\ncarry only ErrorCode; use ErrorReason for monitoring and alerts."
+						},
+						{
 							"name": "ResponseBytes",
 							"type": "int64",
 							"description": "The response-body byte count."
@@ -9063,7 +9068,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.15.0\"",
+					"signature": "const FrameworkVersion = \"0.16.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -12150,7 +12155,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 153
+						"line": 157
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -15780,7 +15785,7 @@
 					"slug": "bound-typed-collection",
 					"kind": "type",
 					"group": "Generated Go API",
-					"summary": "Typed collection methods for strict writes, incomplete working drafts, reads, and deletion.",
+					"summary": "Typed collection methods for strict writes, incomplete working drafts, publication, reads, and deletion.",
 					"signature": "type BoundTypedCollection[Document, Create, Update, Draft any] struct {\n\t// contains filtered or unexported fields\n}",
 					"parameters": [
 						{
@@ -15811,7 +15816,7 @@
 						{
 							"name": "Update(ctx, id, input, options)",
 							"type": "(Document, error)",
-							"description": "Apply a strict partial working update. Published documents require explicit draft intent; Publish is a separate operation."
+							"description": "Apply a strict partial working update. A published versioned document fails with publish_required unless the update has draft intent; use PublishChanges to edit and publish it."
 						},
 						{
 							"name": "SaveDraft(ctx, id, input, options)",
@@ -15822,6 +15827,21 @@
 							"name": "DiscardDraft(ctx, id, options)",
 							"type": "(Document, error)",
 							"description": "Reset pending working values to the live snapshot, subject to expected revision and update access."
+						},
+						{
+							"name": "Publish(ctx, id, options)",
+							"type": "(Document, error)",
+							"description": "Validate the complete working document, including a draft's pending changes, and promote it to the live snapshot."
+						},
+						{
+							"name": "PublishChanges(ctx, id, input, options)",
+							"type": "(Document, error)",
+							"description": "Apply a strict partial update from the Update model and publish the result in one operation."
+						},
+						{
+							"name": "Unpublish(ctx, id, options)",
+							"type": "(Document, error)",
+							"description": "Remove the live snapshot while retaining working content as draft."
 						},
 						{
 							"name": "Delete(ctx, id, options)",
@@ -16091,7 +16111,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 179
+						"line": 204
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -16150,7 +16170,7 @@
 						{
 							"name": "Update(ctx, input, options)",
 							"type": "(Document, error)",
-							"description": "Initialize or update working singleton values from the strict Update model. Published content requires explicit draft intent; Publish is a separate operation."
+							"description": "Initialize or update working singleton values from the strict Update model. Published versioned content fails with publish_required unless the update has draft intent; use PublishChanges to edit and publish it."
 						},
 						{
 							"name": "SaveDraft(ctx, input, options)",
@@ -16166,6 +16186,11 @@
 							"name": "Publish(ctx, options)",
 							"type": "(Document, error)",
 							"description": "Validate the complete working singleton and promote it to live content."
+						},
+						{
+							"name": "PublishChanges(ctx, input, options)",
+							"type": "(Document, error)",
+							"description": "Apply a strict partial update from the Update model and publish the result in one operation."
 						},
 						{
 							"name": "Unpublish(ctx, options)",
@@ -18955,7 +18980,7 @@
 					"kind": "type",
 					"group": "Runtime",
 					"summary": "Transport timing and response metadata for one completed request.",
-					"signature": "type RequestObservation struct {\n\t// Time is when the observation was recorded.\n\tTime time.Time\n\t// RequestID correlates the observation with audit events and logs.\n\tRequestID string\n\t// Method is the HTTP request method.\n\tMethod string\n\t// Path is the requested URL path.\n\tPath string\n\t// Status is the HTTP response status code.\n\tStatus int\n\t// ErrorCode is the stable public Ridu code for a failed request.\n\tErrorCode string\n\t// ResponseBytes is the number of response-body bytes written.\n\tResponseBytes int64\n\t// Duration is the total handler execution time.\n\tDuration time.Duration\n}",
+					"signature": "type RequestObservation struct {\n\t// Time is when the observation was recorded.\n\tTime time.Time\n\t// RequestID correlates the observation with audit events and logs.\n\tRequestID string\n\t// Method is the HTTP request method.\n\tMethod string\n\t// Path is the requested URL path.\n\tPath string\n\t// Status is the HTTP response status code.\n\tStatus int\n\t// ErrorCode is the stable public Ridu code for a failed request.\n\tErrorCode string\n\t// ErrorReason is the specific code behind ErrorCode, such as origin_denied\n\t// behind access_denied or body_too_large behind bad_request. Responses\n\t// carry only ErrorCode; use ErrorReason for monitoring and alerts.\n\tErrorReason string\n\t// ResponseBytes is the number of response-body bytes written.\n\tResponseBytes int64\n\t// Duration is the total handler execution time.\n\tDuration time.Duration\n}",
 					"parameters": [
 						{
 							"name": "Time",
@@ -18986,6 +19011,11 @@
 							"name": "ErrorCode",
 							"type": "string",
 							"description": "The stable public Ridu code for a failed request."
+						},
+						{
+							"name": "ErrorReason",
+							"type": "string",
+							"description": "ErrorReason is the specific code behind ErrorCode, such as origin_denied\nbehind access_denied or body_too_large behind bad_request. Responses\ncarry only ErrorCode; use ErrorReason for monitoring and alerts."
 						},
 						{
 							"name": "ResponseBytes",
@@ -19073,7 +19103,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 142
+						"line": 146
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22985,7 +23015,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 124
+						"line": 149
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -23173,6 +23203,103 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/core#BoundTypedCollection.Publish",
+					"name": "BoundTypedCollection.Publish",
+					"slug": "bound-typed-collection-publish-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Publish publishes the document's saved working content, including a draft's pending changes.",
+					"signature": "func (collection BoundTypedCollection[Document, Create, Update, Draft]) Publish(ctx context.Context, id string, options TypedMutationOptions) (Document, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "id",
+							"type": "string",
+							"description": "The id value."
+						},
+						{
+							"name": "options",
+							"type": "TypedMutationOptions",
+							"description": "The options value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(Document, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"core.BoundTypedCollection.Publish",
+						"BoundTypedCollection.Publish"
+					],
+					"source": {
+						"path": "core/typed_local.go",
+						"line": 126
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/core#BoundTypedCollection.PublishChanges",
+					"name": "BoundTypedCollection.PublishChanges",
+					"slug": "bound-typed-collection-publish-changes-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "PublishChanges applies input and publishes the result in one operation. A published document in a versioned collection changes this way; Update refuses it with publish_required.",
+					"signature": "func (collection BoundTypedCollection[Document, Create, Update, Draft]) PublishChanges(ctx context.Context, id string, input Update, options TypedMutationOptions) (Document, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "id",
+							"type": "string",
+							"description": "The id value."
+						},
+						{
+							"name": "input",
+							"type": "Update",
+							"description": "The input value."
+						},
+						{
+							"name": "options",
+							"type": "TypedMutationOptions",
+							"description": "The options value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(Document, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"core.BoundTypedCollection.PublishChanges",
+						"BoundTypedCollection.PublishChanges"
+					],
+					"source": {
+						"path": "core/typed_local.go",
+						"line": 134
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/core#BoundTypedCollection.SaveDraft",
 					"name": "BoundTypedCollection.SaveDraft",
 					"slug": "bound-typed-collection-save-draft-method",
@@ -23234,6 +23361,52 @@
 						"go:github.com/riducms/ridu/core#BoundTypedCollection.CreateDraft",
 						"go:github.com/riducms/ridu/core#TypedMutationOptions"
 					],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/core#BoundTypedCollection.Unpublish",
+					"name": "BoundTypedCollection.Unpublish",
+					"slug": "bound-typed-collection-unpublish-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Unpublish removes the published document and keeps its working content.",
+					"signature": "func (collection BoundTypedCollection[Document, Create, Update, Draft]) Unpublish(ctx context.Context, id string, options TypedMutationOptions) (Document, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "id",
+							"type": "string",
+							"description": "The id value."
+						},
+						{
+							"name": "options",
+							"type": "TypedMutationOptions",
+							"description": "The options value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(Document, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"core.BoundTypedCollection.Unpublish",
+						"BoundTypedCollection.Unpublish"
+					],
+					"source": {
+						"path": "core/typed_local.go",
+						"line": 144
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
 					"overloads": []
 				},
 				{
@@ -23413,6 +23586,52 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/core#BoundTypedGlobal.PublishChanges",
+					"name": "BoundTypedGlobal.PublishChanges",
+					"slug": "bound-typed-global-publish-changes-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "PublishChanges applies input and publishes the result in one operation. A published versioned global changes this way; Update refuses it with publish_required.",
+					"signature": "func (global BoundTypedGlobal[Document, Update, Draft]) PublishChanges(ctx context.Context, input Update, options TypedMutationOptions) (Document, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "input",
+							"type": "Update",
+							"description": "The input value."
+						},
+						{
+							"name": "options",
+							"type": "TypedMutationOptions",
+							"description": "The options value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(Document, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"core.BoundTypedGlobal.PublishChanges",
+						"BoundTypedGlobal.PublishChanges"
+					],
+					"source": {
+						"path": "core/typed_global.go",
+						"line": 73
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/core#BoundTypedGlobal.Restore",
 					"name": "BoundTypedGlobal.Restore",
 					"slug": "bound-typed-global-restore-method",
@@ -23452,7 +23671,7 @@
 					],
 					"source": {
 						"path": "core/typed_global.go",
-						"line": 75
+						"line": 87
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -23498,7 +23717,7 @@
 					],
 					"source": {
 						"path": "core/typed_global.go",
-						"line": 80
+						"line": 92
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -23585,7 +23804,7 @@
 					],
 					"source": {
 						"path": "core/typed_global.go",
-						"line": 70
+						"line": 82
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -64008,7 +64227,7 @@
 						"line": 120
 					},
 					"relatedDocs": [
-						"/docs/querying/#membership"
+						"/docs/querying/filters/#membership"
 					],
 					"relatedSymbols": [
 						"go:github.com/riducms/ridu/query#In"
@@ -79351,7 +79570,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 259
+						"line": 266
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79601,7 +79820,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 290
+						"line": 297
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79645,7 +79864,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 198
+						"line": 205
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79687,7 +79906,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 186
+						"line": 193
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79843,7 +80062,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 209
+						"line": 216
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79880,7 +80099,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 229
+						"line": 236
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79948,7 +80167,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 238
+						"line": 245
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79998,47 +80217,60 @@
 					"kind": "interface",
 					"group": "Execution",
 					"summary": "Transaction-bound content operations available to a compiled migration callback.",
-					"signature": "type DataTransaction interface {\n\tCreate(context.Context, store.CreateRequest) (store.Document, error)\n\tFind(context.Context, store.Request) (store.Document, error)\n\tList(context.Context, store.Request) (store.Page, error)\n\tUpdate(context.Context, UpdateRequest) (store.Document, error)\n\tTrash(context.Context, store.Request) (store.Document, error)\n\tRestore(context.Context, store.Request) (store.Document, error)\n\tDelete(context.Context, store.Request) (store.Document, error)\n}",
+					"signature": "type DataTransaction interface {\n\t// Collection returns the collection with this slug as the running\n\t// migration leaves it, or as it was before when the migration removes it.\n\t// Every request must use a shape from the migration itself, so a\n\t// transform keeps replaying after later migrations change the collection.\n\tCollection(slug string) (schema.Collection, error)\n\t// Global returns the global with this slug, resolved like Collection.\n\tGlobal(slug string) (schema.Collection, error)\n\tCreate(context.Context, store.CreateRequest) (store.Document, error)\n\tFind(context.Context, store.Request) (store.Document, error)\n\tList(context.Context, store.Request) (store.Page, error)\n\tUpdate(context.Context, UpdateRequest) (store.Document, error)\n\tTrash(context.Context, store.Request) (store.Document, error)\n\tRestore(context.Context, store.Request) (store.Document, error)\n\tDelete(context.Context, store.Request) (store.Document, error)\n}",
 					"parameters": [
+						{
+							"name": "Collection",
+							"type": "func(slug string) (schema.Collection, error)",
+							"description": "Returns the collection as this migration leaves it, or as it was before when the migration removes it. Pass it to every request so the transform keeps replaying after later migrations change the collection."
+						},
+						{
+							"name": "Global",
+							"type": "func(slug string) (schema.Collection, error)",
+							"description": "Returns the global with this slug, resolved like Collection."
+						},
 						{
 							"name": "Create",
 							"type": "func(context.Context, store.CreateRequest) (store.Document, error)",
-							"description": "The Create value."
+							"description": "Creates a document with the given ID and values."
 						},
 						{
 							"name": "Find",
 							"type": "func(context.Context, store.Request) (store.Document, error)",
-							"description": "The Find value."
+							"description": "Reads one stored document by ID."
 						},
 						{
 							"name": "List",
 							"type": "func(context.Context, store.Request) (store.Page, error)",
-							"description": "The List value."
+							"description": "Reads a page of stored documents. Loop while HasNextPage is true to visit every match."
 						},
 						{
 							"name": "Update",
 							"type": "func(context.Context, UpdateRequest) (store.Document, error)",
-							"description": "The Update value."
+							"description": "Locks the stored document and patches its values, or replaces them when ReplaceValues is set."
 						},
 						{
 							"name": "Trash",
 							"type": "func(context.Context, store.Request) (store.Document, error)",
-							"description": "The Trash value."
+							"description": "Moves a document to the trash."
 						},
 						{
 							"name": "Restore",
 							"type": "func(context.Context, store.Request) (store.Document, error)",
-							"description": "The Restore value."
+							"description": "Restores a trashed document."
 						},
 						{
 							"name": "Delete",
 							"type": "func(context.Context, store.Request) (store.Document, error)",
-							"description": "The Delete value."
+							"description": "Deletes a document and the framework state it owns, such as its versions, sessions and preferences."
 						}
 					],
 					"parametersLabel": "",
-					"details": [],
-					"example": "",
+					"details": [
+						"Every request runs inside the migration's transaction, so the schema change and the content change commit or roll back together.",
+						"A transform can't change a versioned collection or global; backfill those in an earlier, data-only migration."
+					],
+					"example": "posts, err := tx.Collection(\"posts\")\nif err != nil {\n\treturn err\n}\n_, err = tx.Update(ctx, migration.UpdateRequest{\n\tRequest: store.Request{Collection: posts, ID: \"hello\"},\n\tValues:  store.Values{\"summary\": store.String(\"Hello\")},\n})\nreturn err",
 					"language": "go",
 					"typeLinks": {},
 					"aliases": [
@@ -80049,7 +80281,9 @@
 						"path": "migration/migration.go",
 						"line": 124
 					},
-					"relatedDocs": [],
+					"relatedDocs": [
+						"/docs/migrations/data-transforms/"
+					],
 					"relatedSymbols": [],
 					"overloads": []
 				},
@@ -80075,7 +80309,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 145
+						"line": 152
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -80120,7 +80354,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 149
+						"line": 156
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -80156,7 +80390,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 158
+						"line": 165
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81300,7 +81534,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 366
+						"line": 373
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81396,7 +81630,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 378
+						"line": 385
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81478,7 +81712,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 164
+						"line": 171
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81508,7 +81742,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 175
+						"line": 182
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81824,7 +82058,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 194
+						"line": 201
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81850,7 +82084,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 190
+						"line": 197
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81876,7 +82110,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 192
+						"line": 199
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -82487,7 +82721,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 138
+						"line": 145
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83143,7 +83377,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 247
+						"line": 253
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83202,7 +83436,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 237
+						"line": 243
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83269,7 +83503,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 224
+						"line": 230
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83326,7 +83560,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 255
+						"line": 261
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83365,7 +83599,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 265
+						"line": 271
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83397,7 +83631,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 291
+						"line": 297
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83429,7 +83663,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 296
+						"line": 302
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83461,7 +83695,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 286
+						"line": 292
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83500,7 +83734,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 302
+						"line": 308
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83542,7 +83776,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 308
+						"line": 314
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83576,7 +83810,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 315
+						"line": 321
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83620,7 +83854,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 374
+						"line": 380
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83709,7 +83943,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 344
+						"line": 350
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83751,7 +83985,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 362
+						"line": 368
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83788,7 +84022,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 382
+						"line": 388
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83827,7 +84061,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 389
+						"line": 395
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83866,7 +84100,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 395
+						"line": 401
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83915,7 +84149,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 411
+						"line": 417
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83974,7 +84208,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 401
+						"line": 407
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84011,7 +84245,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 419
+						"line": 425
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84085,7 +84319,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 321
+						"line": 327
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84119,7 +84353,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 333
+						"line": 339
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84153,7 +84387,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 337
+						"line": 343
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84202,7 +84436,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 425
+						"line": 431
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84266,7 +84500,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 438
+						"line": 444
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84300,7 +84534,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 449
+						"line": 455
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84334,7 +84568,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 454
+						"line": 460
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84366,7 +84600,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 485
+						"line": 491
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84398,7 +84632,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 491
+						"line": 497
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84430,7 +84664,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 497
+						"line": 503
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84484,7 +84718,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 516
+						"line": 522
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84536,7 +84770,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 525
+						"line": 531
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84570,7 +84804,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 534
+						"line": 540
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84604,7 +84838,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 539
+						"line": 545
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84658,7 +84892,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 502
+						"line": 508
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84692,7 +84926,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 511
+						"line": 517
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84728,7 +84962,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 545
+						"line": 551
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86551,7 +86785,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 272
+						"line": 278
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86593,7 +86827,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 279
+						"line": 285
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86657,6 +86891,32 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/protocol#ErrorBadQuery",
+					"name": "ErrorBadQuery",
+					"slug": "error-bad-query",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "ErrorBadQuery rejects a filter, sort, selection or population that the collection can't run, before anything is read.",
+					"signature": "const ErrorBadQuery ErrorCode = \"bad_query\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"protocol.ErrorBadQuery",
+						"ErrorBadQuery"
+					],
+					"source": {
+						"path": "protocol/envelope.go",
+						"line": 223
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/protocol#ErrorInvalidCredential",
 					"name": "ErrorInvalidCredential",
 					"slug": "error-invalid-credential",
@@ -86677,6 +86937,32 @@
 					"source": {
 						"path": "protocol/envelope.go",
 						"line": 215
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/protocol#ErrorPublishRequired",
+					"name": "ErrorPublishRequired",
+					"slug": "error-publish-required",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "ErrorPublishRequired rejects a plain update of a published versioned document or global. Publish the changes instead.",
+					"signature": "const ErrorPublishRequired ErrorCode = \"publish_required\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"protocol.ErrorPublishRequired",
+						"ErrorPublishRequired"
+					],
+					"source": {
+						"path": "protocol/envelope.go",
+						"line": 226
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86932,7 +87218,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 470
+						"line": 476
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86969,7 +87255,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 479
+						"line": 485
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86995,7 +87281,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 459
+						"line": 465
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87021,7 +87307,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 463
+						"line": 469
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87047,7 +87333,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 466
+						"line": 472
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91683,7 +91969,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 64
+						"line": 66
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91727,7 +92013,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 70
+						"line": 72
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91776,7 +92062,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 33
+						"line": 35
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91891,7 +92177,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 51
+						"line": 53
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91921,7 +92207,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 287
+						"line": 296
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91957,7 +92243,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 301
+						"line": 310
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91998,7 +92284,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 317
+						"line": 326
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92046,7 +92332,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 326
+						"line": 335
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92082,7 +92368,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 337
+						"line": 346
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92118,7 +92404,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 351
+						"line": 360
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104127,7 +104413,7 @@
 						},
 						{
 							"name": "auth",
-							"type": "{ readonly session: SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null; login: <Slug>(credentials: LoginInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<SessionFor<Config, Slug>>; getSession: (options?: RequestOptions) => Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null>; rotate: (options?: RequestOptions) => Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>>>; logout: (options?: RequestOptions) => Promise<LogoutEnvelope>; logoutAll: (options?: RequestOptions) => Promise<LogoutEnvelope>; sessions: (options?: RequestOptions) => Promise<AuthSessionInfo[]>; revokeSession: (id: string, options?: RequestOptions) => Promise<DeleteEnvelope>; changePassword: (input: { currentPassword: string; password: string; }, options?: RequestOptions) => Promise<AuthActionEnvelope>; createUser: { <Slug>(input: { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: (MutationLocaleOptions<LocaleFor<Config>> & { draft?: boolean; } & { draft?: true; }) | undefined): Promise<OutputFor<Config, Slug>>; <Slug>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>> | undefined): Promise<OutputFor<Config, Slug>>; }; bootstrap: <Slug>(input: AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthBootstrapEnvelope>; requestPasswordReset: <Slug>(input: { email: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; resetPassword: <Slug>(input: { token: string; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; requestVerification: <Slug>(input: { email: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; verifyEmail: <Slug>(input: { token: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; forceUnlock: <Slug>(input: { id: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; createAPIKey: (input: CreateAPIKeyInput, options?: RequestOptions) => Promise<APIKey>; apiKeys: (options?: RequestOptions) => Promise<APIKeyInfo[]>; revokeAPIKey: (id: string, options?: RequestOptions) => Promise<DeleteEnvelope>; }",
+							"type": "{ readonly session: SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null; login: <Slug>(credentials: LoginInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<SessionFor<Config, Slug>>; getSession: (options?: RequestOptions) => Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null>; rotate: (options?: RequestOptions) => Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>>>; logout: (options?: RequestOptions) => Promise<LogoutEnvelope>; logoutAll: (options?: RequestOptions) => Promise<LogoutEnvelope>; sessions: (options?: RequestOptions) => Promise<AuthSessionInfo[]>; revokeSession: (id: string, options?: RequestOptions) => Promise<DeleteEnvelope>; changePassword: (input: { currentPassword: string; password: string; }, options?: RequestOptions) => Promise<AuthActionEnvelope>; createUser: { <Slug>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: (MutationLocaleOptions<LocaleFor<Config>> & { draft?: boolean; } & { draft?: true; }) | undefined): Promise<OutputFor<Config, Slug>>; <Slug>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>> | undefined): Promise<OutputFor<Config, Slug>>; }; bootstrap: <Slug>(input: AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthBootstrapEnvelope>; requestPasswordReset: <Slug>(input: { email: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; resetPassword: <Slug>(input: { token: string; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; requestVerification: <Slug>(input: { email: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; verifyEmail: <Slug>(input: { token: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; forceUnlock: <Slug>(input: { id: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; createAPIKey: (input: CreateAPIKeyInput, options?: RequestOptions) => Promise<APIKey>; apiKeys: (options?: RequestOptions) => Promise<APIKeyInfo[]>; revokeAPIKey: (id: string, options?: RequestOptions) => Promise<DeleteEnvelope>; }",
 							"description": "Authentication, session, and account operations; see `RiduAuth`. The mapped copy keeps\nclients comparable member by member, so an exact generated client still fits a wider\ncontract such as the admin's."
 						},
 						{
@@ -107458,7 +107744,7 @@
 						},
 						{
 							"name": "createUser",
-							"type": "{ <Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>; <Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>; }",
+							"type": "{ <Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>; <Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>; }",
 							"description": "Create a user in an auth-enabled collection, including sign-up and managed-user flows.\nExplicit publication requires the complete generated user data contract."
 						},
 						{
@@ -108059,7 +108345,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1631
+						"line": 1635
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108130,7 +108416,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1639
+						"line": 1643
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108201,7 +108487,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1625
+						"line": 1629
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108216,11 +108502,11 @@
 					"kind": "method",
 					"group": "Authentication",
 					"summary": "Create a user in an auth-enabled collection, including sign-up.",
-					"signature": "RiduAuth.createUser<Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>\nRiduAuth.createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>",
+					"signature": "RiduAuth.createUser<Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>\nRiduAuth.createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>",
 					"parameters": [
 						{
 							"name": "input",
-							"type": "{ data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>",
+							"type": "[Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>",
 							"description": "The new user document, password, and optional collection."
 						},
 						{
@@ -108277,7 +108563,7 @@
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": [
-						"RiduAuth.createUser<Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>",
+						"RiduAuth.createUser<Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>",
 						"RiduAuth.createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>"
 					]
 				},
@@ -108344,7 +108630,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1645
+						"line": 1649
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108415,7 +108701,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1653
+						"line": 1657
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108559,7 +108845,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1665
+						"line": 1669
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108625,7 +108911,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1668
+						"line": 1672
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108696,7 +108982,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1671
+						"line": 1675
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108767,7 +109053,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1659
+						"line": 1663
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115693,7 +115979,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 84
+						"line": 86
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115719,7 +116005,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 86
+						"line": 88
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115732,7 +116018,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Stable machine-readable failure codes.",
-					"signature": "type ErrorCode = | \"validation\"\n\t| \"access_denied\"\n\t| \"not_found\"\n\t| \"conflict\"\n\t| \"delete_restricted\"\n\t| \"bad_request\"\n\t| \"internal\"\n\t| \"rate_limited\"\n\t| \"email_not_verified\"\n\t| \"auth_feature_disabled\"\n\t| \"invalid_auth_token\"\n\t| \"invalid_credential\"\n\t| \"invalid_preview_token\"\n\t| \"rejected\"\n\t| \"selection_too_large\"",
+					"signature": "type ErrorCode = | \"validation\"\n\t| \"access_denied\"\n\t| \"not_found\"\n\t| \"conflict\"\n\t| \"delete_restricted\"\n\t| \"bad_request\"\n\t| \"internal\"\n\t| \"rate_limited\"\n\t| \"email_not_verified\"\n\t| \"auth_feature_disabled\"\n\t| \"invalid_auth_token\"\n\t| \"invalid_credential\"\n\t| \"invalid_preview_token\"\n\t| \"rejected\"\n\t| \"selection_too_large\"\n\t| \"bad_query\"\n\t| \"publish_required\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -115812,7 +116098,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 276
+						"line": 278
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115872,7 +116158,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 318
+						"line": 320
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115906,7 +116192,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 327
+						"line": 329
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115942,7 +116228,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 272
+						"line": 274
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115982,7 +116268,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 284
+						"line": 286
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116020,7 +116306,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 325
+						"line": 327
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116079,7 +116365,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 332
+						"line": 334
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116118,7 +116404,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 351
+						"line": 353
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116156,7 +116442,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 302
+						"line": 304
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116190,7 +116476,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 375
+						"line": 377
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116222,7 +116508,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 371
+						"line": 373
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116254,7 +116540,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 379
+						"line": 381
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116291,7 +116577,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 478
+						"line": 480
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116328,7 +116614,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 383
+						"line": 385
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116370,7 +116656,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 388
+						"line": 390
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116402,7 +116688,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 394
+						"line": 396
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116489,7 +116775,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 418
+						"line": 420
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116531,7 +116817,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 433
+						"line": 435
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116573,7 +116859,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 439
+						"line": 441
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116610,7 +116896,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 447
+						"line": 449
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116647,7 +116933,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 452
+						"line": 454
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116684,7 +116970,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 457
+						"line": 459
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116741,7 +117027,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 462
+						"line": 464
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116788,7 +117074,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 471
+						"line": 473
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116835,7 +117121,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 483
+						"line": 485
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116897,7 +117183,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 490
+						"line": 492
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116929,7 +117215,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 504
+						"line": 506
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116961,7 +117247,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 500
+						"line": 502
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116993,7 +117279,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 521
+						"line": 523
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117025,7 +117311,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 525
+						"line": 527
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117057,7 +117343,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 529
+						"line": 531
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117109,7 +117395,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 545
+						"line": 547
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117161,7 +117447,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 553
+						"line": 555
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117213,7 +117499,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 533
+						"line": 535
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117285,7 +117571,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 398
+						"line": 400
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117317,7 +117603,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 410
+						"line": 412
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117349,7 +117635,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 414
+						"line": 416
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117381,7 +117667,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 541
+						"line": 543
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117413,7 +117699,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 561
+						"line": 563
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117445,7 +117731,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 565
+						"line": 567
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117504,7 +117790,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 569
+						"line": 571
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117571,7 +117857,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 578
+						"line": 580
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117613,7 +117899,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 603
+						"line": 605
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117660,7 +117946,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 609
+						"line": 611
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117707,7 +117993,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 616
+						"line": 618
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117749,7 +118035,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 623
+						"line": 625
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117786,7 +118072,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 642
+						"line": 644
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117828,7 +118114,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 629
+						"line": 631
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117875,7 +118161,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 635
+						"line": 637
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117932,7 +118218,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 647
+						"line": 649
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117989,7 +118275,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 656
+						"line": 658
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118061,7 +118347,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 665
+						"line": 667
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118103,7 +118389,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 677
+						"line": 679
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118190,7 +118476,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 683
+						"line": 685
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118227,7 +118513,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 698
+						"line": 700
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118259,7 +118545,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 703
+						"line": 705
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118306,7 +118592,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 770
+						"line": 772
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118332,7 +118618,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 733
+						"line": 735
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118389,7 +118675,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 777
+						"line": 779
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118466,7 +118752,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 707
+						"line": 709
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118503,7 +118789,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 720
+						"line": 722
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118555,7 +118841,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 725
+						"line": 727
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118642,7 +118928,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 735
+						"line": 737
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118689,7 +118975,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 750
+						"line": 752
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118736,7 +119022,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 757
+						"line": 759
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118778,7 +119064,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 764
+						"line": 766
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118804,7 +119090,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 52
+						"line": 54
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118830,7 +119116,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 76
+						"line": 78
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119007,7 +119293,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 786
+						"line": 788
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119134,7 +119420,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 819
+						"line": 821
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119181,7 +119467,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 847
+						"line": 849
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119218,7 +119504,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 854
+						"line": 856
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119270,7 +119556,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 859
+						"line": 861
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119307,7 +119593,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 867
+						"line": 869
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119335,7 +119621,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 872
+						"line": 874
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119382,7 +119668,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 877
+						"line": 879
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119426,7 +119712,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 894
+						"line": 896
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119458,7 +119744,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 900
+						"line": 902
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119500,7 +119786,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 904
+						"line": 906
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119542,7 +119828,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 910
+						"line": 912
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119568,7 +119854,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 916
+						"line": 918
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119600,7 +119886,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 918
+						"line": 920
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119626,7 +119912,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 922
+						"line": 924
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119652,7 +119938,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 923
+						"line": 925
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119714,7 +120000,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 925
+						"line": 927
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119740,7 +120026,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 935
+						"line": 937
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119772,7 +120058,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 937
+						"line": 939
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119814,7 +120100,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 941
+						"line": 943
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119856,7 +120142,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 947
+						"line": 949
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119918,7 +120204,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 953
+						"line": 955
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119944,7 +120230,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 963
+						"line": 965
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119996,7 +120282,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 965
+						"line": 967
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120033,7 +120319,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 973
+						"line": 975
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120085,7 +120371,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 978
+						"line": 980
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120145,7 +120431,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 986
+						"line": 988
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120192,7 +120478,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 995
+						"line": 997
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120234,7 +120520,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1003
+						"line": 1005
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120286,7 +120572,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1016
+						"line": 1018
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120333,7 +120619,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1042
+						"line": 1044
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120365,7 +120651,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1049
+						"line": 1051
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120443,7 +120729,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 190
+						"line": 192
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120490,7 +120776,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 203
+						"line": 205
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120516,7 +120802,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 186
+						"line": 188
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120553,7 +120839,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 198
+						"line": 200
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120579,7 +120865,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 194
+						"line": 196
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120616,7 +120902,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 160
+						"line": 162
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120668,7 +120954,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 595
+						"line": 597
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120705,7 +120991,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 155
+						"line": 157
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120731,7 +121017,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 143
+						"line": 145
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120773,7 +121059,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 210
+						"line": 212
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120799,7 +121085,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 88
+						"line": 90
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120836,7 +121122,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 226
+						"line": 228
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120914,7 +121200,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 247
+						"line": 249
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120991,7 +121277,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 216
+						"line": 218
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121017,7 +121303,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 139
+						"line": 141
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121054,7 +121340,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 181
+						"line": 183
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121096,7 +121382,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 175
+						"line": 177
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121300,7 +121586,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 359
+						"line": 361
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121342,7 +121628,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 364
+						"line": 366
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121399,7 +121685,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 166
+						"line": 168
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121587,7 +121873,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 342
+						"line": 344
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121625,7 +121911,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 313
+						"line": 315
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121684,7 +121970,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 297
+						"line": 299
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121719,7 +122005,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 314
+						"line": 316
 					},
 					"relatedDocs": [
 						"/docs/fields/live-validation/"
@@ -121775,7 +122061,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 306
+						"line": 308
 					},
 					"relatedDocs": [
 						"/docs/fields/live-validation/"
@@ -121835,7 +122121,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 288
+						"line": 290
 					},
 					"relatedDocs": [
 						"/docs/fields/live-validation/"
@@ -121884,7 +122170,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 510
+						"line": 512
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122007,7 +122293,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 589
+						"line": 591
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122054,7 +122340,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1009
+						"line": 1011
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122111,7 +122397,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1024
+						"line": 1026
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122163,7 +122449,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1034
+						"line": 1036
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122200,7 +122486,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 842
+						"line": 844
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122237,7 +122523,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 889
+						"line": 891
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122263,7 +122549,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 884
+						"line": 886
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122300,7 +122586,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 516
+						"line": 518
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122326,7 +122612,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 508
+						"line": 510
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122383,7 +122669,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 342
+						"line": 344
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122430,7 +122716,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 119
+						"line": 121
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122467,7 +122753,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 109
+						"line": 111
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122499,7 +122785,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 126
+						"line": 128
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122536,7 +122822,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 114
+						"line": 116
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122593,7 +122879,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 130
+						"line": 132
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],

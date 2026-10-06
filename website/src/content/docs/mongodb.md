@@ -334,14 +334,14 @@ production migration instead of repairing MongoDB by hand.
 
 MongoDB stores what a save accepted: drafts may stay incomplete, and a document saved before a
 field became required stays readable. A synchronization or migration that
-[makes a field required](/docs/migrations/#required-fields) reads the same documents as on
+[makes a field required](/docs/migrations/required-fields/) reads the same documents as on
 PostgreSQL and SQLite and stops with `RIDU_REQUIRED_VALUES_MISSING` while any lacks the value. The
 migration needs `--allow-maintenance`, because MongoDB cannot lock collections against old writers.
 
 A change that looks like a rename is the exception in an interactive terminal: `ridu dev` asks
 whether to preserve the data. Answer `y` and it writes the rename migration, records the
 migrations the database already has, stops the running server, applies the rename with maintenance
-admitted, and starts the replacement. See [Renames in `ridu dev`](/docs/migrations/#renames-in-dev).
+admitted, and starts the replacement. See [Renames in `ridu dev`](/docs/migrations/renames/#in-dev).
 Without a terminal it rejects every reload until you restore the old name or create and apply the
 migration yourself.
 

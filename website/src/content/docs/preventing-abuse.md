@@ -285,10 +285,12 @@ write. A rejected request should use `429 Too Many Requests` and a useful retry 
 
 ## Monitor rejections {#monitoring}
 
-Set `HandlerOptions.Observe` to export request duration, status, response size, and Ridu's stable
-error code. Alert on sustained changes rather than individual bad requests:
+Set `HandlerOptions.Observe` to export request duration, status, response size, and the
+observation's `ErrorReason`. It holds the specific code behind the public `ErrorCode`, such as
+`origin_denied` where the response says `access_denied`. Alert on sustained changes rather than
+individual bad requests:
 
-| Error code                                 | Usually means                                                             |
+| `ErrorReason`                              | Usually means                                                             |
 | ------------------------------------------ | ------------------------------------------------------------------------- |
 | `rate_limited`                             | Ridu rejected an authentication or bounded-work admission                 |
 | `origin_denied`                            | A browser origin or cross-site mutation did not pass policy               |

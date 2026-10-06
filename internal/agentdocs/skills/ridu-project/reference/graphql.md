@@ -161,7 +161,7 @@ query RecentPosts {
 
 `totalDocs` and `totalPages` are counted by default. Pass `pagination: false` to skip the count when
 you only need `hasNextPage`, `nextPage`, and `prevPage`; both totals are then `null`, and the other
-fields stay exact (see [Paginate and count](./querying.md#pagination)). A join field counts only
+fields stay exact (see [Paginate and count](./querying/sorting-and-pagination.md#paginate)). A join field counts only
 when it receives `count: true`. Otherwise its `totalDocs` is `null` and `hasNextPage` is still exact.
 
 Typed filter inputs compile into Ridu's finite [query vocabulary](./querying.md). Filters nest
@@ -185,7 +185,7 @@ as `RiduStringWhere` and `RiduNumberWhere`, and select filters reuse the field's
 schema therefore grows with block definitions rather than with every place a block is used.
 
 Lists, multi-selects, has-many relationships and uploads, and polymorphic relationships are
-filtered by [membership](./querying.md#membership) with `in`, `not_in` and `exists`. A
+filtered by [membership](./querying/filters.md#membership) with `in`, `not_in` and `exists`. A
 polymorphic candidate uses the relationship's GraphQL shape:
 `subjects: { in: [{ relationTo: POSTS, value: "post_123" }] }`.
 

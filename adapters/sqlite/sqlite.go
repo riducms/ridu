@@ -8,7 +8,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -129,6 +131,13 @@ func OpenWithConfig(ctx context.Context, config Config) (*Store, error) {
 	}
 	if err := database.PingContext(ctx); err != nil {
 		database.Close()
+		if filePath != "" {
+			// SQLite creates a missing database file but not its directory, and
+			// reports only "unable to open". Name the cause without the path.
+			if _, statError := os.Stat(filepath.Dir(filePath)); errors.Is(statError, fs.ErrNotExist) {
+				return nil, fmt.Errorf("connect SQLite: the database file's directory does not exist; create it, or choose a path in an existing directory")
+			}
+		}
 		return nil, fmt.Errorf("connect SQLite: %w", sanitizeSQLiteError(err))
 	}
 	if filePath != "" {
@@ -511,7 +520,15 @@ func sanitizeSQLiteError(err error) error {
 	// without wrapping the configured path or URI credentials.
 	var sqliteError *modernsqlite.Error
 	if errors.As(err, &sqliteError) {
-		return fmt.Errorf("SQLite error %d", sqliteError.Code())
+		code := sqliteError.Code()
+		description, known := modernsqlite.ErrorCodeString[code]
+		if !known {
+			description, known = modernsqlite.ErrorCodeString[code&0xff]
+		}
+		if known {
+			return fmt.Errorf("SQLite error %d: %s", code, description)
+		}
+		return fmt.Errorf("SQLite error %d", code)
 	}
 	return err
 }

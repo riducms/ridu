@@ -195,9 +195,8 @@ continue to find their related documents, but callers cannot add filters or sort
 backing field.
 
 Use the field paths described in [Querying data](/docs/querying/). Invalid paths, including block
-paths without a variant and paths into internal rich-text storage, return `400 bad_request`
-(`bad_query` in the local API). Queries inside an unrestricted JSON field depend on the database
-adapter's support for JSON queries.
+paths without a variant and paths into internal rich-text storage, fail with `bad_query` (`400`).
+Queries inside an unrestricted JSON field depend on the database adapter's support for JSON queries.
 
 ## Use another field in an access rule {#sibling-data}
 

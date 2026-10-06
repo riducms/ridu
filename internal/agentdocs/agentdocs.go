@@ -70,6 +70,17 @@ func ParseSelection(value string) (Selection, error) {
 	return "", fmt.Errorf("unknown coding agent %q; expected codex, claude, cursor, all, or none", value)
 }
 
+// DetectSelection reports the coding agent running the CLI from its
+// environment, or "" when none is recognized. Claude Code sets CLAUDECODE in
+// the commands it runs and discovers skills only under .claude/skills, so a
+// project it creates without an explicit selection needs its layout.
+func DetectSelection(getenv func(string) string) Selection {
+	if strings.TrimSpace(getenv("CLAUDECODE")) != "" {
+		return SelectionClaude
+	}
+	return ""
+}
+
 type layout struct {
 	Name       string
 	SkillRoot  string

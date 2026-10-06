@@ -218,6 +218,12 @@ const (
 	ErrorRejected            ErrorCode = "rejected"
 	ErrorInvalidPreviewToken ErrorCode = "invalid_preview_token"
 	ErrorSelectionTooLarge   ErrorCode = "selection_too_large"
+	// ErrorBadQuery rejects a filter, sort, selection or population that the
+	// collection can't run, before anything is read.
+	ErrorBadQuery ErrorCode = "bad_query"
+	// ErrorPublishRequired rejects a plain update of a published versioned
+	// document or global. Publish the changes instead.
+	ErrorPublishRequired ErrorCode = "publish_required"
 )
 
 // ValidationIssue identifies one invalid input path.

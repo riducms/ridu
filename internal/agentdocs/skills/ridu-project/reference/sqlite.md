@@ -229,9 +229,9 @@ ridu migrate up
 ridu migrate status
 ```
 
-SQLite also supports reviewed `down`, `reset`, `refresh`, and `fresh` workflows with
-`--allow-destructive`. Ridu rejects altered or reordered migration history; schema, data-transform,
-plugin, and ledger work commits or rolls back together. Mutating migration commands reject
+SQLite also supports reviewed [`down`, `reset`, `refresh`, and `fresh`](./migrations.md#workflows)
+workflows with `--allow-destructive`. Ridu rejects altered or reordered migration history; schema,
+data-transform, plugin, and ledger work commits or rolls back together. Mutating migration commands reject
 `:memory:` so a successful invocation always targets persistent state. `plan` and `status` inspect
 existing files read-only and report a missing file as all pending without creating it.
 
@@ -245,40 +245,20 @@ live head, independent of retained version history. Earlier framework layouts an
 are unsupported; recreate the database and migration history rather than rewriting old artifacts.
 Startup and readiness never convert an old layout.
 
-SQLite stores document values as JSON keyed by field name. `ridu migrate create` detects an
-unambiguous field rename, and once you confirm it or pass `--accept-renames`, the migration moves
-the stored values to the new name. It covers current documents and retained versions at any depth:
-root fields, localized fields, groups, array rows, and blocks. A collection index or a join that
-names the field follows the rename, and `down` moves the values back.
+SQLite stores document values as JSON keyed by field name. Its migrations can only add to the
+schema, apart from confirmed field renames, which move the stored values in current documents and
+retained versions at any depth. Removing a field or collection is refused, and a collection rename
+or any other rewrite of stored data needs a [data transform](./migrations/data-transforms.md).
+See [Renames](./migrations/renames.md) and [Safety checks](./migrations/safety-checks.md#removing).
 
-Apart from the renames, that migration must be additive, and a renamed field may change only its
-name: a field that also becomes localized, or a group whose children are renamed in the same save,
-is refused. The migration stops before changing anything when a document already stores a value
-under the new name. A collection rename, or any other rewrite of
-stored data, still needs a compiled transaction-bound transform registered by the project and
-selected with `ridu migrate create --transform <name>`. One migration either renames fields or runs
-a transform, not both.
-
-`ridu dev` offers the same rename in an interactive terminal. See
-[Renames](./migrations.md#renames).
-
-Presentation changes also belong in immutable history. After changing the application display name,
-resource labels or admin presentation, or field labels and presentation metadata (including nested
-fields and Blocks), regenerate and create a migration normally. Select/radio choice order,
-admin-language and editor-timezone labels, picker order and configured defaults, and content-locale
-labels and text direction follow the same rule. Locale codes, timezone IDs, content-locale defaults
-and fallback settings retain their existing restrictions. These artifacts record the updated
-manifest without rebuilding content, retained revisions, references, uniqueness rows, or indexes.
-Versioned resources support the same presentation changes; no transform or `--allow-destructive`
-flag is needed. Changes to stored field identities, validation, or versioning remain subject to
-SQLite's schema-transition restrictions. Supported unversioned data transforms can accompany cosmetic
-changes; destructive approval and the prohibition on transforming versioned resources still apply.
+Changes that only affect presentation, such as labels and admin settings, need no migration on
+SQLite either; see [Changes that need no migration](./migrations.md#presentation-changes).
 
 Localized values remain locale maps inside that canonical JSON. SQLite compiles localized filters
 and sorting to JSON expressions and uses expression indexes or focused reference/uniqueness side
 tables where needed; it does not use PostgreSQL's typed per-locale column layout.
 
-[Membership filters](./querying.md#membership) on lists, has-many selects, relationships and
+[Membership filters](./querying/filters.md#membership) on lists, has-many selects, relationships and
 uploads, and polymorphic relationships also run as SQL, including inside groups, arrays and
 blocks: SQLite reads the stored list with `json_each`. No index serves them, so SQLite reads
 every document that the rest of the filter admits. Combine a frequent membership filter with an

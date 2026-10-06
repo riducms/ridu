@@ -40,12 +40,26 @@ the reference needed for the change:
 - Field transforms and output formatting: [field hooks](reference/hooks/fields.md)
 - Hook values, users, locales, and nested calls: [hook context](reference/hooks/context.md)
 - Related writes, notifications, and failures: [transactions and errors](reference/hooks/transactions-and-errors.md)
-- Filters, projection, population, sorting, and pagination:
-  [reference/querying.md](reference/querying.md)
-- In-process operations and generated typed handles: [reference/local-api.md](reference/local-api.md)
+- Reading content from Go, TypeScript, and REST: [reference/querying.md](reference/querying.md), with
+  [filters](reference/querying/filters.md),
+  [sorting and pagination](reference/querying/sorting-and-pagination.md), and
+  [selection and population](reference/querying/select-and-populate.md)
+- Creating, updating, publishing changes, deleting, and revision checks:
+  [reference/writing-data.md](reference/writing-data.md)
+- In-process operations: [reference/local-api.md](reference/local-api.md), with
+  [typed handles](reference/local-api/typed-handles.md) and
+  [transactions and errors](reference/local-api/errors.md)
 - Generated Go, TypeScript, OpenAPI, and plugin contracts:
   [reference/generated-contracts.md](reference/generated-contracts.md)
-- Schema evolution and production artifacts: [reference/migrations.md](reference/migrations.md)
+- Schema evolution, migration commands, and workflows: [reference/migrations.md](reference/migrations.md)
+- Development databases, `baseline`, and squashing history:
+  [reference/migrations/development.md](reference/migrations/development.md)
+- Renames, required fields, and field kind changes: [renames](reference/migrations/renames.md),
+  [required fields](reference/migrations/required-fields.md), and
+  [field kind changes](reference/migrations/field-kinds.md)
+- Compiled data transforms: [reference/migrations/data-transforms.md](reference/migrations/data-transforms.md)
+- Approval flags, safety codes, and deployment order: [safety checks](reference/migrations/safety-checks.md)
+  and [deploying migrations](reference/migrations/deploy.md)
 - PostgreSQL setup, migrations, readiness, backup, and multi-replica operation:
   [reference/postgres.md](reference/postgres.md)
 - SQLite setup, compiled transforms, migration lifecycle, and supported operating envelope:
@@ -55,7 +69,11 @@ the reference needed for the change:
 - Backend and static admin extensions: [reference/plugins.md](reference/plugins.md)
 - REST resources and the generated typed Fetch client:
   [reference/rest-api.md](reference/rest-api.md) and
-  [reference/typescript-sdk.md](reference/typescript-sdk.md)
+  [reference/typescript-sdk.md](reference/typescript-sdk.md), with SDK guides for
+  [signing in](reference/typescript-sdk/signing-in.md), [uploads](reference/typescript-sdk/uploads.md),
+  [drafts and publishing](reference/typescript-sdk/publishing.md),
+  [live checks](reference/typescript-sdk/live-validation.md), and
+  [client options](reference/typescript-sdk/client-options.md)
 - SvelteKit frontends that call Ridu directly from browsers and server loads:
   [reference/sveltekit.md](reference/sveltekit.md)
 - Choosing between Local API, REST, SDK, and plugins:
@@ -151,8 +169,8 @@ Cut over in this order:
 1. **Drain writers.** Stop every old application process, worker, and other writer, and keep them
    drained through completion and retries.
 2. **Verify history.** Run `ridu migrate verify` with the operator's scoped verification
-   credential. Append `--allow-maintenance` whenever the complete committed history contains
-   semantic work, because the clean shadow replays every artifact. Grant it only after the drain.
+   credential. It replays every artifact into a private shadow database that no application can
+   reach, so it never needs `--allow-maintenance`, even when the history contains semantic work.
 3. **Capture the recovery point.** Use the operator's controlled backup credential for a
    database-scoped `mongodump` and copy the matching upload-object snapshot while writers remain
    drained. Restore that scope with `mongorestore` and the matching uploads if recovery is required.
