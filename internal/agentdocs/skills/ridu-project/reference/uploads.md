@@ -520,4 +520,4 @@ derived object keys.
 | A create timed out or returned an uncertain 5xx | Refresh or query the media collection before retrying so a committed upload is not duplicated.                                                     |
 
 Continue with the [Upload field guide](https://riducms.com/docs/fields/upload/), [Object storage](https://riducms.com/docs/storage/),
-[TypeScript SDK](./typescript-sdk.md#uploads), or the [`storage` API reference](https://riducms.com/reference/storage/).
+[TypeScript SDK](./typescript-sdk/uploads.md), or the [`storage` API reference](https://riducms.com/reference/storage/).

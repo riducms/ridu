@@ -298,7 +298,7 @@ prefixes are validated as part of descriptor resolution.
 like a rename, it asks in an interactive terminal and can create and apply the rename migration for
 you; otherwise it rejects every reload until you restore the old name or run the commands
 yourself. See
-[Renames in `ridu dev`](./migrations.md#renames-in-dev). Production uses committed immutable
+[Renames in `ridu dev`](./migrations/renames.md#in-dev). Production uses committed immutable
 artifacts:
 
 ```sh title="terminal"
@@ -310,8 +310,9 @@ ridu migrate status
 ```
 
 Creation is offline. The database-backed commands use their own bounded pools, TLS policy,
-advisory-lock admission, and schema assertions. Read [Migrations](./migrations.md) for exact
-command semantics, destructive and maintenance admission, resumable phases, and recovery.
+advisory-lock admission, and schema assertions. Read [Migrations](./migrations.md) for the
+commands, [Safety checks](./migrations/safety-checks.md) for destructive approval, and
+[Deploy migrations](./migrations/deploy.md) for maintenance work, resumable phases, and recovery.
 
 PostgreSQL accepts only planner `atlas` `1.3.0` artifacts. Separate working and live content is
 part of this layout from its initial migration. Earlier framework layouts and planner histories

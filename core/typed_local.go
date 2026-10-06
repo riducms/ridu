@@ -121,6 +121,31 @@ func (collection BoundTypedCollection[Document, Create, Update, Draft]) DiscardD
 	return decodeTypedDocument[Document](document, err)
 }
 
+// Publish publishes the document's saved working content, including a draft's
+// pending changes.
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) Publish(ctx context.Context, id string, options TypedMutationOptions) (Document, error) {
+	document, err := collection.local.Publish(ctx, collection.definition.slug, id, options.mutationOptions())
+	return decodeTypedDocument[Document](document, err)
+}
+
+// PublishChanges applies input and publishes the result in one operation. A
+// published document in a versioned collection changes this way; Update
+// refuses it with publish_required.
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) PublishChanges(ctx context.Context, id string, input Update, options TypedMutationOptions) (Document, error) {
+	values, err := typedInputValues(input)
+	if err != nil {
+		return *new(Document), err
+	}
+	document, err := collection.local.PublishChanges(ctx, collection.definition.slug, id, values, options.mutationOptions())
+	return decodeTypedDocument[Document](document, err)
+}
+
+// Unpublish removes the published document and keeps its working content.
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) Unpublish(ctx context.Context, id string, options TypedMutationOptions) (Document, error) {
+	document, err := collection.local.Unpublish(ctx, collection.definition.slug, id, options.mutationOptions())
+	return decodeTypedDocument[Document](document, err)
+}
+
 func (collection BoundTypedCollection[Document, Create, Update, Draft]) Delete(ctx context.Context, id string, options TypedMutationOptions) (Document, error) {
 	document, err := collection.local.Delete(ctx, collection.definition.slug, id, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)

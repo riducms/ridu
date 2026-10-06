@@ -254,6 +254,7 @@ type RequestObservation struct {
 	Path          string
 	Status        int
 	ErrorCode     string
+	ErrorReason   string
 	ResponseBytes int64
 	Duration      time.Duration
 }
@@ -360,7 +361,7 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 		if api.config.Observe != nil {
 			func() {
 				defer func() { _ = recover() }()
-				api.config.Observe(RequestObservation{Time: started.UTC(), RequestID: requestID, Method: request.Method, Path: request.URL.Path, Status: tracked.status, ErrorCode: tracked.errorCode, ResponseBytes: tracked.bytes, Duration: time.Since(started)})
+				api.config.Observe(RequestObservation{Time: started.UTC(), RequestID: requestID, Method: request.Method, Path: request.URL.Path, Status: tracked.status, ErrorCode: tracked.errorCode, ErrorReason: tracked.reason(), ResponseBytes: tracked.bytes, Duration: time.Since(started)})
 			}()
 		}
 	}()
@@ -1201,6 +1202,7 @@ type statusWriter struct {
 	status      int
 	bytes       int64
 	errorCode   string
+	errorReason string
 	wroteHeader bool
 	method      string
 	path        string
@@ -3673,9 +3675,36 @@ func (api *API) writeError(writer http.ResponseWriter, requestID string, err err
 	}
 	if tracked, ok := writer.(*statusWriter); ok {
 		tracked.errorCode = string(payload.Code)
+		tracked.errorReason = errorReason(err)
 	}
 	writeJSON(writer, payload.Status, protocol.ErrorEnvelope{Error: payload})
 }
+
+// errorReason is the specific code behind a public error code, such as
+// origin_denied behind access_denied. Observations report it to operators;
+// responses carry only the public code.
+func errorReason(err error) string {
+	var operationError *operationengine.Error
+	switch {
+	case errors.As(err, &operationError) && operationError.Code != "":
+		return operationError.Code
+	case errors.Is(err, context.DeadlineExceeded):
+		return "request_timeout"
+	case errors.Is(err, context.Canceled):
+		return "request_canceled"
+	}
+	return string(protocol.ErrorInternal)
+}
+
+// reason reports the specific failure code, or the public code when no more
+// specific one was recorded.
+func (writer *statusWriter) reason() string {
+	if writer.errorReason != "" {
+		return writer.errorReason
+	}
+	return writer.errorCode
+}
+
 func wireErrorCode(code string, status int) protocol.ErrorCode {
 	switch code {
 	case "validation":
@@ -3704,8 +3733,21 @@ func wireErrorCode(code string, status int) protocol.ErrorCode {
 		return protocol.ErrorInvalidPreviewToken
 	case "selection_too_large":
 		return protocol.ErrorSelectionTooLarge
+	case "bad_query":
+		return protocol.ErrorBadQuery
+	case "publish_required":
+		return protocol.ErrorPublishRequired
 	}
-	if status >= 400 && status < 500 {
+	// Other codes fall back to the category their status names, so the code
+	// never contradicts the status. ErrorReason keeps the specific code.
+	switch {
+	case status == http.StatusForbidden:
+		return protocol.ErrorAccess
+	case status == http.StatusNotFound:
+		return protocol.ErrorNotFound
+	case status == http.StatusConflict:
+		return protocol.ErrorConflict
+	case status >= 400 && status < 500:
 		return protocol.ErrorBadRequest
 	}
 	return protocol.ErrorInternal

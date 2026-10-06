@@ -560,8 +560,8 @@ func badQueryHTTP(t *testing.T, response *httptest.ResponseRecorder, code, path 
 	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode %s: %v", response.Body.String(), err)
 	}
-	if response.Code != http.StatusBadRequest || envelope.Error.Code != "bad_request" || len(envelope.Error.Issues) != 1 || envelope.Error.Issues[0].Code != code || envelope.Error.Issues[0].Path != path {
-		t.Errorf("REST %s = %d %s, want bad_request (400) with a %s issue", path, response.Code, response.Body.String(), code)
+	if response.Code != http.StatusBadRequest || envelope.Error.Code != "bad_query" || len(envelope.Error.Issues) != 1 || envelope.Error.Issues[0].Code != code || envelope.Error.Issues[0].Path != path {
+		t.Errorf("REST %s = %d %s, want bad_query (400) with a %s issue", path, response.Code, response.Body.String(), code)
 	}
 }
 

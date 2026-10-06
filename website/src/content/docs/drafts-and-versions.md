@@ -94,7 +94,7 @@ enum values, upper bounds, structural row identity, valid references, access and
 apply. Authentication identity and upload-file requirements are not editorial completeness rules.
 Custom validators still run; publication-only rules can inspect
 `operation.Context.WritePhase == operation.WritePhasePublished`. Drafts also stay incomplete when
-a migration [makes a field required](/docs/migrations/#required-fields): it checks published
+a migration [makes a field required](/docs/migrations/required-fields/): it checks published
 content, not drafts.
 
 In REST/SDK calls, the equivalent write option is `draft: true` or `draft: false`. Publishing and

@@ -108,7 +108,11 @@ admission, and plugin-specific body limits can reject a request before the opera
 ## Handle errors by code {#errors}
 
 Failures use one stable JSON envelope. Validation failures use HTTP 422 and include field-addressable
-issues; revision and uniqueness conflicts use HTTP 409. Do not branch on the human-readable message.
+issues; revision and uniqueness conflicts use HTTP 409. A plain update of a published versioned
+document uses 409 with `publish_required`, and a filter, sort, selection or population the collection
+can't run uses 400 with `bad_query`. Any other failure reports the code its status names:
+`access_denied` for 403, `not_found` for 404, `conflict` for 409, `bad_request` for other 4xx
+statuses and `internal` for 5xx. Do not branch on the human-readable message.
 
 ```json title="validation-response.json" focus={3,6-13}
 {

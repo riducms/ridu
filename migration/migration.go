@@ -122,6 +122,13 @@ type DataTransformDescriptor struct {
 // supplies it. Delete also removes the framework state the document owns,
 // such as its versions, sessions, and preferences.
 type DataTransaction interface {
+	// Collection returns the collection with this slug as the running
+	// migration leaves it, or as it was before when the migration removes it.
+	// Every request must use a shape from the migration itself, so a
+	// transform keeps replaying after later migrations change the collection.
+	Collection(slug string) (schema.Collection, error)
+	// Global returns the global with this slug, resolved like Collection.
+	Global(slug string) (schema.Collection, error)
 	Create(context.Context, store.CreateRequest) (store.Document, error)
 	Find(context.Context, store.Request) (store.Document, error)
 	List(context.Context, store.Request) (store.Page, error)

@@ -182,7 +182,7 @@ const post = await client.find('posts', 'post_123', {
 Population batches work, reapplies target access and field redaction, respects localization, and
 supports nested relationships under groups, arrays, and blocks. The operation-wide limits are 64
 explicit paths, depth 5, 256 expanded schema paths, and 4,096 materialized related documents.
-See [Querying data](/docs/querying/#populate) for REST encoding and cost controls.
+See [Querying data](/docs/querying/select-and-populate/#populate) for REST encoding and cost controls.
 
 ## Migration implications {#migrations}
 

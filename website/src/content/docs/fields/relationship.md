@@ -105,7 +105,7 @@ A polymorphic relationship, single or a list, compares `{ relationTo, id }` refe
 SDK and REST write them: `{ subject: { in: [{ relationTo: 'posts', id: postID }] } }`. Wrap `in`
 in `not` to exclude documents. Equality, `contains` and ranges are rejected for lists and
 polymorphic relationships, and none of them can be sorted. See
-[Filter by membership](/docs/querying/#membership). The admin list offers **is any of** and
+[Filter by membership](/docs/querying/filters/#membership). The admin list offers **is any of** and
 **is none of** for these fields.
 
 ## Read and translate relationships

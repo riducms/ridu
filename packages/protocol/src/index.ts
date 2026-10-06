@@ -267,6 +267,8 @@ const ERROR_CODES: ReadonlySet<ErrorCode> = new Set([
 	"invalid_preview_token",
 	"rejected",
 	"selection_too_large",
+	"bad_query",
+	"publish_required",
 ]);
 
 export function isValidationIssue(value: unknown): value is ValidationIssue {

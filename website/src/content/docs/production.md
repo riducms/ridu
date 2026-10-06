@@ -242,8 +242,9 @@ generated down migration, while SQLite exposes only the explicit reversible step
 artifacts. A down migration can revert state, but it does not make incompatible application versions
 safe to run together; Ridu uses forward repair or complete recovery-point restoration instead.
 
-[Migrations](/docs/migrations/) documents create/plan/status/verify/up, resumable boundaries,
-destructive and maintenance admission, stable safety codes, and immutable artifact validation.
+[Deploy migrations](/docs/migrations/deploy/) covers the release order, maintenance work,
+interrupted runs, and recovery; [Safety checks](/docs/migrations/safety-checks/) lists the approval
+flags and safety codes.
 
 ## Liveness, readiness, and drain {#health}
 
@@ -275,8 +276,8 @@ hard kill.
 
 Ridu keeps telemetry vendor-neutral:
 
-- `RequestObservation` reports request ID, method/path, status, response bytes, duration, and stable
-  error code.
+- `RequestObservation` reports request ID, method/path, status, response bytes, duration, the stable
+  error code, and the specific `ErrorReason` behind it, such as `origin_denied` behind `access_denied`.
 - `AuditEvent` reports security-relevant actions with request ID, resolved client IP, action,
   collection/document target, and actor collection/document identity.
 - `RequestError` receives trusted internal causes and recovered-panic detail while the HTTP response

@@ -240,29 +240,59 @@ and the usual read-only and field access rules.
 
 ## Find documents containing a value {#queries}
 
-Use the `in` operator to find a document containing any of the supplied values. For example,
-this SDK filter matches products tagged `"sale"` **or** `"featured"`:
+Use the `in` operator to find a document containing any of the supplied values. This matches
+products tagged `"sale"` **or** `"featured"`:
 
-```json
-{ "tags": { "in": ["sale", "featured"] } }
+```go title="content/find_tagged.go" focus={15-20} group="find-tagged" tab="Go"
+package content
+
+import (
+	"context"
+
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/query"
+	"github.com/riducms/ridu/store"
+)
+
+func FindTaggedProducts(
+	ctx context.Context,
+	local *ridu.LocalAPI,
+) (store.Page, error) {
+	// Match either tag anywhere in the list, using exact values.
+	return local.List(ctx, "products", ridu.ListOptions{
+		Where: query.In("tags", "sale", "featured"),
+		Page:  1,
+		Limit: 20,
+	})
+}
 ```
 
-Matching is exact: `"sale"` does not
-match `"wholesale"`. Order and duplicates do not affect membership. Use `query.Not(...)` to
-exclude matches, or combine two `In` filters with `query.And(...)` to require both tags.
-See [filtering by membership](/docs/querying/#membership) for a complete Go example; has-many
-selects and relationships follow the same rules.
+```ts title="TypeScript" group="find-tagged" tab="TypeScript"
+const page = await ridu.list('products', {
+	where: { tags: { in: ['sale', 'featured'] } },
+	limit: 20
+});
+```
+
+```text title="REST" group="find-tagged" tab="REST"
+where={"tags":{"in":["sale","featured"]}}
+```
+
+Matching is exact: `"sale"` does not match `"wholesale"`. Order and duplicates do not affect
+membership. Use `not` to exclude matches, or combine two `in` filters with `and` to require both
+tags. Has-many selects and relationships follow the same rules; see
+[Lists and has-many fields](/docs/querying/filters/#membership).
 
 Existence and null checks are also supported. Whole-list equality, scalar equality, substring
-search, range comparisons, sorting, indexes, and uniqueness are unavailable for these fields;
-the operators fail with `bad_query` rather than matching nothing. Reject duplicate items with a
-validator; there is no `.Unique()` list option.
+search, range comparisons, sorting, indexes, and uniqueness are unavailable for these fields; the
+operators fail with an `unsupported_operator` issue rather than matching nothing. Reject duplicate
+items with a validator; there is no `.Unique()` list option.
 
 ### Query nested lists {#nested-queries}
 
 A list inside groups, arrays or blocks is queried by its full path. With an `availableSizes`
 list in the rows of a `variants` array, `{ "variants.availableSizes": { "in": [10] } }` matches
-a product when any variant offers size 10; see [nested paths](/docs/querying/#paths). Every
+a product when any variant offers size 10; see [nested paths](/docs/querying/filters/#paths). Every
 database adapter queries lists at any depth, including inside localized groups and arrays. See
 [generated contracts](/docs/generated-contracts/#primitive-lists) for Go, TypeScript, and GraphQL
 list types.

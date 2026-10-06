@@ -91,7 +91,7 @@ whole group or list. To translate only selected children, leave the parent share
 
 A required translated field needs a value only for the language you are saving. You do not have
 to submit every translation at once. `.Unique()` also checks uniqueness within each language. When
-a migration [makes a translated field required](./migrations.md#required-fields), it follows the
+a migration [makes a translated field required](./migrations/required-fields.md), it follows the
 same rule: missing translations are allowed, but an empty translation, or no translation in any
 language, stops the migration.
 

@@ -104,12 +104,12 @@ translating option labels alone uses `Option.LabelTranslations`.
 
 ## Filter by choice {#queries}
 
-Query a single choice with `equals`, `notEquals` or `in`. A multi-select is filtered by
-membership: `{ audiences: { in: ['editors', 'reviewers'] } }` matches a document that selected
-either option, and `query.Not(query.In("audiences", "editors"))` excludes those that selected
-editors. Equality, `contains` and sorting are unavailable for multi-selects and fail with
-`bad_query`. The admin list offers **is any of** and **is none of** with the field's options. See
-[Filter by membership](/docs/querying/#membership).
+Query a single choice with `equals`, `notEquals` or `in`. A multi-select is filtered by membership:
+`{ audiences: { in: ['editors', 'reviewers'] } }` matches a document that selected either option,
+and `query.Not(query.In("audiences", "editors"))` excludes those that selected editors. Equality,
+`contains` and sorting are unavailable for multi-selects and fail with an `unsupported_operator` or
+`unsupported_path` issue. The admin list offers **is any of** and **is none of** with the field's
+options. See [Filter by membership](/docs/querying/filters/#membership).
 
 ## Common mistakes {#troubleshooting}
 
