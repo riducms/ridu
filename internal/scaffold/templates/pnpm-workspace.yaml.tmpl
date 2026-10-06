@@ -5,3 +5,16 @@ packages:
 # Release rehearsals provision unpublished Ridu packages in the workspace.
 # Published packages still resolve normally when no matching local package exists.
 linkWorkspacePackages: true
+
+# Dependency install scripts. pnpm 11 and later fail the install when a script is
+# neither allowed nor denied; pnpm 10 skips it with a warning.
+# esbuild's script sets up the native binary that Vite and tsx run. @parcel/watcher is
+# an optional dependency of Sass that only `sass --watch` uses, so its build stays off.
+allowBuilds:
+  esbuild: true
+  "@parcel/watcher": false
+# The same decisions for pnpm 10 releases that predate allowBuilds.
+onlyBuiltDependencies:
+  - esbuild
+ignoredBuiltDependencies:
+  - "@parcel/watcher"

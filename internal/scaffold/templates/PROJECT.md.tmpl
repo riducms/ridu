@@ -45,7 +45,8 @@ special filenames. Ridu only cares about the `ridu.Config` returned by `content.
 | `ridu.plugins.json` | Records packaged plugin dependencies and constructors. | Normally use `ridu add` or `ridu plugin remove`; review the resulting diff. |
 | `go.mod`, `go.sum` | Pin Go dependencies. | Add a Go package or upgrade Ridu. Normally use `go get`/`go mod tidy`. |
 | `package.json`, `{{.Lockfile}}` | Define the {{.PackageManagerLabel}} workspace and frontend dependencies. | Add a frontend package or upgrade dependencies. Normally use `{{.AddCommand}}`. |
-| `admin/src/main.ts` | Mounts the framework-owned admin with this project's generated client and plugins. | You need top-level admin mounting options. Most projects leave it alone. |
+{{if .PNPM}}| `pnpm-workspace.yaml` | Lists the workspace packages and which dependency install scripts may run. | An install stops on an unapproved build script. Normally use `pnpm approve-builds`. |
+{{end}}| `admin/src/main.ts` | Mounts the framework-owned admin with this project's generated client and plugins. | You need top-level admin mounting options. Most projects leave it alone. |
 | `admin/vite.config.ts` | Builds and serves the admin, proxies `/api`, and reloads after schema changes. | You have a real Vite/build requirement. Do not add schema definitions here. |
 | `admin/tsconfig.json` | TypeScript settings for the admin. | A TypeScript integration specifically requires it. |
 | `admin/index.html` | Browser HTML entry containing the admin mount element. | You need document-level HTML or metadata. |
