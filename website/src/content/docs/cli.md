@@ -67,7 +67,9 @@ ridu new [--template starter|blank] [--database postgres|sqlite|mongodb]
   [--release-version version] [directory]
 ```
 
-Outside the wizard, `starter`, PostgreSQL, npm, and Codex guidance are the defaults. Use `blank` for
+Outside the wizard, `starter`, PostgreSQL, npm, and Codex guidance are the defaults. When `ridu new`
+runs inside Claude Code, which sets `CLAUDECODE`, the agent default is `claude` instead, and the
+wizard preselects it, because Claude Code discovers skills only under `.claude/skills`. Use `blank` for
 only the authentication collection and admin shell, `sqlite` for a single-host embedded database,
 or `--agent none` to omit agent files. See the [MongoDB guide](/docs/mongodb/) before selecting its
 bounded production profile.
@@ -99,7 +101,8 @@ Generated projects use the layout selected by `ridu new`:
 | `all`               | Both            | Both skill roots                                 |
 | `none`              | None            | None                                             |
 
-Add another layout to an existing project with `ridu agent install --agent <agent>`. The command
+Add another layout to an existing project with `ridu agent install --agent <agent>`. Without
+`--agent`, it installs the Codex layout, or the Claude Code layout inside Claude Code. The command
 preserves an existing `AGENTS.md` or `CLAUDE.md` and refuses to replace an untracked skill file.
 `.ridu-agent-docs.json` records only framework-managed skill files and their digests; commit it with
 the installed guidance.
@@ -140,7 +143,7 @@ option and default.
 
 If a saved change looks like a rename, `dev` asks in an interactive terminal whether to preserve
 the data and can write and apply the migration for you. See
-[Renames in `ridu dev`](/docs/migrations/#renames-in-dev). For an ambiguous rename or a destructive
+[Renames in `ridu dev`](/docs/migrations/renames/#in-dev). For an ambiguous rename or a destructive
 transition `dev` rejects the reload and asks for a reviewed migration. Without a terminal it
 rejects every reload for a possible rename until the old name is restored or the rename is
 migrated. See the selected [database adapter](/docs/adapters/) for
@@ -209,7 +212,7 @@ ridu migrate verify
 argument, as in `ridu migrate create add-post-summary`. When the schema needs no migration, it says
 so, writes nothing, and exits successfully. `baseline` records the committed migrations a
 database synchronized by `ridu dev` already has, without running them; see
-[Migrations](/docs/migrations/#baseline). `plan` and `status` inspect a
+[Migrations](/docs/migrations/development/#baseline). `plan` and `status` inspect a
 selected database without changing it. `verify` replays the complete history in an isolated target,
 and `up` applies pending migrations. Select the database with `DATABASE_URL` for PostgreSQL or
 MongoDB, or `RIDU_SQLITE_PATH` for SQLite. A PostgreSQL or MongoDB database on `localhost`, a

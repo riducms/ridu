@@ -44,6 +44,18 @@ type Options struct {
 	Interactive          bool
 	Accessible           bool
 	NewProjectResultFile string
+	// CodingAgent is the coding agent detected in the environment that runs the
+	// CLI. It replaces the Codex default when a command receives no agent.
+	CodingAgent agentdocs.Selection
+}
+
+// defaultAgent replaces an omitted agent selection with the detected coding
+// agent. When none was detected, agentdocs.ParseSelection supplies Codex.
+func (options Options) defaultAgent(requested string) string {
+	if strings.TrimSpace(requested) == "" && options.CodingAgent != "" {
+		return string(options.CodingAgent)
+	}
+	return requested
 }
 
 // Run executes one CLI invocation and returns its process exit code.
@@ -129,7 +141,7 @@ func runAgent(args []string, stdout, stderr io.Writer, options Options) int {
 	case "install":
 		flags := flag.NewFlagSet("ridu agent install", flag.ContinueOnError)
 		flags.SetOutput(stderr)
-		agent := flags.String("agent", "codex", "coding agent: codex, claude, cursor, or all")
+		agent := flags.String("agent", "", "coding agent: codex, claude, cursor, or all (default claude inside Claude Code, otherwise codex)")
 		if err := flags.Parse(args[1:]); err != nil {
 			return 2
 		}
@@ -137,7 +149,7 @@ func runAgent(args []string, stdout, stderr io.Writer, options Options) int {
 			fmt.Fprintln(stderr, "usage: ridu agent install [--agent codex|claude|cursor|all]")
 			return 2
 		}
-		selection, err := agentdocs.ParseSelection(*agent)
+		selection, err := agentdocs.ParseSelection(options.defaultAgent(*agent))
 		if err != nil || selection == agentdocs.SelectionNone {
 			if err == nil {
 				err = fmt.Errorf("agent install does not accept none")
@@ -1745,7 +1757,7 @@ func runNew(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	templateName := flags.String("template", "", "project template: starter or blank")
 	databaseName := flags.String("database", "", "database adapter: postgres, sqlite, or mongodb")
 	packageManagerName := flags.String("package-manager", "", "frontend package manager: npm, bun, pnpm, or yarn")
-	agentName := flags.String("agent", "", "coding agent: codex, claude, cursor, all, or none")
+	agentName := flags.String("agent", "", "coding agent: codex, claude, cursor, all, or none (default claude inside Claude Code, otherwise codex)")
 	noAgent := flags.Bool("no-agent", false, "do not install coding-agent guidance")
 	releaseVersionOverride := flags.String("release-version", "", "framework dependency release override (development only)")
 	if err := parseNewProjectFlags(flags, args); err != nil {
@@ -1889,7 +1901,9 @@ func selectNewProject(ctx context.Context, requestedTarget, requestedTemplate, r
 	if err != nil {
 		return "", "", "", "", "", false, err
 	}
-	selectedAgent, err := agentdocs.ParseSelection(requestedAgent)
+	// The wizard still asks when no agent was requested; the detected agent is
+	// its preselected answer.
+	selectedAgent, err := agentdocs.ParseSelection(options.defaultAgent(requestedAgent))
 	if err != nil {
 		return "", "", "", "", "", false, err
 	}

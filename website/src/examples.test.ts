@@ -18,7 +18,10 @@ function titledFence(source: string, language: string, title: string): string {
 
 describe('documentation examples', () => {
 	test('publishes the compile-checked live validation client', () => {
-		const source = readFileSync(resolve(import.meta.dir, 'content/docs/typescript-sdk.md'), 'utf8');
+		const source = readFileSync(
+			resolve(import.meta.dir, 'content/docs/typescript-sdk/live-validation.md'),
+			'utf8'
+		);
 		const fixture = readFileSync(
 			resolve(repositoryRoot, 'examples/documentation/live-validation.ts'),
 			'utf8'
@@ -137,8 +140,7 @@ describe('documentation examples', () => {
 				'utf8'
 			).trim()
 		);
-		const querying = readFileSync(resolve(import.meta.dir, 'content/docs/querying.md'), 'utf8');
-		expect(titledFence(querying, 'go', 'content/find_tagged.go')).toBe(
+		expect(titledFence(source, 'go', 'content/find_tagged.go')).toBe(
 			readFileSync(
 				resolve(repositoryRoot, 'examples/documentation/primitive-lists/find_tagged.go'),
 				'utf8'

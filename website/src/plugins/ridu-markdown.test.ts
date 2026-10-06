@@ -118,6 +118,18 @@ describe('riduMarkdownCodeMetadata', () => {
 		expect(html.indexOf(icon)).toBeLessThan(html.indexOf('server.ts'));
 	});
 
+	it('marks diagram fences so box-drawing characters render in one font', () => {
+		const render = (meta: string) =>
+			markdownToHtml(`\`\`\`text ${meta}\n┌──┐\n└──┘\n\`\`\``, {
+				mdastPlugins: [riduMarkdownCodeMetadata],
+				hastPlugins: [riduMarkdownComponents]
+			}).html;
+
+		expect(render('title="Flow" diagram')).toContain('class="code-block code-block-diagram"');
+		expect(render('title="diagram.txt"')).toContain('class="code-block"');
+		expect(render('title="diagram.txt"')).not.toContain('code-block-diagram');
+	});
+
 	it('shares aliases and the text fallback with authored code blocks', () => {
 		expect(resolveCodeLanguage('typescript')).toBe('ts');
 		expect(resolveCodeLanguage('shell')).toBe('bash');
@@ -316,6 +328,9 @@ describe('code file comparisons', () => {
 		expect(html.match(/role="tabpanel"/g)).toHaveLength(2);
 		expect(html).toContain('aria-controls="code-files-1-panel-0"');
 		expect(html).toContain('aria-labelledby="code-files-1-tab-0"');
+		// Labels let a reader's tab choice follow them to every group that offers it.
+		expect(html).toContain('data-code-file-tab="Payload"');
+		expect(html).toContain('data-code-file-tab="Ridu"');
 		expect(html).toContain('role="tablist" aria-label="Compare code files" hidden');
 		expect(html).not.toMatch(/role="tabpanel"[^>]*hidden/);
 		expect(html.match(/data-copy-code=""/g)).toHaveLength(2);

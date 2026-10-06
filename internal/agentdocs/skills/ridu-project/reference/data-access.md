@@ -84,7 +84,7 @@ metadata. Generated contracts describe these fields.
 List results use a page envelope with `docs` and nested `pagination` information including current
 page, limit, total documents, total pages, and next/previous state. A list read with
 `pagination: false` skips the count and omits both totals; see
-[Paginate and count](./querying.md#pagination). REST failures use one stable
+[Paginate and count](./querying/sorting-and-pagination.md#paginate). REST failures use one stable
 error envelope; the SDK converts it to `RiduError` with `code`, `status`, `requestId`, `issues`, and
 structured `details`. Branch on the code and issue path, never on human wording.
 

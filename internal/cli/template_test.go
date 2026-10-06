@@ -210,3 +210,64 @@ func TestNewProjectLayoutRevealsOnlyTheCurrentAndCompletedSteps(t *testing.T) {
 		t.Fatalf("third progressive frame = %q", third)
 	}
 }
+
+// Claude Code discovers skills only under .claude/skills, so a project it
+// creates without an explicit agent gets that layout; an explicit selection
+// still wins.
+func TestSelectNewProjectDefaultsToTheDetectedCodingAgent(t *testing.T) {
+	options := Options{CodingAgent: agentdocs.SelectionClaude}
+	for requested, want := range map[string]agentdocs.Selection{
+		"":      agentdocs.SelectionClaude,
+		"codex": agentdocs.SelectionCodex,
+		"none":  agentdocs.SelectionNone,
+	} {
+		target := filepath.Join(t.TempDir(), "detected-agent-project")
+		_, _, _, _, agent, _, err := selectNewProject(context.Background(), target, "", "", "", requested, &bytes.Buffer{}, options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if agent != want {
+			t.Fatalf("requested %q: agent = %q, want %q", requested, agent, want)
+		}
+	}
+}
+
+func TestSelectNewProjectWizardPreselectsTheDetectedCodingAgent(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "wizard-detected-agent")
+	_, _, _, _, agent, cancelled, err := selectNewProject(context.Background(), target, "", "", "", "", &bytes.Buffer{}, Options{
+		Stdin:       strings.NewReader("\n\n\n\ny\n"),
+		Interactive: true,
+		Accessible:  true,
+		CodingAgent: agentdocs.SelectionClaude,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled || agent != agentdocs.SelectionClaude {
+		t.Fatalf("agent = %q, cancelled = %v", agent, cancelled)
+	}
+}
+
+func TestAgentInstallDefaultsToTheDetectedCodingAgent(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "detected-agent-install")
+	if _, err := scaffold.Create(scaffold.Options{
+		Target:           root,
+		ModulePath:       "example.com/detected-agent-install",
+		NPMScope:         "@detected-agent-install",
+		FrameworkVersion: "v1.2.3",
+		Agent:            agentdocs.SelectionCodex,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	options := Options{WorkingDirectory: root, Version: "v1.2.3", CodingAgent: agentdocs.SelectionClaude}
+	if exitCode := runAgent([]string{"install"}, &stdout, &stderr, options); exitCode != 0 {
+		t.Fatalf("agent install exit = %d; stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	for _, path := range []string{filepath.Join(".claude", "skills", "ridu-project", "SKILL.md"), "CLAUDE.md"} {
+		if _, err := os.Stat(filepath.Join(root, path)); err != nil {
+			t.Fatalf("Claude Code layout %s: %v", path, err)
+		}
+	}
+}

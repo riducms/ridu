@@ -173,7 +173,7 @@ Rich-text blocks and plugin embedded forms also support live checks. See
 ### Build a custom client {#live-transport}
 
 The admin handles requests automatically. For a separate application, see the
-[SDK example](../typescript-sdk.md#live-validation) and
+[SDK example](../typescript-sdk/live-validation.md) and
 [permissions and limits](./live-validation.md#live-transport).
 
 ## Validate a text or number list {#lists}

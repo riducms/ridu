@@ -47,7 +47,9 @@ export type ErrorCode =
 	| "invalid_credential"
 	| "invalid_preview_token"
 	| "rejected"
-	| "selection_too_large";
+	| "selection_too_large"
+	| "bad_query"
+	| "publish_required";
 
 export type FieldType =
 	| "text"

@@ -143,7 +143,7 @@ transform to its immutable artifact when explicit schema-driven rewriting is req
 If `up` or `ridu dev` stops with `RIDU_REQUIRED_VALUES_MISSING`, a field became required while
 stored documents have no value for it. The message lists the field, locale, document count and
 example IDs. Backfill them with a data transform, or keep the field optional; see
-[Making a field required](/docs/migrations/#required-fields).
+[Making a field required](/docs/migrations/required-fields/).
 
 If status reports a digest mismatch, missing history, or changed applied artifact, restore the
 committed artifact that was actually applied. Migration files are immutable; do not edit applied

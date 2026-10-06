@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/internal/agentdocs"
 	"github.com/riducms/ridu/internal/cli"
 )
 
@@ -39,6 +40,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Interactive:          terminal(os.Stdin) && terminalWriter(stdout),
 		Accessible:           os.Getenv("RIDU_ACCESSIBLE") != "",
 		NewProjectResultFile: os.Getenv("RIDU_NEW_PROJECT_RESULT_FILE"),
+		CodingAgent:          agentdocs.DetectSelection(os.Getenv),
 	})
 }
 

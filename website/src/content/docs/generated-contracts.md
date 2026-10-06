@@ -252,4 +252,4 @@ relationships share one generated TypeScript type, `MembershipWhere<T>`: `in` wi
 the item type `T`, `exists`, and `equals` or `notEquals` with `null`. `T` is `string` or `number`
 for lists, the option union for a select, `ID` for document IDs, and a union of
 `{ relationTo: "..."; id: ID }` for a polymorphic relationship. GraphQL filter inputs offer `in`,
-`not_in` and `exists` for the same fields. See [Filter by membership](/docs/querying/#membership).
+`not_in` and `exists` for the same fields. See [Filter by membership](/docs/querying/filters/#membership).

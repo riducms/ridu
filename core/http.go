@@ -131,6 +131,10 @@ type RequestObservation struct {
 	Status int
 	// ErrorCode is the stable public Ridu code for a failed request.
 	ErrorCode string
+	// ErrorReason is the specific code behind ErrorCode, such as origin_denied
+	// behind access_denied or body_too_large behind bad_request. Responses
+	// carry only ErrorCode; use ErrorReason for monitoring and alerts.
+	ErrorReason string
 	// ResponseBytes is the number of response-body bytes written.
 	ResponseBytes int64
 	// Duration is the total handler execution time.

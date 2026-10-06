@@ -18,6 +18,10 @@ SKILL.md export-ignore
 internal/agentdocs/skills/** -export-ignore
 .agents export-ignore
 .agents/** export-ignore
+# Claude Code discovers project skills only in .claude/skills; its entries are
+# links to the skills above and must not reach the public projection.
+.claude/skills export-ignore
+.claude/skills/** export-ignore
 docs/** export-ignore
 docs/assets -export-ignore
 docs/assets/** -export-ignore

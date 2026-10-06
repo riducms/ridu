@@ -503,3 +503,33 @@ VALUES ('posts', 'invalid-json', 1, 1, 'not-json')`)
 		t.Fatalf("check error = %v, want unclassified integrity error", checkError)
 	}
 }
+
+// SQLite creates a missing database file but not its directory, and its own
+// error says only "unable to open". Open names the cause, for plain paths and
+// file URIs alike, without echoing the configured path.
+func TestSQLiteOpenNamesAMissingDatabaseDirectory(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	missing := filepath.Join(t.TempDir(), "volume-not-mounted", "content.sqlite")
+	for _, path := range []string{missing, "file:" + missing + "?cache=private"} {
+		backend, err := Open(ctx, path)
+		if err == nil {
+			backend.Close()
+			t.Fatalf("Open(%q) succeeded in a missing directory", path)
+		}
+		if !strings.Contains(err.Error(), "the database file's directory does not exist") {
+			t.Fatalf("Open(%q) error = %v, want the missing directory named", path, err)
+		}
+		if strings.Contains(err.Error(), "volume-not-mounted") {
+			t.Fatalf("Open(%q) error echoes the configured path: %v", path, err)
+		}
+	}
+
+	// A path whose directory exists but can't hold the file keeps SQLite's
+	// own code, now with its description.
+	directory := t.TempDir()
+	_, err := Open(ctx, directory)
+	if err == nil || !strings.Contains(err.Error(), "SQLite error 14: Unable to open the database file (SQLITE_CANTOPEN)") {
+		t.Fatalf("Open(directory) error = %v, want the described SQLite error", err)
+	}
+}

@@ -9349,7 +9349,7 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/core#BoundTypedCollection": {
-			"summary": "Typed collection methods for strict writes, incomplete working drafts, reads, and deletion.",
+			"summary": "Typed collection methods for strict writes, incomplete working drafts, publication, reads, and deletion.",
 			"group": "Generated Go API",
 			"parametersLabel": "",
 			"parameters": [
@@ -9381,7 +9381,7 @@
 				{
 					"name": "Update(ctx, id, input, options)",
 					"type": "(Document, error)",
-					"description": "Apply a strict partial working update. Published documents require explicit draft intent; Publish is a separate operation."
+					"description": "Apply a strict partial working update. A published versioned document fails with publish_required unless the update has draft intent; use PublishChanges to edit and publish it."
 				},
 				{
 					"name": "SaveDraft(ctx, id, input, options)",
@@ -9392,6 +9392,21 @@
 					"name": "DiscardDraft(ctx, id, options)",
 					"type": "(Document, error)",
 					"description": "Reset pending working values to the live snapshot, subject to expected revision and update access."
+				},
+				{
+					"name": "Publish(ctx, id, options)",
+					"type": "(Document, error)",
+					"description": "Validate the complete working document, including a draft's pending changes, and promote it to the live snapshot."
+				},
+				{
+					"name": "PublishChanges(ctx, id, input, options)",
+					"type": "(Document, error)",
+					"description": "Apply a strict partial update from the Update model and publish the result in one operation."
+				},
+				{
+					"name": "Unpublish(ctx, id, options)",
+					"type": "(Document, error)",
+					"description": "Remove the live snapshot while retaining working content as draft."
 				},
 				{
 					"name": "Delete(ctx, id, options)",
@@ -9677,7 +9692,7 @@
 				{
 					"name": "Update(ctx, input, options)",
 					"type": "(Document, error)",
-					"description": "Initialize or update working singleton values from the strict Update model. Published content requires explicit draft intent; Publish is a separate operation."
+					"description": "Initialize or update working singleton values from the strict Update model. Published versioned content fails with publish_required unless the update has draft intent; use PublishChanges to edit and publish it."
 				},
 				{
 					"name": "SaveDraft(ctx, input, options)",
@@ -9693,6 +9708,11 @@
 					"name": "Publish(ctx, options)",
 					"type": "(Document, error)",
 					"description": "Validate the complete working singleton and promote it to live content."
+				},
+				{
+					"name": "PublishChanges(ctx, input, options)",
+					"type": "(Document, error)",
+					"description": "Apply a strict partial update from the Update model and publish the result in one operation."
 				},
 				{
 					"name": "Unpublish(ctx, options)",
@@ -15279,7 +15299,7 @@
 			],
 			"example": "query.In(\"subjects\", query.Reference(\"posts\", postID))",
 			"keywords": ["query.Reference", "Reference", "polymorphic", "relationTo"],
-			"relatedDocs": ["/docs/querying/#membership"],
+			"relatedDocs": ["/docs/querying/filters/#membership"],
 			"relatedSymbols": ["go:github.com/riducms/ridu/query#In"],
 			"typeLinkIDs": {
 				"Value": "go:github.com/riducms/ridu/query#Value"
@@ -23755,45 +23775,58 @@
 			"parametersLabel": "",
 			"parameters": [
 				{
+					"name": "Collection",
+					"type": "func(slug string) (schema.Collection, error)",
+					"description": "Returns the collection as this migration leaves it, or as it was before when the migration removes it. Pass it to every request so the transform keeps replaying after later migrations change the collection."
+				},
+				{
+					"name": "Global",
+					"type": "func(slug string) (schema.Collection, error)",
+					"description": "Returns the global with this slug, resolved like Collection."
+				},
+				{
 					"name": "Create",
 					"type": "func(context.Context, store.CreateRequest) (store.Document, error)",
-					"description": "The Create value."
+					"description": "Creates a document with the given ID and values."
 				},
 				{
 					"name": "Find",
 					"type": "func(context.Context, store.Request) (store.Document, error)",
-					"description": "The Find value."
+					"description": "Reads one stored document by ID."
 				},
 				{
 					"name": "List",
 					"type": "func(context.Context, store.Request) (store.Page, error)",
-					"description": "The List value."
+					"description": "Reads a page of stored documents. Loop while HasNextPage is true to visit every match."
 				},
 				{
 					"name": "Update",
-					"type": "func(context.Context, store.UpdateRequest) (store.Document, error)",
-					"description": "The Update value."
+					"type": "func(context.Context, migration.UpdateRequest) (store.Document, error)",
+					"description": "Locks the stored document and patches its values, or replaces them when ReplaceValues is set."
 				},
 				{
 					"name": "Trash",
 					"type": "func(context.Context, store.Request) (store.Document, error)",
-					"description": "The Trash value."
+					"description": "Moves a document to the trash."
 				},
 				{
 					"name": "Restore",
 					"type": "func(context.Context, store.Request) (store.Document, error)",
-					"description": "The Restore value."
+					"description": "Restores a trashed document."
 				},
 				{
 					"name": "Delete",
 					"type": "func(context.Context, store.Request) (store.Document, error)",
-					"description": "The Delete value."
+					"description": "Deletes a document and the framework state it owns, such as its versions, sessions and preferences."
 				}
 			],
-			"details": [],
-			"example": "",
+			"details": [
+				"Every request runs inside the migration's transaction, so the schema change and the content change commit or roll back together.",
+				"A transform can't change a versioned collection or global; backfill those in an earlier, data-only migration."
+			],
+			"example": "posts, err := tx.Collection(\"posts\")\nif err != nil {\n\treturn err\n}\n_, err = tx.Update(ctx, migration.UpdateRequest{\n\tRequest: store.Request{Collection: posts, ID: \"hello\"},\n\tValues:  store.Values{\"summary\": store.String(\"Hello\")},\n})\nreturn err",
 			"keywords": ["migration.DataTransaction", "DataTransaction"],
-			"relatedDocs": [],
+			"relatedDocs": ["/docs/migrations/data-transforms/"],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},

@@ -232,12 +232,28 @@ const memberOptions: ClientOptions<"users"> = {
 const members = createClient<CapabilityConfig, "users">(memberOptions);
 void members.auth.login({ email: "editor@example.test", password: "secret" });
 void members.auth.getSession().then((session) => session?.collection satisfies "users" | undefined);
+// A non-draft default collection creates through the published contract, not as `never`.
+void members.auth
+	.createUser({ data: { email: "editor@example.test" }, password: "secret" })
+	.then((user) => user.email satisfies string);
+// @ts-expect-error a non-draft default collection requires its complete create input.
+void members.auth.createUser({ data: {}, password: "secret" });
+// @ts-expect-error a non-draft default collection cannot request draft creation.
+void members.auth.createUser(
+	{ data: { email: "editor@example.test" }, password: "secret" },
+	{ draft: true }
+);
 
 const draftMembers = createClient<CapabilityConfig, "draft-users">({
 	baseURL: "https://cms.example.test",
 	auth: { collection: "draft-users" },
 });
-void draftMembers.auth.createUser({ data: { email: "editor@example.test" }, password: "secret" });
+void draftMembers.auth
+	.createUser({ data: { email: "editor@example.test" }, password: "secret" })
+	.then((user) => user.bio satisfies string | null);
+void draftMembers.auth
+	.createUser({ collection: "users", data: { email: "editor@example.test" }, password: "secret" })
+	.then((user) => user.email satisfies string);
 
 // @ts-expect-error only upload-enabled collections accept blobs.
 void client.upload("posts", new Blob());

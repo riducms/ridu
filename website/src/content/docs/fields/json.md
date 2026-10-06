@@ -64,7 +64,7 @@ reusable field type and editor.
 Select or omit the JSON property as one value. Filters compare it only when it holds a scalar of
 the operand's type: `{ metadata: { contains: 'plan' } }` matches the string `"Launch PLAN"`, but
 an array or object never matches `contains`, `like` or `equals`, even when an item would. JSON
-values cannot be sorted. See [Compare JSON values](/docs/querying/#json) for paths inside a value.
+values cannot be sorted. See [Compare JSON values](/docs/querying/filters/#paths) for paths inside a value.
 Promote fields you must filter or sort into the content model.
 
 `Localized` stores the whole JSON value independently per locale. Partial locale fallback applies

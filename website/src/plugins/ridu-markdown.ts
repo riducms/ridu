@@ -18,6 +18,7 @@ interface CodeMetadata {
 	packageManager?: PackageManager;
 	group?: string;
 	tab?: string;
+	diagram?: boolean;
 }
 
 const codeMetadataKey = 'riduCodeMetadata';
@@ -25,6 +26,8 @@ const codeMetadataIndexKey = 'riduCodeMetadataIndex';
 const explicitHeadingId = /\s+\{#([A-Za-z][\w:.-]*)\}\s*$/;
 const githubAlertMarker = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/;
 const packageManagerMeta = /(?:^|\s)package-manager=("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s]+)/;
+// A text diagram draws boxes and arrows with box-drawing characters.
+const diagramMeta = /(?:^|\s)diagram(?:\s|$)/;
 
 export function createMarkdownAlert(node: Readonly<Element>): Element | undefined {
 	const paragraphIndex = node.children.findIndex(
@@ -126,7 +129,8 @@ export const riduMarkdownCodeMetadata = {
 			label: parseLabel(node.meta, language),
 			language,
 			...(group ? { group, tab: tab ?? parseLabel(node.meta, language) } : {}),
-			...(packageManager ? { packageManager } : {})
+			...(packageManager ? { packageManager } : {}),
+			...(diagramMeta.test(node.meta ?? '') ? { diagram: true } : {})
 		});
 		context.data[codeMetadataKey] = metadata;
 		context.setProperty(node, 'value', code);
@@ -184,7 +188,7 @@ function createCodeBlock(node: Element, block: CodeMetadata): Element {
 		type: 'element',
 		tagName: 'figure',
 		properties: {
-			className: ['code-block'],
+			className: block.diagram ? ['code-block', 'code-block-diagram'] : ['code-block'],
 			'data-code-block': '',
 			...(block.group
 				? { 'data-code-group': block.group, 'data-code-tab-label': block.tab ?? block.label }
@@ -456,6 +460,8 @@ function createCodeFileTabs(sources: Readonly<Element>[], index: number): Elemen
 						role: 'tab',
 						'aria-selected': String(tab === 0),
 						'aria-controls': `${id}-panel-${tab}`,
+						// Groups that offer the same label switch together.
+						'data-code-file-tab': String(source.properties['data-code-tab-label']),
 						tabIndex: tab === 0 ? 0 : -1
 					},
 					children: [{ type: 'text', value: String(source.properties['data-code-tab-label']) }]

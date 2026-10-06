@@ -280,3 +280,15 @@ func TestExcludedSkillsCanBeEditedInTheManifest(t *testing.T) {
 		t.Fatalf("removing the exclusion did not restore the skill: %v", err)
 	}
 }
+
+func TestDetectSelectionRecognizesClaudeCode(t *testing.T) {
+	environment := map[string]string{}
+	getenv := func(name string) string { return environment[name] }
+	if selection := DetectSelection(getenv); selection != "" {
+		t.Fatalf("selection without an agent = %q", selection)
+	}
+	environment["CLAUDECODE"] = "1"
+	if selection := DetectSelection(getenv); selection != SelectionClaude {
+		t.Fatalf("selection inside Claude Code = %q", selection)
+	}
+}

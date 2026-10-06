@@ -369,3 +369,15 @@
 		right: 0.5rem;
 	}
 }
+
+/*
+ * Text diagrams draw boxes with box-drawing characters. Martian Mono ships no box-drawing subset,
+ * so its fallback would draw those glyphs at a different width. Render every glyph of a diagram
+ * in one system monospace font that includes them, and tighten lines so vertical rules join.
+ */
+.code-block-diagram .code-source .astro-code,
+.code-block-diagram .code-source .astro-code > code {
+	font-family:
+		ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace !important;
+	line-height: 1.3;
+}

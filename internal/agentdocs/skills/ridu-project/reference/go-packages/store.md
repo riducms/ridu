@@ -329,7 +329,7 @@ Generated input wrappers still distinguish omitted fields from explicit nulls an
 The generated handle uses the same local API, permissions, validation, and hooks; it does not give
 you direct database access. Use `store.Values` when writing generic code across collections or
 calling local API features that the typed handle does not expose. See
-[generated typed handles](../local-api.md#typed-handles) for binding and input examples.
+[generated typed handles](../local-api/typed-handles.md) for binding and input examples.
 
 For allocation-sensitive callbacks, [Hook and value performance](https://riducms.com/docs/performance/hooks-and-values/)
 shows when immutable iteration avoids a copy and how repeated copies can grow with embedded data.

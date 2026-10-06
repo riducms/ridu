@@ -545,4 +545,4 @@ derived object keys.
 | A create timed out or returned an uncertain 5xx | Refresh or query the media collection before retrying so a committed upload is not duplicated.                                                     |
 
 Continue with the [Upload field guide](/docs/fields/upload/), [Object storage](/docs/storage/),
-[TypeScript SDK](/docs/typescript-sdk/#uploads), or the [`storage` API reference](/reference/storage/).
+[TypeScript SDK](/docs/typescript-sdk/uploads/), or the [`storage` API reference](/reference/storage/).

@@ -1601,10 +1601,14 @@ export interface RiduAuth<
 			DraftCollectionSlug<Config>
 		>,
 	>(
-		input: { data: DraftCreateFor<Config, Slug>; password: string } & AuthCollectionInput<
-			DefaultAuth,
-			Slug
-		>,
+		// A non-draft default collection defaults Slug to never; reject the input so the call
+		// resolves through the published overload instead of returning never.
+		input: [Slug] extends [never]
+			? never
+			: { data: DraftCreateFor<Config, Slug>; password: string } & AuthCollectionInput<
+					DefaultAuth,
+					Slug
+				>,
 		options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true }
 	): Promise<OutputFor<Config, Slug>>;
 

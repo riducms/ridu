@@ -67,6 +67,18 @@ func (global BoundTypedGlobal[Document, Update, Draft]) Publish(ctx context.Cont
 	return decodeTypedDocument[Document](document, err)
 }
 
+// PublishChanges applies input and publishes the result in one operation. A
+// published versioned global changes this way; Update refuses it with
+// publish_required.
+func (global BoundTypedGlobal[Document, Update, Draft]) PublishChanges(ctx context.Context, input Update, options TypedMutationOptions) (Document, error) {
+	values, err := typedInputValues(input)
+	if err != nil {
+		return *new(Document), err
+	}
+	document, err := global.local.PublishGlobalChanges(ctx, global.definition.slug, values, options.mutationOptions())
+	return decodeTypedDocument[Document](document, err)
+}
+
 func (global BoundTypedGlobal[Document, Update, Draft]) Unpublish(ctx context.Context, options TypedMutationOptions) (Document, error) {
 	document, err := global.local.UnpublishGlobal(ctx, global.definition.slug, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)

@@ -634,11 +634,11 @@ func TestCreateMongoDBRendersQualifiedReplicaSetGuidanceForStarterAndBlank(t *te
 			if err != nil {
 				t.Fatal(err)
 			}
-			referenceNames := []string{"mongodb.md", "capabilities.md", "migrations.md", "production.md"}
+			referenceNames := []string{"mongodb.md", "capabilities.md", "migrations.md", "migrations/deploy.md", "migrations/safety-checks.md", "production.md"}
 			referenceTexts := make(map[string]string, len(referenceNames))
 			var referenceDocumentation strings.Builder
 			for _, name := range referenceNames {
-				reference, readError := os.ReadFile(filepath.Join(target, ".agents", "skills", "ridu-project", "reference", name))
+				reference, readError := os.ReadFile(filepath.Join(target, ".agents", "skills", "ridu-project", "reference", filepath.FromSlash(name)))
 				if readError != nil {
 					t.Fatalf("read generated MongoDB agent reference %s: %v", name, readError)
 				}
@@ -747,9 +747,13 @@ func TestCreateMongoDBRendersQualifiedReplicaSetGuidanceForStarterAndBlank(t *te
 					t.Errorf("MongoDB generated agent references are missing bounded production guidance %q", required)
 				}
 			}
-			for _, required := range []string{"MongoDB planner contract `5.0.0`", "--allow-destructive", "--allow-maintenance"} {
-				if !strings.Contains(referenceTexts["migrations.md"], required) {
-					t.Errorf("generated migration reference is missing MongoDB lifecycle guidance %q", required)
+			if !strings.Contains(referenceTexts["mongodb.md"], "MongoDB planner contract `5.0.0`") {
+				t.Error("generated MongoDB reference is missing its migration planner contract")
+			}
+			migrationTexts := referenceTexts["migrations.md"] + referenceTexts["migrations/deploy.md"] + referenceTexts["migrations/safety-checks.md"]
+			for _, required := range []string{"--allow-destructive", "--allow-maintenance", "MongoDB: the exact cutover sequence"} {
+				if !strings.Contains(migrationTexts, required) {
+					t.Errorf("generated migration references are missing MongoDB lifecycle guidance %q", required)
 				}
 			}
 			for _, stale := range []string{
