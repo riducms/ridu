@@ -411,6 +411,23 @@ func TestCreateRendersEachSupportedPackageManager(t *testing.T) {
 				if err != nil || !strings.Contains(string(workspace), "linkWorkspacePackages: true") {
 					t.Fatalf("pnpm workspace does not link release-rehearsal packages: %v\n%s", err, workspace)
 				}
+				// pnpm 11+ fails an install whose dependency build scripts are neither allowed nor
+				// denied; pnpm 10 before allowBuilds reads the older lists.
+				for _, decision := range []string{
+					"allowBuilds:\n  esbuild: true\n  \"@parcel/watcher\": false\n",
+					"onlyBuiltDependencies:\n  - esbuild\n",
+					"ignoredBuiltDependencies:\n  - \"@parcel/watcher\"\n",
+				} {
+					if !strings.Contains(string(workspace), decision) {
+						t.Fatalf("pnpm workspace is missing build-script decision %q:\n%s", decision, workspace)
+					}
+				}
+			}
+			// The pnpm row sits inside the file table, with no blank line on either side
+			workspaceRow := strings.Contains(string(guide), "|\n| `pnpm-workspace.yaml` |") &&
+				strings.Contains(string(guide), "`pnpm approve-builds`. |\n| `admin/src/main.ts` |")
+			if workspaceRow != (test.manager == projectfile.PackageManagerPNPM) {
+				t.Fatalf("%s PROJECT.md pnpm-workspace.yaml table row present = %v:\n%s", test.manager, workspaceRow, guide)
 			}
 		})
 	}
