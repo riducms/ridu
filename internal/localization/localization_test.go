@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -23,11 +24,11 @@ func TestLocalizedStructuredStorageMergesPreserveOmittedSiblings(t *testing.T) {
 		},
 		{
 			Name: "blocks", Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested, Localized: true,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Slug: "quote", Fields: []schema.Field{text("headline"), text("summary")},
-			}}},
+			Blocks: &schema.BlocksField{BlockReferences: []string{"quote"}},
 		},
 	}
+	quote := schema.BlockType{Slug: "quote", TypeName: "Quote", Fields: []schema.Field{text("headline"), text("summary")}}
+	fields = schematest.Bind(t, "pages", []schema.BlockType{quote}, fields...)
 	current := store.Values{
 		"group": store.Object(store.Values{
 			"en": store.Object(store.Values{"headline": store.String("old"), "summary": store.String("keep")}),

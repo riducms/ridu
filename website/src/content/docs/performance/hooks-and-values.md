@@ -115,6 +115,7 @@ func countNamedLinks(ctx operation.Context) int {
 | `value.CopyObject()`              | Detached mutable `store.Values`     | Yes                          |
 | `value.CopyList()`                | Detached mutable `[]store.Value`    | Yes                          |
 | `value.CopyDocument()`            | Detached populated document         | Yes                          |
+| `value.WithMembers(members)`      | New object with members set         | Copies the object's map once |
 | `value.WithListItem(index, item)` | New list sharing unchanged branches | Copies only the changed path |
 
 Use a `Copy...` method at the point where another API requires a mutable Go container or where you
@@ -139,8 +140,8 @@ linear operation into quadratic work by rescanning the complete root list from e
 
 Stable row keys identify retained array and block occurrences after reordering. Use `ctx.Siblings`
 and `ctx.Prior` rather than searching by the current array index. Shared block definitions share
-schema metadata; their access rules and hooks still run independently at each placement and
-occurrence.
+schema metadata and callbacks; their access rules and hooks still run independently for each
+occurrence, wherever its block is placed.
 
 ## Avoid repeated reads inside one callback {#callback-reads}
 
@@ -156,7 +157,9 @@ measure it under the expected workload.
 
 ## Reuse block definitions {#shared-blocks}
 
-Register a block once when several fields use the same schema. `References` also controls the
+Ridu stores, checks and generates each block once, however many fields and other blocks use it, so
+a large layout builder costs about as much as its block declarations. Declare a shared block as one
+Go value and reuse it, or register it once and reference it by slug. `References` also controls the
 picker order for that field:
 
 ```go title="content/config.go" focus={8-16,22-24}
@@ -189,9 +192,12 @@ func Config() ridu.Config {
 }
 ```
 
-Use inline `field.Blocks("layout", Hero)` when a definition belongs to one field. Do not register
-and inline the same slug on one field. See [Blocks](/docs/fields/blocks/#references) for labels,
-localization, migrations, and generated types.
+`field.Blocks("layout", Hero)` declares the same block inline and costs the same. A slug names one
+block, so reuse the `Hero` value rather than building an equivalent copy with its own callbacks.
+Fields with hooks, validators or access rules are bound once with their block, however widely it
+nests; each request runs them only for the rows the document contains. See
+[Blocks](/docs/fields/blocks/#references) for labels, localization, migrations, and generated
+types.
 
 ## Profile before introducing a cache {#profile}
 

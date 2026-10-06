@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SchemaCollection } from "@riducms/protocol";
+import type { SchemaBlockType, SchemaCollection, SchemaField } from "@riducms/protocol";
 import { createAdminI18n, en } from "@riducms/translations";
 
 import type { AdminVersion } from "@admin/core/api/admin-client";
@@ -9,6 +9,8 @@ import {
 	versionTextDiff,
 	sameValue,
 } from "@admin/features/versions/version-diff";
+
+import { bindBlockFields } from "./block-manifest";
 
 const i18n = createAdminI18n({ languages: [en], language: "en" });
 
@@ -146,21 +148,23 @@ describe("version comparison semantics", () => {
 	});
 
 	test("retains removed fields when a block changes type without changing identity", () => {
+		const definitions = [
+			{ slug: "text", fields: [structuredClone(collection.fields[0]!)] },
+			{
+				slug: "link",
+				fields: [{ name: "url", path: "url", type: "text", admin: { label: "URL" } }],
+			},
+		] as SchemaBlockType[];
+		const layout = {
+			name: "layout",
+			path: "layout",
+			type: "blocks",
+			admin: { label: "Layout" },
+			blocks: { blockReferences: ["text", "link"] },
+		} as SchemaField;
 		const blocks = {
 			...collection,
-			fields: [
-				{
-					name: "layout",
-					type: "blocks",
-					admin: { label: "Layout" },
-					blocks: {
-						types: [
-							{ slug: "text", fields: [collection.fields[0]!] },
-							{ slug: "link", fields: [{ name: "url", type: "text", admin: { label: "URL" } }] },
-						],
-					},
-				},
-			],
+			fields: bindBlockFields(definitions, [layout], "posts"),
 		} as SchemaCollection;
 		const before = {
 			...version(1, "", ""),

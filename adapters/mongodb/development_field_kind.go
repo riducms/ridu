@@ -148,7 +148,7 @@ func scanMongoFieldKindCollection(ctx context.Context, transaction *documentTran
 		for index := range localReports {
 			localReports[index].Documents, localReports[index].Snapshots = 0, 0
 		}
-		values, found, err := fieldchange.Process(changes, localReports, resource.ID, document.Values, snapshot, clear)
+		values, found, err := fieldchange.Process(changes, localReports, resource, document.Values, snapshot, clear)
 		if err != nil {
 			return err
 		}

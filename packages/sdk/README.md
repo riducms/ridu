@@ -26,6 +26,10 @@ capabilities alongside the page. The opt-in response is a `CollectionPageEnvelop
 calls retain the smaller `PageEnvelope`. Capabilities describe available controls, while the server
 still authorizes each mutation.
 
+Lists count every match by default. Pass `pagination: false` when a page only needs
+`hasNextPage`: the server skips the count, and the result's `UncountedPagination` metadata has no
+`totalDocs` or `totalPages`.
+
 Authentication lives under `ridu.auth`. Same-origin browser clients use Ridu's HttpOnly cookie by
 default. A frontend on another domain, a server renderer, or a script passes a token store and the
 client sends `Authorization: Session <token>` on every request:

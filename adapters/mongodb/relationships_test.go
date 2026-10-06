@@ -30,7 +30,7 @@ func TestMongoPopulationEnvelopeRejectsInvalidPlansBeforeDocumentCommands(t *tes
 		Collection: owner, Collections: collections,
 		Populate: []query.Population{{Path: relationshipPath, Depth: 1}},
 	}
-	if err := validateRequestEnvelope(valid); err != nil {
+	if err := (&Store{}).validateRequestEnvelope(valid); err != nil {
 		t.Fatalf("valid relationship population envelope = %v", err)
 	}
 
@@ -54,7 +54,7 @@ func TestMongoPopulationEnvelopeRejectsInvalidPlansBeforeDocumentCommands(t *tes
 		{name: "missing target", request: missingTarget, want: "unavailable"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if err := validateRequestEnvelope(test.request); err == nil || !strings.Contains(err.Error(), test.want) {
+			if err := (&Store{}).validateRequestEnvelope(test.request); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("population envelope error = %v, want containing %q", err, test.want)
 			}
 		})
@@ -91,19 +91,19 @@ func TestMongoPopulationEnvelopeSeparatesExplicitAndGeneratedPathLimits(t *testi
 	if err := validateMongoPopulationEnvelope(store.Request{
 		Collection: owner, Collections: collections,
 		Populate: []query.Population{{Path: hubPath, Depth: 2}},
-	}); err != nil {
+	}, validateCollectionEnvelope); err != nil {
 		t.Fatalf("one explicit path with %d generated paths was rejected: %v", len(hub.Fields), err)
 	}
 	if err := validateMongoPopulationEnvelope(store.Request{
 		Collection: hub, Collections: collections,
 		Populate: populationwalk.DepthPopulations(hub, 1),
-	}); err == nil || !strings.Contains(err.Error(), "explicit paths") {
+	}, validateCollectionEnvelope); err == nil || !strings.Contains(err.Error(), "explicit paths") {
 		t.Fatalf("caller-authored population paths error = %v", err)
 	}
 	if err := validateMongoPopulationPlan(store.Request{
 		Collection: hub, Collections: collections,
 		Populate: populationwalk.DepthPopulations(hub, 1),
-	}, false); err != nil {
+	}, false, validateCollectionEnvelope); err != nil {
 		t.Fatalf("generated population paths were subjected to the explicit limit: %v", err)
 	}
 }

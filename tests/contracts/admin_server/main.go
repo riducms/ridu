@@ -28,11 +28,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/riducms/ridu"
-	"github.com/riducms/ridu/adapters/mongodb"
 	"github.com/riducms/ridu/adapters/postgres"
-	sqliteadapter "github.com/riducms/ridu/adapters/sqlite"
 	localstorage "github.com/riducms/ridu/adapters/storage/local"
-	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/store"
 )
@@ -42,7 +39,13 @@ const resetTokenHeader = "X-Ridu-Test-Reset-Token"
 var postgresFixtureSchemaPattern = regexp.MustCompile(`^ridu_admin_fixture_[a-z0-9_]+$`)
 
 func main() {
-	if err := run(); err != nil {
+	var err error
+	if len(os.Args) > 1 {
+		err = runFixtureCommand(context.Background(), os.Args[1:], os.Stdout)
+	} else {
+		err = run()
+	}
+	if err != nil {
 		log.Print(err)
 		os.Exit(1)
 	}
@@ -101,6 +104,10 @@ func run() error {
 	if (baseDatabaseURL != "" && (sqliteFixture || mongoDatabaseURL != "")) || (sqliteFixture && mongoDatabaseURL != "") {
 		return fmt.Errorf("select only one of RIDU_POSTGRES_URL, RIDU_SQLITE_FIXTURE and RIDU_MONGODB_URL")
 	}
+	historyDigest := os.Getenv(postgresFixtureHistoryDigestVariable)
+	if historyDigest != "" && (baseDatabaseURL == "" || os.Getenv("RIDU_POSTGRES_FIXTURE_SCHEMA") == "" || bootstrapFixture || resetToken != "") {
+		return fmt.Errorf("%s requires RIDU_POSTGRES_URL and the migrated RIDU_POSTGRES_FIXTURE_SCHEMA, and excludes the bootstrap fixture and reset route", postgresFixtureHistoryDigestVariable)
+	}
 	if mongoDatabaseURL != "" {
 		mongoDatabaseURL, err = mongoFixtureURL(mongoDatabaseURL)
 		if err != nil {
@@ -136,22 +143,26 @@ func run() error {
 			return lockErr
 		}
 		defer releaseLock()
-		if resetErr := resetPostgresFixture(ctx, baseDatabaseURL, fixtureSchema); resetErr != nil {
-			return resetErr
-		}
-		defer func() {
-			cleanupContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if cleanupErr := dropPostgresFixture(cleanupContext, baseDatabaseURL, fixtureSchema); cleanupErr != nil {
-				log.Printf("clean up PostgreSQL fixture: %v", cleanupErr)
+		// A production-startup server uses the schema its separate migrate step
+		// prepared and, like any deployment, never drops its data.
+		if historyDigest == "" {
+			if resetErr := resetPostgresFixture(ctx, baseDatabaseURL, fixtureSchema); resetErr != nil {
+				return resetErr
 			}
-		}()
+			defer func() {
+				cleanupContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if cleanupErr := dropPostgresFixture(cleanupContext, baseDatabaseURL, fixtureSchema); cleanupErr != nil {
+					log.Printf("clean up PostgreSQL fixture: %v", cleanupErr)
+				}
+			}()
+		}
 		databaseURL, err = postgresFixtureURL(baseDatabaseURL, fixtureSchema)
 		if err != nil {
 			return err
 		}
 	}
-	applicationHandler, closeBackend, err := fixtureApplicationHandler(ctx, config, bootstrapFixture, adminAssets, databaseURL, sqlitePath, mongoDatabaseURL)
+	applicationHandler, closeBackend, err := fixtureApplicationHandler(ctx, config, bootstrapFixture, adminAssets, databaseURL, sqlitePath, mongoDatabaseURL, historyDigest)
 	if err != nil {
 		return err
 	}
@@ -200,7 +211,7 @@ func run() error {
 			// The replacement handler outlives this reset request. Build it with the
 			// server context so pooled database work is not tied to a cancelled
 			// request context after the 204 response is sent.
-			replacement, replacementClose, resetErr := fixtureApplicationHandler(ctx, config, false, adminAssets, databaseURL, sqlitePath, mongoDatabaseURL)
+			replacement, replacementClose, resetErr := fixtureApplicationHandler(ctx, config, false, adminAssets, databaseURL, sqlitePath, mongoDatabaseURL, "")
 			if resetErr != nil {
 				http.Error(response, resetErr.Error(), http.StatusInternalServerError)
 				return
@@ -276,8 +287,8 @@ func resetTokenMatches(provided, expected string) bool {
 	return expected != "" && subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
-func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstrapFixture bool, adminAssets fs.FS, databaseURL, sqlitePath, mongoDatabaseURL string) (http.Handler, func(), error) {
-	backend, closeBackend, err := fixtureBackend(ctx, config, databaseURL, sqlitePath, mongoDatabaseURL)
+func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstrapFixture bool, adminAssets fs.FS, databaseURL, sqlitePath, mongoDatabaseURL, historyDigest string) (http.Handler, func(), error) {
+	backend, closeBackend, err := fixtureBackend(ctx, config, databaseURL, sqlitePath, mongoDatabaseURL, historyDigest)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -285,6 +296,19 @@ func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstra
 	if err != nil {
 		closeBackend()
 		return nil, nil, err
+	}
+	if historyDigest != "" {
+		// ridu.Execute's production preflight: the database must carry exactly the
+		// executable migration history and storage schema before serving.
+		readiness, supported := backend.(store.MigrationReadinessStore)
+		if !supported {
+			closeBackend()
+			return nil, nil, errors.New("production startup requires a store.MigrationReadinessStore")
+		}
+		if err := readiness.ReadyWithMigrationHistory(ctx, application.Manifest(), historyDigest); err != nil {
+			closeBackend()
+			return nil, nil, fmt.Errorf("production readiness preflight: %w", err)
+		}
 	}
 	if !bootstrapFixture {
 		if _, err := seedFixture(ctx, application); err != nil {
@@ -309,55 +333,22 @@ func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstra
 	return blockSchemaRecoveryFixture(application.Handler(options), config, backend, options), closeBackend, nil
 }
 
-func fixtureBackend(ctx context.Context, config ridu.Config, databaseURL, sqlitePath, mongoDatabaseURL string) (store.Store, func(), error) {
+func fixtureBackend(ctx context.Context, config ridu.Config, databaseURL, sqlitePath, mongoDatabaseURL, historyDigest string) (store.Store, func(), error) {
 	if mongoDatabaseURL != "" {
-		backend, err := mongodb.OpenWithConfig(ctx, mongodb.Config{DatabaseURL: mongoDatabaseURL, AllowInsecureTransport: true})
-		if err != nil {
-			return nil, nil, err
-		}
-		manifest, err := ridu.Resolve(config)
-		if err != nil {
-			_ = backend.Close()
-			return nil, nil, err
-		}
-		if err := backend.SyncIndexes(ctx, manifest); err != nil {
-			_ = backend.Close()
-			return nil, nil, err
-		}
-		return backend, func() { _ = backend.Close() }, nil
+		return openMongoFixtureBackend(ctx, config, mongoDatabaseURL)
 	}
 	if databaseURL == "" && sqlitePath == "" {
 		return teststore.New(), func() {}, nil
 	}
 	if sqlitePath != "" {
-		backend, err := sqliteadapter.Open(ctx, sqlitePath)
-		if err != nil {
-			return nil, nil, err
-		}
-		manifest, err := ridu.Resolve(config)
-		if err != nil {
-			_ = backend.Close()
-			return nil, nil, err
-		}
-		if err := backend.Migrate(ctx, manifest); err != nil {
-			_ = backend.Close()
-			return nil, nil, err
-		}
-		return backend, func() { _ = backend.Close() }, nil
+		return openSQLiteFixtureBackend(ctx, config, sqlitePath)
 	}
 	backend, err := postgres.OpenWithConfig(ctx, postgres.PoolConfig{DatabaseURL: databaseURL, AllowInsecureTransport: true})
 	if err != nil {
 		return nil, nil, err
 	}
-	manifest, err := ridu.Resolve(config)
-	if err != nil {
-		backend.Close()
-		return nil, nil, err
-	}
-	artifact, err := postgres.BuildArtifact(ctx, "browser-fixture-initial", nil, manifest, nil, false)
-	if err != nil {
-		backend.Close()
-		return nil, nil, err
+	if historyDigest != "" {
+		return backend, backend.Close, nil
 	}
 	directory, err := os.MkdirTemp("", "ridu-browser-migrations-")
 	if err != nil {
@@ -365,7 +356,7 @@ func fixtureBackend(ctx context.Context, config ridu.Config, databaseURL, sqlite
 		return nil, nil, err
 	}
 	defer os.RemoveAll(directory)
-	if _, err := migrationartifact.Create(directory, "browser-fixture-initial", artifact, time.Unix(1, 0)); err != nil {
+	if err := writeFixtureMigration(ctx, config, directory); err != nil {
 		backend.Close()
 		return nil, nil, err
 	}

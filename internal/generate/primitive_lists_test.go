@@ -60,7 +60,7 @@ func TestPrimitiveListGeneratedContracts(t *testing.T) {
 					}
 				}
 			case "TS":
-				for _, fragment := range []string{`"sellingPoints": string[]`, `"availableSizes"?: number[] | null`, `"defaulted"?: number[]`, `"computedDefault"?: string[]`, `"sellingPoints"?: PrimitiveListWhere<string>`, `"availableSizes"?: PrimitiveListWhere<number>`, `RiduLocalizedValues<string[] | null>`} {
+				for _, fragment := range []string{`"sellingPoints": string[]`, `"availableSizes"?: number[] | null`, `"defaulted"?: number[]`, `"computedDefault"?: string[]`, `"sellingPoints"?: MembershipWhere<string>`, `"availableSizes"?: MembershipWhere<number>`, `RiduLocalizedValues<string[] | null>`} {
 					if !strings.Contains(string(encoded), fragment) {
 						t.Fatalf("missing %q", fragment)
 					}

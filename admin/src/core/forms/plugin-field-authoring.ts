@@ -5,6 +5,7 @@ import type {
 } from "@riducms/plugin";
 import type { PluginFieldBinding } from "@admin/core/forms/plugin-field-binding";
 import { cloneFormValue } from "@admin/core/forms/form-schema";
+import { cloneSchemaCollections } from "@admin/core/schema/schema-clone";
 
 /** Every retained callable checks its lease, including after asynchronous host operations. */
 export function guardPluginAuthoring(
@@ -15,7 +16,7 @@ export function guardPluginAuthoring(
 	return {
 		get collections() {
 			binding.assertActive();
-			return cloneFormValue(host.collections) as typeof host.collections;
+			return cloneSchemaCollections(host.collections);
 		},
 		get documentRevision() {
 			binding.assertActive();

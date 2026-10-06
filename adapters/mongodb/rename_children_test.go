@@ -38,11 +38,11 @@ func renameChildrenIntent(t *testing.T, before, after schema.Manifest) []ridumig
 	t.Helper()
 	var renames []ridumigration.Rename
 	for _, candidate := range schemadiff.RenameCandidates(before, after) {
-		if candidate.Kind != schemadiff.RenameField {
+		if candidate.Kind == schemadiff.RenameCollection {
 			t.Fatalf("unexpected rename candidate %#v", candidate)
 		}
 		renames = append(renames, ridumigration.Rename{
-			CollectionBefore: candidate.BeforeCollection.Slug, CollectionAfter: candidate.AfterCollection.Slug,
+			CollectionBefore: candidate.BeforeCollection.Slug, CollectionAfter: candidate.AfterCollection.Slug, Block: candidate.Block,
 			FieldBefore: candidate.BeforeField.Path.String(), FieldAfter: candidate.AfterField.Path.String(),
 		})
 	}
@@ -62,7 +62,9 @@ func renameChildrenHistory(t *testing.T, before schema.Manifest) string {
 // names and follow it, so they are not removals. When the same migration also
 // renames or relocalizes a child, or relocalizes the field itself, the stored
 // values would move with their old inner shape, and the planner says to make
-// that change separately instead of reporting a removed field.
+// that change separately instead of reporting a removed field. A block's
+// fields belong to its shared definition, whose field rename is confirmed and
+// planned beside the container's.
 func TestMongoDBFieldRenameCarriesUnchangedChildrenAndRefusesChangedOnes(t *testing.T) {
 	ctx := context.Background()
 	hero := func(name string) field.Block {
@@ -106,7 +108,7 @@ func TestMongoDBFieldRenameCarriesUnchangedChildrenAndRefusesChangedOnes(t *test
 		"blocks with a renamed block field": {
 			[]field.Node{field.Blocks("layout", hero("caption"))},
 			[]field.Node{field.Blocks("sections", hero("credit"))},
-			"renames its child",
+			"",
 		},
 		"group with a relocalized child": {
 			[]field.Node{field.Group("meta", field.Fields{field.Text("slug"), field.Number("rank")})},
@@ -122,8 +124,12 @@ func TestMongoDBFieldRenameCarriesUnchangedChildrenAndRefusesChangedOnes(t *test
 		_, before := renameChildrenManifest(t, append(candidate.before, field.Number("views"))...)
 		_, after := renameChildrenManifest(t, append(candidate.after, field.Number("views"))...)
 		renames := renameChildrenIntent(t, before, after)
-		if len(renames) != 1 {
-			t.Errorf("%s: %d rename candidates, want one", name, len(renames))
+		want := 1
+		if name == "blocks with a renamed block field" {
+			want = 2
+		}
+		if len(renames) != want {
+			t.Errorf("%s: %d rename candidates, want %d", name, len(renames), want)
 			continue
 		}
 		directory := renameChildrenHistory(t, before)

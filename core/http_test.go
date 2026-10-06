@@ -533,8 +533,8 @@ func TestRESTDocumentIDTrashCannotEmptyCollectionTrash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if trash.Total != 2 {
-		t.Fatalf("trash count = %d, want target plus preexisting document", trash.Total)
+	if *trash.Total != 2 {
+		t.Fatalf("trash count = %d, want target plus preexisting document", *trash.Total)
 	}
 }
 

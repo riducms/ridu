@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/riducms/ridu/internal/migrationartifact"
+	"github.com/riducms/ridu/internal/requiredfield"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -35,6 +36,7 @@ type mongoDBArtifactReplayStep struct {
 	rename                          ridumigration.Rename
 	transform                       ridumigration.DataTransformDescriptor
 	resourceIDs                     []schema.StableID
+	requirements                    []requiredfield.Requirement
 }
 
 type mongoDBArtifactReplayPhase struct {
@@ -196,6 +198,15 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 						return nil, fmt.Errorf("decode MongoDB migration retirement %s/%s in %s: %w", phase.ID, step.ID, file.Name, err)
 					}
 					compiled.resourceIDs = append([]schema.StableID(nil), payload.ResourceIDs...)
+				case ridumigration.StepAuditRequiredValues:
+					var payload ridumigration.AuditRequiredValuesPayload
+					if err := json.Unmarshal(step.Payload, &payload); err != nil {
+						return nil, fmt.Errorf("decode MongoDB migration required-value audit %s/%s in %s: %w", phase.ID, step.ID, file.Name, err)
+					}
+					compiled.requirements, err = mongoArtifactRequirements(file.Artifact, payload)
+					if err != nil {
+						return nil, fmt.Errorf("MongoDB migration step %s/%s in %s: %w", phase.ID, step.ID, file.Name, err)
+					}
 				case ridumigration.StepMongoDBDropResources:
 					var payload ridumigration.MongoDBDropResourcesPayload
 					if err := json.Unmarshal(step.Payload, &payload); err != nil {

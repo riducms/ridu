@@ -102,7 +102,7 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 			"url": store.String("/docs/internals/payload-parity"), "newWindow": store.Boolean(false),
 		})),
 		"layout": store.List(store.Object(store.Values{
-			"_key": store.String("block-note"), "blockType": store.String("callout"), "tone": store.String("note"),
+			"_key": store.String("block-note"), "blockType": store.String("post-callout"), "tone": store.String("note"),
 			"body": store.String("This row proves blocks preserve a stable key and discriminator."),
 		})),
 		"metadata": store.Object(store.Values{"fixture": store.Boolean(true), "priority": store.Number(2)}),

@@ -186,6 +186,7 @@ func reserveToolName(names map[string]string, name, owner string) error {
 type collectionInput struct {
 	Page            int      `json:"page,omitempty" jsonschema:"One-based result page; defaults to 1."`
 	Limit           int      `json:"limit,omitempty" jsonschema:"Maximum documents returned; bounded by the server."`
+	Pagination      *bool    `json:"pagination,omitempty" jsonschema:"Set false to skip counting every match; totalDocs is then omitted and hasNextPage stays exact."`
 	Select          []string `json:"select,omitempty" jsonschema:"Optional canonical field paths to return."`
 	Locale          string   `json:"locale,omitempty" jsonschema:"Optional configured content locale."`
 	DisableFallback bool     `json:"disableFallback,omitempty" jsonschema:"Require exact localized values without fallbacks."`
@@ -215,9 +216,10 @@ type collectionOutput struct {
 	Documents []documentOutput `json:"docs"`
 	Page      int              `json:"page"`
 	Limit     int              `json:"limit"`
-	Total     int              `json:"totalDocs"`
-	HasNext   bool             `json:"hasNextPage"`
-	HasPrev   bool             `json:"hasPrevPage"`
+	// Total is omitted when the call set pagination to false.
+	Total   *int `json:"totalDocs,omitempty"`
+	HasNext bool `json:"hasNextPage"`
+	HasPrev bool `json:"hasPrevPage"`
 }
 
 type globalOutput struct {
@@ -249,7 +251,7 @@ func (plugin *Plugin) addCollectionTool(server *mcpsdk.Server, name string, coll
 			return nil, collectionOutput{}, err
 		}
 		page, err := state.local.List(ctx, string(collection.Slug), ridu.ListOptions{
-			Page: input.Page, Limit: limit, Select: selectPaths, Draft: input.Draft,
+			Page: input.Page, Limit: limit, SkipTotal: input.Pagination != nil && !*input.Pagination, Select: selectPaths, Draft: input.Draft,
 			Actor: &state.actor, ActorCollection: state.actorCollection,
 			Locale: schema.LocaleCode(input.Locale), DisableFallback: input.DisableFallback, AllLocales: input.AllLocales,
 		})
@@ -265,7 +267,7 @@ func (plugin *Plugin) addCollectionTool(server *mcpsdk.Server, name string, coll
 		}
 		return nil, collectionOutput{
 			Documents: documents, Page: page.Page, Limit: page.Limit, Total: page.Total,
-			HasNext: page.Page*page.Limit < page.Total, HasPrev: page.Page > 1,
+			HasNext: page.HasNextPage, HasPrev: page.Page > 1,
 		}, nil
 	})
 }

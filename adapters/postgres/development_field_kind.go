@@ -79,8 +79,10 @@ func (backend *Store) ClearDevelopmentFieldKinds(ctx context.Context, before, af
 		return fmt.Errorf("this PostgreSQL database is managed by ridu migrate; field-kind recovery requires a reviewed migration")
 	}
 	for _, resource := range fieldchange.AffectedResources(changes) {
-		if _, err := transaction.Exec(ctx, `LOCK TABLE `+quote(collectionTable(resource.ID))+` IN ACCESS EXCLUSIVE MODE`); err != nil {
-			return err
+		for _, table := range documentTables(resource, resource.ID) {
+			if _, err := transaction.Exec(ctx, `LOCK TABLE `+quote(table)+` IN ACCESS EXCLUSIVE MODE`); err != nil {
+				return err
+			}
 		}
 	}
 	reports := fieldchange.Reports(changes)
@@ -94,11 +96,13 @@ func (backend *Store) ClearDevelopmentFieldKinds(ctx context.Context, before, af
 	// that old constraint in this same transaction, before writing NULL.
 	// ValidateClear already refused a replacement that remains required.
 	for _, change := range changes {
-		if len(change.Containers) != 0 || !change.Before.Required || change.After.Required || change.Before.Localized {
+		if !change.TopLevel() || !change.Before.Required || change.After.Required || change.Before.Localized {
 			continue
 		}
-		if _, err := transaction.Exec(ctx, `ALTER TABLE `+quote(collectionTable(change.Resource.ID))+` ALTER COLUMN `+quote(fieldColumn(change.Before.ID))+` DROP NOT NULL`); err != nil {
-			return err
+		for _, table := range documentTables(change.Resource, change.Resource.ID) {
+			if _, err := transaction.Exec(ctx, `ALTER TABLE `+quote(table)+` ALTER COLUMN `+quote(fieldColumn(change.Before.ID))+` DROP NOT NULL`); err != nil {
+				return err
+			}
 		}
 	}
 	reports = fieldchange.Reports(changes)
@@ -125,10 +129,9 @@ func retypeEmptyPostgresColumns(before schema.Manifest, changes []fieldchange.Ch
 		locales = localization.LocaleCodes()
 	}
 	for _, change := range changes {
-		if len(change.Containers) != 0 || change.Payload != nil || columnType(change.Before) == columnType(change.After) {
+		if !change.TopLevel() || change.Payload != nil || columnType(change.Before) == columnType(change.After) {
 			continue
 		}
-		table := quote(collectionTable(change.Resource.ID))
 		type physicalColumn struct{ name, constraintKey string }
 		key := string(change.Resource.ID) + ":" + string(change.Before.ID)
 		columns := []physicalColumn{{name: fieldColumn(change.Before.ID), constraintKey: key}}
@@ -138,17 +141,23 @@ func retypeEmptyPostgresColumns(before schema.Manifest, changes []fieldchange.Ch
 				columns = append(columns, physicalColumn{name: localizedFieldColumn(change.Before.ID, locale), constraintKey: key + ":" + string(locale)})
 			}
 		}
-		for _, column := range columns {
-			if hasForeignKey(change.Before) {
-				if err := exec(`ALTER TABLE ` + table + ` DROP CONSTRAINT IF EXISTS ` + quote("z_fk_"+identifierHash(column.constraintKey))); err != nil {
+		for index, table := range documentTables(change.Resource, change.Resource.ID) {
+			constraintName := func(name string) string { return name }
+			if index > 0 {
+				constraintName = livePhysicalName
+			}
+			for _, column := range columns {
+				if hasForeignKey(change.Before) {
+					if err := exec(`ALTER TABLE ` + quote(table) + ` DROP CONSTRAINT IF EXISTS ` + quote(constraintName("z_fk_"+identifierHash(column.constraintKey)))); err != nil {
+						return err
+					}
+				}
+				if err := exec(`ALTER TABLE ` + quote(table) + ` ALTER COLUMN ` + quote(column.name) + ` DROP DEFAULT`); err != nil {
 					return err
 				}
-			}
-			if err := exec(`ALTER TABLE ` + table + ` ALTER COLUMN ` + quote(column.name) + ` DROP DEFAULT`); err != nil {
-				return err
-			}
-			if err := exec(`ALTER TABLE ` + table + ` ALTER COLUMN ` + quote(column.name) + ` TYPE ` + columnType(change.After) + ` USING NULL::` + columnType(change.After)); err != nil {
-				return fmt.Errorf("change emptied field column type: %w", err)
+				if err := exec(`ALTER TABLE ` + quote(table) + ` ALTER COLUMN ` + quote(column.name) + ` TYPE ` + columnType(change.After) + ` USING NULL::` + columnType(change.After)); err != nil {
+					return fmt.Errorf("change emptied field column type: %w", err)
+				}
 			}
 		}
 	}
@@ -163,121 +172,12 @@ func scanPostgresFieldKinds(ctx context.Context, transaction pgx.Tx, before sche
 		}
 	}
 	for _, resource := range fieldchange.AffectedResources(changes) {
-		var exists bool
-		if err := transaction.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.' || $1) IS NOT NULL`, collectionTable(resource.ID)).Scan(&exists); err != nil {
-			return err
+		reported := make([]map[string]struct{}, len(reports))
+		for index := range reported {
+			reported[index] = make(map[string]struct{})
 		}
-		if !exists {
-			continue
-		}
-		fields := storedSchemaFields(resource.Fields)
-		// Read the physical values without casting them through either schema.
-		// Drift in another column must not bypass an incompatible JSON root, and
-		// an already-cleared scalar can have its candidate physical type here.
-		rows, err := transaction.Query(ctx, `SELECT id, to_jsonb(content) FROM `+quote(collectionTable(resource.ID))+` AS content ORDER BY id`)
-		if err != nil {
-			return err
-		}
-		var rewritten []store.Document
-		for rows.Next() {
-			document := store.Document{Values: make(store.Values)}
-			var encoded []byte
-			if err := rows.Scan(&document.ID, &encoded); err != nil {
-				rows.Close()
-				return err
-			}
-			var physical map[string]json.RawMessage
-			if err := json.Unmarshal(encoded, &physical); err != nil {
-				rows.Close()
-				return err
-			}
-			for _, field := range fields {
-				if !field.Localized {
-					if raw, exists := physical[fieldColumn(field.ID)]; exists {
-						var value store.Value
-						if err := value.UnmarshalJSON(raw); err != nil {
-							rows.Close()
-							return err
-						}
-						document.Values[field.Name] = value
-					}
-					continue
-				}
-				localized := make(store.Values)
-				for _, locale := range locales {
-					if raw, exists := physical[localizedFieldColumn(field.ID, locale)]; exists {
-						var value store.Value
-						if err := value.UnmarshalJSON(raw); err != nil {
-							rows.Close()
-							return err
-						}
-						localized[string(locale)] = value
-					}
-				}
-				document.Values[field.Name] = store.Object(localized)
-			}
-			values, found, err := fieldchange.Process(changes, reports, resource.ID, document.Values, false, clear)
-			if err != nil {
-				rows.Close()
-				return err
-			}
-			if clear && found {
-				document.Values = values
-				rewritten = append(rewritten, document)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return err
-		}
-		rows.Close()
-		for _, document := range rewritten {
-			var assignments []string
-			arguments := []any{document.ID}
-			roots := make(map[string]bool)
-			for _, change := range changes {
-				if change.Resource.ID == resource.ID {
-					root := change.Before
-					if len(change.Containers) != 0 {
-						root = change.Containers[0].Field
-					}
-					roots[root.Name] = true
-				}
-			}
-			for _, field := range fields {
-				if !roots[field.Name] {
-					continue
-				}
-				value, exists := document.Values[field.Name]
-				if !exists {
-					value = store.Null()
-				}
-				columns := []string{fieldColumn(field.ID)}
-				values := []store.Value{value}
-				if field.Localized {
-					columns = nil
-					values = nil
-					for _, locale := range locales {
-						columns = append(columns, localizedFieldColumn(field.ID, locale))
-						values = append(values, value.Get(string(locale)))
-					}
-				}
-				unlocalized := field
-				unlocalized.Localized = false
-				for index, column := range columns {
-					encoded, err := databaseValue(unlocalized, values[index])
-					if err != nil {
-						return err
-					}
-					arguments = append(arguments, encoded)
-					assignments = append(assignments, fmt.Sprintf("%s = $%d", quote(column), len(arguments)))
-				}
-			}
-			if _, err := transaction.Exec(ctx, `UPDATE `+quote(collectionTable(resource.ID))+` SET `+strings.Join(assignments, ", ")+` WHERE id = $1`, arguments...); err != nil {
-				return err
-			}
-			wrapped := &documentTransaction{transaction: transaction, tableExists: make(map[string]bool)}
-			if err := wrapped.replaceDocumentReferences(ctx, resource, document); err != nil {
+		for index, table := range documentTables(resource, resource.ID) {
+			if err := scanPostgresFieldKindTable(ctx, transaction, table, index > 0, resource, locales, changes, reports, reported, clear); err != nil {
 				return err
 			}
 		}
@@ -288,16 +188,7 @@ func scanPostgresFieldKinds(ctx context.Context, transaction pgx.Tx, before sche
 	return nil
 }
 
-func scanPostgresFieldKindSnapshots(ctx context.Context, transaction pgx.Tx, resource schema.Collection, changes []fieldchange.Change, reports []fieldchange.Report, clear bool) error {
-	for _, table := range []string{"ridu_versions", "ridu_published_documents"} {
-		if err := scanPostgresFieldKindSnapshotTable(ctx, transaction, table, resource, changes, reports, clear); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func scanPostgresFieldKindSnapshotTable(ctx context.Context, transaction pgx.Tx, table string, resource schema.Collection, changes []fieldchange.Change, reports []fieldchange.Report, clear bool) error {
+func scanPostgresFieldKindTable(ctx context.Context, transaction pgx.Tx, table string, live bool, resource schema.Collection, locales []schema.LocaleCode, changes []fieldchange.Change, reports []fieldchange.Report, reported []map[string]struct{}, clear bool) error {
 	var exists bool
 	if err := transaction.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.' || $1) IS NOT NULL`, table).Scan(&exists); err != nil {
 		return err
@@ -305,7 +196,148 @@ func scanPostgresFieldKindSnapshotTable(ctx context.Context, transaction pgx.Tx,
 	if !exists {
 		return nil
 	}
-	rows, err := transaction.Query(ctx, `SELECT document_id, revision, snapshot FROM `+quote(table)+` WHERE collection_id = $1 ORDER BY document_id, revision`, string(resource.ID))
+	fields := storedSchemaFields(resource)
+	// Read the physical values without casting them through either schema.
+	// Drift in another column must not bypass an incompatible JSON root, and
+	// an already-cleared scalar can have its candidate physical type here.
+	rows, err := transaction.Query(ctx, `SELECT id, to_jsonb(content) FROM `+quote(table)+` AS content ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	var rewritten []store.Document
+	for rows.Next() {
+		document := store.Document{Values: make(store.Values)}
+		var encoded []byte
+		if err := rows.Scan(&document.ID, &encoded); err != nil {
+			rows.Close()
+			return err
+		}
+		var physical map[string]json.RawMessage
+		if err := json.Unmarshal(encoded, &physical); err != nil {
+			rows.Close()
+			return err
+		}
+		for _, field := range fields {
+			if !field.Localized {
+				if raw, exists := physical[fieldColumn(field.ID)]; exists {
+					var value store.Value
+					if err := value.UnmarshalJSON(raw); err != nil {
+						rows.Close()
+						return err
+					}
+					document.Values[field.Name] = value
+				}
+				continue
+			}
+			localized := make(store.Values)
+			for _, locale := range locales {
+				if raw, exists := physical[localizedFieldColumn(field.ID, locale)]; exists {
+					var value store.Value
+					if err := value.UnmarshalJSON(raw); err != nil {
+						rows.Close()
+						return err
+					}
+					localized[string(locale)] = value
+				}
+			}
+			document.Values[field.Name] = store.Object(localized)
+		}
+		local := make([]fieldchange.Report, len(reports))
+		copy(local, reports)
+		for index := range local {
+			local[index].Documents, local[index].Snapshots = 0, 0
+		}
+		values, found, err := fieldchange.Process(changes, local, resource, document.Values, false, clear)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		for index := range local {
+			if local[index].Documents == 0 {
+				continue
+			}
+			if _, counted := reported[index][document.ID]; !counted {
+				reported[index][document.ID] = struct{}{}
+				reports[index].Documents++
+			}
+		}
+		if clear && found {
+			document.Values = values
+			rewritten = append(rewritten, document)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, document := range rewritten {
+		var assignments []string
+		arguments := []any{document.ID}
+		roots := make(map[string]bool)
+		for _, change := range changes {
+			if change.AppliesTo(resource.ID) {
+				for _, root := range change.Roots(resource) {
+					roots[root.Name] = true
+				}
+			}
+		}
+		for _, field := range fields {
+			if !roots[field.Name] {
+				continue
+			}
+			value, exists := document.Values[field.Name]
+			if !exists {
+				value = store.Null()
+			}
+			columns := []string{fieldColumn(field.ID)}
+			values := []store.Value{value}
+			if field.Localized {
+				columns = nil
+				values = nil
+				for _, locale := range locales {
+					columns = append(columns, localizedFieldColumn(field.ID, locale))
+					values = append(values, value.Get(string(locale)))
+				}
+			}
+			unlocalized := field
+			unlocalized.Localized = false
+			for index, column := range columns {
+				encoded, err := databaseValue(unlocalized, values[index])
+				if err != nil {
+					return err
+				}
+				arguments = append(arguments, encoded)
+				assignments = append(assignments, fmt.Sprintf("%s = $%d", quote(column), len(arguments)))
+			}
+		}
+		if _, err := transaction.Exec(ctx, `UPDATE `+quote(table)+` SET `+strings.Join(assignments, ", ")+` WHERE id = $1`, arguments...); err != nil {
+			return err
+		}
+		wrapped := &documentTransaction{transaction: transaction, tableExists: make(map[string]bool)}
+		if live {
+			err = wrapped.replacePublishedReferences(ctx, resource, document)
+		} else {
+			err = wrapped.replaceDocumentReferences(ctx, resource, document)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// scanPostgresFieldKindSnapshots inspects retained version history, the only
+// JSON document snapshots.
+func scanPostgresFieldKindSnapshots(ctx context.Context, transaction pgx.Tx, resource schema.Collection, changes []fieldchange.Change, reports []fieldchange.Report, clear bool) error {
+	var exists bool
+	if err := transaction.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.ridu_versions') IS NOT NULL`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	rows, err := transaction.Query(ctx, `SELECT document_id, revision, snapshot FROM ridu_versions WHERE collection_id = $1 ORDER BY document_id, revision`, string(resource.ID))
 	if err != nil {
 		return err
 	}
@@ -326,7 +358,7 @@ func scanPostgresFieldKindSnapshotTable(ctx context.Context, transaction pgx.Tx,
 			rows.Close()
 			return err
 		}
-		values, found, err := fieldchange.Process(changes, reports, resource.ID, document.Values, true, clear)
+		values, found, err := fieldchange.Process(changes, reports, resource, document.Values, true, clear)
 		if err != nil {
 			rows.Close()
 			return err
@@ -348,7 +380,7 @@ func scanPostgresFieldKindSnapshotTable(ctx context.Context, transaction pgx.Tx,
 	}
 	rows.Close()
 	for _, update := range rewrites {
-		if _, err := transaction.Exec(ctx, `UPDATE `+quote(table)+` SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, update.value, string(resource.ID), update.id, update.revision); err != nil {
+		if _, err := transaction.Exec(ctx, `UPDATE ridu_versions SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, update.value, string(resource.ID), update.id, update.revision); err != nil {
 			return err
 		}
 	}

@@ -49,7 +49,7 @@ func loadPostSummary(
 		return PostSummaryData{}, err
 	}
 	return PostSummaryData{
-		Total: posts.Total, Search: input.Search,
+		Total: *posts.Total, Search: input.Search,
 		Locale: string(ctx.Locale()),
 	}, nil
 }
@@ -62,7 +62,8 @@ single hyphens between words.
 
 The `json:"q"` tag means the URL's `?q=Welcome` becomes `input.Search`.
 Without `q`, the search is empty and the function counts all readable posts.
-`posts.Total` is the number of matches, not the size of the one-document page.
+`posts.Total` points to the number of matches, not the size of the one-document page. It is
+nil only when a list sets `SkipTotal`, so this counted read can dereference it.
 
 [`ctx.List`](https://riducms.com/reference/core/admin-load-context-list-method/) reads as the signed-in user
 in the current content locale, using the application's configured fallback locales.

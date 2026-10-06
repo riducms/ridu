@@ -1,4 +1,4 @@
-import type { SchemaField } from "@riducms/protocol";
+import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
 import { expect, test } from "./fixture";
 import {
 	loginAsEditor,
@@ -271,16 +271,20 @@ test("block errors reveal invalid fields inside collapsed sections", async ({ pa
 	await page.route("**/api/schema", async (route) => {
 		const response = await route.fetch();
 		const body = (await response.json()) as {
-			schema: { collections: { slug: string; fields: SchemaField[] }[] };
+			schema: { blocks: SchemaBlockType[]; collections: { slug: string; fields: SchemaField[] }[] };
 		};
-		const heading = body.schema.collections
+		const selected = body.schema.collections
 			.find((collection) => collection.slug === "pages")
 			?.fields.find((field) => field.name === "layout")
-			?.blocks?.types?.find((block) => block.slug === "hero")
+			?.blocks?.blockReferences?.includes("hero");
+		// Block fields live in the shared definition; every placement derives them.
+		const heading = body.schema.blocks
+			.find((block) => block.slug === "hero")
 			?.fields.find((field) => field.name === "heading");
-		if (heading === undefined) throw new Error("Hero heading fixture is missing");
+		if (!selected || heading === undefined) throw new Error("Hero heading fixture is missing");
+		// Definition presentation IDs start with the definition's ID.
 		heading.admin.collapsible = {
-			id: "hero-details",
+			id: "block-hero-details",
 			label: "Hero details",
 			initiallyCollapsed: true,
 		};
@@ -336,7 +340,9 @@ test("removed block schemas preserve content and prevent destructive admin savin
 			.find((collection) => collection.slug === "pages")
 			?.fields.find((field) => field.name === "layout");
 		if (layout?.blocks)
-			layout.blocks.types = layout.blocks.types!.filter((block) => block.slug !== "hero");
+			layout.blocks.blockReferences = layout.blocks.blockReferences!.filter(
+				(slug) => slug !== "hero"
+			);
 		await route.fulfill({ response, json: body });
 	});
 	let updates = 0;
@@ -393,7 +399,7 @@ test("server schema removal rejects reads and destructive updates until recovery
 	const layout = schema.collections
 		.find((collection: { slug: string }) => collection.slug === "pages")
 		.fields.find((field: SchemaField) => field.name === "layout");
-	expect(layout.blocks.types.some((block: { slug: string }) => block.slug === "hero")).toBe(false);
+	expect(layout.blocks.blockReferences).not.toContain("hero");
 	for (const response of [
 		await page.request.get(`/api/collections/pages/${original.id}`),
 		await page.request.patch(`/api/collections/pages/${original.id}`, { data: { layout: [] } }),

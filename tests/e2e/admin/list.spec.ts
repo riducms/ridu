@@ -1,7 +1,12 @@
 import { expect, test } from "./fixture";
 import type { AdminPreparedRouteStateV1 } from "@riducms/protocol";
 
-import { chooseRiduSelect, expectRiduSelectValue, loginAsEditor } from "./helpers";
+import {
+	chooseFilterField,
+	chooseRiduSelect,
+	expectRiduSelectValue,
+	loginAsEditor,
+} from "./helpers";
 
 test("collection search keeps focus and caret while superseding pending results", async ({
 	page,
@@ -332,7 +337,11 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 
 	await page.getByRole("button", { name: /Filters/ }).click();
 	await page.getByRole("button", { name: "Add filter", exact: true }).click();
-	await chooseRiduSelect(page, page.getByLabel("Filter field", { exact: true }), "Links > Label");
+	await chooseFilterField(page, page.getByLabel("Filter field", { exact: true }), [
+		"Links",
+		"Label",
+	]);
+	await expect(page.getByLabel("Filter field", { exact: true })).toContainText("Links > Label");
 	await chooseRiduSelect(page, page.getByLabel("Filter operator", { exact: true }), "equals");
 	await page.getByLabel("Filter value", { exact: true }).fill("Payload parity roadmap");
 
@@ -748,4 +757,45 @@ test("collection filters compose OR groups and AND conditions; columns retain hi
 	await expect(table.getByRole("link", { name: "Welcome to Ridu", exact: true })).toBeVisible();
 	await table.getByRole("link", { name: "Welcome to Ridu", exact: true }).click();
 	await expect(page).toHaveURL(/\/admin\/collections\/posts\/[^?]+/);
+});
+
+test("has-many fields filter by is any of and is none of, never by equality", async ({ page }) => {
+	await loginAsEditor(page);
+	await page.goto("/admin/collections/posts");
+	const table = page.getByRole("table");
+	await page.getByRole("button", { name: "Filters", exact: true }).click();
+	await page.getByRole("button", { name: "Add filter", exact: true }).click();
+	await chooseRiduSelect(page, page.getByLabel("Filter field", { exact: true }), "Related posts");
+	const operator = page.getByLabel("Filter operator", { exact: true });
+	await operator.click();
+	await expect(page.getByRole("option")).toHaveText(["is any of", "is none of", "exists"]);
+	await page.getByRole("option", { name: "is any of", exact: true }).click();
+	await page.getByLabel("Filter value", { exact: true }).fill("posts_8");
+	await expect(table.getByText("Welcome to Ridu", { exact: true })).toBeVisible();
+	await expect(table.getByText("Relationship field notes", { exact: true })).toHaveCount(0);
+
+	// The candidates carry over when the condition is negated.
+	await chooseRiduSelect(page, operator, "is none of");
+	await expect(page.getByLabel("Filter value", { exact: true })).toHaveValue("posts_8");
+	await expect(table.getByText("Relationship field notes", { exact: true })).toBeVisible();
+	await expect(table.getByText("Welcome to Ridu", { exact: true })).toHaveCount(0);
+	await page.reload();
+	await expect(table.getByText("Relationship field notes", { exact: true })).toBeVisible();
+	await expect(table.getByText("Welcome to Ridu", { exact: true })).toHaveCount(0);
+
+	// A has-many select offers its options, several of which may be chosen.
+	await page.goto("/admin/collections/payload-only-capabilities");
+	await page.getByRole("button", { name: "Filters", exact: true }).click();
+	await page.getByRole("button", { name: "Add filter", exact: true }).click();
+	await chooseRiduSelect(page, page.getByLabel("Filter field", { exact: true }), "Audiences");
+	await chooseRiduSelect(page, operator, "is none of");
+	const values = page.getByLabel("Filter value", { exact: true });
+	await values.click();
+	await page.getByRole("option", { name: "Administrators", exact: true }).click();
+	await page.getByRole("option", { name: "Reviewers", exact: true }).click();
+	await page.keyboard.press("Escape");
+	await expect(values).toContainText("Administrators, Reviewers");
+	await expect(table.getByText("Field and array parity", { exact: true })).toHaveCount(0);
+	await chooseRiduSelect(page, operator, "is any of");
+	await expect(table.getByText("Field and array parity", { exact: true })).toBeVisible();
 });

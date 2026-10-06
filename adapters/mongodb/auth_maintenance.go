@@ -50,7 +50,7 @@ func (transaction *documentTransaction) pruneMongoAuthSessions(ctx context.Conte
 		bson.D{{Key: "$sort", Value: bson.D{{Key: "expiresAt", Value: int32(1)}, {Key: "_id", Value: int32(1)}}}},
 		bson.D{{Key: "$limit", Value: int64(limit)}},
 	}
-	cursor, err := transaction.authSessionCollection().Aggregate(ctx, pipeline)
+	cursor, err := mongoAggregate(ctx, transaction.authSessionCollection(), pipeline)
 	if err != nil {
 		return 0, translateMongoError(ctx, err)
 	}
@@ -95,7 +95,7 @@ func (transaction *documentTransaction) pruneMongoAuthAPIKeys(ctx context.Contex
 		bson.D{{Key: "$sort", Value: bson.D{{Key: "expiresAt", Value: int32(1)}, {Key: "_id", Value: int32(1)}}}},
 		bson.D{{Key: "$limit", Value: int64(limit)}},
 	}
-	cursor, err := transaction.authAPIKeyCollection().Aggregate(ctx, pipeline)
+	cursor, err := mongoAggregate(ctx, transaction.authAPIKeyCollection(), pipeline)
 	if err != nil {
 		return 0, translateMongoError(ctx, err)
 	}
@@ -223,14 +223,13 @@ func (backend *Store) AllowAuthAttempt(ctx context.Context, keyHash string, now 
 }
 
 func (transaction *documentTransaction) pruneMongoAuthRateLimits(ctx context.Context, currentKeyHash string, nowNanos int64, limit int) error {
-	cursor, err := transaction.authRateLimitCollection().Find(
-		ctx,
-		bson.D{
-			{Key: "expiresAt", Value: bson.D{{Key: "$lte", Value: nowNanos}}},
-			{Key: "_id", Value: bson.D{{Key: "$ne", Value: currentKeyHash}}},
-		},
-		options.Find().SetSort(bson.D{{Key: "expiresAt", Value: int32(1)}, {Key: "_id", Value: int32(1)}}).SetLimit(int64(limit)),
-	)
+	cursor, err := mongoFind(ctx, transaction.authRateLimitCollection(), bson.D{
+		{Key: "expiresAt", Value: bson.D{{Key: "$lte", Value: nowNanos}}},
+		{Key: "_id", Value: bson.D{{Key: "$ne", Value: currentKeyHash}}},
+	}, mongoFindCommand{
+		sort:  bson.D{{Key: "expiresAt", Value: int32(1)}, {Key: "_id", Value: int32(1)}},
+		limit: int64(limit),
+	})
 	if err != nil {
 		return translateMongoError(ctx, err)
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
+	"github.com/riducms/ridu/internal/requiredfield"
 	"github.com/riducms/ridu/internal/schemadiff"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -57,6 +58,10 @@ func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *
 			return err
 		}
 		if err := fieldchange.RequireEmpty(reports); err != nil {
+			return err
+		}
+		requirements := requiredfield.Detect(previous.Snapshot(), manifest.Snapshot(), requiredfield.Renames{})
+		if err := auditSQLiteRequiredValues(ctx, connection, requirements, true); err != nil {
 			return err
 		}
 	}
@@ -343,34 +348,21 @@ func appendSQLiteUniqueLocale(locales []schema.LocaleCode, locale schema.LocaleC
 	return append(locales, locale)
 }
 
+// sqliteQueryableFieldChain resolves a scalar path through non-repeated groups.
 func sqliteQueryableFieldChain(fields []schema.Field, segments []string) ([]schema.Field, bool) {
-	if len(segments) == 0 {
+	steps, found := sqliteFieldSteps(fields, segments)
+	if !found {
 		return nil, false
 	}
-	chain := make([]schema.Field, 0, len(segments))
-	candidates := fields
-	for index, segment := range segments {
-		var current *schema.Field
-		for candidateIndex := range candidates {
-			if candidates[candidateIndex].Name == segment {
-				current = &candidates[candidateIndex]
-				break
-			}
-		}
-		if current == nil {
+	chain := make([]schema.Field, len(steps))
+	for index, step := range steps {
+		if index < len(steps)-1 && step.field.Type != schema.FieldTypeGroup {
 			return nil, false
 		}
-		chain = append(chain, *current)
-		if index == len(segments)-1 {
-			_, supported := sqliteFieldValueKind(*current)
-			return chain, supported
-		}
-		if current.Type != schema.FieldTypeGroup || current.Nested == nil {
-			return nil, false
-		}
-		candidates = current.Nested.ResolvedFields()
+		chain[index] = step.field
 	}
-	return nil, false
+	_, supported := sqliteFieldValueKind(chain[len(chain)-1])
+	return chain, supported
 }
 
 func sqliteFieldValueKind(field schema.Field) (sqliteDocumentValueKind, bool) {

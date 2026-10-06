@@ -20,11 +20,13 @@ type fieldIssueLocation struct {
 	target  string
 	fieldID schema.StableID
 	locale  schema.LocaleCode
+	// list reports a primitive list field.
+	list bool
 }
 
-func fieldIssueTargets(fields []schema.Field, values store.Values, allLocales bool) map[string]string {
+func fieldIssueTargets(collection Collection, values store.Values, allLocales bool) map[string]string {
 	result := make(map[string]string)
-	for path, location := range fieldIssueLocations(fields, values, allLocales, "") {
+	for path, location := range fieldIssueLocations(collection, values, allLocales, "") {
 		result[path] = location.target
 	}
 	return result
@@ -32,35 +34,43 @@ func fieldIssueTargets(fields []schema.Field, values store.Values, allLocales bo
 
 // Track locale while traversing schema structure. User keys are arbitrary strings
 // and must never be interpreted as the markers used in the opaque wire token.
-func fieldIssueLocations(fields []schema.Field, values store.Values, allLocales bool, locale schema.LocaleCode) map[string]fieldIssueLocation {
+// Tokens name fields by placement: a shared block definition's fields take the
+// stable IDs of the placement the walk reached them through.
+func fieldIssueLocations(collection Collection, values store.Values, allLocales bool, locale schema.LocaleCode) map[string]fieldIssueLocation {
 	result := make(map[string]fieldIssueLocation)
-	add := func(path string, token []string, fieldID schema.StableID, locale schema.LocaleCode) {
+	add := func(path string, token []string, field schema.Field, fieldID schema.StableID, locale schema.LocaleCode) {
 		var buffer bytes.Buffer
 		encoder := json.NewEncoder(&buffer)
 		encoder.SetEscapeHTML(false)
 		_ = encoder.Encode(token)
-		result[path] = fieldIssueLocation{target: strings.TrimSuffix(buffer.String(), "\n"), fieldID: fieldID, locale: locale}
+		result[path] = fieldIssueLocation{target: strings.TrimSuffix(buffer.String(), "\n"), fieldID: fieldID, locale: locale, list: primitivefield.IsList(field)}
 	}
-	var record func([]schema.Field, store.Values, string, []string, schema.LocaleCode)
-	var visit func(schema.Field, store.Value, string, []string, bool, schema.LocaleCode)
-	record = func(fields []schema.Field, values store.Values, path string, token []string, locale schema.LocaleCode) {
+	id := func(f schema.Field, placement fieldPlacement) schema.StableID {
+		if placement.shared {
+			return schema.PlacementFieldID(collection.Schema.ID, placement.canonical)
+		}
+		return f.ID
+	}
+	var record func([]schema.Field, store.Value, string, []string, fieldPlacement, schema.LocaleCode)
+	var visit func(schema.Field, store.Value, string, []string, fieldPlacement, bool, schema.LocaleCode)
+	record = func(fields []schema.Field, values store.Value, path string, token []string, parent fieldPlacement, locale schema.LocaleCode) {
 		for _, f := range fields {
-			visit(f, values[f.Name], joinFieldPath(path, f.Name), appendIssueToken(token, string(f.ID)), false, locale)
+			placement := parent.child(f.Name)
+			visit(f, values.Get(f.Name), joinFieldPath(path, f.Name), appendIssueToken(token, string(id(f, placement))), placement, false, locale)
 		}
 	}
-	visit = func(f schema.Field, value store.Value, path string, token []string, translated bool, locale schema.LocaleCode) {
-		add(path, token, f.ID, locale)
+	visit = func(f schema.Field, value store.Value, path string, token []string, placement fieldPlacement, translated bool, locale schema.LocaleCode) {
+		fieldID := id(f, placement)
+		add(path, token, f, fieldID, locale)
 		if allLocales && f.Localized && !translated {
 			for code, item := range value.Entries() {
-				visit(f, item, joinFieldPath(path, code), appendIssueToken(token, "@locale", code), true, schema.LocaleCode(code))
+				visit(f, item, joinFieldPath(path, code), appendIssueToken(token, "@locale", code), placement, true, schema.LocaleCode(code))
 			}
 			return
 		}
 		if f.Type == schema.FieldTypeGroup && f.Nested != nil {
 			if value.Kind() == store.ValueObject {
-				for _, child := range f.Nested.ResolvedFields() {
-					visit(child, value.Get(child.Name), joinFieldPath(path, child.Name), appendIssueToken(token, string(child.ID)), false, locale)
-				}
+				record(f.Nested.ResolvedFields(), value, path, token, placement, locale)
 			}
 		}
 		if f.Type == schema.FieldTypeArray || f.Type == schema.FieldTypeBlocks {
@@ -78,24 +88,21 @@ func fieldIssueLocations(fields []schema.Field, values store.Values, allLocales 
 				}
 				var children []schema.Field
 				caseKey := ""
+				childPlacement := placement
 				if f.Nested != nil {
 					children = f.Nested.ResolvedFields()
 				}
 				if f.Blocks != nil {
 					tag, _ := row.Get("blockType").StringValue()
-					for _, block := range f.Blocks.ResolvedTypes() {
-						if block.Slug == tag {
-							caseKey, children = block.Slug, block.ResolvedFields()
-							break
-						}
+					if block, found := f.Blocks.Definition(tag); found {
+						caseKey, children = block.Slug, block.ResolvedFields()
+						childPlacement = placement.enter(block.Slug)
 					}
 				}
 				next := appendIssueToken(token, key, caseKey)
 				rowPath := joinFieldPath(path, strconv.Itoa(i))
-				add(rowPath, next, f.ID, locale)
-				for _, child := range children {
-					visit(child, row.Get(child.Name), joinFieldPath(rowPath, child.Name), appendIssueToken(next, string(child.ID)), false, locale)
-				}
+				add(rowPath, next, f, fieldID, locale)
+				record(children, row, rowPath, next, childPlacement, locale)
 			}
 		}
 		if f.Plugin != nil && len(f.Plugin.EmbeddedTrees) != 0 {
@@ -105,12 +112,13 @@ func fieldIssueLocations(fields []schema.Field, values store.Values, allLocales 
 			}
 			for _, occurrence := range occurrences {
 				next := appendIssueToken(token, occurrence.Tree.Key, occurrence.Case.TagValue, occurrence.Type.Slug, occurrence.Key)
-				add(occurrence.RuntimePath, next, f.ID, locale)
-				record(occurrence.Fields, occurrence.Payload, occurrence.RuntimePath, next, locale)
+				add(occurrence.RuntimePath, next, f, fieldID, locale)
+				payload := placement.enter(occurrence.Tree.Key, occurrence.Case.TagValue, occurrence.Type.Slug)
+				record(occurrence.Fields, store.Object(occurrence.Payload), occurrence.RuntimePath, next, payload, locale)
 			}
 		}
 	}
-	record(fields, values, "", nil, locale)
+	record(collection.Schema.Fields, store.Object(values), "", nil, collection.placement, locale)
 	return result
 }
 
@@ -121,37 +129,26 @@ func appendIssueToken(prefix []string, segments ...string) []string {
 // correlatePrimitiveListIssues attaches the whole-list occurrence to built-in
 // item diagnostics. The message may mention an item position; the target never
 // does, so a client can invalidate the entire list's feedback after any edit.
-func correlatePrimitiveListIssues(collection schema.Collection, values store.Values, ctx Context, issues []schema.Issue) {
+func correlatePrimitiveListIssues(collection Collection, values store.Values, ctx Context, issues []schema.Issue) {
 	if len(issues) == 0 {
 		return
 	}
-	ids := map[string]bool{}
-	var index func([]schema.Field)
-	index = func(fields []schema.Field) {
-		for _, field := range fields {
-			if primitivefield.IsList(field) {
-				ids[string(field.ID)] = true
-			}
-			index(schema.ChildFields(field))
-		}
-	}
-	index(collection.Fields)
-	if len(ids) == 0 {
+	if plan := collection.runtimePlan().readOutput; plan == nil || !plan.lists {
 		return
 	}
-	locations := fieldIssueLocations(collection.Fields, values, ctx.AllLocales, ctx.Locale)
+	locations := fieldIssueLocations(collection, values, ctx.AllLocales, ctx.Locale)
 	for i := range issues {
 		location, found := locations[issues[i].Path]
-		if !found || !ids[string(location.fieldID)] {
+		if !found || !location.list {
 			continue
 		}
 		issues[i].Target = location.target
 		issues[i].FieldID = location.fieldID
 		issues[i].Locale = location.locale
-		if collection.Capabilities.Global {
-			issues[i].GlobalID = collection.ID
+		if collection.Schema.Capabilities.Global {
+			issues[i].GlobalID = collection.Schema.ID
 		} else {
-			issues[i].CollectionID = collection.ID
+			issues[i].CollectionID = collection.Schema.ID
 		}
 	}
 }

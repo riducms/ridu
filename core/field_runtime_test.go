@@ -62,7 +62,7 @@ func TestUnsupportedUniqueFieldsFailClosedForCollectionsAndGlobals(t *testing.T)
 		},
 		{
 			name: "collection block", field: field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("code").Unique()}}),
-			path: "collections[0].fields[0].blocks[0].fields[0].unique",
+			path: "blocks.hero.fields[0].unique",
 		},
 		{
 			name: "collection named tab", field: field.Tabs(field.Fields{field.NamedTab("seo", "SEO", field.Fields{field.Text("code").Unique()})}),

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -20,7 +21,7 @@ func TestMongoRequestPredicateCombinesRequestAndAuthorizationRestrictions(t *tes
 	access := query.GreaterThan(score, 5).Node()
 
 	compiled, err := requestPredicate(store.Request{
-		Collection:       mongoPredicateCollection(),
+		Collection:       mongoPredicateCollection(t),
 		ID:               "post-1",
 		Filter:           &filter,
 		Access:           &access,
@@ -57,7 +58,7 @@ func TestMongoRequestPredicateCombinesRequestAndAuthorizationRestrictions(t *tes
 func TestMongoRegexPredicatesQuoteUserInput(t *testing.T) {
 	title := mongoMustPath(t, "title")
 	injected := `{$where:"return true",$gt:""}`
-	equality, err := compileMongoNode(mongoPredicateCollection(), query.Equal(title, injected).Node(), "filter", mongoPredicateScope{})
+	equality, err := compileMongoNode(mongoPredicateCollection(t), query.Equal(title, injected).Node(), "filter", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +85,7 @@ func TestMongoRegexPredicatesQuoteUserInput(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := compileMongoNode(mongoPredicateCollection(), test.node, "filter", mongoPredicateScope{})
+			compiled, err := compileMongoNode(mongoPredicateCollection(t), test.node, "filter", mongoPredicateScope{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -102,7 +103,7 @@ func TestMongoRegexPredicatesQuoteUserInput(t *testing.T) {
 }
 
 func TestMongoDeletionPredicateRequiresCanonicalMetadataType(t *testing.T) {
-	collection := mongoPredicateCollection()
+	collection := mongoPredicateCollection(t)
 	tests := []struct {
 		name string
 		mode store.DeletionMode
@@ -168,7 +169,7 @@ func TestMongoDeletionPredicateRequiresCanonicalMetadataType(t *testing.T) {
 
 func TestMongoNullAndMissingPredicatesMatchRiduTruthTable(t *testing.T) {
 	optional := mongoMustPath(t, "optional")
-	equalNull, err := compileMongoNode(mongoPredicateCollection(), query.Equal(optional, query.Null()).Node(), "filter", mongoPredicateScope{})
+	equalNull, err := compileMongoNode(mongoPredicateCollection(t), query.Equal(optional, query.Null()).Node(), "filter", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +190,7 @@ func TestMongoNullAndMissingPredicatesMatchRiduTruthTable(t *testing.T) {
 		t.Fatalf("equal null = %#v, want explicit missing-or-null predicate %#v", equalNull, wantNull)
 	}
 
-	notEqualNull, err := compileMongoNode(mongoPredicateCollection(), query.NotEqual(optional, query.Null()).Node(), "filter", mongoPredicateScope{})
+	notEqualNull, err := compileMongoNode(mongoPredicateCollection(t), query.NotEqual(optional, query.Null()).Node(), "filter", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +203,7 @@ func TestMongoNullAndMissingPredicatesMatchRiduTruthTable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	existsFalse, err := compileMongoNode(mongoPredicateCollection(), exists.Node(), "filter", mongoPredicateScope{})
+	existsFalse, err := compileMongoNode(mongoPredicateCollection(t), exists.Node(), "filter", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +234,7 @@ func TestMongoRangesUseExactBSONTypeGuards(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			path := mongoMustPath(t, test.path)
-			compiled, err := compileMongoNode(mongoPredicateCollection(), query.GreaterThan(path, test.value).Node(), "filter", mongoPredicateScope{})
+			compiled, err := compileMongoNode(mongoPredicateCollection(t), query.GreaterThan(path, test.value).Node(), "filter", mongoPredicateScope{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -277,7 +278,7 @@ func TestMongoNestedPredicatesGuardEveryObjectAncestor(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := compileMongoNode(mongoPredicateCollection(), test.node, "filter", mongoPredicateScope{})
+			compiled, err := compileMongoNode(mongoPredicateCollection(t), test.node, "filter", mongoPredicateScope{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -297,7 +298,7 @@ func TestMongoInvalidTimestampNotEqualMatchesNoDocuments(t *testing.T) {
 	createdAt := mongoMustPath(t, "createdAt")
 	for _, value := range []query.Value{query.Number(0), query.String("not-a-timestamp")} {
 		compiled, err := compileMongoNode(
-			mongoPredicateCollection(),
+			mongoPredicateCollection(t),
 			query.NotEqual(createdAt, value).Node(),
 			"access",
 			mongoPredicateScope{},
@@ -312,7 +313,7 @@ func TestMongoInvalidTimestampNotEqualMatchesNoDocuments(t *testing.T) {
 
 	title := mongoMustPath(t, "title")
 	compiled, err := compileMongoNode(
-		mongoPredicateCollection(),
+		mongoPredicateCollection(t),
 		query.NotEqual(title, 0).Node(),
 		"access",
 		mongoPredicateScope{},
@@ -331,7 +332,7 @@ func TestMongoRequestSortUsesNestedShapeAndStableID(t *testing.T) {
 	descendingTitle, _ := query.NewSort(title, query.Descending)
 	ascendingUpdatedAt, _ := query.NewSort(updatedAt, query.Ascending)
 	compiled, err := requestSort(store.Request{
-		Collection: mongoPredicateCollection(),
+		Collection: mongoPredicateCollection(t),
 		Sort:       []query.Sort{descendingTitle, ascendingUpdatedAt},
 	})
 	if err != nil {
@@ -348,7 +349,7 @@ func TestMongoRequestSortUsesNestedShapeAndStableID(t *testing.T) {
 
 	id := mongoMustPath(t, "id")
 	descendingID, _ := query.NewSort(id, query.Descending)
-	compiled, err = requestSort(store.Request{Collection: mongoPredicateCollection(), Sort: []query.Sort{descendingID}})
+	compiled, err = requestSort(store.Request{Collection: mongoPredicateCollection(t), Sort: []query.Sort{descendingID}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +359,7 @@ func TestMongoRequestSortUsesNestedShapeAndStableID(t *testing.T) {
 }
 
 func TestMongoRequestSortRejectsDuplicateAndOversizedSpecifications(t *testing.T) {
-	collection := mongoPredicateCollection()
+	collection := mongoPredicateCollection(t)
 	title := mongoMustPath(t, "title")
 	ascending, _ := query.NewSort(title, query.Ascending)
 	descending, _ := query.NewSort(title, query.Descending)
@@ -387,7 +388,7 @@ func TestMongoProjectionIncludesMetadataAndRequestedValues(t *testing.T) {
 	headline := mongoMustPath(t, "seo.headline")
 	owner := mongoMustPath(t, "owner")
 	compiled, err := requestProjection(store.Request{
-		Collection: mongoPredicateCollection(),
+		Collection: mongoPredicateCollection(t),
 		Select:     []query.Path{title, headline, title},
 		Populate:   []query.Population{{Path: owner}},
 	})
@@ -411,7 +412,7 @@ func TestMongoProjectionIncludesMetadataAndRequestedValues(t *testing.T) {
 	if !reflect.DeepEqual(compiled, want) {
 		t.Fatalf("projection = %#v, want metadata plus selected/populated values %#v", compiled, want)
 	}
-	all, err := requestProjection(store.Request{Collection: mongoPredicateCollection()})
+	all, err := requestProjection(store.Request{Collection: mongoPredicateCollection(t)})
 	if err != nil || len(all) != 0 {
 		t.Fatalf("nil selection projection = %#v, %v; want unrestricted read", all, err)
 	}
@@ -432,7 +433,7 @@ func TestMongoProjectionCoalescesAncestorAndDescendantPaths(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			compiled, err := requestProjection(store.Request{
-				Collection: mongoPredicateCollection(), Select: test.selectPaths, Populate: test.populate,
+				Collection: mongoPredicateCollection(t), Select: test.selectPaths, Populate: test.populate,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -468,12 +469,12 @@ func TestMongoMalformedNodesFailClosed(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := compileMongoNode(mongoPredicateCollection(), test.node, "filter", mongoPredicateScope{}); err == nil || !strings.Contains(err.Error(), test.want) {
+			if _, err := compileMongoNode(mongoPredicateCollection(t), test.node, "filter", mongoPredicateScope{}); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("compile error = %v, want containing %q", err, test.want)
 			}
 		})
 	}
-	if _, err := requestPredicate(store.Request{Collection: mongoPredicateCollection()}, true); err == nil || !strings.Contains(err.Error(), "document ID is required") {
+	if _, err := requestPredicate(store.Request{Collection: mongoPredicateCollection(t)}, true); err == nil || !strings.Contains(err.Error(), "document ID is required") {
 		t.Fatalf("missing required ID error = %v", err)
 	}
 }
@@ -485,14 +486,14 @@ func TestMongoUnsupportedSchemaPathsFailClosed(t *testing.T) {
 		want string
 	}{
 		{name: "localized", path: "localizedTitle", want: "localized"},
-		{name: "opaque JSON", path: "metadata", want: "non-scalar"},
+		{name: "opaque JSON descendant", path: "metadata.tag", want: "cannot be traversed"},
 		{name: "unknown nested", path: "seo.missing", want: "not in collection"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			path := mongoMustPath(t, test.path)
 			node := query.Equal(path, "value").Node()
-			if _, err := compileMongoNode(mongoPredicateCollection(), node, "filter", mongoPredicateScope{}); err == nil || !strings.Contains(err.Error(), test.want) {
+			if _, err := compileMongoNode(mongoPredicateCollection(t), node, "filter", mongoPredicateScope{}); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("compile error = %v, want containing %q", err, test.want)
 			}
 		})
@@ -501,19 +502,19 @@ func TestMongoUnsupportedSchemaPathsFailClosed(t *testing.T) {
 	localized := mongoMustPath(t, "localizedTitle")
 	access := query.Equal(localized, "visible").Node()
 	if _, err := requestPredicate(store.Request{
-		Collection: mongoPredicateCollection(), Access: &access, AllLocales: true,
+		Collection: mongoPredicateCollection(t), Access: &access, AllLocales: true,
 		Locales: []schema.LocaleCode{"en", "fr"}, LocaleChain: []schema.LocaleCode{"en"},
 	}, false); err != nil {
 		t.Fatalf("localized all-locales access was rejected: %v", err)
 	}
 	nonLocalized := query.Equal(mongoMustPath(t, "title"), "visible").Node()
 	if _, err := requestPredicate(store.Request{
-		Collection: mongoPredicateCollection(), Access: &nonLocalized, AllLocales: true,
+		Collection: mongoPredicateCollection(t), Access: &nonLocalized, AllLocales: true,
 	}, false); err != nil {
 		t.Fatalf("non-localized all-locales access was rejected: %v", err)
 	}
 
-	collection := mongoPredicateCollection()
+	collection := mongoPredicateCollection(t)
 	for _, root := range []string{"tags", "rows", "layout"} {
 		compiled, err := requestProjection(store.Request{
 			Collection: collection,
@@ -537,7 +538,7 @@ func TestMongoUnsupportedSchemaPathsFailClosed(t *testing.T) {
 }
 
 func TestMongoRepeatedPredicatesPreserveDocumentScopedBooleanSemantics(t *testing.T) {
-	collection := mongoRepeatedCollection()
+	collection := mongoRepeatedCollection(t)
 	rowsKind := mongoMustPath(t, "rows.kind")
 	rowsLabel := mongoMustPath(t, "rows.label")
 
@@ -573,34 +574,31 @@ func TestMongoRepeatedPredicatesPreserveDocumentScopedBooleanSemantics(t *testin
 	}
 }
 
-func TestMongoRepeatedSelectUsesWholeListTruthTable(t *testing.T) {
-	collection := mongoRepeatedCollection()
+func TestMongoRepeatedSelectUsesMembership(t *testing.T) {
+	collection := mongoRepeatedCollection(t)
 	tags := mongoMustPath(t, "tags")
 
-	contains, err := compileMongoNode(collection, query.Contains(tags, "alpha").Node(), "filter", mongoPredicateScope{})
+	in, err := compileMongoNode(collection, query.In(tags, "alpha").Node(), "filter", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	matches := mongoElementMatches(contains, "values.tags")
-	if len(matches) != 1 || mongoDirectValue(matches[0], "$eq") != "alpha" {
-		t.Fatalf("has-many select contains = %#v, want exact scalar membership", contains)
+	matches := mongoElementMatches(in, "values.tags")
+	candidates, _ := mongoDirectValue(matches[0], "$in").(bson.A)
+	if len(matches) != 1 || len(candidates) != 1 || candidates[0] != "alpha" {
+		t.Fatalf("has-many select in = %#v, want exact item membership", in)
 	}
 	for _, expression := range []query.Expression{
 		query.Equal(tags, "alpha"),
-		query.In(tags, "alpha"),
+		query.Contains(tags, "alpha"),
 	} {
-		compiled, err := compileMongoNode(collection, expression.Node(), "filter", mongoPredicateScope{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !mongoContainsConstant(compiled, false) {
-			t.Fatalf("whole-list scalar comparison did not compile false: %#v", compiled)
+		if _, err := compileMongoNode(collection, expression.Node(), "filter", mongoPredicateScope{}); err == nil {
+			t.Fatalf("%v compiled outside the membership contract", expression.Node().Comparison)
 		}
 	}
 }
 
 func TestMongoRepeatedNegationAndDisjunctionKeepShapeGuardsOutside(t *testing.T) {
-	collection := mongoRepeatedCollection()
+	collection := mongoRepeatedCollection(t)
 	repeated := query.Equal(mongoMustPath(t, "rows.kind"), "primary")
 
 	negated := query.Not(repeated)
@@ -625,7 +623,7 @@ func TestMongoRepeatedNegationAndDisjunctionKeepShapeGuardsOutside(t *testing.T)
 }
 
 func TestMongoRepeatedRootShapeGuardCoversTheStrictStorageEnvelope(t *testing.T) {
-	collection := mongoRepeatedCollection()
+	collection := mongoRepeatedCollection(t)
 	for _, test := range []struct {
 		name      string
 		path      string
@@ -636,20 +634,21 @@ func TestMongoRepeatedRootShapeGuardCoversTheStrictStorageEnvelope(t *testing.T)
 			fragments: []string{`"enum":["alpha","beta"]`, `"uniqueItems":true`},
 		},
 		{
+			// Required row children are completeness rules, not stored shape.
 			name: "array row", path: "rows.kind",
-			fragments: []string{`"additionalProperties":false`, `\\x{3000}`, `"required":["kind","label"]`, `"details"`, `"bsonType":["object","null"]`, `"enum":["draft","published","",null]`, `"enum":["quiet","loud","",null]`},
+			fragments: []string{`"additionalProperties":false`, `\\x{3000}`, `"kind":{"bsonType":["string","null"]`, `"details"`, `"bsonType":["object","null"]`, `"enum":["draft","published","",null]`, `"enum":["quiet","loud","",null]`},
 		},
 		{
 			name: "block row", path: "layout.hero.heading",
-			fragments: []string{`"oneOf"`, `"enum":["hero"]`, `"enum":["quote"]`, `"required":["blockType","heading"]`},
+			fragments: []string{`"anyOf"`, `"enum":["hero"]`, `"enum":["quote"]`, `"required":["blockType"]`},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			resolved, err := resolveMongoPredicatePath(collection, mongoMustPath(t, test.path), "access", mongoPredicateScope{})
-			if err != nil {
-				t.Fatal(err)
+			nested, isNested, err := resolveMongoNestedPath(collection, mongoMustPath(t, test.path), "access", mongoPredicateScope{})
+			if err != nil || !isNested {
+				t.Fatalf("repeated path %q did not resolve as a nested path: %v", test.path, err)
 			}
-			encoded, err := bson.MarshalExtJSON(mongoRepeatedShapePredicate(resolved), false, false)
+			encoded, err := bson.MarshalExtJSON(mongoNestedShapePredicate(nested), false, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -675,8 +674,10 @@ func TestMongoRepeatedRootShapeGuardCoversTheStrictStorageEnvelope(t *testing.T)
 	}
 }
 
-func TestMongoDecoderFreePredicateGuardsTheCompleteAuthoredEnvelope(t *testing.T) {
-	collection := mongoRepeatedCollection()
+// The decoder-free envelope guards the authored root exactly and each
+// repeated field's rows by identity; row content is left to strict reads.
+func TestMongoDecoderFreePredicateGuardsTheRootAuthoredEnvelope(t *testing.T) {
+	collection := mongoRepeatedCollection(t)
 	titleFilter := query.Equal(mongoMustPath(t, "title"), "visible").Node()
 	compiled, err := decoderFreeRequestPredicate(store.Request{
 		Collection: collection,
@@ -692,10 +693,15 @@ func TestMongoDecoderFreePredicateGuardsTheCompleteAuthoredEnvelope(t *testing.T
 	text := string(encoded)
 	for _, fragment := range []string{
 		`"values"`, `"additionalProperties":false`, `"title"`, `"tags"`, `"rows"`, `"layout"`,
-		`"uniqueItems":true`, `"oneOf"`, `"$setUnion"`, `"$objectToArray"`,
+		`"uniqueItems":true`, `"enum":["hero","quote"]`, `"required":["blockType"]`, `"$setUnion"`, `"$objectToArray"`,
 	} {
 		if !strings.Contains(text, fragment) {
 			t.Fatalf("decoder-free envelope lacks %s: %s", fragment, text)
+		}
+	}
+	for _, rowContent := range []string{`"anyOf"`, `"kind"`, `"details"`, `"heading"`} {
+		if strings.Contains(text, rowContent) {
+			t.Fatalf("decoder-free envelope describes row content %s: %s", rowContent, text)
 		}
 	}
 	if !mongoContainsKey(compiled, "values.title") {
@@ -758,7 +764,7 @@ func TestMongoDecoderFreePredicateGuardsTheCompleteAuthoredEnvelope(t *testing.T
 }
 
 func TestMongoRepeatedShapeGuardDedupUsesTheCompleteResolvedShape(t *testing.T) {
-	collection := mongoRepeatedCollection()
+	collection := mongoRepeatedCollection(t)
 	kind := query.Equal(mongoMustPath(t, "rows.kind"), "primary")
 	note := query.Equal(mongoMustPath(t, "rows.details.note"), "nested")
 
@@ -780,7 +786,7 @@ func TestMongoRepeatedShapeGuardDedupUsesTheCompleteResolvedShape(t *testing.T) 
 }
 
 func TestMongoRepeatedPathsAreScopedForVersionsAndBoundedByRole(t *testing.T) {
-	collection := mongoRepeatedCollection()
+	collection := mongoRepeatedCollection(t)
 	path := mongoMustPath(t, "rows.label")
 	compiled, err := compileMongoNode(
 		collection,
@@ -824,34 +830,34 @@ func TestMongoRepeatedPathsAreScopedForVersionsAndBoundedByRole(t *testing.T) {
 	}
 }
 
-func mongoPredicateCollection() schema.Collection {
+func mongoPredicateCollection(t testing.TB) schema.Collection {
+	t.Helper()
+	hero := schema.BlockType{Slug: "hero", TypeName: "Hero", Fields: []schema.Field{{ID: "block-hero-heading", Name: "heading", Path: query.Field("heading"), Type: schema.FieldTypeText}}}
 	return schema.Collection{
 		ID:       "posts",
 		Slug:     "posts",
 		Versions: &schema.VersionSettings{Drafts: true},
-		Fields: []schema.Field{
-			{ID: "title", Name: "title", Type: schema.FieldTypeText},
-			{ID: "optional", Name: "optional", Type: schema.FieldTypeText},
-			{ID: "score", Name: "score", Type: schema.FieldTypeNumber},
-			{ID: "published", Name: "published", Type: schema.FieldTypeCheckbox},
-			{ID: "localized-title", Name: "localizedTitle", Type: schema.FieldTypeText, Localized: true},
-			{ID: "metadata", Name: "metadata", Type: schema.FieldTypeJSON},
-			{ID: "owner", Name: "owner", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{CollectionID: "users", CollectionSlug: "users"}},
-			{ID: "tags", Name: "tags", Type: schema.FieldTypeSelect, Select: &schema.SelectField{HasMany: true}},
-			{ID: "seo", Name: "seo", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{
+		Fields: schematest.Bind(t, "posts", []schema.BlockType{hero},
+			schema.Field{ID: "title", Name: "title", Type: schema.FieldTypeText},
+			schema.Field{ID: "optional", Name: "optional", Type: schema.FieldTypeText},
+			schema.Field{ID: "score", Name: "score", Type: schema.FieldTypeNumber},
+			schema.Field{ID: "published", Name: "published", Type: schema.FieldTypeCheckbox},
+			schema.Field{ID: "localized-title", Name: "localizedTitle", Type: schema.FieldTypeText, Localized: true},
+			schema.Field{ID: "metadata", Name: "metadata", Type: schema.FieldTypeJSON},
+			schema.Field{ID: "owner", Name: "owner", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{CollectionID: "users", CollectionSlug: "users"}},
+			schema.Field{ID: "tags", Name: "tags", Type: schema.FieldTypeSelect, Select: &schema.SelectField{HasMany: true}},
+			schema.Field{ID: "seo", Name: "seo", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{
 				{ID: "seo-headline", Name: "headline", Type: schema.FieldTypeText},
 				{ID: "seo-owner", Name: "owner", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{CollectionID: "users", CollectionSlug: "users"}},
 				{ID: "seo-details", Name: "details", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{
 					{ID: "seo-details-summary", Name: "summary", Type: schema.FieldTypeText},
 				}}},
 			}}},
-			{ID: "rows", Name: "rows", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{
+			schema.Field{ID: "rows", Name: "rows", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{
 				{ID: "row-label", Name: "label", Type: schema.FieldTypeText},
 			}}},
-			{ID: "layout", Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Slug: "hero", Fields: []schema.Field{{ID: "hero-heading", Name: "heading", Type: schema.FieldTypeText}},
-			}}}},
-		},
+			schema.Field{ID: "layout", Name: "layout", Path: query.Field("layout"), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"hero"}}},
+		),
 	}
 }
 

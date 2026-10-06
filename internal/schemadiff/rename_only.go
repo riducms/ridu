@@ -7,9 +7,10 @@ import (
 )
 
 // ValidateFieldRenameOnly refuses a confirmed field rename that changes more
-// than the field's name: one whose localization changes, or whose group,
-// array, blocks or embedded-block children are renamed or change localization
-// in the same migration.
+// than the field's name: one whose localization changes, or whose group or
+// array children are renamed or change localization in the same migration.
+// Fields of the block definitions a renamed container selects are compared
+// with the definitions, which every placement shares.
 //
 // A field rename moves the stored value whole, so renamed children would stay
 // under their old names inside it, where the new config does not read them,
@@ -66,39 +67,12 @@ func renamedFieldChildChange(before, after schema.Field) (child, change string) 
 		}
 		return "", ""
 	}
-	compareBlocks := func(beforeTypes, afterTypes []schema.BlockType) (string, string) {
-		afterBySlug := make(map[string]schema.BlockType, len(afterTypes))
-		for _, block := range afterTypes {
-			afterBySlug[block.Slug] = block
-		}
-		for _, block := range beforeTypes {
-			if kept, exists := afterBySlug[block.Slug]; exists {
-				if child, change := compare(block.ResolvedFields(), kept.ResolvedFields()); child != "" {
-					return child, change
-				}
-			}
-		}
-		return "", ""
-	}
+	// Blocks keep their fields when the container that stores them is renamed:
+	// a block definition is shared by every placement, and a change inside it
+	// is planned once for all of them, with its own confirmed renames.
 	if before.Nested != nil && after.Nested != nil {
 		if child, change := compare(before.Nested.ResolvedFields(), after.Nested.ResolvedFields()); child != "" {
 			return child, change
-		}
-	}
-	if before.Blocks != nil && after.Blocks != nil {
-		if child, change := compareBlocks(before.Blocks.ResolvedTypes(), after.Blocks.ResolvedTypes()); child != "" {
-			return child, change
-		}
-	}
-	afterEmbedded := make(map[string]schema.Field)
-	for _, container := range schema.EmbeddedBlocks(after) {
-		afterEmbedded[container.Name] = container
-	}
-	for _, container := range schema.EmbeddedBlocks(before) {
-		if kept, exists := afterEmbedded[container.Name]; exists && container.Blocks != nil && kept.Blocks != nil {
-			if child, change := compareBlocks(container.Blocks.ResolvedTypes(), kept.Blocks.ResolvedTypes()); child != "" {
-				return child, change
-			}
 		}
 	}
 	return "", ""

@@ -14,8 +14,10 @@ import (
 func (builder *schemaBuilder) populationsFor(fields []schema.Field, info enginegraphql.ResolveInfo) []query.Population {
 	seen := make(map[string]int)
 	var result []query.Population
-	var walk func([]schema.Field, *ast.SelectionSet, int, map[string]bool)
-	walk = func(currentFields []schema.Field, selectionSet *ast.SelectionSet, wrapperDepth int, fragments map[string]bool) {
+	// prefix is the canonical path of currentFields: a registered block's fields
+	// are its shared definition, so each placement's path comes from the walk.
+	var walk func([]schema.Field, []string, *ast.SelectionSet, int, map[string]bool)
+	walk = func(currentFields []schema.Field, prefix []string, selectionSet *ast.SelectionSet, wrapperDepth int, fragments map[string]bool) {
 		if selectionSet == nil || wrapperDepth > 2 {
 			return
 		}
@@ -25,19 +27,19 @@ func (builder *schemaBuilder) populationsFor(fields []schema.Field, info engineg
 			case *ast.Field:
 				field, exists := byName[selected.Name.Value]
 				if !exists {
-					walk(currentFields, selected.SelectionSet, wrapperDepth+1, fragments)
+					walk(currentFields, prefix, selected.SelectionSet, wrapperDepth+1, fragments)
 					continue
 				}
 				if selected.SelectionSet == nil {
 					continue
 				}
 				if field.Nested != nil {
-					walk(field.Nested.ResolvedFields(), selected.SelectionSet, wrapperDepth, fragments)
+					walk(field.Nested.ResolvedFields(), childPath(prefix, field.Name), selected.SelectionSet, wrapperDepth, fragments)
 					continue
 				}
 				if field.Blocks != nil {
-					for _, block := range field.Blocks.ResolvedTypes() {
-						walk(block.ResolvedFields(), selected.SelectionSet, wrapperDepth, fragments)
+					for _, block := range field.Blocks.Definitions() {
+						walk(block.ResolvedFields(), childPath(prefix, field.Name, block.Slug), selected.SelectionSet, wrapperDepth, fragments)
 					}
 					continue
 				}
@@ -45,7 +47,11 @@ func (builder *schemaBuilder) populationsFor(fields []schema.Field, info engineg
 					continue
 				}
 				depth := builder.relationshipSelectionDepth(field, selected.SelectionSet, info, fragments)
-				path := field.Path.String()
+				canonical, err := query.NewPath(childPath(prefix, field.Name)...)
+				if err != nil {
+					continue
+				}
+				path := canonical.String()
 				if index, duplicate := seen[path]; duplicate {
 					if depth > result[index].Depth {
 						result[index].Depth = depth
@@ -53,9 +59,9 @@ func (builder *schemaBuilder) populationsFor(fields []schema.Field, info engineg
 					continue
 				}
 				seen[path] = len(result)
-				result = append(result, query.Population{Path: field.Path, Depth: depth})
+				result = append(result, query.Population{Path: canonical, Depth: depth})
 			case *ast.InlineFragment:
-				walk(currentFields, selected.SelectionSet, wrapperDepth, fragments)
+				walk(currentFields, prefix, selected.SelectionSet, wrapperDepth, fragments)
 			case *ast.FragmentSpread:
 				name := selected.Name.Value
 				if fragments[name] {
@@ -71,12 +77,12 @@ func (builder *schemaBuilder) populationsFor(fields []schema.Field, info engineg
 					cloned[key] = value
 				}
 				cloned[name] = true
-				walk(currentFields, fragment.SelectionSet, wrapperDepth, cloned)
+				walk(currentFields, prefix, fragment.SelectionSet, wrapperDepth, cloned)
 			}
 		}
 	}
 	for _, field := range info.FieldASTs {
-		walk(fields, field.SelectionSet, 0, map[string]bool{})
+		walk(fields, nil, field.SelectionSet, 0, map[string]bool{})
 	}
 	return result
 }
@@ -184,7 +190,7 @@ func (builder *schemaBuilder) selectedRelationshipDepth(fields []schema.Field, s
 					continue
 				}
 				if field.Blocks != nil {
-					for _, block := range field.Blocks.ResolvedTypes() {
+					for _, block := range field.Blocks.Definitions() {
 						candidate := builder.selectedRelationshipDepth(block.ResolvedFields(), selected.SelectionSet, info, active, level)
 						if candidate > maximum {
 							maximum = candidate
@@ -262,4 +268,9 @@ func cloneFragmentSet(source map[string]bool, name string) map[string]bool {
 	}
 	cloned[name] = true
 	return cloned
+}
+
+// childPath extends a canonical path without sharing prefix's backing array.
+func childPath(prefix []string, segments ...string) []string {
+	return append(append(make([]string, 0, len(prefix)+len(segments)), prefix...), segments...)
 }

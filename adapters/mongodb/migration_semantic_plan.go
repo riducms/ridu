@@ -8,9 +8,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/riducms/ridu/internal/blockrename"
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/referenceindex"
+	"github.com/riducms/ridu/internal/requiredfield"
 	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
@@ -26,9 +28,12 @@ type mongoDBSemanticRenamePlan struct {
 	intents           []ridumigration.Rename
 	collectionMapping map[schema.StableID]schema.StableID
 	fieldMapping      map[string]schema.Field
-	// fieldRenames are the standalone field renames, as the fields before and
-	// after. A collection rename pairs every descendant itself.
+	// fieldRenames are the standalone and block field renames, as the fields
+	// before and after. A collection rename pairs every descendant itself.
 	fieldRenames []schemadiff.FieldPair
+	// blockFieldMapping maps a block slug and a definition-relative before
+	// path to the field it becomes.
+	blockFieldMapping map[string]schema.Field
 }
 
 type mongoDBIndexDelta struct {
@@ -172,12 +177,19 @@ func buildMongoDBArtifact(
 			Message: fmt.Sprintf("permanently retire framework-owned current, version, authentication, preference, task, lock, and reference state for removed resources %s", mongoStableIDList(retired)),
 		})
 	}
+	// The renamed before schema carries every confirmed rename, so a renamed
+	// field keeps the requiredness it already had.
+	var requirements []requiredfield.Requirement
+	if before != nil {
+		requirements = requiredfield.Detect(normalizedBefore, after.Snapshot(), requiredfield.Renames{})
+		artifact.Risks = append(artifact.Risks, requiredfield.Risks(requirements)...)
+	}
 	artifact.Risks = normalizeMongoDBRisks(artifact.Risks)
 	if err := requireMongoDBDestructiveApproval(artifact.Risks, options.AllowDestructive); err != nil {
 		return ridumigration.Artifact{}, err
 	}
 
-	artifact.Phases, err = mongoDBArtifactPhases(artifact.FromDigest, before, after, renamePlan, options.DataTransforms, retired, delta)
+	artifact.Phases, err = mongoDBArtifactPhases(artifact.FromDigest, before, after, renamePlan, options.DataTransforms, retired, delta, requirements)
 	if err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -251,6 +263,7 @@ func compileMongoDBRenamePlan(before, after schema.Manifest, intents []ridumigra
 	plan := mongoDBSemanticRenamePlan{
 		collectionMapping: make(map[schema.StableID]schema.StableID),
 		fieldMapping:      make(map[string]schema.Field),
+		blockFieldMapping: make(map[string]schema.Field),
 	}
 	if err := validateMongoDBCollectionSlugRewriteOverlap(intents); err != nil {
 		return plan, err
@@ -259,6 +272,9 @@ func compileMongoDBRenamePlan(before, after schema.Manifest, intents []ridumigra
 	beforeBySlug, afterBySlug := mongoSemanticCollectionsBySlug(beforeSnapshot.Collections), mongoSemanticCollectionsBySlug(afterSnapshot.Collections)
 	targets := make(map[schema.StableID]schema.StableID)
 	for _, intent := range intents {
+		if intent.Block != "" {
+			continue
+		}
 		if intent.CollectionBefore == "" || intent.CollectionAfter == "" {
 			return plan, fmt.Errorf("MongoDB rename intent requires before and after collection slugs")
 		}
@@ -283,6 +299,20 @@ func compileMongoDBRenamePlan(before, after schema.Manifest, intents []ridumigra
 	}
 	candidates := schemadiff.RenameCandidatesWithCollectionMapping(before, after, plan.collectionMapping)
 	for _, intent := range intents {
+		if intent.Block != "" {
+			candidate, err := mongoBlockFieldRenameCandidate(candidates, beforeSnapshot, afterSnapshot, intent)
+			if err != nil {
+				return plan, err
+			}
+			key := mongoBlockFieldRenameKey(intent.Block, intent.FieldBefore)
+			if _, duplicate := plan.blockFieldMapping[key]; duplicate {
+				return plan, fmt.Errorf("MongoDB block field rename source %s.%s is ambiguous", intent.Block, intent.FieldBefore)
+			}
+			plan.blockFieldMapping[key] = *candidate.AfterField
+			plan.fieldRenames = append(plan.fieldRenames, schemadiff.FieldPair{Before: *candidate.BeforeField, After: *candidate.AfterField})
+			plan.intents = append(plan.intents, intent)
+			continue
+		}
 		previous, next := beforeBySlug[intent.CollectionBefore], afterBySlug[intent.CollectionAfter]
 		if intent.FieldBefore != intent.FieldAfter && (embedded.DescendantPath(previous.Fields, intent.FieldBefore) || embedded.DescendantPath(next.Fields, intent.FieldAfter)) {
 			return plan, fmt.Errorf("embedded field rename %q to %q requires an explicit data migration", intent.FieldBefore, intent.FieldAfter)
@@ -333,7 +363,57 @@ func compileMongoDBRenamePlan(before, after schema.Manifest, intents []ridumigra
 	sort.Slice(plan.intents, func(left, right int) bool {
 		return mongoRenameIntentKey(plan.intents[left]) < mongoRenameIntentKey(plan.intents[right])
 	})
+	// Block field renames find their blocks through the after schema, so they
+	// follow resource renames, each definition's before those it places.
+	plan.intents = blockrename.Order(afterSnapshot, plan.intents)
 	return plan, nil
+}
+
+// mongoBlockFieldRenameCandidate finds the one structural candidate a block
+// field rename intent confirms. A path inside an embedded payload needs an
+// explicit data migration.
+func mongoBlockFieldRenameCandidate(candidates []schemadiff.RenameCandidate, before, after schema.Snapshot, intent ridumigration.Rename) (schemadiff.RenameCandidate, error) {
+	if intent.CollectionBefore != "" || intent.CollectionAfter != "" || len(intent.Fields) != 0 || intent.FieldBefore == "" || intent.FieldAfter == "" {
+		return schemadiff.RenameCandidate{}, fmt.Errorf("MongoDB block field rename requires one block and one before and after path")
+	}
+	previous, previousFound := mongoBlockTemplate(before, intent.Block)
+	next, nextFound := mongoBlockTemplate(after, intent.Block)
+	if !previousFound || !nextFound {
+		return schemadiff.RenameCandidate{}, fmt.Errorf("MongoDB block field rename addresses absent block %q", intent.Block)
+	}
+	if embedded.DescendantPath(previous.Fields, intent.FieldBefore) || embedded.DescendantPath(next.Fields, intent.FieldAfter) {
+		return schemadiff.RenameCandidate{}, fmt.Errorf("embedded field rename %q to %q requires an explicit data migration", intent.FieldBefore, intent.FieldAfter)
+	}
+	var result schemadiff.RenameCandidate
+	found := false
+	for _, candidate := range candidates {
+		if candidate.Kind != schemadiff.RenameBlockField || candidate.Block != intent.Block ||
+			candidate.BeforeField.Path.String() != intent.FieldBefore || candidate.AfterField.Path.String() != intent.FieldAfter {
+			continue
+		}
+		if found {
+			found = false
+			break
+		}
+		result, found = candidate, true
+	}
+	if !found {
+		return schemadiff.RenameCandidate{}, fmt.Errorf("MongoDB block field rename %s.%s -> %s.%s is unsupported or ambiguous", intent.Block, intent.FieldBefore, intent.Block, intent.FieldAfter)
+	}
+	return result, nil
+}
+
+func mongoBlockTemplate(snapshot schema.Snapshot, slug string) (schema.BlockType, bool) {
+	for _, block := range snapshot.Blocks {
+		if block.Slug == slug {
+			return block, true
+		}
+	}
+	return schema.BlockType{}, false
+}
+
+func mongoBlockFieldRenameKey(slug, path string) string {
+	return "block\x00" + slug + "\x00" + path
 }
 
 func validateMongoDBCollectionSlugRewriteOverlap(intents []ridumigration.Rename) error {
@@ -416,7 +496,7 @@ func mongoFieldRenameKey(collectionID schema.StableID, path string) string {
 }
 
 func mongoRenameIntentKey(intent ridumigration.Rename) string {
-	return string(intent.CollectionBefore) + "\x00" + intent.FieldBefore + "\x00" + string(intent.CollectionAfter) + "\x00" + intent.FieldAfter
+	return string(intent.CollectionBefore) + "\x00" + intent.Block + "\x00" + intent.FieldBefore + "\x00" + string(intent.CollectionAfter) + "\x00" + intent.FieldAfter
 }
 
 // normalizeMongoDBSemanticBefore gives the before-schema the identities its
@@ -463,9 +543,44 @@ func normalizeMongoDBSemanticBefore(before, after schema.Snapshot, plan mongoDBS
 		globals = append(globals, global)
 	}
 	normalized.Collections, normalized.Globals = collections, globals
+	for index := range normalized.Blocks {
+		normalizeMongoDBBlockFields(&normalized.Blocks[index], plan)
+	}
 	normalizeMongoDBReferences(&normalized, before, after, plan.collectionMapping)
 	sort.Slice(retired, func(left, right int) bool { return retired[left] < retired[right] })
-	return normalized, retired, nil
+	// Rebind the containers to the renamed definitions.
+	return schema.NewManifest(normalized).Snapshot(), retired, nil
+}
+
+// normalizeMongoDBBlockFields gives a block definition the identities its
+// fields have after the confirmed block field renames. Every placement shares
+// the definition, so this renames the field wherever the block is placed.
+func normalizeMongoDBBlockFields(block *schema.BlockType, plan mongoDBSemanticRenamePlan) {
+	var rewrite func([]schema.Field, *mongoDBRenamedAncestor) []schema.Field
+	rewrite = func(fields []schema.Field, ancestor *mongoDBRenamedAncestor) []schema.Field {
+		result := append([]schema.Field(nil), fields...)
+		for index := range result {
+			original := result[index]
+			if mapped, exists := plan.blockFieldMapping[mongoBlockFieldRenameKey(block.Slug, original.Path.String())]; exists {
+				result[index].ID, result[index].Name, result[index].Path = mapped.ID, mapped.Name, mapped.Path
+			} else if ancestor != nil {
+				ancestor.carry(&result[index])
+			}
+			below := ancestor
+			if result[index].ID != original.ID {
+				below = &mongoDBRenamedAncestor{
+					beforeID: string(original.ID), afterID: string(result[index].ID),
+					beforeDepth: len(original.Path.Segments()), afterPath: result[index].Path.Segments(),
+				}
+			}
+			if result[index].Nested != nil {
+				nested := *result[index].Nested
+				nested.Fields, result[index].Nested = rewrite(nested.ResolvedFields(), below), &nested
+			}
+		}
+		return result
+	}
+	block.Fields = rewrite(block.Fields, nil)
 }
 
 // mongoDBRenamedAncestor is the nearest ancestor whose identity a rename
@@ -509,6 +624,8 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 					beforeDepth: len(original.Path.Segments()), afterPath: result[index].Path.Segments(),
 				}
 			}
+			// Block definitions keep their own fields under a resource rename;
+			// their field renames apply to the shared definition.
 			if result[index].Nested != nil {
 				nested := *result[index].Nested
 				children, err := rewrite(nested.ResolvedFields(), below)
@@ -517,39 +634,6 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 				}
 				nested.Fields, result[index].Nested = children, &nested
 			}
-			if result[index].Blocks != nil {
-				blocks := *result[index].Blocks
-				blocks.Types = append([]schema.BlockType(nil), blocks.ResolvedTypes()...)
-				for blockIndex := range blocks.ResolvedTypes() {
-					children, err := rewrite(blocks.ResolvedTypes()[blockIndex].ResolvedFields(), below)
-					if err != nil {
-						return nil, err
-					}
-					blocks.ResolvedTypes()[blockIndex].Fields = children
-				}
-				result[index].Blocks = &blocks
-			}
-			if result[index].Plugin != nil {
-				plugin := *result[index].Plugin
-				plugin.EmbeddedTrees = append([]schema.EmbeddedTree(nil), plugin.EmbeddedTrees...)
-				for ti := range plugin.EmbeddedTrees {
-					tree := &plugin.EmbeddedTrees[ti]
-					tree.Cases = append([]schema.EmbeddedTreeCase(nil), tree.Cases...)
-					for ci := range tree.Cases {
-						c := &tree.Cases[ci]
-						c.Types = append([]schema.BlockType(nil), c.ResolvedTypes()...)
-						for vi := range c.ResolvedTypes() {
-							children, err := rewrite(c.ResolvedTypes()[vi].ResolvedFields(), below)
-							if err != nil {
-								return nil, err
-							}
-							c.ResolvedTypes()[vi].Fields = children
-						}
-					}
-				}
-				result[index].Plugin = &plugin
-			}
-
 		}
 		return result, nil
 	}
@@ -638,28 +722,18 @@ func normalizeMongoDBReferences(snapshot *schema.Snapshot, before, after schema.
 			if field.Nested != nil {
 				visit(field.Nested.ResolvedFields())
 			}
-			if field.Blocks != nil {
-				for blockIndex := range field.Blocks.ResolvedTypes() {
-					visit(field.Blocks.ResolvedTypes()[blockIndex].ResolvedFields())
-				}
-			}
-			if field.Plugin != nil {
-				for _, tree := range field.Plugin.EmbeddedTrees {
-					for _, c := range tree.Cases {
-						for _, variant := range c.ResolvedTypes() {
-							visit(variant.ResolvedFields())
-						}
-					}
-				}
-			}
-
 		}
 	}
+	// Each definition is normalized once, in the registry every placement
+	// shares; the caller rebinds the containers to it.
 	for index := range snapshot.Collections {
 		visit(snapshot.Collections[index].Fields)
 	}
 	for index := range snapshot.Globals {
 		visit(snapshot.Globals[index].Fields)
+	}
+	for index := range snapshot.Blocks {
+		visit(snapshot.Blocks[index].Fields)
 	}
 	if snapshot.Application.Admin != nil {
 		admin := *snapshot.Application.Admin
@@ -710,16 +784,12 @@ func validateMongoDBRetirement(before, after schema.Snapshot, mapping map[schema
 	return nil
 }
 
+// mongoFieldsContainDeclaredPluginCollectionReferences inspects each block
+// definition beneath fields once, however often the block graph places it.
 func mongoFieldsContainDeclaredPluginCollectionReferences(fields []schema.Field) bool {
-	for _, field := range fields {
-		if field.Plugin != nil && len(field.Plugin.ReferenceKeys) != 0 {
-			return true
-		}
-		if mongoFieldsContainDeclaredPluginCollectionReferences(schema.ChildFields(field)) {
-			return true
-		}
-	}
-	return false
+	return !schema.WalkDefinitionFields(func(field schema.Field) bool {
+		return field.Plugin == nil || len(field.Plugin.ReferenceKeys) == 0
+	}, fields)
 }
 
 func validateMongoDBTransformedTransition(before, after schema.Snapshot) error {
@@ -750,7 +820,7 @@ func validateMongoDBTransformedResources(kind string, before, after []schema.Col
 		if !reflect.DeepEqual(previous, comparison) {
 			return fmt.Errorf("data transforms cannot change MongoDB %s %q outside fields or indexes", kind, previous.ID)
 		}
-		if previous.Versions != nil && !reflect.DeepEqual(previous.Fields, current.Fields) {
+		if previous.Versions != nil && !schema.EqualFields(previous.Fields, current.Fields) {
 			return fmt.Errorf("data transforms cannot mutate versioned MongoDB %s %q; use explicit field renames that rewrite snapshots", kind, previous.ID)
 		}
 	}
@@ -817,7 +887,7 @@ func mongoDBSemanticIndexDelta(before, after mongoPhysicalIndexPlanSet, mapping 
 	return delta, nil
 }
 
-func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after schema.Manifest, renames mongoDBSemanticRenamePlan, transforms []ridumigration.DataTransformDescriptor, retired []schema.StableID, delta mongoDBIndexDelta) ([]ridumigration.Phase, error) {
+func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after schema.Manifest, renames mongoDBSemanticRenamePlan, transforms []ridumigration.DataTransformDescriptor, retired []schema.StableID, delta mongoDBIndexDelta, requirements []requiredfield.Requirement) ([]ridumigration.Phase, error) {
 	physical := ridumigration.PhysicalDigestSeed(fromDigest)
 	var phases []ridumigration.Phase
 	stepNumber := 0
@@ -886,6 +956,11 @@ func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after sch
 	if len(retired) != 0 {
 		semantic = append(semantic, phaseValue{kind: ridumigration.StepRetireResources, name: "retire framework state for removed MongoDB resources", data: ridumigration.RetireResourcesPayload{ResourceIDs: append([]schema.StableID(nil), retired...)}})
 	}
+	// The audit follows every transform in the same transaction, so a
+	// transform can backfill the values it checks.
+	if len(requirements) != 0 {
+		semantic = append(semantic, phaseValue{kind: ridumigration.StepAuditRequiredValues, name: requiredfield.StepName, data: requiredfield.Payload(requirements)})
+	}
 	if len(semantic) != 0 {
 		if err := appendPhase(ridumigration.PhaseTransaction, semantic); err != nil {
 			return nil, err
@@ -935,6 +1010,9 @@ func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after sch
 }
 
 func mongoSemanticRenameName(intent ridumigration.Rename) string {
+	if intent.Block != "" {
+		return fmt.Sprintf("preserve MongoDB block field content %s.%s -> %s.%s", intent.Block, intent.FieldBefore, intent.Block, intent.FieldAfter)
+	}
 	if intent.FieldBefore != "" {
 		return fmt.Sprintf("preserve MongoDB field content %s.%s -> %s.%s", intent.CollectionBefore, intent.FieldBefore, intent.CollectionAfter, intent.FieldAfter)
 	}

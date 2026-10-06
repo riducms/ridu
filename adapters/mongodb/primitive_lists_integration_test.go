@@ -1,13 +1,7 @@
 package mongodb
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"strings"
 	"testing"
 	"time"
 
@@ -26,7 +20,7 @@ func TestPrimitiveListsMongoDBLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	app, err := core.New(config, backend)
@@ -36,55 +30,21 @@ func TestPrimitiveListsMongoDBLifecycle(t *testing.T) {
 	primitivelists.Exercise(t, app)
 }
 
-func TestPrimitiveListsMongoDBRepeatedQueryBoundary(t *testing.T) {
+func TestPrimitiveListsMongoDBRepeatedQueries(t *testing.T) {
 	backend := mongoIntegrationStore(t)
-	config := primitivelists.Config()
-	config.Collections[0].Fields = append(config.Collections[0].Fields, field.Group("localizedDetails", field.Fields{field.TextList("points")}).Localized())
+	config := primitivelists.RepeatedConfig()
 	manifest, err := core.Resolve(config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	app, err := core.New(config, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Create(t.Context(), "primitive-products", primitivelists.Values(), core.MutationOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	for _, test := range []struct {
-		path, diagnostic string
-		item             query.Value
-	}{
-		{"variants.points", "unsupported non-scalar field type", query.String("Oak")},
-		{"variants.sizes", "unsupported non-scalar field type", query.Number(0)},
-		{"content.card.points", "unsupported non-scalar field type", query.String("Oak")},
-		{"content.card.sizes", "unsupported non-scalar field type", query.Number(0)},
-		{"localizedDetails.points", "localized containers are not supported", query.String("Oak")},
-	} {
-		path, _ := query.ParsePath(test.path)
-		for _, negate := range []bool{false, true} {
-			expression := query.In(path, test.item)
-			if negate {
-				expression = query.Not(expression)
-			}
-			_, err := app.Local().List(t.Context(), "primitive-products", core.ListOptions{Where: expression})
-			var failure *core.OperationError
-			if !errors.As(err, &failure) || failure.Code != "bad_query" || failure.Status != 400 || len(failure.Issues) != 1 || failure.Issues[0].Code != "unsupported_path" || failure.Issues[0].Path != test.path || !strings.Contains(err.Error(), test.diagnostic) {
-				t.Fatalf("path %s negate=%v must reject explicitly: %v", test.path, negate, err)
-			}
-		}
-		operand, _ := json.Marshal(test.item)
-		where := fmt.Sprintf(`{%q:{"in":[%s]}}`, test.path, operand)
-		response := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodGet, "/api/collections/primitive-products?where="+url.QueryEscape(where), nil)
-		app.Handler(core.HandlerOptions{}).ServeHTTP(response, request)
-		if response.Code != 400 || !strings.Contains(response.Body.String(), `"code":"bad_request"`) || !strings.Contains(response.Body.String(), fmt.Sprintf(`"path":%q`, test.path)) || !strings.Contains(response.Body.String(), `"code":"unsupported_path"`) {
-			t.Fatalf("REST path %s %d: %s", test.path, response.Code, response.Body.String())
-		}
-	}
+	primitivelists.ExerciseRepeatedQueries(t, app)
 }
 
 func TestPrimitiveListMongoDBNegativePredicatesExcludeCorruptShapes(t *testing.T) {
@@ -103,7 +63,7 @@ func TestPrimitiveListMongoDBNegativePredicatesExcludeCorruptShapes(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+			if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 				t.Fatal(err)
 			}
 			collection := manifest.Snapshot().Collections[0]
@@ -143,7 +103,7 @@ func TestPrimitiveListMongoDBNegativePredicatesExcludeCorruptShapes(t *testing.T
 				}
 				page, err := transaction.List(t.Context(), request)
 				_ = transaction.Rollback(t.Context())
-				if err != nil || page.Total != 2 {
+				if err != nil || *page.Total != 2 {
 					t.Fatalf("list page %#v: %v", page, err)
 				}
 			}

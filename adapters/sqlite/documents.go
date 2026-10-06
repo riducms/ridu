@@ -15,8 +15,8 @@ import (
 
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/internal/membership"
 	populationwalk "github.com/riducms/ridu/internal/population"
-	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -314,7 +314,7 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 }
 
 func (transaction *documentTransaction) Find(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Document{}, err
 	}
 	leave, err := transaction.enter(ctx, false)
@@ -368,7 +368,7 @@ func loadDocument(ctx context.Context, runner sqlRunner, collection schema.Colle
 }
 
 func (transaction *documentTransaction) List(ctx context.Context, request store.Request) (store.Page, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Page{}, err
 	}
 	leave, err := transaction.enter(ctx, false)
@@ -392,7 +392,7 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 }
 
 func (transaction *documentTransaction) Distinct(ctx context.Context, request store.DistinctRequest) (store.DistinctPage, error) {
-	if err := primitivefield.ValidateRequest(store.Request{Collection: request.Collection, Filter: request.Filter, Access: request.Access}); err != nil {
+	if err := membership.ValidateRequest(store.Request{Collection: request.Collection, Filter: request.Filter, Access: request.Access}); err != nil {
 		return store.DistinctPage{}, err
 	}
 	leave, err := transaction.enter(ctx, false)
@@ -471,17 +471,24 @@ func (transaction *documentTransaction) Distinct(ctx context.Context, request st
 }
 
 func (transaction *documentTransaction) listSQL(ctx context.Context, request store.Request, predicate sqlitePredicate, order string) (store.Page, bool, error) {
-	var total int
-	if err := transaction.connection.QueryRowContext(ctx,
-		"SELECT count(*) FROM "+sqliteReadTable(request)+" WHERE "+predicate.clause,
-		predicate.arguments...,
-	).Scan(&total); err != nil {
-		return store.Page{}, false, translateError(err)
+	// A SkipTotal read runs no count. It reads one row past the page so the
+	// extra row alone proves that a next page exists.
+	pageNumber, limit, offset := store.UncountedPageBounds(request.Page, request.Limit)
+	readLimit := limit + 1
+	total := -1
+	if !request.SkipTotal {
+		if err := transaction.connection.QueryRowContext(ctx,
+			"SELECT count(*) FROM "+sqliteReadTable(request)+" WHERE "+predicate.clause,
+			predicate.arguments...,
+		).Scan(&total); err != nil {
+			return store.Page{}, false, translateError(err)
+		}
+		_, _, offset, _ = store.ListPageBounds(request.Page, request.Limit, total)
+		readLimit = limit
 	}
-	page, limit, offset, _ := store.ListPageBounds(request.Page, request.Limit, total)
 
 	arguments := append([]any(nil), predicate.arguments...)
-	arguments = append(arguments, limit, offset)
+	arguments = append(arguments, readLimit, offset)
 	rows, err := transaction.connection.QueryContext(ctx, `SELECT
   id, created_at, updated_at, deleted_at, status, revision, values_json
 FROM `+sqliteReadTable(request)+` WHERE `+predicate.clause+" ORDER BY "+order+" LIMIT ? OFFSET ?", arguments...)
@@ -489,7 +496,7 @@ FROM `+sqliteReadTable(request)+` WHERE `+predicate.clause+" ORDER BY "+order+" 
 		return store.Page{}, false, translateError(err)
 	}
 	defer rows.Close()
-	documents := make([]store.Document, 0, min(limit, total))
+	documents := make([]store.Document, 0, readLimit)
 	for rows.Next() {
 		document, err := scanDocumentRecord(rows, request.Collection)
 		if err != nil {
@@ -506,6 +513,13 @@ FROM `+sqliteReadTable(request)+` WHERE `+predicate.clause+" ORDER BY "+order+" 
 	if err := rows.Err(); err != nil {
 		return store.Page{}, false, translateError(err)
 	}
+	var page store.Page
+	if request.SkipTotal {
+		page = store.Page{Page: pageNumber, Limit: limit}
+		documents, page.HasNextPage = store.TrimUncountedPage(documents, limit)
+	} else {
+		page = store.CountedPage(nil, request.Page, request.Limit, total)
+	}
 	if len(request.Populate) != 0 && request.PopulationBudget == nil {
 		request.PopulationBudget = store.NewPopulationBudget(store.MaxPopulationMaterializedDocuments)
 	}
@@ -516,11 +530,12 @@ FROM `+sqliteReadTable(request)+` WHERE `+predicate.clause+" ORDER BY "+order+" 
 		}
 		documents[index] = prepared
 	}
-	return store.Page{Documents: documents, Page: page, Limit: limit, Total: total}, true, nil
+	page.Documents = documents
+	return page, true, nil
 }
 
 func (transaction *documentTransaction) listInMemory(ctx context.Context, request store.Request) (store.Page, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Page{}, err
 	}
 	documents, err := transaction.matchingDocuments(ctx, request)
@@ -535,7 +550,7 @@ func (transaction *documentTransaction) listInMemory(ctx context.Context, reques
 		rightDocument := localizedForRequest(documents[right], sortRequest)
 		return compareDocuments(leftDocument, rightDocument, sorts) < 0
 	})
-	page, limit, start, end := store.ListPageBounds(request.Page, request.Limit, len(documents))
+	_, _, start, end := store.ListPageBounds(request.Page, request.Limit, len(documents))
 	if len(request.Populate) != 0 && request.PopulationBudget == nil {
 		request.PopulationBudget = store.NewPopulationBudget(store.MaxPopulationMaterializedDocuments)
 	}
@@ -547,7 +562,13 @@ func (transaction *documentTransaction) listInMemory(ctx context.Context, reques
 		}
 		selected[index] = prepared
 	}
-	return store.Page{Documents: selected, Page: page, Limit: limit, Total: len(documents)}, nil
+	// The residual path has already materialized its bounded match set, so a
+	// SkipTotal page only withholds the total it did not need to count.
+	page := store.CountedPage(selected, request.Page, request.Limit, len(documents))
+	if request.SkipTotal {
+		page.Total = nil
+	}
+	return page, nil
 }
 
 func (transaction *documentTransaction) matchingDocuments(ctx context.Context, request store.Request) ([]store.Document, error) {
@@ -782,6 +803,9 @@ func compileSQLiteNodeForLocales(collection schema.Collection, node query.Node, 
 }
 
 func compileSQLiteComparison(collection schema.Collection, comparison query.Comparison, locales []schema.LocaleCode, source sqlitePredicateSource) (sqlitePredicate, bool) {
+	if field, found := populationwalk.FieldAtPath(collection.Fields, comparison.Path); found && membership.KindOf(field) != membership.None {
+		return compileSQLiteMembership(collection.Fields, comparison, locales, source)
+	}
 	value, supported := sqliteValueAtPathForLocales(collection, comparison.Path, locales, source)
 	if !supported {
 		return sqlitePredicate{}, false
@@ -1046,7 +1070,7 @@ func sqliteTimestampArgument(value query.Value) (int64, bool) {
 }
 
 func (transaction *documentTransaction) ListWindow(ctx context.Context, request store.Request) (store.Window, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Window{}, err
 	}
 	leave, err := transaction.enter(ctx, false)
@@ -1173,7 +1197,7 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		(request.Intent == store.WriteIntentSaveDraft || request.Intent == store.WriteIntentDiscardDraft) {
 		return store.Document{}, fmt.Errorf("draft write intent requires a draft-enabled collection")
 	}
-	if err := primitivefield.ValidateRequest(request.Request); err != nil {
+	if err := membership.ValidateRequest(request.Request); err != nil {
 		return store.Document{}, err
 	}
 	if request.Collection.Versions != nil && request.Collection.Versions.Drafts && request.Intent == store.WriteIntentDefault {
@@ -1187,87 +1211,104 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 	if request.ID == "" {
 		return store.Document{}, fmt.Errorf("document ID is required")
 	}
-	probe := request.Request
-	probe.ExpectedRevision = 0
-	document, err := loadRequestedDocument(ctx, transaction.connection, probe)
+	current, err := request.LockedCurrent()
 	if err != nil {
 		return store.Document{}, err
 	}
-	if !documentMatchesRequest(document, probe) {
-		return store.Document{}, store.ErrNotFound
-	}
-	if request.ExpectedRevision > 0 && document.Revision != request.ExpectedRevision {
+	if request.ExpectedRevision > 0 && current.Revision != request.ExpectedRevision {
 		return store.Document{}, store.ErrConflict
 	}
-	live, hasLive, err := transaction.publishedHead(ctx, request.Collection, document.ID)
-	if err != nil {
-		return store.Document{}, err
-	}
+	document := store.CloneDocument(current)
+	document.PublishedRevision, document.HasDraftChanges = 0, false
+	hasLive := store.HasLiveHead(request.Collection, current)
+	liveRevision := current.PublishedRevision
 	if request.Intent == store.WriteIntentDiscardDraft {
-		if !hasLive || !live.HasDraftChanges {
+		// Only a discard needs the live content; every other intent derives
+		// the live state from the locked working read.
+		live, found, err := transaction.publishedHead(ctx, request.Collection, document.ID)
+		if err != nil {
+			return store.Document{}, err
+		}
+		if !found || !live.HasDraftChanges {
 			return store.Document{}, store.ErrConflict
 		}
 		document.Values = store.CloneValues(live.Values)
+		liveRevision = live.Revision
 	} else if request.ReplaceValues {
 		document.Values = store.CloneValues(request.Values)
 	} else {
 		document.Values = localization.MergeStoragePatch(request.Collection.Fields, document.Values, request.Values)
 	}
 	canonicalizeSQLiteAuthIdentity(request.Collection, document.Values)
-	document.UpdatedAt = transaction.store.now().UTC()
+	document.UpdatedAt = nextUpdatedAt(transaction.store.now(), current.UpdatedAt)
 	if request.Collection.Versions != nil || request.Collection.Upload != nil {
 		document.Revision++
 	}
 	if request.Collection.Versions != nil {
 		switch request.Intent {
 		case store.WriteIntentDefault:
-			if document.Status == store.StatusPublished {
-				if err := transaction.putPublishedHead(ctx, request.Collection, document); err != nil {
-					return store.Document{}, err
-				}
-			} else if err := transaction.deletePublishedHead(ctx, request.Collection, document.ID); err != nil {
-				return store.Document{}, err
-			}
 		case store.WriteIntentSaveDraft:
+			document.Status = store.StatusDraft
 			if hasLive {
 				document.Status = store.StatusPublished
-				if err := transaction.setPublishedPending(ctx, request.Collection, document.ID, true); err != nil {
-					return store.Document{}, err
-				}
-			} else {
-				document.Status = store.StatusDraft
 			}
-		case store.WriteIntentPublish:
+		case store.WriteIntentPublish, store.WriteIntentDiscardDraft:
 			document.Status = store.StatusPublished
-			if err := transaction.putPublishedHead(ctx, request.Collection, document); err != nil {
-				return store.Document{}, err
-			}
 		case store.WriteIntentUnpublish:
 			if !hasLive {
 				return store.Document{}, store.ErrConflict
 			}
 			document.Status = store.StatusDraft
-			if err := transaction.deletePublishedHead(ctx, request.Collection, document.ID); err != nil {
-				return store.Document{}, err
-			}
-		case store.WriteIntentDiscardDraft:
-			document.Status = store.StatusPublished
-			if err := transaction.setPublishedPending(ctx, request.Collection, document.ID, false); err != nil {
-				return store.Document{}, err
-			}
 		default:
 			return store.Document{}, fmt.Errorf("unsupported write intent %q", request.Intent)
 		}
 	} else if request.Intent != store.WriteIntentDefault {
 		return store.Document{}, fmt.Errorf("write intent requires a versioned collection")
 	}
-	if err := transaction.persistDocument(ctx, request.Collection, document); err != nil {
+	// The document is rebuilt from Current, so the guarded row write comes
+	// first: a stale Current fails before the live head changes.
+	if err := transaction.writeDocumentRow(ctx, request.Collection, document, current); err != nil {
+		return store.Document{}, err
+	}
+	if request.Collection.Versions != nil {
+		var err error
+		switch request.Intent {
+		case store.WriteIntentDefault:
+			if document.Status == store.StatusPublished {
+				err = transaction.putPublishedHead(ctx, request.Collection, document)
+			} else {
+				err = transaction.deletePublishedHead(ctx, request.Collection, document.ID)
+			}
+		case store.WriteIntentSaveDraft:
+			if hasLive {
+				err = transaction.setPublishedPending(ctx, request.Collection, document.ID, true)
+			}
+		case store.WriteIntentPublish:
+			err = transaction.putPublishedHead(ctx, request.Collection, document)
+		case store.WriteIntentUnpublish:
+			err = transaction.deletePublishedHead(ctx, request.Collection, document.ID)
+		case store.WriteIntentDiscardDraft:
+			err = transaction.setPublishedPending(ctx, request.Collection, document.ID, false)
+		}
+		if err != nil {
+			return store.Document{}, err
+		}
+	}
+	if err := transaction.reindexDocument(ctx, request.Collection, document); err != nil {
 		return store.Document{}, err
 	}
 	if request.Collection.Versions != nil && request.Collection.Versions.Drafts {
-		document.PublishedRevision, document.HasDraftChanges, err = sqlitePublishedMetadata(ctx, transaction.connection, request.Collection, document.ID)
-		if err != nil {
-			return store.Document{}, err
+		// The write lock is held, so the live state just written is the state
+		// an authoring read would attach.
+		switch request.Intent {
+		case store.WriteIntentSaveDraft:
+			if hasLive {
+				document.PublishedRevision, document.HasDraftChanges = liveRevision, true
+			}
+		case store.WriteIntentPublish:
+			document.PublishedRevision = document.Revision
+		case store.WriteIntentDiscardDraft:
+			document.PublishedRevision = liveRevision
 		}
 	}
 	return store.CloneDocument(document), nil
@@ -1338,7 +1379,20 @@ func (transaction *documentTransaction) deletePublishedHead(ctx context.Context,
 	return translateError(err)
 }
 
-func (transaction *documentTransaction) persistDocument(ctx context.Context, collection schema.Collection, document store.Document) error {
+// persistDocument replaces the stored row that stored describes with document
+// and rebuilds its derived unique values and references.
+func (transaction *documentTransaction) persistDocument(ctx context.Context, collection schema.Collection, document, stored store.Document) error {
+	if err := transaction.writeDocumentRow(ctx, collection, document, stored); err != nil {
+		return err
+	}
+	return transaction.reindexDocument(ctx, collection, document)
+}
+
+// writeDocumentRow replaces a working row only while it is still the stored
+// version stored describes: the same updated_at and, for a revisioned
+// resource, the same revision. Every write advances updated_at, so a document
+// built from a stale read is a conflict rather than a lost update.
+func (transaction *documentTransaction) writeDocumentRow(ctx context.Context, collection schema.Collection, document, stored store.Document) error {
 	timestamps := []time.Time{document.UpdatedAt}
 	if document.DeletedAt != nil {
 		timestamps = append(timestamps, *document.DeletedAt)
@@ -1350,19 +1404,50 @@ func (transaction *documentTransaction) persistDocument(ctx context.Context, col
 	if err != nil {
 		return fmt.Errorf("encode SQLite document values: %w", err)
 	}
-	result, err := transaction.connection.ExecContext(ctx, `UPDATE ridu_documents SET
+	statement := `UPDATE ridu_documents SET
   updated_at = ?, deleted_at = ?, status = ?, revision = ?, values_json = ?
-WHERE collection_id = ? AND id = ?`, encodeTime(document.UpdatedAt), optionalTime(document.DeletedAt), string(document.Status), document.Revision, string(encoded), string(collection.ID), document.ID)
+WHERE collection_id = ? AND id = ? AND updated_at = ?`
+	arguments := []any{encodeTime(document.UpdatedAt), optionalTime(document.DeletedAt), string(document.Status), document.Revision, string(encoded),
+		string(collection.ID), document.ID, encodeTime(stored.UpdatedAt)}
+	if collection.Versions != nil || collection.Upload != nil {
+		statement += " AND revision = ?"
+		arguments = append(arguments, stored.Revision)
+	}
+	result, err := transaction.connection.ExecContext(ctx, statement, arguments...)
 	if err != nil {
 		return translateError(err)
 	}
-	if affected, _ := result.RowsAffected(); affected != 1 {
-		return store.ErrNotFound
+	if affected, _ := result.RowsAffected(); affected == 1 {
+		return nil
 	}
+	var exists bool
+	if err := transaction.connection.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM ridu_documents WHERE collection_id = ? AND id = ?)`,
+		string(collection.ID), document.ID).Scan(&exists); err != nil {
+		return translateError(err)
+	}
+	if exists {
+		return store.ErrConflict
+	}
+	return store.ErrNotFound
+}
+
+// reindexDocument rebuilds a written row's unique values and references.
+func (transaction *documentTransaction) reindexDocument(ctx context.Context, collection schema.Collection, document store.Document) error {
 	if err := transaction.replaceUniqueValues(ctx, collection, document); err != nil {
 		return err
 	}
 	return transaction.replaceDocumentReferences(ctx, collection, document)
+}
+
+// nextUpdatedAt is the updated_at of a write that replaces a row last written
+// at previous. It strictly increases even when the clock does not advance, so
+// updated_at identifies a row's stored version.
+func nextUpdatedAt(now, previous time.Time) time.Time {
+	now = now.UTC()
+	if now.After(previous) {
+		return now
+	}
+	return previous.UTC().Add(time.Nanosecond)
 }
 
 func optionalTime(value *time.Time) any {
@@ -1387,7 +1472,7 @@ func canonicalizeSQLiteAuthIdentity(collection schema.Collection, values store.V
 }
 
 func (transaction *documentTransaction) Trash(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Document{}, err
 	}
 	leave, err := transaction.enter(ctx, true)
@@ -1396,27 +1481,31 @@ func (transaction *documentTransaction) Trash(ctx context.Context, request store
 	}
 	defer leave()
 	request.Deletion = store.DeletionActive
-	document, err := transaction.mutableDocument(ctx, request)
+	stored, err := transaction.mutableDocument(ctx, request)
 	if err != nil {
 		return store.Document{}, err
 	}
+	document := stored
 	now := transaction.store.now().UTC()
 	document.DeletedAt = &now
-	document.UpdatedAt = now
+	document.UpdatedAt = nextUpdatedAt(now, stored.UpdatedAt)
+	if err := transaction.writeDocumentRow(ctx, request.Collection, document, stored); err != nil {
+		return store.Document{}, err
+	}
 	if request.Collection.Versions != nil {
 		if _, err := transaction.connection.ExecContext(ctx, `UPDATE ridu_published_documents SET deleted_at = ?, updated_at = ? WHERE collection_id = ? AND id = ?`,
-			encodeTime(now), encodeTime(now), string(request.Collection.ID), document.ID); err != nil {
+			encodeTime(now), encodeTime(document.UpdatedAt), string(request.Collection.ID), document.ID); err != nil {
 			return store.Document{}, translateError(err)
 		}
 	}
-	if err := transaction.persistDocument(ctx, request.Collection, document); err != nil {
+	if err := transaction.reindexDocument(ctx, request.Collection, document); err != nil {
 		return store.Document{}, err
 	}
 	return document, nil
 }
 
 func (transaction *documentTransaction) Restore(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Document{}, err
 	}
 	leave, err := transaction.enter(ctx, true)
@@ -1425,26 +1514,30 @@ func (transaction *documentTransaction) Restore(ctx context.Context, request sto
 	}
 	defer leave()
 	request.Deletion = store.DeletionTrash
-	document, err := transaction.mutableDocument(ctx, request)
+	stored, err := transaction.mutableDocument(ctx, request)
 	if err != nil {
 		return store.Document{}, err
 	}
+	document := stored
 	document.DeletedAt = nil
-	document.UpdatedAt = transaction.store.now().UTC()
+	document.UpdatedAt = nextUpdatedAt(transaction.store.now(), stored.UpdatedAt)
+	if err := transaction.writeDocumentRow(ctx, request.Collection, document, stored); err != nil {
+		return store.Document{}, err
+	}
 	if request.Collection.Versions != nil {
 		if _, err := transaction.connection.ExecContext(ctx, `UPDATE ridu_published_documents SET deleted_at = NULL, updated_at = ? WHERE collection_id = ? AND id = ?`,
 			encodeTime(document.UpdatedAt), string(request.Collection.ID), document.ID); err != nil {
 			return store.Document{}, translateError(err)
 		}
 	}
-	if err := transaction.persistDocument(ctx, request.Collection, document); err != nil {
+	if err := transaction.reindexDocument(ctx, request.Collection, document); err != nil {
 		return store.Document{}, err
 	}
 	return document, nil
 }
 
 func (transaction *documentTransaction) mutableDocument(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Document{}, err
 	}
 	if request.ID == "" {
@@ -1472,7 +1565,7 @@ func (transaction *documentTransaction) mutableDocument(ctx context.Context, req
 }
 
 func (transaction *documentTransaction) Delete(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return store.Document{}, err
 	}
 	leave, err := transaction.enter(ctx, true)
@@ -1625,10 +1718,8 @@ func queryDocumentValues(document store.Document, request store.Request, path qu
 	locales := populationwalk.LocaleSelection{All: request.AllLocales, Chain: request.LocaleChain}
 	visit := func(prefix query.Path, remainder []string) {
 		populationwalk.VisitAtPath(request.Collection.Fields, store.Values{segments[0]: root}, prefix, locales, func(_ schema.Field, value store.Value) {
-			if len(remainder) == 0 {
+			if value, reached := opaqueValueAt(value, remainder); reached {
 				values = append(values, value)
-			} else {
-				values = append(values, valuesBelow(value, remainder)...)
 			}
 		})
 	}
@@ -1650,6 +1741,23 @@ func queryDocumentValues(document store.Document, request store.Request, path qu
 		}
 	}
 	return nil
+}
+
+// opaqueValueAt follows object keys inside a JSON or opaque plugin value, as
+// every store does: a list on the way is a value of its own, never a set of
+// values to reach through, so the path reaches nothing beyond it.
+func opaqueValueAt(value store.Value, segments []string) (store.Value, bool) {
+	for _, segment := range segments {
+		if value.Kind() != store.ValueObject {
+			return store.Value{}, false
+		}
+		child, exists := value.Lookup(segment)
+		if !exists {
+			return store.Value{}, false
+		}
+		value = child
+	}
+	return value, true
 }
 
 func matches(document store.Document, node query.Node) bool {
@@ -1878,20 +1986,10 @@ func compareValue(actual store.Value, exists bool, operator query.Operator, expe
 		return false
 	}
 	if operator == query.OperatorContains || operator == query.OperatorLike {
+		// Only a stored string contains text. A list or object, including one in
+		// a JSON value, never matches: membership fields use In instead.
 		expectedText, expectedOK := expected.StringValue()
 		if !exists || !expectedOK {
-			return false
-		}
-		if actual.Kind() == store.ValueList {
-			if operator == query.OperatorLike {
-				return false
-			}
-			for value := range actual.Elements() {
-				text, valid := value.StringValue()
-				if valid && text == expectedText {
-					return true
-				}
-			}
 			return false
 		}
 		actualText, valid := actual.StringValue()
@@ -2432,7 +2530,7 @@ WHERE collection_id = ? AND id = ?`, string(encoded), string(collection.ID), doc
 				return translateError(err)
 			}
 		}
-		if err := transaction.persistDocument(ctx, collection, document); err != nil {
+		if err := transaction.persistDocument(ctx, collection, document, document); err != nil {
 			return err
 		}
 	}
@@ -2488,6 +2586,16 @@ func (transaction *documentTransaction) SaveVersion(ctx context.Context, collect
 		ID: fmt.Sprintf("%s:%d", document.ID, document.Revision), DocumentID: document.ID,
 		Revision: document.Revision, Status: document.Status, Snapshot: store.CloneDocument(document), CreatedAt: now,
 	}
+	if document.Revision == 1 {
+		// Revision 1 starts a document's history: any later revision belongs
+		// to an earlier document with the same ID, which would otherwise be
+		// inherited or outrank this document's own versions when pruning.
+		// Revision 1 itself is replaced below, keeping a re-save's created_at.
+		if _, err := transaction.connection.ExecContext(ctx, `DELETE FROM ridu_versions WHERE collection_id = ? AND document_id = ? AND revision > 1`,
+			string(collection.ID), document.ID); err != nil {
+			return store.Version{}, translateError(err)
+		}
+	}
 	var createdAt int64
 	err = transaction.connection.QueryRowContext(ctx, `INSERT INTO ridu_versions (
   id, collection_id, document_id, revision, status, snapshot_json, created_at
@@ -2514,7 +2622,7 @@ WHERE collection_id = ? AND document_id = ? AND revision NOT IN (
 }
 
 func (transaction *documentTransaction) ListVersions(ctx context.Context, request store.VersionRequest) ([]store.Version, error) {
-	if err := primitivefield.ValidateNode(request.Collection.Fields, request.Access); err != nil {
+	if err := membership.ValidateNode(request.Collection.Fields, request.Access); err != nil {
 		return nil, err
 	}
 	leave, err := transaction.enter(ctx, false)
@@ -2557,7 +2665,7 @@ FROM ridu_versions WHERE ` + predicate.clause + " ORDER BY revision DESC"
 }
 
 func (transaction *documentTransaction) CountVersions(ctx context.Context, request store.VersionRequest) (int, error) {
-	if err := primitivefield.ValidateNode(request.Collection.Fields, request.Access); err != nil {
+	if err := membership.ValidateNode(request.Collection.Fields, request.Access); err != nil {
 		return 0, err
 	}
 	leave, err := transaction.enter(ctx, false)
@@ -2637,9 +2745,9 @@ var _ store.VersionTransaction = (*documentTransaction)(nil)
 
 func matchesPrimitiveQuery(document store.Document, fields []schema.Field, node query.Node, values func(query.Path) []store.Value) bool {
 	if node.Kind == query.ExpressionComparison && node.Comparison != nil && node.Comparison.Operator == query.OperatorIn {
-		if field, ok := populationwalk.FieldAtPath(fields, node.Comparison.Path); ok && primitivefield.IsList(field) {
+		if field, ok := populationwalk.FieldAtPath(fields, node.Comparison.Path); ok && membership.KindOf(field) != membership.None {
 			for _, value := range values(node.Comparison.Path) {
-				if primitivefield.Membership(value, node.Comparison.Value) {
+				if membership.Matches(value, node.Comparison.Value) {
 					return true
 				}
 			}

@@ -14,13 +14,11 @@ func RenameFirstLink(
 	if !ok {
 		return store.Value{}, fmt.Errorf("links must be a nonempty list")
 	}
-	row, ok := first.CopyObject()
+	// Only this row is copied. Its _key and other fields are retained.
+	row, ok := first.WithMembers(store.Values{"label": store.String(label)})
 	if !ok {
 		return store.Value{}, fmt.Errorf("first link must be an object")
 	}
-
-	// Only this row needs a mutable copy. Preserve its _key and other fields.
-	row["label"] = store.String(label)
-	updated, _ := links.WithListItem(0, store.Object(row))
+	updated, _ := links.WithListItem(0, row)
 	return updated, nil
 }

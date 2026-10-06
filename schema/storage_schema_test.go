@@ -12,7 +12,7 @@ func TestStorageSchemaClearsPresentationAndPreservesStorage(t *testing.T) {
 		Name: "title", Path: query.Field("title"), Type: FieldTypeText, Required: true,
 		Admin: FieldAdmin{Hidden: true}, Text: &TextField{},
 	}
-	inline := BlockType{Slug: "inline", Admin: &BlockAdmin{RowLabel: "title"}, Fields: []Field{leaf}}
+	inline := BlockType{Slug: "inline", TypeName: "Inline", Admin: &BlockAdmin{RowLabel: "title"}, Fields: []Field{leaf}}
 	tone := Field{Name: "tone", Path: query.Field("tone"), Type: FieldTypeSelect, Select: &SelectField{Options: []SelectOption{
 		{Value: "light", Label: "Light"}, {Value: "dark", Label: "Dark"},
 	}}}
@@ -29,7 +29,7 @@ func TestStorageSchemaClearsPresentationAndPreservesStorage(t *testing.T) {
 			Localization: &LocalizationSettings{DefaultLocale: "en", Fallback: true, Locales: []Locale{{Code: "en", Label: "English"}, {Code: "ar", Label: "Arabic", RTL: true}}},
 			Endpoints:    []Endpoint{endpoint},
 		},
-		Blocks: []BlockType{{
+		Blocks: []BlockType{inline, {
 			Slug: "card", Labels: BlockLabels{Singular: "Card", Plural: "Cards"}, TypeName: "Card", Admin: &BlockAdmin{RowLabel: "title"},
 			Fields: []Field{{Name: "details", Path: query.Field("details"), Type: FieldTypeGroup, Nested: &NestedField{Fields: []Field{leaf}}}},
 		}},
@@ -41,7 +41,7 @@ func TestStorageSchemaClearsPresentationAndPreservesStorage(t *testing.T) {
 		Globals: []Global{{
 			ID: "settings", Slug: "settings", Admin: CollectionAdmin{Hidden: true},
 			Fields: []Field{{Name: "widgets", Path: query.Field("widgets"), Type: FieldTypePlugin, Plugin: &PluginField{EmbeddedTrees: []EmbeddedTree{{
-				Cases: []EmbeddedTreeCase{{Types: []BlockType{inline}}, {BlockReferences: []string{"card"}}},
+				Cases: []EmbeddedTreeCase{{BlockReferences: []string{"inline"}}, {BlockReferences: []string{"card"}}},
 			}}}}},
 		}},
 		Plugins: []Plugin{{Key: "widgets", GoPackage: "example.com/widgets", Admin: &PluginAdmin{Package: "@example/widgets"}, FieldTypes: []PluginFieldType{{
@@ -66,7 +66,7 @@ func TestStorageSchemaClearsPresentationAndPreservesStorage(t *testing.T) {
 		t.Fatal("registered block placements retained admin metadata")
 	}
 	cases := snapshot.Globals[0].Fields[0].Plugin.EmbeddedTrees[0].Cases
-	if cases[0].ResolvedTypes()[0].Admin != nil || cases[0].ResolvedTypes()[0].Fields[0].Admin.Hidden ||
+	if cases[0].ResolvedTypes()[0].Admin != nil || cases[0].ResolvedTypes()[0].ResolvedFields()[0].Admin.Hidden ||
 		cases[1].ResolvedTypes()[0].ResolvedFields()[0].Nested.ResolvedFields()[0].Admin.Hidden {
 		t.Fatal("embedded block cases retained admin metadata")
 	}
@@ -80,7 +80,7 @@ func TestStorageSchemaClearsPresentationAndPreservesStorage(t *testing.T) {
 	if manifest.SameStorage(NewManifest(moved)) {
 		t.Fatal("a plugin value schema change was ignored")
 	}
-	snapshot.Blocks[0].Fields[0].Nested.Fields[0].Required = false
+	snapshot.Blocks[1].Fields[0].Nested.Fields[0].Required = false
 	if manifest.SameStorage(NewManifest(snapshot)) {
 		t.Fatal("a storage change inside a shared block was ignored")
 	}
@@ -96,7 +96,7 @@ func TestStorageSchemaClearsPresentationAndPreservesStorage(t *testing.T) {
 		"application endpoint": func(s *Snapshot) { s.Application.Endpoints[0].Path = "/trending" },
 		"collection endpoint":  func(s *Snapshot) { s.Collections[0].Endpoints = nil },
 		"collection labels":    func(s *Snapshot) { s.Collections[0].Labels.Plural = "Articles" },
-		"block labels":         func(s *Snapshot) { s.Blocks[0].Labels.Singular, s.Blocks[0].TypeName = "Teaser", "Teaser" },
+		"block labels":         func(s *Snapshot) { s.Blocks[1].Labels.Singular, s.Blocks[1].TypeName = "Teaser", "Teaser" },
 		"locale presentation": func(s *Snapshot) {
 			s.Application.Localization.Locales[1].Label, s.Application.Localization.Locales[1].RTL = "العربية", false
 		},

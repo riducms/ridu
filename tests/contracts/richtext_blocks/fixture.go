@@ -47,7 +47,9 @@ func configuration(t testing.TB, seen *observations) ridu.Config {
 			field.Text("message"),
 		}},
 	)
-	cta := field.Block{Slug: "cta", Labels: field.BlockLabels{Singular: "CTA"}, Fields: field.Fields{
+	// The reference application already defines "cta"; a slug names one
+	// block definition, so this smaller action block has its own slug.
+	action := field.Block{Slug: "action", Labels: field.BlockLabels{Singular: "Action"}, Fields: field.Fields{
 		field.Text("label").Required(),
 		field.Relationship("destination", "pages"),
 	}}
@@ -82,8 +84,8 @@ func configuration(t testing.TB, seen *observations) ridu.Config {
 		field.Relationship("locked", "assets").OnDelete(field.ReferenceDeleteRestrict),
 		field.Upload("asset", "files"),
 		field.Upload("lockedAsset", "files").OnDelete(field.ReferenceDeleteRestrict),
-		richtext.Field("detail", richtext.Config{Blocks: []field.Block{cta}}),
-		richtext.Field("aside", richtext.Config{Blocks: []field.Block{cta}}),
+		richtext.Field("detail", richtext.Config{Blocks: []field.Block{action}}),
+		richtext.Field("aside", richtext.Config{Blocks: []field.Block{action}}),
 	}}
 
 	for i, collection := range config.Collections {
@@ -94,8 +96,8 @@ func configuration(t testing.TB, seen *observations) ridu.Config {
 		collection.VersionConfig.MaxPerDocument = 30
 		collection.Fields = field.Fields{
 			field.Text("title").Required(),
-			richtext.Field("body", richtext.Config{Blocks: []field.Block{callout, cta, content.Media}}),
-			richtext.Field("localizedBody", richtext.Config{Blocks: []field.Block{callout, cta}}).Localized(),
+			richtext.Field("body", richtext.Config{Blocks: []field.Block{callout, action, content.Media}}),
+			richtext.Field("localizedBody", richtext.Config{Blocks: []field.Block{callout, action}}).Localized(),
 		}
 		collection.Hooks.BeforeChange = append(collection.Hooks.BeforeChange, func(ctx ridu.HookContext) error {
 			if seen.rollback {

@@ -4,31 +4,42 @@ import (
 	"testing"
 
 	"github.com/riducms/ridu/internal/referenceindex"
+	"github.com/riducms/ridu/internal/schematest"
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
 
+func mustPath(raw string) query.Path {
+	path, err := query.ParsePath(raw)
+	if err != nil {
+		panic(err)
+	}
+	return path
+}
+
 func TestCollectAndNullifyTargetAcrossNestedLocalizedReferenceShapes(t *testing.T) {
-	collection := schema.Collection{ID: "posts", Fields: []schema.Field{
-		{
+	image := schema.BlockType{Slug: "image", TypeName: "Image", Fields: []schema.Field{{
+		ID: "block-image-asset", Name: "asset", Path: mustPath("asset"), Type: schema.FieldTypeUpload,
+		Upload: &schema.UploadField{CollectionID: "media", OnDelete: schema.ReferenceDeleteNullify},
+	}}}
+	collection := schema.Collection{ID: "posts", Fields: schematest.Bind(t, "posts", []schema.BlockType{image},
+		schema.Field{
 			ID: "posts-author", Name: "author", Type: schema.FieldTypeRelationship,
 			Relationship: &schema.RelationshipField{CollectionID: "users", OnDelete: schema.ReferenceDeleteNullify},
 		},
-		{
+		schema.Field{
 			ID: "posts-rows", Name: "rows", Type: schema.FieldTypeArray,
 			Nested: &schema.NestedField{Fields: []schema.Field{{
 				ID: "posts-rows-tags", Name: "tags", Type: schema.FieldTypeRelationship,
 				Relationship: &schema.RelationshipField{CollectionID: "tags", HasMany: true, OnDelete: schema.ReferenceDeleteNullify},
 			}}},
 		},
-		{
-			ID: "posts-gallery", Name: "gallery", Type: schema.FieldTypeBlocks, Localized: true,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "image", Fields: []schema.Field{{
-				ID: "posts-gallery-asset", Name: "asset", Type: schema.FieldTypeUpload,
-				Upload: &schema.UploadField{CollectionID: "media", OnDelete: schema.ReferenceDeleteNullify},
-			}}}}},
+		schema.Field{
+			ID: "posts-gallery", Name: "gallery", Path: mustPath("gallery"), Type: schema.FieldTypeBlocks, Localized: true,
+			Blocks: &schema.BlocksField{BlockReferences: []string{"image"}},
 		},
-	}}
+	)}
 	document := store.Document{ID: "post-1", Values: store.Values{
 		"author": store.String("user-1"),
 		"rows": store.List(store.Object(store.Values{
@@ -54,7 +65,7 @@ func TestCollectAndNullifyTargetAcrossNestedLocalizedReferenceShapes(t *testing.
 		if entry.FieldID == "posts-rows-tags" && entry.Target.DocumentID == "tag-1" {
 			duplicateOccurrences = append(duplicateOccurrences, entry.Occurrence)
 		}
-		if entry.FieldID == "posts-gallery-asset" {
+		if entry.FieldID == "posts-gallery-image-asset" {
 			mediaLocales = append(mediaLocales, entry.Locale)
 		}
 	}
@@ -164,12 +175,16 @@ func TestNullifyTargetRemovesOnlyMatchingPolymorphicMembers(t *testing.T) {
 }
 
 func TestRemoveResourceTargetsAcrossNestedLocalizedAndPolymorphicShapes(t *testing.T) {
-	collection := schema.Collection{ID: "posts", Fields: []schema.Field{
-		{
+	image := schema.BlockType{Slug: "image", TypeName: "Image", Fields: []schema.Field{{
+		ID: "block-image-assets", Name: "assets", Path: mustPath("assets"), Type: schema.FieldTypeUpload,
+		Upload: &schema.UploadField{CollectionID: "media", HasMany: true, OnDelete: schema.ReferenceDeleteRestrict},
+	}}}
+	collection := schema.Collection{ID: "posts", Fields: schematest.Bind(t, "posts", []schema.BlockType{image},
+		schema.Field{
 			ID: "posts-owner", Name: "owner", Type: schema.FieldTypeRelationship,
 			Relationship: &schema.RelationshipField{CollectionID: "users", OnDelete: schema.ReferenceDeleteRestrict},
 		},
-		{
+		schema.Field{
 			ID: "posts-sections", Name: "sections", Type: schema.FieldTypeArray,
 			Nested: &schema.NestedField{Fields: []schema.Field{{
 				ID: "posts-sections-subjects", Name: "subjects", Type: schema.FieldTypeRelationship,
@@ -182,14 +197,11 @@ func TestRemoveResourceTargetsAcrossNestedLocalizedAndPolymorphicShapes(t *testi
 				},
 			}}},
 		},
-		{
-			ID: "posts-gallery", Name: "gallery", Type: schema.FieldTypeBlocks, Localized: true,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "image", Fields: []schema.Field{{
-				ID: "posts-gallery-assets", Name: "assets", Type: schema.FieldTypeUpload,
-				Upload: &schema.UploadField{CollectionID: "media", HasMany: true, OnDelete: schema.ReferenceDeleteRestrict},
-			}}}}},
+		schema.Field{
+			ID: "posts-gallery", Name: "gallery", Path: mustPath("gallery"), Type: schema.FieldTypeBlocks, Localized: true,
+			Blocks: &schema.BlocksField{BlockReferences: []string{"image"}},
 		},
-	}}
+	)}
 	reference := func(collection, id string) store.Value {
 		return store.Object(store.Values{"relationTo": store.String(collection), "id": store.String(id)})
 	}

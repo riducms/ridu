@@ -106,7 +106,10 @@ const measurements = {
 // Bulk workflows move both editors behind lazy boundaries, reducing initial JS to 312,082 bytes.
 // The collection loading/error shell and changed shared CSS chunk boundaries measure 28,441
 // initial CSS bytes (+557). Allow 0.75 KiB; workspace/picker CSS remains lazy and JS caps stay fixed.
-const budgets = { initialJS: 322.25 * 1024, initialCSS: 28 * 1024, largestAsyncJS: 150 * 1024 };
+// The list filter's field trigger shows nested block trails (ancestors truncate before the field's
+// label), measuring 28,733 initial CSS bytes (+107). Allow 0.25 KiB; the picker's panel, search
+// and navigation styles load with the panel, and JS caps stay fixed.
+const budgets = { initialJS: 322.25 * 1024, initialCSS: 28.25 * 1024, largestAsyncJS: 150 * 1024 };
 const exceeded = Object.entries(budgets).filter(
 	([name, budget]) => measurements[name as keyof typeof measurements] > budget
 );

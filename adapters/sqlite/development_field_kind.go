@@ -137,7 +137,7 @@ func scanSQLiteFieldKinds(ctx context.Context, connection *sql.Conn, changes []f
 				for index := range localReports {
 					localReports[index].Documents, localReports[index].Snapshots = 0, 0
 				}
-				values, found, err := fieldchange.Process(changes, localReports, resource.ID, document.Values, head.snapshot, clear)
+				values, found, err := fieldchange.Process(changes, localReports, resource, document.Values, head.snapshot, clear)
 				if err != nil {
 					rows.Close()
 					return err

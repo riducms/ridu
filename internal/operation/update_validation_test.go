@@ -4,14 +4,15 @@ import (
 	"testing"
 
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
 
 func TestCompleteUpdatePreservesLocalizedNullEmptyAndInvalidInput(t *testing.T) {
-	fields := []schema.Field{{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{
+	fields := schematest.Bind(t, "pages", []schema.BlockType{{Slug: "hero", TypeName: "Hero", Fields: []schema.Field{
 		{Name: "secret", Type: schema.FieldTypeText, Localized: true},
-	}}}}}}
+	}}}, schema.Field{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"hero"}}})
 	selection := localization.Selection{Locale: "fr", Chain: []schema.LocaleCode{"fr", "en"}, Configured: []schema.LocaleCode{"en", "fr"}}
 	for _, value := range []store.Value{store.Null(), store.String("")} {
 		for _, supplied := range []bool{false, true} {

@@ -26,14 +26,22 @@ export interface ScalarWhere<Value> {
 
 export type TimestampWhere = Omit<ScalarWhere<string>, "contains" | "like">;
 
-export interface MultiSelectWhere<Value extends string> {
-	contains?: Value;
+/** Item membership for lists, multi-selects, reference lists and polymorphic relationships; wrap `in` in `not` to exclude. */
+export interface MembershipWhere<Value> {
+	in?: readonly Value[];
+	equals?: null;
+	notEquals?: null;
 	exists?: boolean;
 }
 
 export interface ExistsWhere {
 	exists?: boolean;
 }
+
+/** Places a nested definition's relative dotted paths under the path prefix of one placement. */
+export type RiduPrefixedPaths<Prefix extends string, Paths> = {
+	[Path in keyof Paths as `${Prefix}${Path & string}`]: Paths[Path];
+};
 
 export type CTAInput = {
 	"blockName"?: string | null;
@@ -468,6 +476,60 @@ export type PagesLayoutAllLocales = Array<PagesLayoutBlockAllLocales>;
 export type PagesLayoutBlockAllLocalesValue = HeroAllLocalesValue | ContentAllLocalesValue | MediaAllLocalesValue | CTAAllLocalesValue;
 export type PagesLayoutAllLocalesValue = Array<PagesLayoutBlockAllLocalesValue>;
 
+/** Filters relative to one CTA block row; a resource filter prefixes them with the row's path. */
+export interface CTAWhere {
+	"blockName"?: ScalarWhere<string>;
+	"label"?: ScalarWhere<string>;
+	"destination"?: ScalarWhere<ID>;
+}
+
+/** Filters relative to one Content block row; a resource filter prefixes them with the row's path. */
+export interface ContentWhere {
+	"title"?: ScalarWhere<string>;
+	"body"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<never[][number]>>;
+	"links"?: ExistsWhere;
+	"links.label"?: ScalarWhere<string>;
+	"links.href"?: ScalarWhere<string>;
+	"blockName"?: ScalarWhere<string>;
+}
+
+/** Filters relative to one Hero block row; a resource filter prefixes them with the row's path. */
+export interface HeroWhere {
+	"heading"?: ScalarWhere<string>;
+	"appearance"?: ExistsWhere;
+	"appearance.tone"?: ScalarWhere<"light" | "dark">;
+	"blockName"?: ScalarWhere<string>;
+}
+
+/** Filters relative to one Media block row; a resource filter prefixes them with the row's path. */
+export interface MediaWhere {
+	"asset"?: ScalarWhere<ID>;
+	"caption"?: ScalarWhere<string>;
+	"blockName"?: ScalarWhere<string>;
+}
+
+/** Population paths relative to one CTA block row. */
+export interface CTAPopulate {
+	"destination"?: boolean | PagesPopulationSelect | { depth?: number; select?: PagesPopulationSelect };
+}
+
+/** Population paths relative to one Callout block row. */
+export interface CalloutPopulate extends
+	RiduPrefixedPaths<"detail.blocks.block.cta.", CTAPopulate> {}
+
+/** Population paths relative to one Media block row. */
+export interface MediaPopulate {
+	"asset"?: boolean | AssetsPopulationSelect | { depth?: number; select?: AssetsPopulationSelect };
+}
+
+export type CTAValidationPath = "blockName" | "label" | `label.${Locale}` | "destination";
+
+export type ContentValidationPath = "title" | `title.${Locale}` | "body" | `body.${string}` | "links" | `links.${number}` | `links.${number}._key` | `links.${number}.label` | `links.${number}.href` | "blockName";
+
+export type HeroValidationPath = "heading" | `heading.${Locale}` | "appearance" | "appearance.tone" | "blockName";
+
+export type MediaValidationPath = "asset" | "caption" | `caption.${Locale}` | "blockName";
+
 export interface Assets {
 	id: ID;
 	createdAt: string;
@@ -524,10 +586,6 @@ export interface AssetsPopulationSelect {
 
 export type AssetsPopulate = Record<string, never>;
 
-export type AssetsPopulateOutput = Record<string, never>;
-
-export type AssetsAllLocalesPopulateOutput = Record<string, never>;
-
 export type AssetsValidationPath = "title" | "url";
 
 export interface Pages {
@@ -575,7 +633,11 @@ export interface PagesDraftUpdate {
 	"layout"?: PagesLayoutDraftUpdate | null;
 }
 
-export interface PagesWhere {
+export interface PagesWhere extends
+	RiduPrefixedPaths<"layout.hero.", HeroWhere>,
+	RiduPrefixedPaths<"layout.content.", ContentWhere>,
+	RiduPrefixedPaths<"layout.media.", MediaWhere>,
+	RiduPrefixedPaths<"layout.cta.", CTAWhere> {
 	and?: readonly PagesWhere[];
 	or?: readonly PagesWhere[];
 	not?: PagesWhere;
@@ -585,22 +647,6 @@ export interface PagesWhere {
 	_status?: ScalarWhere<"draft" | "published">;
 	"title"?: ScalarWhere<string>;
 	"layout"?: ExistsWhere;
-	"layout.hero.heading"?: ScalarWhere<string>;
-	"layout.hero.appearance"?: ExistsWhere;
-	"layout.hero.appearance.tone"?: ScalarWhere<"light" | "dark">;
-	"layout.hero.blockName"?: ScalarWhere<string>;
-	"layout.content.title"?: ScalarWhere<string>;
-	"layout.content.body"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<never[][number]>>;
-	"layout.content.links"?: ExistsWhere;
-	"layout.content.links.label"?: ScalarWhere<string>;
-	"layout.content.links.href"?: ScalarWhere<string>;
-	"layout.content.blockName"?: ScalarWhere<string>;
-	"layout.media.asset"?: ScalarWhere<ID>;
-	"layout.media.caption"?: ScalarWhere<string>;
-	"layout.media.blockName"?: ScalarWhere<string>;
-	"layout.cta.blockName"?: ScalarWhere<string>;
-	"layout.cta.label"?: ScalarWhere<string>;
-	"layout.cta.destination"?: ScalarWhere<ID>;
 }
 
 export interface PagesSelect {
@@ -623,22 +669,11 @@ export interface PagesPopulationSelect {
 	"layout"?: boolean;
 }
 
-export interface PagesPopulate {
-	"layout.media.asset"?: boolean | AssetsPopulationSelect | { depth?: number; select?: AssetsPopulationSelect };
-	"layout.cta.destination"?: boolean | PagesPopulationSelect | { depth?: number; select?: PagesPopulationSelect };
-}
+export interface PagesPopulate extends
+	RiduPrefixedPaths<"layout.media.", MediaPopulate>,
+	RiduPrefixedPaths<"layout.cta.", CTAPopulate> {}
 
-export interface PagesPopulateOutput {
-	"layout.media.asset": ID | Assets | null;
-	"layout.cta.destination": ID | Pages | null;
-}
-
-export interface PagesAllLocalesPopulateOutput {
-	"layout.media.asset": ID | AssetsAllLocales | null;
-	"layout.cta.destination": ID | PagesAllLocales | null;
-}
-
-export type PagesValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.heading` | `layout.${number}.heading.${Locale}` | `layout.${number}.appearance` | `layout.${number}.appearance.tone` | `layout.${number}.blockName` | `layout.${number}.title` | `layout.${number}.title.${Locale}` | `layout.${number}.body` | `layout.${number}.body.${string}` | `layout.${number}.links` | `layout.${number}.links.${number}` | `layout.${number}.links.${number}._key` | `layout.${number}.links.${number}.label` | `layout.${number}.links.${number}.href` | `layout.${number}.asset` | `layout.${number}.caption` | `layout.${number}.caption.${Locale}` | `layout.${number}.label` | `layout.${number}.label.${Locale}` | `layout.${number}.destination`;
+export type PagesValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.${HeroValidationPath}` | `layout.${number}.${ContentValidationPath}` | `layout.${number}.${MediaValidationPath}` | `layout.${number}.${CTAValidationPath}`;
 
 export interface Campaigns {
 	id: ID;
@@ -667,7 +702,9 @@ export interface CampaignsUpdate {
 	"layout"?: CampaignsLayoutUpdate | null;
 }
 
-export interface CampaignsWhere {
+export interface CampaignsWhere extends
+	RiduPrefixedPaths<"layout.hero.", HeroWhere>,
+	RiduPrefixedPaths<"layout.cta.", CTAWhere> {
 	and?: readonly CampaignsWhere[];
 	or?: readonly CampaignsWhere[];
 	not?: CampaignsWhere;
@@ -676,13 +713,6 @@ export interface CampaignsWhere {
 	updatedAt?: TimestampWhere;
 	"title"?: ScalarWhere<string>;
 	"layout"?: ExistsWhere;
-	"layout.hero.heading"?: ScalarWhere<string>;
-	"layout.hero.appearance"?: ExistsWhere;
-	"layout.hero.appearance.tone"?: ScalarWhere<"light" | "dark">;
-	"layout.hero.blockName"?: ScalarWhere<string>;
-	"layout.cta.blockName"?: ScalarWhere<string>;
-	"layout.cta.label"?: ScalarWhere<string>;
-	"layout.cta.destination"?: ScalarWhere<ID>;
 }
 
 export interface CampaignsSelect {
@@ -701,19 +731,10 @@ export interface CampaignsPopulationSelect {
 	"layout"?: boolean;
 }
 
-export interface CampaignsPopulate {
-	"layout.cta.destination"?: boolean | PagesPopulationSelect | { depth?: number; select?: PagesPopulationSelect };
-}
+export interface CampaignsPopulate extends
+	RiduPrefixedPaths<"layout.cta.", CTAPopulate> {}
 
-export interface CampaignsPopulateOutput {
-	"layout.cta.destination": ID | Pages | null;
-}
-
-export interface CampaignsAllLocalesPopulateOutput {
-	"layout.cta.destination": ID | PagesAllLocales | null;
-}
-
-export type CampaignsValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.heading` | `layout.${number}.heading.${Locale}` | `layout.${number}.appearance` | `layout.${number}.appearance.tone` | `layout.${number}.blockName` | `layout.${number}.label` | `layout.${number}.label.${Locale}` | `layout.${number}.destination`;
+export type CampaignsValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.${HeroValidationPath}` | `layout.${number}.${CTAValidationPath}`;
 
 export interface Articles {
 	id: ID;
@@ -801,32 +822,13 @@ export interface ArticlesPopulationSelect {
 	"localizedBody"?: boolean;
 }
 
-export interface ArticlesPopulate {
-	"body.blocks.block.callout.detail.blocks.block.cta.destination"?: boolean | PagesPopulationSelect | { depth?: number; select?: PagesPopulationSelect };
-	"body.blocks.block.media.asset"?: boolean | AssetsPopulationSelect | { depth?: number; select?: AssetsPopulationSelect };
-	"body.blocks.block.cta.destination"?: boolean | PagesPopulationSelect | { depth?: number; select?: PagesPopulationSelect };
-	"localizedBody.blocks.block.callout.detail.blocks.block.cta.destination"?: boolean | PagesPopulationSelect | { depth?: number; select?: PagesPopulationSelect };
-	"localizedBody.blocks.block.media.asset"?: boolean | AssetsPopulationSelect | { depth?: number; select?: AssetsPopulationSelect };
-	"localizedBody.blocks.block.cta.destination"?: boolean | PagesPopulationSelect | { depth?: number; select?: PagesPopulationSelect };
-}
-
-export interface ArticlesPopulateOutput {
-	"body.blocks.block.callout.detail.blocks.block.cta.destination": ID | Pages | null;
-	"body.blocks.block.media.asset": ID | Assets | null;
-	"body.blocks.block.cta.destination": ID | Pages | null;
-	"localizedBody.blocks.block.callout.detail.blocks.block.cta.destination": ID | Pages | null;
-	"localizedBody.blocks.block.media.asset": ID | Assets | null;
-	"localizedBody.blocks.block.cta.destination": ID | Pages | null;
-}
-
-export interface ArticlesAllLocalesPopulateOutput {
-	"body.blocks.block.callout.detail.blocks.block.cta.destination": ID | PagesAllLocales | null;
-	"body.blocks.block.media.asset": ID | AssetsAllLocales | null;
-	"body.blocks.block.cta.destination": ID | PagesAllLocales | null;
-	"localizedBody.blocks.block.callout.detail.blocks.block.cta.destination": ID | PagesAllLocales | null;
-	"localizedBody.blocks.block.media.asset": ID | AssetsAllLocales | null;
-	"localizedBody.blocks.block.cta.destination": ID | PagesAllLocales | null;
-}
+export interface ArticlesPopulate extends
+	RiduPrefixedPaths<"body.blocks.block.callout.", CalloutPopulate>,
+	RiduPrefixedPaths<"body.blocks.block.media.", MediaPopulate>,
+	RiduPrefixedPaths<"body.blocks.block.cta.", CTAPopulate>,
+	RiduPrefixedPaths<"localizedBody.blocks.block.callout.", CalloutPopulate>,
+	RiduPrefixedPaths<"localizedBody.blocks.block.media.", MediaPopulate>,
+	RiduPrefixedPaths<"localizedBody.blocks.block.cta.", CTAPopulate> {}
 
 export type ArticlesValidationPath = "title" | "body" | `body.${string}` | "localizedBody" | `localizedBody.${Locale}` | `localizedBody.${string}` | `localizedBody.${Locale}.${string}`;
 
@@ -847,8 +849,6 @@ export interface RiduConfig {
 			where: AssetsWhere;
 			select: AssetsSelect;
 			populate: AssetsPopulate;
-			populateOutput: AssetsPopulateOutput;
-			allPopulateOutput: AssetsAllLocalesPopulateOutput;
 			validationPath: AssetsValidationPath;
 		};
 		"pages": {
@@ -867,8 +867,6 @@ export interface RiduConfig {
 			where: PagesWhere;
 			select: PagesSelect;
 			populate: PagesPopulate;
-			populateOutput: PagesPopulateOutput;
-			allPopulateOutput: PagesAllLocalesPopulateOutput;
 			validationPath: PagesValidationPath;
 		};
 		"campaigns": {
@@ -885,8 +883,6 @@ export interface RiduConfig {
 			where: CampaignsWhere;
 			select: CampaignsSelect;
 			populate: CampaignsPopulate;
-			populateOutput: CampaignsPopulateOutput;
-			allPopulateOutput: CampaignsAllLocalesPopulateOutput;
 			validationPath: CampaignsValidationPath;
 		};
 		"articles": {
@@ -905,8 +901,6 @@ export interface RiduConfig {
 			where: ArticlesWhere;
 			select: ArticlesSelect;
 			populate: ArticlesPopulate;
-			populateOutput: ArticlesPopulateOutput;
-			allPopulateOutput: ArticlesAllLocalesPopulateOutput;
 			validationPath: ArticlesValidationPath;
 		};
 	};

@@ -100,8 +100,8 @@ func runPrimitiveLists(t *testing.T, factory Factory) {
 				t.Fatal(err)
 			}
 			assertDocumentIDs(t, page.Documents, test.ids...)
-			if page.Total != len(test.ids) {
-				t.Fatalf("total %d, want %d", page.Total, len(test.ids))
+			if *page.Total != len(test.ids) {
+				t.Fatalf("total %d, want %d", *page.Total, len(test.ids))
 			}
 			request.Filter = nil
 			request.Access = &node
@@ -119,7 +119,7 @@ func runPrimitiveLists(t *testing.T, factory Factory) {
 		read := begin(t, fixture.backend)
 		_, err := read.List(t.Context(), fixture.request(store.Request{Collection: fixture.records, Filter: &node}))
 		rollback(t, read)
-		if err == nil || !strings.Contains(err.Error(), "primitive list") {
+		if err == nil || !strings.Contains(err.Error(), ` list "`) {
 			t.Fatalf("unsupported list query error = %v", err)
 		}
 	}
@@ -131,7 +131,7 @@ func runPrimitiveLists(t *testing.T, factory Factory) {
 		t.Fatal("list sort accepted")
 	}
 	transaction = begin(t, fixture.backend)
-	updated, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{Request: store.Request{Collection: fixture.records, ID: id(1)}, Values: store.Values{"texts": store.List(store.String("replacement")), "numbers": store.List()}, Intent: store.WriteIntentPublish}))
+	updated, err := LockedUpdate(t.Context(), transaction, fixture.updateRequest(store.UpdateRequest{Request: store.Request{Collection: fixture.records, ID: id(1)}, Values: store.Values{"texts": store.List(store.String("replacement")), "numbers": store.List()}, Intent: store.WriteIntentPublish}))
 	if err != nil {
 		rollback(t, transaction)
 		t.Fatal(err)

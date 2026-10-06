@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -11,7 +12,7 @@ import (
 func TestBlocksBoundsPresenceSemantics(t *testing.T) {
 	row := store.Object(store.Values{"blockType": store.String("hero")})
 	for _, required := range []bool{false, true} {
-		fields := []schema.Field{{Name: "layout", Type: schema.FieldTypeBlocks, Required: required, Blocks: &schema.BlocksField{MinRows: 2, MaxRows: 3, Types: []schema.BlockType{{Slug: "hero"}}}}}
+		fields := schematest.Bind(t, "pages", []schema.BlockType{{Slug: "hero", TypeName: "Hero"}}, schema.Field{Name: "layout", Type: schema.FieldTypeBlocks, Required: required, Blocks: &schema.BlocksField{MinRows: 2, MaxRows: 3, BlockReferences: []string{"hero"}}})
 		for _, test := range []struct {
 			name   string
 			values store.Values
@@ -38,7 +39,8 @@ func TestBlocksBoundsPresenceSemantics(t *testing.T) {
 }
 
 func BenchmarkPrepareRowIdentities(b *testing.B) {
-	fields := []schema.Field{{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{{Name: "content", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "heading", Type: schema.FieldTypeText}}}}}}}}}}
+	hero := schema.BlockType{Slug: "hero", TypeName: "Hero", Fields: []schema.Field{{Name: "content", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "heading", Type: schema.FieldTypeText}}}}}}
+	fields := schematest.Bind(b, "pages", []schema.BlockType{hero}, schema.Field{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"hero"}}})
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			rows := make([]store.Value, count)
@@ -49,7 +51,7 @@ func BenchmarkPrepareRowIdentities(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				if err := prepareRowIdentities(fields, values, true, false); err != nil {
+				if _, err := prepareRowIdentities(fields, values, true, false); err != nil {
 					b.Fatal(err)
 				}
 			}
@@ -58,12 +60,12 @@ func BenchmarkPrepareRowIdentities(b *testing.B) {
 }
 
 func TestBlockIdentityIssuesUseValidationEnvelopeLimit(t *testing.T) {
-	fields := []schema.Field{{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero"}}}}}
+	fields := schematest.Bind(t, "pages", []schema.BlockType{{Slug: "hero", TypeName: "Hero"}}, schema.Field{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"hero"}}})
 	rows := make([]store.Value, MaxValidationIssues*2)
 	for i := range rows {
 		rows[i] = store.Object(store.Values{"_key": store.String(""), "blockType": store.String("hero")})
 	}
-	err := prepareRowIdentities(fields, store.Values{"layout": store.List(rows...)}, false, false)
+	_, err := prepareRowIdentities(fields, store.Values{"layout": store.List(rows...)}, false, false)
 	failure, ok := err.(*Error)
 	if !ok || len(failure.Issues) != MaxValidationIssues {
 		t.Fatalf("identity failure = %#v", err)

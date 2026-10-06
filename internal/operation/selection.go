@@ -67,7 +67,7 @@ func (engine *Engine) ResolveFilteredSelection(ctx context.Context, request Filt
 	}
 	readDecision, accessError := authorize(collection, operationContext)
 	if accessError != nil {
-		return FilteredSelectionResult{}, capabilityAccessError("read access rule failed", accessError)
+		return FilteredSelectionResult{}, accessRuleError("read access rule failed", accessError)
 	}
 	if readDecision.Kind == Deny {
 		return FilteredSelectionResult{Items: []FilteredSelectionItem{}}, nil

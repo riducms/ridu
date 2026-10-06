@@ -20,6 +20,209 @@
       "fallback": true
     }
   },
+  "blocks": [
+    {
+      "typeName": "UnifiedCard",
+      "slug": "unified-card",
+      "labels": {
+        "singular": "Card",
+        "plural": "Cards"
+      },
+      "fields": [
+        {
+          "id": "block-unified-card-label",
+          "name": "label",
+          "path": "label",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "editor": {
+              "reference": "app:text"
+            },
+            "label": "Label"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-card-sku",
+          "name": "sku",
+          "path": "sku",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "SKU"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-card-accent",
+          "name": "accent",
+          "path": "accent",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "editor": {
+              "reference": "app:capturedText",
+              "config": {
+                "capture": true
+              }
+            },
+            "label": "Accent"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-card-products",
+          "name": "products",
+          "path": "products",
+          "type": "array",
+          "category": "nested",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Products"
+          },
+          "nested": {
+            "fields": [
+              {
+                "id": "block-unified-card-products-label",
+                "name": "label",
+                "path": "products.label",
+                "type": "text",
+                "category": "scalar",
+                "required": false,
+                "unique": false,
+                "admin": {
+                  "editor": {
+                    "reference": "app:text"
+                  },
+                  "label": "Label"
+                },
+                "text": {}
+              },
+              {
+                "id": "block-unified-card-products-sku",
+                "name": "sku",
+                "path": "products.sku",
+                "type": "text",
+                "category": "scalar",
+                "required": false,
+                "unique": false,
+                "admin": {
+                  "label": "SKU"
+                },
+                "text": {}
+              },
+              {
+                "id": "block-unified-card-products-accent",
+                "name": "accent",
+                "path": "products.accent",
+                "type": "text",
+                "category": "scalar",
+                "required": false,
+                "unique": false,
+                "admin": {
+                  "editor": {
+                    "reference": "app:capturedText",
+                    "config": {
+                      "capture": true
+                    }
+                  },
+                  "label": "Accent"
+                },
+                "text": {}
+              }
+            ],
+            "rowLabelComponent": {
+              "reference": "app:unifiedRowLabel",
+              "config": {
+                "prefix": "Row"
+              }
+            }
+          }
+        },
+        {
+          "id": "block-unified-card-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "",
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        }
+      ]
+    },
+    {
+      "typeName": "UnifiedNote",
+      "slug": "unified-note",
+      "labels": {
+        "singular": "Note",
+        "plural": "Notes"
+      },
+      "fields": [
+        {
+          "id": "block-unified-note-label",
+          "name": "label",
+          "path": "label",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "editor": {
+              "reference": "app:text"
+            },
+            "label": "Label"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-note-accent",
+          "name": "accent",
+          "path": "accent",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "editor": {
+              "reference": "app:capturedText",
+              "config": {
+                "capture": true
+              }
+            },
+            "label": "Accent"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-unified-note-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "",
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        }
+      ]
+    }
+  ],
   "collections": [
     {
       "id": "users",
@@ -317,206 +520,9 @@
             }
           },
           "blocks": {
-            "types": [
-              {
-                "slug": "card",
-                "labels": {
-                  "singular": "Card",
-                  "plural": "Cards"
-                },
-                "fields": [
-                  {
-                    "id": "unified-articles-content-card-label",
-                    "name": "label",
-                    "path": "content.card.label",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "editor": {
-                        "reference": "app:text"
-                      },
-                      "label": "Label"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "unified-articles-content-card-sku",
-                    "name": "sku",
-                    "path": "content.card.sku",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "SKU"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "unified-articles-content-card-accent",
-                    "name": "accent",
-                    "path": "content.card.accent",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "editor": {
-                        "reference": "app:capturedText",
-                        "config": {
-                          "capture": true
-                        }
-                      },
-                      "label": "Accent"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "unified-articles-content-card-products",
-                    "name": "products",
-                    "path": "content.card.products",
-                    "type": "array",
-                    "category": "nested",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "Products"
-                    },
-                    "nested": {
-                      "fields": [
-                        {
-                          "id": "unified-articles-content-card-products-label",
-                          "name": "label",
-                          "path": "content.card.products.label",
-                          "type": "text",
-                          "category": "scalar",
-                          "required": false,
-                          "unique": false,
-                          "admin": {
-                            "editor": {
-                              "reference": "app:text"
-                            },
-                            "label": "Label"
-                          },
-                          "text": {}
-                        },
-                        {
-                          "id": "unified-articles-content-card-products-sku",
-                          "name": "sku",
-                          "path": "content.card.products.sku",
-                          "type": "text",
-                          "category": "scalar",
-                          "required": false,
-                          "unique": false,
-                          "admin": {
-                            "label": "SKU"
-                          },
-                          "text": {}
-                        },
-                        {
-                          "id": "unified-articles-content-card-products-accent",
-                          "name": "accent",
-                          "path": "content.card.products.accent",
-                          "type": "text",
-                          "category": "scalar",
-                          "required": false,
-                          "unique": false,
-                          "admin": {
-                            "editor": {
-                              "reference": "app:capturedText",
-                              "config": {
-                                "capture": true
-                              }
-                            },
-                            "label": "Accent"
-                          },
-                          "text": {}
-                        }
-                      ],
-                      "rowLabelComponent": {
-                        "reference": "app:unifiedRowLabel",
-                        "config": {
-                          "prefix": "Row"
-                        }
-                      }
-                    }
-                  },
-                  {
-                    "id": "unified-articles-content-card-block-name",
-                    "name": "blockName",
-                    "path": "content.card.blockName",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "default": "",
-                    "admin": {
-                      "label": "Block name"
-                    },
-                    "text": {}
-                  }
-                ]
-              },
-              {
-                "slug": "note",
-                "labels": {
-                  "singular": "Note",
-                  "plural": "Notes"
-                },
-                "fields": [
-                  {
-                    "id": "unified-articles-content-note-label",
-                    "name": "label",
-                    "path": "content.note.label",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "editor": {
-                        "reference": "app:text"
-                      },
-                      "label": "Label"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "unified-articles-content-note-accent",
-                    "name": "accent",
-                    "path": "content.note.accent",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "editor": {
-                        "reference": "app:capturedText",
-                        "config": {
-                          "capture": true
-                        }
-                      },
-                      "label": "Accent"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "unified-articles-content-note-block-name",
-                    "name": "blockName",
-                    "path": "content.note.blockName",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "default": "",
-                    "admin": {
-                      "label": "Block name"
-                    },
-                    "text": {}
-                  }
-                ]
-              }
+            "blockReferences": [
+              "unified-card",
+              "unified-note"
             ]
           }
         },
@@ -671,153 +677,13 @@
                 "tag": "type",
                 "cases": [
                   {
+                    "blockReferences": [
+                      "unified-card"
+                    ],
                     "tagValue": "block",
                     "payload": "fields",
                     "discriminator": "blockType",
-                    "identity": "_key",
-                    "types": [
-                      {
-                        "slug": "card",
-                        "labels": {
-                          "singular": "Card",
-                          "plural": "Cards"
-                        },
-                        "fields": [
-                          {
-                            "id": "unified-articles-body-blocks-block-card-label",
-                            "name": "label",
-                            "path": "body.blocks.block.card.label",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "editor": {
-                                "reference": "app:text"
-                              },
-                              "label": "Label"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "unified-articles-body-blocks-block-card-sku",
-                            "name": "sku",
-                            "path": "body.blocks.block.card.sku",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "SKU"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "unified-articles-body-blocks-block-card-accent",
-                            "name": "accent",
-                            "path": "body.blocks.block.card.accent",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "editor": {
-                                "reference": "app:capturedText",
-                                "config": {
-                                  "capture": true
-                                }
-                              },
-                              "label": "Accent"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "unified-articles-body-blocks-block-card-products",
-                            "name": "products",
-                            "path": "body.blocks.block.card.products",
-                            "type": "array",
-                            "category": "nested",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Products"
-                            },
-                            "nested": {
-                              "fields": [
-                                {
-                                  "id": "unified-articles-body-blocks-block-card-products-label",
-                                  "name": "label",
-                                  "path": "body.blocks.block.card.products.label",
-                                  "type": "text",
-                                  "category": "scalar",
-                                  "required": false,
-                                  "unique": false,
-                                  "admin": {
-                                    "editor": {
-                                      "reference": "app:text"
-                                    },
-                                    "label": "Label"
-                                  },
-                                  "text": {}
-                                },
-                                {
-                                  "id": "unified-articles-body-blocks-block-card-products-sku",
-                                  "name": "sku",
-                                  "path": "body.blocks.block.card.products.sku",
-                                  "type": "text",
-                                  "category": "scalar",
-                                  "required": false,
-                                  "unique": false,
-                                  "admin": {
-                                    "label": "SKU"
-                                  },
-                                  "text": {}
-                                },
-                                {
-                                  "id": "unified-articles-body-blocks-block-card-products-accent",
-                                  "name": "accent",
-                                  "path": "body.blocks.block.card.products.accent",
-                                  "type": "text",
-                                  "category": "scalar",
-                                  "required": false,
-                                  "unique": false,
-                                  "admin": {
-                                    "editor": {
-                                      "reference": "app:capturedText",
-                                      "config": {
-                                        "capture": true
-                                      }
-                                    },
-                                    "label": "Accent"
-                                  },
-                                  "text": {}
-                                }
-                              ],
-                              "rowLabelComponent": {
-                                "reference": "app:unifiedRowLabel",
-                                "config": {
-                                  "prefix": "Row"
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "id": "unified-articles-body-blocks-block-card-block-name",
-                            "name": "blockName",
-                            "path": "body.blocks.block.card.blockName",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "default": "",
-                            "admin": {
-                              "label": "Block name"
-                            },
-                            "text": {}
-                          }
-                        ]
-                      }
-                    ]
+                    "identity": "_key"
                   }
                 ]
               }

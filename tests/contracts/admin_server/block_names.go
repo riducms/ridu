@@ -26,9 +26,11 @@ func blockNamesCollection() ridu.Collection {
 			return nil, nil
 		})
 
+	// The rich-text fixture owns "cta" and "callout"; these blocks keep their
+	// editor labels under their own slugs.
 	cta := field.Block{
-		Slug:   "cta",
-		Labels: field.BlockLabels{Singular: "CTA"},
+		Slug:   "named-cta",
+		Labels: field.BlockLabels{Singular: "CTA", Plural: "Ctas"},
 		Admin:  field.BlockAdmin{RowLabelPath: "heading"},
 		Fields: field.Fields{
 			name,
@@ -38,8 +40,9 @@ func blockNamesCollection() ridu.Collection {
 	}
 
 	callout := field.Block{
-		Slug:  "callout",
-		Admin: field.BlockAdmin{RowLabelPath: "heading"},
+		Slug:   "named-callout",
+		Labels: field.BlockLabels{Singular: "Callout", Plural: "Callouts"},
+		Admin:  field.BlockAdmin{RowLabelPath: "heading"},
 		Fields: field.Fields{
 			name,
 			field.Text("heading").Required(),

@@ -157,3 +157,27 @@ func TestValueStaysCompact(t *testing.T) {
 		t.Fatalf("store.Value is %d bytes, want at most 56", size)
 	}
 }
+
+func TestWithMembersAddsAndReplacesWithoutChangingTheOriginal(t *testing.T) {
+	shared := store.Object(store.Values{"title": store.String("kept")})
+	original := store.Object(store.Values{"seo": shared, "status": store.String("draft")})
+	members := store.Values{"status": store.String("published"), "summary": store.Null()}
+	updated, isObject := original.WithMembers(members)
+	if !isObject {
+		t.Fatal("object rejected its members")
+	}
+	members["status"] = store.String("caller mutation")
+	if encodedValue(t, original) != `{"seo":{"title":"kept"},"status":"draft"}` {
+		t.Fatalf("original changed: %s", encodedValue(t, original))
+	}
+	if encodedValue(t, updated) != `{"seo":{"title":"kept"},"status":"published","summary":null}` {
+		t.Fatalf("updated=%s", encodedValue(t, updated))
+	}
+	if !updated.Get("seo").SameBacking(shared) || updated.SameBacking(original) {
+		t.Fatal("unchanged members were copied or the edited object shares the original map")
+	}
+	list := store.List(store.String("item"))
+	if unchanged, isObject := list.WithMembers(members); isObject || !unchanged.SameBacking(list) {
+		t.Fatal("non-object accepted members")
+	}
+}

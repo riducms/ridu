@@ -137,10 +137,36 @@ Literal `includeAccess: true` returns `CollectionPageEnvelope<Document>`. Omissi
 response contains one capability entry for every returned document. These capabilities inform the
 interface; the server still re-authorizes each mutation.
 
+A list that only needs to know whether another page exists can skip the total count:
+
+```ts title="load-more.ts"
+const page = await ridu.list('posts', {
+	page: 3,
+	limit: 24,
+	pagination: false
+});
+
+if (page.pagination.hasNextPage) {
+	// Show "Load more".
+}
+```
+
+Literal `pagination: false` returns `PageEnvelope<Document, UncountedPagination>`, whose metadata
+has `page`, `limit`, `hasNextPage`, and `hasPrevPage` but no `totalDocs` or `totalPages`. The SDK
+rejects a response whose metadata does not match the requested mode. Omission or `true` keeps the
+counted `Pagination`. A runtime boolean types it as `Pagination | UncountedPagination`, so check
+`pagination.totalDocs !== undefined` before showing a total. The option combines with
+`includeAccess`. See [Paginate and count](./querying.md#pagination) for the server behavior.
+
 A group, array, or blocks container supports an `exists` filter. Nested group, array-row, and block
 filters use canonical dotted keys such as `"seo.description"`, `"sections.reviewer"`, and
 `"layout.quote.source"`. Generated where contracts do not model these paths as nested objects
 because the REST API decodes the same dotted path vocabulary used by the operation engine.
+
+Each block definition generates its filter, populate, and validation-path types once, relative to
+its row: for example, a `Quote` block's `QuoteWhere` contains `"source"`, and `PostsWhere`
+inherits it as `"layout.quote.source"`. A block reused throughout a layout graph therefore adds one
+set of types to the generated client, however many paths reach it.
 
 Use either `depth` for uniform relationship expansion or `populate` for explicit paths, never both
 in one request. Locale-aware reads accept `locale`, including `"all"`, and

@@ -25,6 +25,7 @@ const (
 	mongoHeadUniqueReservationIndexName    = "z_unique_heads"
 	mongoReferenceOwnerIndexName           = "z_reference_owner"
 	mongoReferenceTargetIndexName          = "z_reference_target"
+	mongoReferenceFenceTargetIndexName     = "z_reference_fence_target"
 	mongoVersionOwnerIndexName             = "z_version_owner_revision"
 	mongoPreferenceOwnerIndexName          = "z_preference_owner_key"
 	mongoDocumentLockTargetIndexName       = "z_document_lock_target"
@@ -91,6 +92,7 @@ const (
 	mongoSystemAuthRateLimitIndexes
 	mongoSystemAuthBootstrapIndexes
 	mongoSystemUploadLockIndexes
+	mongoSystemReferenceFenceIndexes
 )
 
 type mongoSystemIndexPlan struct {
@@ -101,20 +103,13 @@ type mongoSystemIndexPlan struct {
 	definitions  []mongoIndexDefinition
 }
 
-// SyncIndexes is the explicit development/bootstrap entry point for the
-// bounded MongoDB index slice. It creates missing declared indexes, never
-// drops or rewrites an existing index, and does not install migration state.
-// MongoDB index builds are not transactional, so the operation is deliberately
-// resumable and verifies the complete physical shape before authorizing writes.
-func (backend *Store) SyncIndexes(ctx context.Context, manifest schema.Manifest) error {
-	if backend != nil {
-		backend.indexLifecycleMu.Lock()
-		defer backend.indexLifecycleMu.Unlock()
-	}
-	return backend.syncMongoIndexes(ctx, manifest)
-}
-
-// syncMongoIndexes requires the caller to own the index lifecycle lock.
+// syncMongoIndexes builds the bounded MongoDB index slice for
+// SyncDevelopmentSchema, which audits stored content and records the schema
+// around it. It creates missing declared indexes, never drops or rewrites an
+// existing index, and does not install migration state. MongoDB index builds
+// are not transactional, so the operation is deliberately resumable and
+// verifies the complete physical shape before authorizing writes. The caller
+// must own the index lifecycle lock.
 func (backend *Store) syncMongoIndexes(ctx context.Context, manifest schema.Manifest) error {
 	planSet, err := mongoPhysicalIndexPlans(manifest)
 	if err != nil {
@@ -291,6 +286,10 @@ func (backend *Store) verifyIndexPlansWithAuthorization(ctx context.Context, pla
 			verifiedAuthBootstrap = true
 		case mongoSystemUploadLockIndexes:
 			verifiedUploadLocks = true
+		case mongoSystemReferenceFenceIndexes:
+			// Locks need no admission: the index only bounds the deletion of
+			// shared fences, and migration data transactions lock before it is
+			// verified.
 		default:
 			return fmt.Errorf("unknown MongoDB system index plan")
 		}
@@ -452,7 +451,7 @@ func (backend *Store) requireVerifiedIndexesForLocales(collection schema.Collect
 		return err
 	}
 	if !mongoLocaleListsEqual(locales, verified.locales) {
-		return fmt.Errorf("MongoDB locale configuration for collection %q does not match the verified manifest; call VerifyIndexes or SyncIndexes before serving this manifest", collection.ID)
+		return fmt.Errorf("MongoDB locale configuration for collection %q does not match the verified manifest; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest", collection.ID)
 	}
 	return nil
 }
@@ -462,7 +461,7 @@ func (backend *Store) verifiedIndexPlan(collection schema.Collection) (mongoVeri
 	verified, exists := backend.verifiedIndexes[collection.ID]
 	backend.indexesMu.RUnlock()
 	if !exists {
-		return mongoVerifiedIndexPlan{}, fmt.Errorf("MongoDB indexes for collection %q are not verified; call VerifyIndexes or SyncIndexes before serving this manifest", collection.ID)
+		return mongoVerifiedIndexPlan{}, fmt.Errorf("MongoDB indexes for collection %q are not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest", collection.ID)
 	}
 	definitions, err := mongoContentIndexesForLocales(collection, verified.locales)
 	if err != nil {
@@ -476,7 +475,7 @@ func (backend *Store) verifiedIndexPlan(collection schema.Collection) (mongoVeri
 		return mongoVerifiedIndexPlan{}, err
 	}
 	if verified.fingerprint != fingerprint {
-		return mongoVerifiedIndexPlan{}, fmt.Errorf("MongoDB indexes for collection %q are not verified; call VerifyIndexes or SyncIndexes before serving this manifest", collection.ID)
+		return mongoVerifiedIndexPlan{}, fmt.Errorf("MongoDB indexes for collection %q are not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest", collection.ID)
 	}
 	return verified, nil
 }
@@ -504,7 +503,7 @@ func (backend *Store) requireVerifiedResourcePlan(id schema.StableID) (bool, err
 	versioned := backend.verifiedVersionIndexes[id]
 	backend.indexesMu.RUnlock()
 	if !verified {
-		return false, fmt.Errorf("MongoDB physical plan for resource %q is not verified; call VerifyIndexes or SyncIndexes before serving this manifest", id)
+		return false, fmt.Errorf("MongoDB physical plan for resource %q is not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest", id)
 	}
 	return versioned, nil
 }
@@ -516,7 +515,7 @@ func (backend *Store) requireVerifiedDocumentStatePlan(id schema.StableID) (bool
 	references := backend.verifiedReferenceIndexes
 	backend.indexesMu.RUnlock()
 	if !verified {
-		return false, false, fmt.Errorf("MongoDB physical plan for resource %q is not verified; call VerifyIndexes or SyncIndexes before serving this manifest", id)
+		return false, false, fmt.Errorf("MongoDB physical plan for resource %q is not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest", id)
 	}
 	return versioned, references, nil
 }
@@ -529,20 +528,21 @@ func (backend *Store) requireVerifiedVersionIndexes(collection schema.Collection
 	verified := backend.verifiedVersionIndexes[collection.ID]
 	backend.indexesMu.RUnlock()
 	if !verified {
-		return fmt.Errorf("MongoDB version indexes for collection %q are not verified; call VerifyIndexes or SyncIndexes before serving this manifest", collection.ID)
+		return fmt.Errorf("MongoDB version indexes for collection %q are not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest", collection.ID)
 	}
 	return nil
 }
 
 func (backend *Store) requireVerifiedReferenceIndexes(collection schema.Collection) error {
-	if !mongoCollectionHasRelationships(collection) {
-		return nil
+	hasRelationships, err := backend.collectionHasRelationships(collection)
+	if err != nil || !hasRelationships {
+		return err
 	}
 	backend.indexesMu.RLock()
 	verified := backend.verifiedReferenceIndexes
 	backend.indexesMu.RUnlock()
 	if !verified {
-		return fmt.Errorf("MongoDB reference indexes are not verified; call VerifyIndexes or SyncIndexes before serving this manifest")
+		return fmt.Errorf("MongoDB reference indexes are not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest")
 	}
 	return nil
 }
@@ -552,7 +552,7 @@ func (backend *Store) requireVerifiedPreferenceIndexes() error {
 	verified := backend.verifiedPreferenceIndexes
 	backend.indexesMu.RUnlock()
 	if !verified {
-		return fmt.Errorf("MongoDB preference indexes are not verified; call VerifyIndexes or SyncIndexes before serving this manifest")
+		return fmt.Errorf("MongoDB preference indexes are not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest")
 	}
 	return nil
 }
@@ -562,7 +562,7 @@ func (backend *Store) requireVerifiedDocumentLockIndexes() error {
 	verified := backend.verifiedDocumentLockIndexes
 	backend.indexesMu.RUnlock()
 	if !verified {
-		return fmt.Errorf("MongoDB document-lock indexes are not verified; call VerifyIndexes or SyncIndexes before serving this manifest")
+		return fmt.Errorf("MongoDB document-lock indexes are not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest")
 	}
 	return nil
 }
@@ -572,7 +572,7 @@ func (backend *Store) requireVerifiedTaskIndexes() error {
 	verified := backend.verifiedTaskIndexes
 	backend.indexesMu.RUnlock()
 	if !verified {
-		return fmt.Errorf("MongoDB task indexes are not verified; call VerifyIndexes or SyncIndexes before serving this manifest")
+		return fmt.Errorf("MongoDB task indexes are not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest")
 	}
 	return nil
 }
@@ -582,7 +582,7 @@ func (backend *Store) requireVerifiedAuthIndexes() error {
 	verified := backend.verifiedAuthIndexes
 	backend.indexesMu.RUnlock()
 	if !verified {
-		return fmt.Errorf("MongoDB authentication indexes are not verified; call VerifyIndexes or SyncIndexes before serving this manifest")
+		return fmt.Errorf("MongoDB authentication indexes are not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest")
 	}
 	return nil
 }
@@ -592,7 +592,7 @@ func (backend *Store) requireVerifiedUploadLockIndexes() error {
 	verified := backend.verifiedUploadLockIndexes
 	backend.indexesMu.RUnlock()
 	if !verified {
-		return fmt.Errorf("MongoDB upload-lock indexes are not verified; call VerifyIndexes or SyncIndexes before serving this manifest")
+		return fmt.Errorf("MongoDB upload-lock indexes are not verified; call VerifyIndexes or SyncDevelopmentSchema before serving this manifest")
 	}
 	return nil
 }
@@ -681,6 +681,15 @@ func mongoSystemIndexPlans(collectionPlans []mongoCollectionIndexPlan) []mongoSy
 			kind: mongoSystemUploadLockIndexes, description: "upload-object lock state",
 			physicalName: mongoUploadLockCollectionName,
 			definitions:  []mongoIndexDefinition{},
+		},
+		{
+			// Exclusive locks increment a document's shared fences; see fences.go.
+			kind: mongoSystemReferenceFenceIndexes, description: "shared document-lock fence state",
+			physicalName: mongoReferenceFenceCollectionName,
+			definitions: []mongoIndexDefinition{{
+				name: mongoReferenceFenceTargetIndexName,
+				keys: bson.D{{Key: "collection", Value: mongoAscendingDirection}, {Key: "document", Value: mongoAscendingDirection}},
+			}},
 		},
 		{
 			kind: mongoSystemAuthCredentialIndexes, description: "authentication credential state",
@@ -924,20 +933,12 @@ func mongoSystemIndexPlans(collectionPlans []mongoCollectionIndexPlan) []mongoSy
 	return plans
 }
 
+// mongoCollectionHasRelationships visits each block definition once, however
+// often it is placed.
 func mongoCollectionHasRelationships(collection schema.Collection) bool {
-	var visit func([]schema.Field) bool
-	visit = func(fields []schema.Field) bool {
-		for _, field := range fields {
-			if field.Relationship != nil || field.Upload != nil {
-				return true
-			}
-			if visit(schema.ChildFields(field)) {
-				return true
-			}
-		}
-		return false
-	}
-	return visit(collection.Fields)
+	return !schema.WalkDefinitionFields(func(field schema.Field) bool {
+		return field.Relationship == nil && field.Upload == nil
+	}, collection.Fields)
 }
 
 // mongoContentIndexes composes the narrowly required adapter metadata indexes

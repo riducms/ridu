@@ -271,7 +271,7 @@ func (engine *Engine) findJoinMutationDocument(ctx context.Context, transaction 
 	operationContext := Context{Context: ctx, Operation: operation.Read, Collection: collection.Schema, ID: id, Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, System: system, Data: store.Values{}, Locale: selection.Locale, AllLocales: selection.All, Locales: append([]schema.LocaleCode(nil), selection.Configured...)}
 	decision, err := authorize(collection, operationContext)
 	if err != nil {
-		return joinMutationRead{}, &Error{Code: "access_failed", Status: 500, Message: "join document access rule failed", Cause: err}
+		return joinMutationRead{}, accessRuleError("join document access rule failed", err)
 	}
 	if decision.Kind == Deny {
 		return joinMutationRead{}, &Error{Code: "access_denied", Status: 403, Message: "join document may not be read"}
@@ -327,7 +327,7 @@ func (engine *Engine) preflightJoinTargetUpdate(ctx context.Context, transaction
 	}
 	decision, err := authorize(collection, operationContext)
 	if err != nil {
-		return &Error{Code: "access_failed", Status: 500, Message: "join target access rule failed", Cause: err}
+		return accessRuleError("join target access rule failed", err)
 	}
 	if decision.Kind == Deny {
 		return &Error{Code: "access_denied", Status: 403, Message: "join target may not be updated"}

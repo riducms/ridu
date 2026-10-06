@@ -28,5 +28,5 @@ var editorialDashboard = ridu.NewAdminLoader("editorial-dashboard", func(ctx rid
 	if err != nil {
 		return editorialDashboardData{}, err
 	}
-	return editorialDashboardData{Posts: posts.Total, Categories: categories.Total, Search: input.Search}, nil
+	return editorialDashboardData{Posts: *posts.Total, Categories: *categories.Total, Search: input.Search}, nil
 })

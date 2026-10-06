@@ -9,6 +9,7 @@ import (
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -36,7 +37,7 @@ func TestMongoDBUploadReferenceDeletePlansNullifiesVersionsAndRecreation(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	collections := mongoCollectionsBySlug(manifest.Snapshot().Collections)
@@ -127,7 +128,7 @@ func TestMongoDBUploadReferenceDeletePlansNullifiesVersionsAndRecreation(t *test
 	mongoRollback(t, blocked)
 
 	removeRestriction := mongoBegin(t, backend, false)
-	if _, err := removeRestriction.Update(t.Context(), store.UpdateRequest{
+	if _, err := conformance.LockedUpdate(t.Context(), removeRestriction, store.UpdateRequest{
 		Request: store.Request{Collection: owners, ID: active.ID}, Values: store.Values{"guard": store.Null()},
 		Intent: store.WriteIntentPublish,
 	}); err != nil {

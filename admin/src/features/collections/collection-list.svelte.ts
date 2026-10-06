@@ -20,10 +20,10 @@ import {
 } from "@admin/features/collections/collection-list-preferences-controller.svelte";
 import type { CollectionListQuery } from "@admin/features/collections/collection-list-query";
 import { createCollectionListCellFormatter } from "@admin/features/collections/collection-list-cell-values";
+import { ListFilterFields } from "@admin/features/collections/list-filter-fields";
 import {
 	bulkEditableListFields,
 	defaultListColumns,
-	filterableFields,
 	listMetadataFields,
 	type ListColumnSelection,
 	type ListPageSize,
@@ -79,10 +79,15 @@ export class CollectionList {
 	#availableColumnFields = $derived(
 		resolveListColumns(this.#collection, this.#runtime.i18n, this.#customListCells)
 	);
-	#filterFields = $derived([
-		...filterableFields(this.#collection?.fields ?? []),
-		...this.#metadataFields,
-	]);
+	// An immutable schema index; its lazy lookups are invisible to readers.
+	#filterFields = $derived(
+		new ListFilterFields({
+			fields: this.#collection?.fields ?? [],
+			metadata: this.#metadataFields,
+			collections: this.#runtime.manifest?.collections,
+			i18n: this.#runtime.i18n,
+		})
+	);
 	#defaultColumns = $derived([
 		...new Set([
 			...defaultListColumns(this.#collection, this.#availableColumnFields),

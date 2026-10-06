@@ -69,11 +69,10 @@ func testUnifiedGraphQLContractsAndOccurrenceRuntime(t *testing.T, references bo
 			}},
 		},
 	}
-	// Registered blocks share one output type across placements.
-	quoteType := "PostContentBlockQuote"
+	// Inline and registered blocks alike share one output type per definition.
+	quoteType := "QuoteBlock"
 	if references {
 		config.Blocks = []field.Block{quote}
-		quoteType = "QuoteBlock"
 	}
 	manifest, err := ridu.Resolve(config)
 	if err != nil {
@@ -161,7 +160,7 @@ func TestSharedUnifiedFixtureGraphQLComputedAndEmbeddedContract(t *testing.T) {
 	server := httptest.NewServer(app.Handler(ridu.HandlerOptions{}))
 	defer server.Close()
 	created := graphQL(t, server.URL, `mutation {
-		createUnifiedArticle(data: {title: "GraphQL fixture", sku: " sku-root ", presentationHidden: "logical value", body: {version: 1, root: {type: "root", children: [{type: "block", version: 1, fields: {_key: "embedded-A", blockType: "card", label: "Card", sku: " sku-embedded ", accent: "blue"}}]}}}) { id sku summary body privateNote presentationHidden }
+		createUnifiedArticle(data: {title: "GraphQL fixture", sku: " sku-root ", presentationHidden: "logical value", body: {version: 1, root: {type: "root", children: [{type: "block", version: 1, fields: {_key: "embedded-A", blockType: "unified-card", label: "Card", sku: " sku-embedded ", accent: "blue"}}]}}}) { id sku summary body privateNote presentationHidden }
 	}`)
 	article := objectAt(t, created, "data", "createUnifiedArticle")
 	if article["summary"] != "Article: GraphQL fixture" || article["sku"] != "SKU-ROOT" || article["presentationHidden"] != "logical value" {

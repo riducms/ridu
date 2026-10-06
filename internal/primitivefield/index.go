@@ -11,21 +11,19 @@ func ValidateIndexes(collection schema.Collection) error {
 	return validateIndexes(collection, map[string]bool{})
 }
 
-// checked holds registered block slugs already validated; a registered block
-// has the same fields wherever it is referenced.
+// checked holds block slugs already validated; a block definition has the
+// same fields wherever it is placed.
 func validateIndexes(collection schema.Collection, checked map[string]bool) error {
 	var walk func([]schema.Field) error
-	walkBlocks := func(types []schema.BlockType, registered bool) error {
+	walkBlocks := func(types []schema.BlockType) error {
 		for _, block := range types {
-			if registered && checked[block.Slug] {
+			if checked[block.Slug] {
 				continue
 			}
 			if err := walk(block.ResolvedFields()); err != nil {
 				return err
 			}
-			if registered {
-				checked[block.Slug] = true
-			}
+			checked[block.Slug] = true
 		}
 		return nil
 	}
@@ -40,14 +38,14 @@ func validateIndexes(collection schema.Collection, checked map[string]bool) erro
 				}
 			}
 			if field.Blocks != nil {
-				if err := walkBlocks(field.Blocks.ResolvedTypes(), len(field.Blocks.BlockReferences) > 0); err != nil {
+				if err := walkBlocks(field.Blocks.Definitions()); err != nil {
 					return err
 				}
 			}
 			if field.Plugin != nil {
 				for _, tree := range field.Plugin.EmbeddedTrees {
 					for _, c := range tree.Cases {
-						if err := walkBlocks(c.ResolvedTypes(), len(c.BlockReferences) > 0); err != nil {
+						if err := walkBlocks(c.Definitions()); err != nil {
 							return err
 						}
 					}

@@ -223,7 +223,7 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != indexed.want {
+			if *page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != indexed.want {
 				t.Fatalf("indexed query page = %#v", page)
 			}
 		})
@@ -351,7 +351,7 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 2 || len(page.Documents) != 2 {
+	if *page.Total != 2 || len(page.Documents) != 2 {
 		t.Fatalf("all-locales native access page = %#v", page)
 	}
 	desiredIndexes, err := sqliteDocumentIndexes(manifest)

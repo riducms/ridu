@@ -40,10 +40,18 @@ func TestBlockNameResolvesAcrossInlineRegisteredAndEmbeddedSchemas(t *testing.T)
 	registeredSnapshot := registered.Snapshot()
 	embeddedSnapshot := embedded.Snapshot()
 	blocks := []schema.BlockType{
+		inlineSnapshot.Blocks[0],
 		inlineSnapshot.Collections[0].Fields[0].Blocks.ResolvedTypes()[0],
 		registeredSnapshot.Blocks[0],
 		registeredSnapshot.Collections[0].Fields[0].Blocks.ResolvedTypes()[0],
+		embeddedSnapshot.Blocks[0],
 		embeddedSnapshot.Collections[0].Fields[0].Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0],
+	}
+	// An inline declaration is the same definition as a registered one.
+	inlineJSON, _ := json.Marshal([]any{inlineSnapshot.Blocks, inlineSnapshot.Collections})
+	registeredJSON, _ := json.Marshal([]any{registeredSnapshot.Blocks, registeredSnapshot.Collections})
+	if string(inlineJSON) != string(registeredJSON) {
+		t.Fatalf("inline and registered declarations resolve differently:\n%s\n%s", inlineJSON, registeredJSON)
 	}
 	for _, resolved := range blocks {
 		if resolved.Admin == nil || resolved.Admin.RowLabel != "count" {
@@ -70,7 +78,7 @@ func TestBlockNameResolvesAcrossInlineRegisteredAndEmbeddedSchemas(t *testing.T)
 		t.Fatal(err)
 	}
 	registeredField := parsedRegistered.Snapshot().Collections[0].Fields[0]
-	if len(registeredField.Blocks.Types) != 0 || registeredField.Blocks.ResolvedTypes()[0].ResolvedFields()[2].Name != "blockName" {
+	if registeredField.Blocks.ResolvedTypes()[0].ResolvedFields()[2].Name != "blockName" {
 		t.Fatal("block name expanded or disappeared from compact registered metadata")
 	}
 	encoded, err := embedded.Bytes()
@@ -112,7 +120,7 @@ func TestBlockNameAllowsAuthoredTextAndRejectsIncompatibleFields(t *testing.T) {
 			_, err := Resolve(Input{Name: "Invalid block name", Collections: []Collection{{Slug: "pages", Fields: field.Fields{
 				field.Blocks("layout", field.Block{Slug: "card", Fields: field.Fields{field.Text("title"), test.field}}),
 			}}}})
-			if err == nil || !strings.Contains(err.Error(), "collections[0].fields[0].blocks[0].fields.blockName") || !strings.Contains(err.Error(), test.message) {
+			if err == nil || !strings.Contains(err.Error(), "blocks.card.fields.blockName") || !strings.Contains(err.Error(), test.message) {
 				t.Fatalf("Resolve error = %v, want blockName path and %q", err, test.message)
 			}
 		})
@@ -126,17 +134,17 @@ func TestSchemaParseRejectsInvalidBlockName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Run("missing inline name", func(t *testing.T) {
+	t.Run("missing name", func(t *testing.T) {
 		snapshot := base.Snapshot()
-		block := &snapshot.Collections[0].Fields[0].Blocks.Types[0]
+		block := &snapshot.Blocks[0]
 		block.Fields = block.Fields[:1]
 		encoded, encodeErr := schema.NewManifest(snapshot).Bytes()
 		if encodeErr != nil {
 			t.Fatal(encodeErr)
 		}
 		_, parseErr := schema.Parse(encoded)
-		if parseErr == nil || !strings.Contains(parseErr.Error(), "collections[0].fields[0].blocks.types[0].fields.blockName") {
-			t.Fatalf("Parse error = %v, want missing inline block name", parseErr)
+		if parseErr == nil || !strings.Contains(parseErr.Error(), "blocks[0].fields.blockName") {
+			t.Fatalf("Parse error = %v, want missing block name", parseErr)
 		}
 	})
 	tests := []struct {
@@ -159,7 +167,7 @@ func TestSchemaParseRejectsInvalidBlockName(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			snapshot := base.Snapshot()
-			block := &snapshot.Collections[0].Fields[0].Blocks.Types[0]
+			block := &snapshot.Blocks[0]
 			test.mutate(&block.Fields[1])
 			encoded, encodeErr := schema.NewManifest(snapshot).Bytes()
 			if encodeErr != nil {
@@ -171,11 +179,10 @@ func TestSchemaParseRejectsInvalidBlockName(t *testing.T) {
 			}
 		})
 	}
-	t.Run("unused registered definition", func(t *testing.T) {
+	t.Run("unused definition", func(t *testing.T) {
 		snapshot := base.Snapshot()
-		definition := snapshot.Collections[0].Fields[0].Blocks.Types[0]
+		definition := &snapshot.Blocks[0]
 		definition.Fields[1].Type, definition.Fields[1].Text, definition.Fields[1].Number = schema.FieldTypeNumber, nil, &schema.NumberField{}
-		snapshot.Blocks = []schema.BlockType{definition}
 		snapshot.Collections[0].Fields = nil
 		encoded, encodeErr := schema.NewManifest(snapshot).Bytes()
 		if encodeErr != nil {
@@ -184,21 +191,6 @@ func TestSchemaParseRejectsInvalidBlockName(t *testing.T) {
 		_, parseErr := schema.Parse(encoded)
 		if parseErr == nil || !strings.Contains(parseErr.Error(), "blocks[0].fields.blockName") {
 			t.Fatalf("Parse error = %v, want registered definition name diagnostic", parseErr)
-		}
-	})
-	t.Run("missing registered name", func(t *testing.T) {
-		snapshot := base.Snapshot()
-		definition := snapshot.Collections[0].Fields[0].Blocks.Types[0]
-		definition.Fields = definition.Fields[:1]
-		snapshot.Blocks = []schema.BlockType{definition}
-		snapshot.Collections[0].Fields = nil
-		encoded, encodeErr := schema.NewManifest(snapshot).Bytes()
-		if encodeErr != nil {
-			t.Fatal(encodeErr)
-		}
-		_, parseErr := schema.Parse(encoded)
-		if parseErr == nil || !strings.Contains(parseErr.Error(), "blocks[0].fields.blockName") {
-			t.Fatalf("Parse error = %v, want missing registered block name", parseErr)
 		}
 	})
 	t.Run("missing embedded name", func(t *testing.T) {
@@ -213,15 +205,32 @@ func TestSchemaParseRejectsInvalidBlockName(t *testing.T) {
 			t.Fatal(resolveErr)
 		}
 		snapshot := embedded.Snapshot()
-		block := &snapshot.Collections[0].Fields[0].Plugin.EmbeddedTrees[0].Cases[0].Types[0]
+		block := &snapshot.Blocks[0]
 		block.Fields = block.Fields[:1]
 		encoded, encodeErr := schema.NewManifest(snapshot).Bytes()
 		if encodeErr != nil {
 			t.Fatal(encodeErr)
 		}
 		_, parseErr := schema.Parse(encoded)
-		if parseErr == nil || !strings.Contains(parseErr.Error(), "plugin.embeddedTrees[0].cases[0].types[0].fields.blockName") {
+		if parseErr == nil || !strings.Contains(parseErr.Error(), "blocks[0].fields.blockName") {
 			t.Fatalf("Parse error = %v, want missing embedded block name", parseErr)
 		}
 	})
+}
+
+// A definition generates one payload type, so every container that selects it
+// must use the same discriminator and identity properties.
+func TestBlockDefinitionHasOnePayloadEnvelope(t *testing.T) {
+	card := field.Block{Slug: "card", Fields: field.Fields{field.Text("title")}}
+	tree := field.EmbeddedTree{
+		Key: "widgets", Root: []string{"outline"}, Children: "items", Tag: "kind",
+		Cases: []field.EmbeddedTreeCase{{TagValue: "widget", Payload: "content", Discriminator: "schema", Identity: "uid", Types: []field.Block{card}}},
+	}
+	_, err := Resolve(Input{Name: "Envelopes", Plugins: []Plugin{{Key: "outline"}}, Collections: []Collection{{Slug: "pages", Fields: field.Fields{
+		field.Blocks("layout", card),
+		field.Plugin("body", "outline", json.RawMessage(`{}`)).EmbeddedTrees(tree),
+	}}}})
+	if err == nil || !strings.Contains(err.Error(), "block_envelope_conflict") || !strings.Contains(err.Error(), `"schema/uid"`) || !strings.Contains(err.Error(), `"blockType/_key"`) {
+		t.Fatalf("Resolve error = %v, want a payload envelope conflict", err)
+	}
 }

@@ -11,6 +11,7 @@ import { FieldEditorBinding } from "@admin/core/forms/field-editor-binding";
 import { createEmbeddedSchemaDraft } from "@admin/core/forms/embedded-schema-draft.svelte";
 import { indexFieldValues } from "@admin/core/forms/form-issue-correlation";
 import { createAdminI18n } from "@riducms/translations";
+import { bindBlockField, blockDefinition } from "../block-manifest";
 import { draftFixture } from "./draft-fixture";
 
 const Harness = svelte`
@@ -270,15 +271,15 @@ for (const kind of ["array", "blocks"] as const)
 			liveValidation: false,
 			...(kind === "array"
 				? { nested: { fields: [child] } }
-				: {
-						blocks: {
-							types: [
-								{ slug: "card", labels: { singular: "Card", plural: "Cards" }, fields: [child] },
-								{ slug: "other", labels: { singular: "Other", plural: "Others" }, fields: [child] },
-							],
-						},
-					}),
+				: { blocks: { blockReferences: ["card", "other"] } }),
 		};
+		bindBlockField(
+			[
+				blockDefinition("card", [child], { singular: "Card", plural: "Cards" }),
+				blockDefinition("other", [child], { singular: "Other", plural: "Others" }),
+			],
+			rows
+		);
 		const a = {
 			_key: "@locale",
 			...(kind === "blocks" ? { blockType: "card" } : {}),
@@ -457,7 +458,14 @@ it("generic embedded list forms apply valid typed payloads despite advisory issu
 	expect(requests[0]!.input.fields).toEqual(["values"]);
 	expect(requests[0]!.input.embedded?.[0]?.data.values).toEqual([0, 9]);
 	expect(requests[0]!.input.data).toEqual(source.form.liveValidationData());
-	requests[0]!.response.resolve(answer(requests[0]!.input, "Advisory list feedback", '["values"]'));
+	// Targets name fields by their placement's stable ID.
+	requests[0]!.response.resolve(
+		answer(
+			requests[0]!.input,
+			"Advisory list feedback",
+			'["pages-body-widgets-widget-card-values"]'
+		)
+	);
 	await expect.poll(() => session.form.liveValidation.forField(path).status).toBe("checked");
 	await expect.element(screen.getByText("Advisory list feedback", { exact: true })).toBeVisible();
 	await screen.getByRole("button", { name: "Apply", exact: true }).click();

@@ -588,7 +588,7 @@ func (transaction *documentTransaction) mongoTaskClaimCandidates(
 		return nil, err
 	}
 	pipeline := mongoTaskClaimPipeline(request)
-	cursor, err := transaction.taskCollection().Aggregate(sessionContext, pipeline)
+	cursor, err := mongoAggregate(sessionContext, transaction.taskCollection(), pipeline)
 	if err != nil {
 		return nil, translateMongoError(callerContext, err)
 	}
@@ -611,7 +611,7 @@ func (transaction *documentTransaction) validateMongoTaskBlockingGuards(
 	callerContext, sessionContext context.Context,
 	request store.TaskClaim,
 ) error {
-	cursor, err := transaction.taskCollection().Aggregate(sessionContext, mongoTaskBlockingGuardPipeline(request))
+	cursor, err := mongoAggregate(sessionContext, transaction.taskCollection(), mongoTaskBlockingGuardPipeline(request))
 	if err != nil {
 		return translateMongoError(callerContext, err)
 	}
@@ -1119,7 +1119,7 @@ func (transaction *documentTransaction) pruneTasks(ctx context.Context, limit in
 		bson.D{{Key: "$sort", Value: bson.D{{Key: "retainUntil", Value: int32(1)}, {Key: "_id", Value: int32(1)}}}},
 		bson.D{{Key: "$limit", Value: int64(limit)}},
 	}
-	cursor, err := transaction.taskCollection().Aggregate(sessionContext, pipeline)
+	cursor, err := mongoAggregate(sessionContext, transaction.taskCollection(), pipeline)
 	if err != nil {
 		return 0, translateMongoError(ctx, err)
 	}

@@ -1,0 +1,1 @@
+import{Sn as e,Zn as t,er as n,kn as r}from"./src-DBuVdSOR.js";var i=new Set([`$$slots`,`$$events`,`$$legacy`]),a=n(`<svg><path d="M14 8L10 12L6 8" stroke="currentColor" stroke-linecap="square"></path></svg>`);function o(n,o){let s=e(o,i);var c=a();r(c,()=>({width:`20`,height:`20`,viewBox:`0 0 20 20`,fill:`none`,"aria-hidden":`true`,...s})),t(n,c)}export{o as t};

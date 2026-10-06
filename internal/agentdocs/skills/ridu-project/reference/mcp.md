@@ -98,7 +98,8 @@ longer used.
 ## Authorization and tools {#tools}
 
 Each collection contributes `ridu_find_collection_<slug>` with pagination, selection, locale,
-fallback, all-locale, and draft inputs. Each global contributes
+fallback, all-locale, and draft inputs. Its `pagination: false` input skips the total count: the
+result leaves out `totalDocs` and keeps an exact `hasNextPage`. Each global contributes
 `ridu_find_global_<slug>` with selection and localization inputs.
 
 Every call enters the ordinary Local API and operation engine with the API key's owning actor.

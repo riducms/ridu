@@ -1,7 +1,9 @@
 import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
 import {
 	SCHEMA_MANIFEST_VERSION,
+	bindSchemaManifest,
 	type AccessCapabilitiesEnvelope,
+	type SchemaBlockType,
 	type SchemaCollection,
 } from "@riducms/protocol";
 import { expect, it, vi } from "vitest";
@@ -106,6 +108,7 @@ async function editor(
 		prepared?: boolean;
 		access?: AccessCapabilitiesEnvelope;
 		schema?: SchemaCollection;
+		blocks?: SchemaBlockType[];
 		find?: AdminClient["find"];
 		update?: AdminClient["update"];
 		create?: boolean;
@@ -122,7 +125,7 @@ async function editor(
 		unpublish: vi.fn(async () => ({ ...document, _status: "draft", _revision: 4 })),
 	} as unknown as AdminClient;
 	const runtime = new AdminRuntime(client);
-	runtime.manifest = {
+	runtime.manifest = bindSchemaManifest({
 		version: SCHEMA_MANIFEST_VERSION,
 		application: {
 			name: "Recovery",
@@ -142,7 +145,8 @@ async function editor(
 		collections: [options.schema ?? collection],
 		globals: [],
 		plugins: [],
-	};
+		...(options.blocks === undefined ? {} : { blocks: options.blocks }),
+	});
 	runtime.manifestRevision = 1;
 	const notifications = new NotificationCenter();
 	const success = vi.spyOn(notifications, "success");
@@ -954,6 +958,13 @@ it.each(["reorder", "remove", "revoke", "publication", "schema"])(
 it.each([false, true])(
 	"reordered plugin payloads retain occurrence access (redacted=%s)",
 	async (redacted) => {
+		const blocks: SchemaBlockType[] = [
+			{
+				slug: "card",
+				labels: { singular: "Card", plural: "Cards" },
+				fields: [{ ...textField("title"), id: "block-card-title" }],
+			},
+		];
 		const schema: SchemaCollection = {
 			...collection,
 			fields: [
@@ -977,13 +988,7 @@ it.each([false, true])(
 										payload: "content",
 										discriminator: "schema",
 										identity: "uid",
-										types: [
-											{
-												slug: "card",
-												labels: { singular: "Card", plural: "Cards" },
-												fields: [{ ...textField("title"), path: "body.title" }],
-											},
-										],
+										blockReferences: ["card"],
 									},
 								],
 							},
@@ -1009,7 +1014,9 @@ it.each([false, true])(
 			"one",
 			{ body: { outline: [original.body.outline[1], original.body.outline[0]] } },
 			original,
-			{ revision: 1 }
+			{ revision: 1 },
+			undefined,
+			blocks
 		);
 		const document = {
 			id: "one",
@@ -1018,6 +1025,7 @@ it.each([false, true])(
 		};
 		const fixture = await editor(document, {
 			schema,
+			blocks,
 			access: {
 				...access,
 				fields: { "body.outline.1.content.title": { read: false, create: false, update: false } },

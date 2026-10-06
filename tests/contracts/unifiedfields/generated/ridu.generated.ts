@@ -26,8 +26,11 @@ export interface ScalarWhere<Value> {
 
 export type TimestampWhere = Omit<ScalarWhere<string>, "contains" | "like">;
 
-export interface MultiSelectWhere<Value extends string> {
-	contains?: Value;
+/** Item membership for lists, multi-selects, reference lists and polymorphic relationships; wrap `in` in `not` to exclude. */
+export interface MembershipWhere<Value> {
+	in?: readonly Value[];
+	equals?: null;
+	notEquals?: null;
 	exists?: boolean;
 }
 
@@ -35,7 +38,12 @@ export interface ExistsWhere {
 	exists?: boolean;
 }
 
-export type UnifiedArticlesBodyBlocksBlockCardInput = {
+/** Places a nested definition's relative dotted paths under the path prefix of one placement. */
+export type RiduPrefixedPaths<Prefix extends string, Paths> = {
+	[Path in keyof Paths as `${Prefix}${Path & string}`]: Paths[Path];
+};
+
+export type UnifiedCardInput = {
 	"label"?: string | null;
 	"sku"?: string | null;
 	"accent"?: string | null;
@@ -46,10 +54,10 @@ export type UnifiedArticlesBodyBlocksBlockCardInput = {
 		"accent"?: string | null;
 	}> | null;
 	"blockName"?: string | null;
-} & { blockType: "card"; _key?: string };
+} & { blockType: "unified-card"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
-export type UnifiedArticlesBodyBlocksBlockCardUpdate = {
+export type UnifiedCardUpdate = {
 	"label"?: string | null;
 	"sku"?: string | null;
 	"accent"?: string | null;
@@ -65,9 +73,9 @@ export type UnifiedArticlesBodyBlocksBlockCardUpdate = {
 		"accent"?: string | null;
 	}> | null;
 	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
+} & { blockType: "unified-card"; _key: string };
 
-export type UnifiedArticlesBodyBlocksBlockCard = {
+export type UnifiedCard = {
 	"label"?: string | null;
 	"sku"?: string | null;
 	"accent"?: string | null;
@@ -78,9 +86,9 @@ export type UnifiedArticlesBodyBlocksBlockCard = {
 		"accent"?: string | null;
 	}> | null;
 	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
+} & { blockType: "unified-card"; _key: string };
 
-export type UnifiedArticlesBodyBlocksBlockCardAllLocales = {
+export type UnifiedCardAllLocales = {
 	"label"?: string | null;
 	"sku"?: string | null;
 	"accent"?: string | null;
@@ -91,9 +99,9 @@ export type UnifiedArticlesBodyBlocksBlockCardAllLocales = {
 		"accent"?: string | null;
 	}> | null;
 	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
+} & { blockType: "unified-card"; _key: string };
 
-export type UnifiedArticlesBodyBlocksBlockCardAllLocalesValue = {
+export type UnifiedCardAllLocalesValue = {
 	"label"?: string | null;
 	"sku"?: string | null;
 	"accent"?: string | null;
@@ -104,139 +112,91 @@ export type UnifiedArticlesBodyBlocksBlockCardAllLocalesValue = {
 		"accent"?: string | null;
 	}> | null;
 	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
+} & { blockType: "unified-card"; _key: string };
 
-export type UnifiedArticlesContentCardInput = {
+export type UnifiedNoteInput = {
 	"label"?: string | null;
-	"sku"?: string | null;
 	"accent"?: string | null;
-	"products"?: Array<{
-		_key?: string;
-		"label"?: string | null;
-		"sku"?: string | null;
-		"accent"?: string | null;
-	}> | null;
 	"blockName"?: string | null;
-} & { blockType: "card"; _key?: string };
+} & { blockType: "unified-note"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
-export type UnifiedArticlesContentCardUpdate = {
-	"label"?: string | null;
-	"sku"?: string | null;
-	"accent"?: string | null;
-	"products"?: Array<{
-		_key?: string;
-		"label"?: string | null;
-		"sku"?: string | null;
-		"accent"?: string | null;
-	} | {
-		_key: string;
-		"label"?: string | null;
-		"sku"?: string | null;
-		"accent"?: string | null;
-	}> | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type UnifiedArticlesContentCard = {
-	"label"?: string | null;
-	"sku"?: string | null;
-	"accent"?: string | null;
-	"products"?: Array<{
-		_key: string;
-		"label"?: string | null;
-		"sku"?: string | null;
-		"accent"?: string | null;
-	}> | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type UnifiedArticlesContentCardAllLocales = {
-	"label"?: string | null;
-	"sku"?: string | null;
-	"accent"?: string | null;
-	"products"?: Array<{
-		_key: string;
-		"label"?: string | null;
-		"sku"?: string | null;
-		"accent"?: string | null;
-	}> | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type UnifiedArticlesContentCardAllLocalesValue = {
-	"label"?: string | null;
-	"sku"?: string | null;
-	"accent"?: string | null;
-	"products"?: Array<{
-		_key: string;
-		"label"?: string | null;
-		"sku"?: string | null;
-		"accent"?: string | null;
-	}> | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type UnifiedArticlesContentNoteInput = {
+export type UnifiedNoteUpdate = {
 	"label"?: string | null;
 	"accent"?: string | null;
 	"blockName"?: string | null;
-} & { blockType: "note"; _key?: string };
+} & { blockType: "unified-note"; _key: string };
 
-/** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
-export type UnifiedArticlesContentNoteUpdate = {
+export type UnifiedNote = {
 	"label"?: string | null;
 	"accent"?: string | null;
 	"blockName"?: string | null;
-} & { blockType: "note"; _key: string };
+} & { blockType: "unified-note"; _key: string };
 
-export type UnifiedArticlesContentNote = {
+export type UnifiedNoteAllLocales = {
 	"label"?: string | null;
 	"accent"?: string | null;
 	"blockName"?: string | null;
-} & { blockType: "note"; _key: string };
+} & { blockType: "unified-note"; _key: string };
 
-export type UnifiedArticlesContentNoteAllLocales = {
+export type UnifiedNoteAllLocalesValue = {
 	"label"?: string | null;
 	"accent"?: string | null;
 	"blockName"?: string | null;
-} & { blockType: "note"; _key: string };
+} & { blockType: "unified-note"; _key: string };
 
-export type UnifiedArticlesContentNoteAllLocalesValue = {
-	"label"?: string | null;
-	"accent"?: string | null;
-	"blockName"?: string | null;
-} & { blockType: "note"; _key: string };
-
-export type UnifiedArticlesBodyBlocksBlockBlockInput = UnifiedArticlesBodyBlocksBlockCardInput;
+export type UnifiedArticlesBodyBlocksBlockBlockInput = UnifiedCardInput;
 export type UnifiedArticlesBodyBlocksBlockInput = Array<UnifiedArticlesBodyBlocksBlockBlockInput>;
 
-export type UnifiedArticlesBodyBlocksBlockBlockUpdate = UnifiedArticlesBodyBlocksBlockCardUpdate | UnifiedArticlesBodyBlocksBlockCardInput;
+export type UnifiedArticlesBodyBlocksBlockBlockUpdate = UnifiedCardUpdate | UnifiedCardInput;
 export type UnifiedArticlesBodyBlocksBlockUpdate = Array<UnifiedArticlesBodyBlocksBlockBlockUpdate>;
 
-export type UnifiedArticlesBodyBlocksBlockBlock = UnifiedArticlesBodyBlocksBlockCard;
+export type UnifiedArticlesBodyBlocksBlockBlock = UnifiedCard;
 export type UnifiedArticlesBodyBlocksBlock = Array<UnifiedArticlesBodyBlocksBlockBlock>;
 
-export type UnifiedArticlesBodyBlocksBlockBlockAllLocales = UnifiedArticlesBodyBlocksBlockCardAllLocales;
+export type UnifiedArticlesBodyBlocksBlockBlockAllLocales = UnifiedCardAllLocales;
 export type UnifiedArticlesBodyBlocksBlockAllLocales = Array<UnifiedArticlesBodyBlocksBlockBlockAllLocales>;
 
-export type UnifiedArticlesBodyBlocksBlockBlockAllLocalesValue = UnifiedArticlesBodyBlocksBlockCardAllLocalesValue;
+export type UnifiedArticlesBodyBlocksBlockBlockAllLocalesValue = UnifiedCardAllLocalesValue;
 export type UnifiedArticlesBodyBlocksBlockAllLocalesValue = Array<UnifiedArticlesBodyBlocksBlockBlockAllLocalesValue>;
 
-export type UnifiedArticlesContentBlockInput = UnifiedArticlesContentCardInput | UnifiedArticlesContentNoteInput;
+export type UnifiedArticlesContentBlockInput = UnifiedCardInput | UnifiedNoteInput;
 export type UnifiedArticlesContentInput = Array<UnifiedArticlesContentBlockInput>;
 
-export type UnifiedArticlesContentBlockUpdate = UnifiedArticlesContentCardUpdate | UnifiedArticlesContentCardInput | UnifiedArticlesContentNoteUpdate | UnifiedArticlesContentNoteInput;
+export type UnifiedArticlesContentBlockUpdate = UnifiedCardUpdate | UnifiedCardInput | UnifiedNoteUpdate | UnifiedNoteInput;
 export type UnifiedArticlesContentUpdate = Array<UnifiedArticlesContentBlockUpdate>;
 
-export type UnifiedArticlesContentBlock = UnifiedArticlesContentCard | UnifiedArticlesContentNote;
+export type UnifiedArticlesContentBlock = UnifiedCard | UnifiedNote;
 export type UnifiedArticlesContent = Array<UnifiedArticlesContentBlock>;
 
-export type UnifiedArticlesContentBlockAllLocales = UnifiedArticlesContentCardAllLocales | UnifiedArticlesContentNoteAllLocales;
+export type UnifiedArticlesContentBlockAllLocales = UnifiedCardAllLocales | UnifiedNoteAllLocales;
 export type UnifiedArticlesContentAllLocales = Array<UnifiedArticlesContentBlockAllLocales>;
 
-export type UnifiedArticlesContentBlockAllLocalesValue = UnifiedArticlesContentCardAllLocalesValue | UnifiedArticlesContentNoteAllLocalesValue;
+export type UnifiedArticlesContentBlockAllLocalesValue = UnifiedCardAllLocalesValue | UnifiedNoteAllLocalesValue;
 export type UnifiedArticlesContentAllLocalesValue = Array<UnifiedArticlesContentBlockAllLocalesValue>;
+
+/** Filters relative to one UnifiedCard block row; a resource filter prefixes them with the row's path. */
+export interface UnifiedCardWhere {
+	"label"?: ScalarWhere<string>;
+	"sku"?: ScalarWhere<string>;
+	"accent"?: ScalarWhere<string>;
+	"products"?: ExistsWhere;
+	"products.label"?: ScalarWhere<string>;
+	"products.sku"?: ScalarWhere<string>;
+	"products.accent"?: ScalarWhere<string>;
+	"blockName"?: ScalarWhere<string>;
+}
+
+/** Filters relative to one UnifiedNote block row; a resource filter prefixes them with the row's path. */
+export interface UnifiedNoteWhere {
+	"label"?: ScalarWhere<string>;
+	"accent"?: ScalarWhere<string>;
+	"blockName"?: ScalarWhere<string>;
+}
+
+export type UnifiedCardValidationPath = "label" | "sku" | "accent" | "products" | `products.${number}` | `products.${number}._key` | `products.${number}.label` | `products.${number}.sku` | `products.${number}.accent` | "blockName";
+
+export type UnifiedNoteValidationPath = "label" | "accent" | "blockName";
 
 export interface Users {
 	id: ID;
@@ -286,10 +246,6 @@ export interface UsersPopulationSelect {
 }
 
 export type UsersPopulate = Record<string, never>;
-
-export type UsersPopulateOutput = Record<string, never>;
-
-export type UsersAllLocalesPopulateOutput = Record<string, never>;
 
 export type UsersValidationPath = "name";
 
@@ -450,7 +406,9 @@ export interface UnifiedArticlesUpdate {
 	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<UnifiedArticlesBodyBlocksBlockUpdate[number]> | null;
 }
 
-export interface UnifiedArticlesWhere {
+export interface UnifiedArticlesWhere extends
+	RiduPrefixedPaths<"content.unified-card.", UnifiedCardWhere>,
+	RiduPrefixedPaths<"content.unified-note.", UnifiedNoteWhere> {
 	and?: readonly UnifiedArticlesWhere[];
 	or?: readonly UnifiedArticlesWhere[];
 	not?: UnifiedArticlesWhere;
@@ -472,17 +430,6 @@ export interface UnifiedArticlesWhere {
 	"sections.products.sku"?: ScalarWhere<string>;
 	"sections.products.accent"?: ScalarWhere<string>;
 	"content"?: ExistsWhere;
-	"content.card.label"?: ScalarWhere<string>;
-	"content.card.sku"?: ScalarWhere<string>;
-	"content.card.accent"?: ScalarWhere<string>;
-	"content.card.products"?: ExistsWhere;
-	"content.card.products.label"?: ScalarWhere<string>;
-	"content.card.products.sku"?: ScalarWhere<string>;
-	"content.card.products.accent"?: ScalarWhere<string>;
-	"content.card.blockName"?: ScalarWhere<string>;
-	"content.note.label"?: ScalarWhere<string>;
-	"content.note.accent"?: ScalarWhere<string>;
-	"content.note.blockName"?: ScalarWhere<string>;
 	"author"?: ScalarWhere<ID>;
 	"accent"?: ScalarWhere<string>;
 	"localizedAccent"?: ScalarWhere<string>;
@@ -538,15 +485,7 @@ export interface UnifiedArticlesPopulate {
 	"author"?: boolean | UsersPopulationSelect | { depth?: number; select?: UsersPopulationSelect };
 }
 
-export interface UnifiedArticlesPopulateOutput {
-	"author": ID | Users | null;
-}
-
-export interface UnifiedArticlesAllLocalesPopulateOutput {
-	"author": ID | UsersAllLocales | null;
-}
-
-export type UnifiedArticlesValidationPath = "title" | "sku" | "defaulted" | "meta" | "meta.description" | "meta.accent" | "sections" | `sections.${number}` | `sections.${number}._key` | `sections.${number}.label` | `sections.${number}.sku` | `sections.${number}.accent` | `sections.${number}.products` | `sections.${number}.products.${number}` | `sections.${number}.products.${number}._key` | `sections.${number}.products.${number}.label` | `sections.${number}.products.${number}.sku` | `sections.${number}.products.${number}.accent` | "content" | `content.${number}` | `content.${number}._key` | `content.${number}.blockType` | `content.${number}.label` | `content.${number}.sku` | `content.${number}.accent` | `content.${number}.products` | `content.${number}.products.${number}` | `content.${number}.products.${number}._key` | `content.${number}.products.${number}.label` | `content.${number}.products.${number}.sku` | `content.${number}.products.${number}.accent` | `content.${number}.blockName` | "author" | "accent" | "localizedAccent" | `localizedAccent.${Locale}` | "localizedTitle" | `localizedTitle.${Locale}` | "localizedMeta" | "localizedMeta.description" | `localizedMeta.description.${Locale}` | "privateNote" | "presentationHidden" | "body" | `body.${string}`;
+export type UnifiedArticlesValidationPath = "title" | "sku" | "defaulted" | "meta" | "meta.description" | "meta.accent" | "sections" | `sections.${number}` | `sections.${number}._key` | `sections.${number}.label` | `sections.${number}.sku` | `sections.${number}.accent` | `sections.${number}.products` | `sections.${number}.products.${number}` | `sections.${number}.products.${number}._key` | `sections.${number}.products.${number}.label` | `sections.${number}.products.${number}.sku` | `sections.${number}.products.${number}.accent` | "content" | `content.${number}` | `content.${number}._key` | `content.${number}.blockType` | `content.${number}.${UnifiedCardValidationPath}` | `content.${number}.${UnifiedNoteValidationPath}` | "author" | "accent" | "localizedAccent" | `localizedAccent.${Locale}` | "localizedTitle" | `localizedTitle.${Locale}` | "localizedMeta" | "localizedMeta.description" | `localizedMeta.description.${Locale}` | "privateNote" | "presentationHidden" | "body" | `body.${string}`;
 
 export interface RiduConfig {
 	locale: Locale;
@@ -565,8 +504,6 @@ export interface RiduConfig {
 			where: UsersWhere;
 			select: UsersSelect;
 			populate: UsersPopulate;
-			populateOutput: UsersPopulateOutput;
-			allPopulateOutput: UsersAllLocalesPopulateOutput;
 			validationPath: UsersValidationPath;
 		};
 		"unified-articles": {
@@ -583,8 +520,6 @@ export interface RiduConfig {
 			where: UnifiedArticlesWhere;
 			select: UnifiedArticlesSelect;
 			populate: UnifiedArticlesPopulate;
-			populateOutput: UnifiedArticlesPopulateOutput;
-			allPopulateOutput: UnifiedArticlesAllLocalesPopulateOutput;
 			validationPath: UnifiedArticlesValidationPath;
 		};
 	};

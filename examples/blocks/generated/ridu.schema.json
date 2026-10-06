@@ -17,6 +17,485 @@
       "fallback": true
     }
   },
+  "blocks": [
+    {
+      "typeName": "Callout",
+      "admin": {
+        "rowLabel": "title"
+      },
+      "slug": "callout",
+      "labels": {
+        "singular": "Callout",
+        "plural": "Callouts"
+      },
+      "fields": [
+        {
+          "id": "block-callout-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-callout-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Title"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-callout-message",
+          "name": "message",
+          "path": "message",
+          "type": "textarea",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "localized": true,
+          "admin": {
+            "label": "Message"
+          },
+          "textarea": {}
+        },
+        {
+          "id": "block-callout-detail",
+          "name": "detail",
+          "path": "detail",
+          "type": "plugin",
+          "category": "plugin",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Detail"
+          },
+          "plugin": {
+            "embeddedTrees": [
+              {
+                "version": 1,
+                "key": "blocks",
+                "root": [
+                  "root"
+                ],
+                "children": "children",
+                "tag": "type",
+                "cases": [
+                  {
+                    "blockReferences": [
+                      "cta"
+                    ],
+                    "tagValue": "block",
+                    "payload": "fields",
+                    "discriminator": "blockType",
+                    "identity": "_key"
+                  }
+                ]
+              }
+            ],
+            "key": "richtext",
+            "config": {
+              "features": [
+                "blocks",
+                "code",
+                "horizontal-rule",
+                "links",
+                "lists",
+                "relationships",
+                "uploads"
+              ]
+            },
+            "referenceKeys": [
+              "relationTo"
+            ]
+          }
+        },
+        {
+          "id": "block-callout-aside",
+          "name": "aside",
+          "path": "aside",
+          "type": "plugin",
+          "category": "plugin",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Aside"
+          },
+          "plugin": {
+            "embeddedTrees": [
+              {
+                "version": 1,
+                "key": "blocks",
+                "root": [
+                  "root"
+                ],
+                "children": "children",
+                "tag": "type",
+                "cases": [
+                  {
+                    "tagValue": "block",
+                    "payload": "fields",
+                    "discriminator": "blockType",
+                    "identity": "_key"
+                  }
+                ]
+              }
+            ],
+            "key": "richtext",
+            "config": {
+              "features": [
+                "code",
+                "horizontal-rule",
+                "links",
+                "lists",
+                "relationships",
+                "uploads"
+              ]
+            },
+            "referenceKeys": [
+              "relationTo"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "typeName": "Content",
+      "admin": {
+        "rowLabel": "title"
+      },
+      "slug": "content",
+      "labels": {
+        "singular": "Content",
+        "plural": "Contents"
+      },
+      "fields": [
+        {
+          "id": "block-content-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "localized": true,
+          "admin": {
+            "label": "Title"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-content-body",
+          "name": "body",
+          "path": "body",
+          "type": "plugin",
+          "category": "plugin",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Body"
+          },
+          "plugin": {
+            "embeddedTrees": [
+              {
+                "version": 1,
+                "key": "blocks",
+                "root": [
+                  "root"
+                ],
+                "children": "children",
+                "tag": "type",
+                "cases": [
+                  {
+                    "tagValue": "block",
+                    "payload": "fields",
+                    "discriminator": "blockType",
+                    "identity": "_key"
+                  }
+                ]
+              }
+            ],
+            "key": "richtext",
+            "config": {
+              "features": [
+                "code",
+                "horizontal-rule",
+                "links",
+                "lists",
+                "relationships",
+                "uploads"
+              ]
+            },
+            "referenceKeys": [
+              "relationTo"
+            ]
+          }
+        },
+        {
+          "id": "block-content-links",
+          "name": "links",
+          "path": "links",
+          "type": "array",
+          "category": "nested",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Links"
+          },
+          "nested": {
+            "fields": [
+              {
+                "id": "block-content-links-label",
+                "name": "label",
+                "path": "links.label",
+                "type": "text",
+                "category": "scalar",
+                "required": true,
+                "unique": false,
+                "admin": {
+                  "label": "Label"
+                },
+                "text": {}
+              },
+              {
+                "id": "block-content-links-href",
+                "name": "href",
+                "path": "links.href",
+                "type": "text",
+                "category": "scalar",
+                "required": true,
+                "unique": false,
+                "admin": {
+                  "label": "Href"
+                },
+                "text": {}
+              }
+            ]
+          }
+        },
+        {
+          "id": "block-content-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "",
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        }
+      ]
+    },
+    {
+      "typeName": "CTA",
+      "admin": {
+        "rowLabel": "label"
+      },
+      "slug": "cta",
+      "labels": {
+        "singular": "CTA",
+        "plural": "Ctas"
+      },
+      "fields": [
+        {
+          "id": "block-cta-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-cta-label",
+          "name": "label",
+          "path": "label",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "localized": true,
+          "admin": {
+            "label": "Label"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-cta-destination",
+          "name": "destination",
+          "path": "destination",
+          "type": "relationship",
+          "category": "relationship",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Destination"
+          },
+          "relationship": {
+            "collectionId": "pages",
+            "collectionSlug": "pages",
+            "onDelete": "nullify"
+          }
+        }
+      ]
+    },
+    {
+      "typeName": "Hero",
+      "admin": {
+        "rowLabel": "heading"
+      },
+      "slug": "hero",
+      "labels": {
+        "singular": "Hero",
+        "plural": "Heroes"
+      },
+      "fields": [
+        {
+          "id": "block-hero-heading",
+          "name": "heading",
+          "path": "heading",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "localized": true,
+          "admin": {
+            "label": "Heading"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-hero-appearance",
+          "name": "appearance",
+          "path": "appearance",
+          "type": "group",
+          "category": "nested",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Appearance"
+          },
+          "nested": {
+            "fields": [
+              {
+                "id": "block-hero-appearance-tone",
+                "name": "tone",
+                "path": "appearance.tone",
+                "type": "select",
+                "category": "scalar",
+                "required": false,
+                "unique": false,
+                "admin": {
+                  "label": "Tone"
+                },
+                "select": {
+                  "options": [
+                    {
+                      "value": "light",
+                      "label": "Light"
+                    },
+                    {
+                      "value": "dark",
+                      "label": "Dark"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "block-hero-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "",
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        }
+      ]
+    },
+    {
+      "typeName": "Media",
+      "admin": {
+        "rowLabel": "caption"
+      },
+      "slug": "media",
+      "labels": {
+        "singular": "Media",
+        "plural": "Media"
+      },
+      "fields": [
+        {
+          "id": "block-media-asset",
+          "name": "asset",
+          "path": "asset",
+          "type": "relationship",
+          "category": "relationship",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Asset"
+          },
+          "relationship": {
+            "collectionId": "assets",
+            "collectionSlug": "assets",
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "id": "block-media-caption",
+          "name": "caption",
+          "path": "caption",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "localized": true,
+          "admin": {
+            "label": "Caption"
+          },
+          "text": {}
+        },
+        {
+          "id": "block-media-block-name",
+          "name": "blockName",
+          "path": "blockName",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "",
+          "admin": {
+            "label": "Block name"
+          },
+          "text": {}
+        }
+      ]
+    }
+  ],
   "collections": [
     {
       "id": "assets",
@@ -106,336 +585,14 @@
             "label": "Layout"
           },
           "blocks": {
+            "blockReferences": [
+              "hero",
+              "content",
+              "media",
+              "cta"
+            ],
             "minRows": 1,
-            "maxRows": 12,
-            "types": [
-              {
-                "typeName": "Hero",
-                "admin": {
-                  "rowLabel": "heading"
-                },
-                "slug": "hero",
-                "labels": {
-                  "singular": "Hero",
-                  "plural": "Heroes"
-                },
-                "fields": [
-                  {
-                    "id": "pages-layout-hero-heading",
-                    "name": "heading",
-                    "path": "layout.hero.heading",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": true,
-                    "unique": false,
-                    "localized": true,
-                    "admin": {
-                      "label": "Heading"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "pages-layout-hero-appearance",
-                    "name": "appearance",
-                    "path": "layout.hero.appearance",
-                    "type": "group",
-                    "category": "nested",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "Appearance"
-                    },
-                    "nested": {
-                      "fields": [
-                        {
-                          "id": "pages-layout-hero-appearance-tone",
-                          "name": "tone",
-                          "path": "layout.hero.appearance.tone",
-                          "type": "select",
-                          "category": "scalar",
-                          "required": false,
-                          "unique": false,
-                          "admin": {
-                            "label": "Tone"
-                          },
-                          "select": {
-                            "options": [
-                              {
-                                "value": "light",
-                                "label": "Light"
-                              },
-                              {
-                                "value": "dark",
-                                "label": "Dark"
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "id": "pages-layout-hero-block-name",
-                    "name": "blockName",
-                    "path": "layout.hero.blockName",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "default": "",
-                    "admin": {
-                      "label": "Block name"
-                    },
-                    "text": {}
-                  }
-                ]
-              },
-              {
-                "typeName": "Content",
-                "admin": {
-                  "rowLabel": "title"
-                },
-                "slug": "content",
-                "labels": {
-                  "singular": "Content",
-                  "plural": "Contents"
-                },
-                "fields": [
-                  {
-                    "id": "pages-layout-content-title",
-                    "name": "title",
-                    "path": "layout.content.title",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "localized": true,
-                    "admin": {
-                      "label": "Title"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "pages-layout-content-body",
-                    "name": "body",
-                    "path": "layout.content.body",
-                    "type": "plugin",
-                    "category": "plugin",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "Body"
-                    },
-                    "plugin": {
-                      "embeddedTrees": [
-                        {
-                          "version": 1,
-                          "key": "blocks",
-                          "root": [
-                            "root"
-                          ],
-                          "children": "children",
-                          "tag": "type",
-                          "cases": [
-                            {
-                              "tagValue": "block",
-                              "payload": "fields",
-                              "discriminator": "blockType",
-                              "identity": "_key"
-                            }
-                          ]
-                        }
-                      ],
-                      "key": "richtext",
-                      "config": {
-                        "features": [
-                          "code",
-                          "horizontal-rule",
-                          "links",
-                          "lists",
-                          "relationships",
-                          "uploads"
-                        ]
-                      },
-                      "referenceKeys": [
-                        "relationTo"
-                      ]
-                    }
-                  },
-                  {
-                    "id": "pages-layout-content-links",
-                    "name": "links",
-                    "path": "layout.content.links",
-                    "type": "array",
-                    "category": "nested",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "Links"
-                    },
-                    "nested": {
-                      "fields": [
-                        {
-                          "id": "pages-layout-content-links-label",
-                          "name": "label",
-                          "path": "layout.content.links.label",
-                          "type": "text",
-                          "category": "scalar",
-                          "required": true,
-                          "unique": false,
-                          "admin": {
-                            "label": "Label"
-                          },
-                          "text": {}
-                        },
-                        {
-                          "id": "pages-layout-content-links-href",
-                          "name": "href",
-                          "path": "layout.content.links.href",
-                          "type": "text",
-                          "category": "scalar",
-                          "required": true,
-                          "unique": false,
-                          "admin": {
-                            "label": "Href"
-                          },
-                          "text": {}
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "id": "pages-layout-content-block-name",
-                    "name": "blockName",
-                    "path": "layout.content.blockName",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "default": "",
-                    "admin": {
-                      "label": "Block name"
-                    },
-                    "text": {}
-                  }
-                ]
-              },
-              {
-                "typeName": "Media",
-                "admin": {
-                  "rowLabel": "caption"
-                },
-                "slug": "media",
-                "labels": {
-                  "singular": "Media",
-                  "plural": "Media"
-                },
-                "fields": [
-                  {
-                    "id": "pages-layout-media-asset",
-                    "name": "asset",
-                    "path": "layout.media.asset",
-                    "type": "relationship",
-                    "category": "relationship",
-                    "required": true,
-                    "unique": false,
-                    "admin": {
-                      "label": "Asset"
-                    },
-                    "relationship": {
-                      "collectionId": "assets",
-                      "collectionSlug": "assets",
-                      "onDelete": "restrict"
-                    }
-                  },
-                  {
-                    "id": "pages-layout-media-caption",
-                    "name": "caption",
-                    "path": "layout.media.caption",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "localized": true,
-                    "admin": {
-                      "label": "Caption"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "pages-layout-media-block-name",
-                    "name": "blockName",
-                    "path": "layout.media.blockName",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "default": "",
-                    "admin": {
-                      "label": "Block name"
-                    },
-                    "text": {}
-                  }
-                ]
-              },
-              {
-                "typeName": "CTA",
-                "admin": {
-                  "rowLabel": "label"
-                },
-                "slug": "cta",
-                "labels": {
-                  "singular": "CTA",
-                  "plural": "Ctas"
-                },
-                "fields": [
-                  {
-                    "id": "pages-layout-cta-block-name",
-                    "name": "blockName",
-                    "path": "layout.cta.blockName",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "Block name"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "pages-layout-cta-label",
-                    "name": "label",
-                    "path": "layout.cta.label",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": true,
-                    "unique": false,
-                    "localized": true,
-                    "admin": {
-                      "label": "Label"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "pages-layout-cta-destination",
-                    "name": "destination",
-                    "path": "layout.cta.destination",
-                    "type": "relationship",
-                    "category": "relationship",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "Destination"
-                    },
-                    "relationship": {
-                      "collectionId": "pages",
-                      "collectionSlug": "pages",
-                      "onDelete": "nullify"
-                    }
-                  }
-                ]
-              }
-            ]
+            "maxRows": 12
           }
         }
       ]
@@ -480,145 +637,9 @@
             "label": "Layout"
           },
           "blocks": {
-            "types": [
-              {
-                "typeName": "Hero",
-                "admin": {
-                  "rowLabel": "heading"
-                },
-                "slug": "hero",
-                "labels": {
-                  "singular": "Hero",
-                  "plural": "Heroes"
-                },
-                "fields": [
-                  {
-                    "id": "campaigns-layout-hero-heading",
-                    "name": "heading",
-                    "path": "layout.hero.heading",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": true,
-                    "unique": false,
-                    "localized": true,
-                    "admin": {
-                      "label": "Heading"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "campaigns-layout-hero-appearance",
-                    "name": "appearance",
-                    "path": "layout.hero.appearance",
-                    "type": "group",
-                    "category": "nested",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "Appearance"
-                    },
-                    "nested": {
-                      "fields": [
-                        {
-                          "id": "campaigns-layout-hero-appearance-tone",
-                          "name": "tone",
-                          "path": "layout.hero.appearance.tone",
-                          "type": "select",
-                          "category": "scalar",
-                          "required": false,
-                          "unique": false,
-                          "admin": {
-                            "label": "Tone"
-                          },
-                          "select": {
-                            "options": [
-                              {
-                                "value": "light",
-                                "label": "Light"
-                              },
-                              {
-                                "value": "dark",
-                                "label": "Dark"
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "id": "campaigns-layout-hero-block-name",
-                    "name": "blockName",
-                    "path": "layout.hero.blockName",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "default": "",
-                    "admin": {
-                      "label": "Block name"
-                    },
-                    "text": {}
-                  }
-                ]
-              },
-              {
-                "typeName": "CTA",
-                "admin": {
-                  "rowLabel": "label"
-                },
-                "slug": "cta",
-                "labels": {
-                  "singular": "CTA",
-                  "plural": "Ctas"
-                },
-                "fields": [
-                  {
-                    "id": "campaigns-layout-cta-block-name",
-                    "name": "blockName",
-                    "path": "layout.cta.blockName",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "Block name"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "campaigns-layout-cta-label",
-                    "name": "label",
-                    "path": "layout.cta.label",
-                    "type": "text",
-                    "category": "scalar",
-                    "required": true,
-                    "unique": false,
-                    "localized": true,
-                    "admin": {
-                      "label": "Label"
-                    },
-                    "text": {}
-                  },
-                  {
-                    "id": "campaigns-layout-cta-destination",
-                    "name": "destination",
-                    "path": "layout.cta.destination",
-                    "type": "relationship",
-                    "category": "relationship",
-                    "required": false,
-                    "unique": false,
-                    "admin": {
-                      "label": "Destination"
-                    },
-                    "relationship": {
-                      "collectionId": "pages",
-                      "collectionSlug": "pages",
-                      "onDelete": "nullify"
-                    }
-                  }
-                ]
-              }
+            "blockReferences": [
+              "hero",
+              "cta"
             ]
           }
         }
@@ -680,334 +701,15 @@
                 "tag": "type",
                 "cases": [
                   {
+                    "blockReferences": [
+                      "callout",
+                      "media",
+                      "cta"
+                    ],
                     "tagValue": "block",
                     "payload": "fields",
                     "discriminator": "blockType",
-                    "identity": "_key",
-                    "types": [
-                      {
-                        "typeName": "Callout",
-                        "admin": {
-                          "rowLabel": "title"
-                        },
-                        "slug": "callout",
-                        "labels": {
-                          "singular": "Callout",
-                          "plural": "Callouts"
-                        },
-                        "fields": [
-                          {
-                            "id": "articles-body-blocks-block-callout-block-name",
-                            "name": "blockName",
-                            "path": "body.blocks.block.callout.blockName",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Block name"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-body-blocks-block-callout-title",
-                            "name": "title",
-                            "path": "body.blocks.block.callout.title",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": true,
-                            "unique": false,
-                            "admin": {
-                              "label": "Title"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-body-blocks-block-callout-message",
-                            "name": "message",
-                            "path": "body.blocks.block.callout.message",
-                            "type": "textarea",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "localized": true,
-                            "admin": {
-                              "label": "Message"
-                            },
-                            "textarea": {}
-                          },
-                          {
-                            "id": "articles-body-blocks-block-callout-detail",
-                            "name": "detail",
-                            "path": "body.blocks.block.callout.detail",
-                            "type": "plugin",
-                            "category": "plugin",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Detail"
-                            },
-                            "plugin": {
-                              "embeddedTrees": [
-                                {
-                                  "version": 1,
-                                  "key": "blocks",
-                                  "root": [
-                                    "root"
-                                  ],
-                                  "children": "children",
-                                  "tag": "type",
-                                  "cases": [
-                                    {
-                                      "tagValue": "block",
-                                      "payload": "fields",
-                                      "discriminator": "blockType",
-                                      "identity": "_key",
-                                      "types": [
-                                        {
-                                          "typeName": "CTA",
-                                          "admin": {
-                                            "rowLabel": "label"
-                                          },
-                                          "slug": "cta",
-                                          "labels": {
-                                            "singular": "CTA",
-                                            "plural": "Ctas"
-                                          },
-                                          "fields": [
-                                            {
-                                              "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
-                                              "name": "blockName",
-                                              "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
-                                              "type": "text",
-                                              "category": "scalar",
-                                              "required": false,
-                                              "unique": false,
-                                              "admin": {
-                                                "label": "Block name"
-                                              },
-                                              "text": {}
-                                            },
-                                            {
-                                              "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
-                                              "name": "label",
-                                              "path": "body.blocks.block.callout.detail.blocks.block.cta.label",
-                                              "type": "text",
-                                              "category": "scalar",
-                                              "required": true,
-                                              "unique": false,
-                                              "localized": true,
-                                              "admin": {
-                                                "label": "Label"
-                                              },
-                                              "text": {}
-                                            },
-                                            {
-                                              "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-destination",
-                                              "name": "destination",
-                                              "path": "body.blocks.block.callout.detail.blocks.block.cta.destination",
-                                              "type": "relationship",
-                                              "category": "relationship",
-                                              "required": false,
-                                              "unique": false,
-                                              "admin": {
-                                                "label": "Destination"
-                                              },
-                                              "relationship": {
-                                                "collectionId": "pages",
-                                                "collectionSlug": "pages",
-                                                "onDelete": "nullify"
-                                              }
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ],
-                              "key": "richtext",
-                              "config": {
-                                "features": [
-                                  "blocks",
-                                  "code",
-                                  "horizontal-rule",
-                                  "links",
-                                  "lists",
-                                  "relationships",
-                                  "uploads"
-                                ]
-                              },
-                              "referenceKeys": [
-                                "relationTo"
-                              ]
-                            }
-                          },
-                          {
-                            "id": "articles-body-blocks-block-callout-aside",
-                            "name": "aside",
-                            "path": "body.blocks.block.callout.aside",
-                            "type": "plugin",
-                            "category": "plugin",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Aside"
-                            },
-                            "plugin": {
-                              "embeddedTrees": [
-                                {
-                                  "version": 1,
-                                  "key": "blocks",
-                                  "root": [
-                                    "root"
-                                  ],
-                                  "children": "children",
-                                  "tag": "type",
-                                  "cases": [
-                                    {
-                                      "tagValue": "block",
-                                      "payload": "fields",
-                                      "discriminator": "blockType",
-                                      "identity": "_key"
-                                    }
-                                  ]
-                                }
-                              ],
-                              "key": "richtext",
-                              "config": {
-                                "features": [
-                                  "code",
-                                  "horizontal-rule",
-                                  "links",
-                                  "lists",
-                                  "relationships",
-                                  "uploads"
-                                ]
-                              },
-                              "referenceKeys": [
-                                "relationTo"
-                              ]
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "typeName": "Media",
-                        "admin": {
-                          "rowLabel": "caption"
-                        },
-                        "slug": "media",
-                        "labels": {
-                          "singular": "Media",
-                          "plural": "Media"
-                        },
-                        "fields": [
-                          {
-                            "id": "articles-body-blocks-block-media-asset",
-                            "name": "asset",
-                            "path": "body.blocks.block.media.asset",
-                            "type": "relationship",
-                            "category": "relationship",
-                            "required": true,
-                            "unique": false,
-                            "admin": {
-                              "label": "Asset"
-                            },
-                            "relationship": {
-                              "collectionId": "assets",
-                              "collectionSlug": "assets",
-                              "onDelete": "restrict"
-                            }
-                          },
-                          {
-                            "id": "articles-body-blocks-block-media-caption",
-                            "name": "caption",
-                            "path": "body.blocks.block.media.caption",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "localized": true,
-                            "admin": {
-                              "label": "Caption"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-body-blocks-block-media-block-name",
-                            "name": "blockName",
-                            "path": "body.blocks.block.media.blockName",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "default": "",
-                            "admin": {
-                              "label": "Block name"
-                            },
-                            "text": {}
-                          }
-                        ]
-                      },
-                      {
-                        "typeName": "CTA",
-                        "admin": {
-                          "rowLabel": "label"
-                        },
-                        "slug": "cta",
-                        "labels": {
-                          "singular": "CTA",
-                          "plural": "Ctas"
-                        },
-                        "fields": [
-                          {
-                            "id": "articles-body-blocks-block-cta-block-name",
-                            "name": "blockName",
-                            "path": "body.blocks.block.cta.blockName",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Block name"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-body-blocks-block-cta-label",
-                            "name": "label",
-                            "path": "body.blocks.block.cta.label",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": true,
-                            "unique": false,
-                            "localized": true,
-                            "admin": {
-                              "label": "Label"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-body-blocks-block-cta-destination",
-                            "name": "destination",
-                            "path": "body.blocks.block.cta.destination",
-                            "type": "relationship",
-                            "category": "relationship",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Destination"
-                            },
-                            "relationship": {
-                              "collectionId": "pages",
-                              "collectionSlug": "pages",
-                              "onDelete": "nullify"
-                            }
-                          }
-                        ]
-                      }
-                    ]
+                    "identity": "_key"
                   }
                 ]
               }
@@ -1053,330 +755,15 @@
                 "tag": "type",
                 "cases": [
                   {
+                    "blockReferences": [
+                      "callout",
+                      "media",
+                      "cta"
+                    ],
                     "tagValue": "block",
                     "payload": "fields",
                     "discriminator": "blockType",
-                    "identity": "_key",
-                    "types": [
-                      {
-                        "typeName": "Callout",
-                        "admin": {
-                          "rowLabel": "title"
-                        },
-                        "slug": "callout",
-                        "labels": {
-                          "singular": "Callout",
-                          "plural": "Callouts"
-                        },
-                        "fields": [
-                          {
-                            "id": "articles-localized-body-blocks-block-callout-block-name",
-                            "name": "blockName",
-                            "path": "localizedBody.blocks.block.callout.blockName",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Block name"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-localized-body-blocks-block-callout-title",
-                            "name": "title",
-                            "path": "localizedBody.blocks.block.callout.title",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": true,
-                            "unique": false,
-                            "admin": {
-                              "label": "Title"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-localized-body-blocks-block-callout-message",
-                            "name": "message",
-                            "path": "localizedBody.blocks.block.callout.message",
-                            "type": "textarea",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Message"
-                            },
-                            "textarea": {}
-                          },
-                          {
-                            "id": "articles-localized-body-blocks-block-callout-detail",
-                            "name": "detail",
-                            "path": "localizedBody.blocks.block.callout.detail",
-                            "type": "plugin",
-                            "category": "plugin",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Detail"
-                            },
-                            "plugin": {
-                              "embeddedTrees": [
-                                {
-                                  "version": 1,
-                                  "key": "blocks",
-                                  "root": [
-                                    "root"
-                                  ],
-                                  "children": "children",
-                                  "tag": "type",
-                                  "cases": [
-                                    {
-                                      "tagValue": "block",
-                                      "payload": "fields",
-                                      "discriminator": "blockType",
-                                      "identity": "_key",
-                                      "types": [
-                                        {
-                                          "typeName": "CTA",
-                                          "admin": {
-                                            "rowLabel": "label"
-                                          },
-                                          "slug": "cta",
-                                          "labels": {
-                                            "singular": "CTA",
-                                            "plural": "Ctas"
-                                          },
-                                          "fields": [
-                                            {
-                                              "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
-                                              "name": "blockName",
-                                              "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
-                                              "type": "text",
-                                              "category": "scalar",
-                                              "required": false,
-                                              "unique": false,
-                                              "admin": {
-                                                "label": "Block name"
-                                              },
-                                              "text": {}
-                                            },
-                                            {
-                                              "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
-                                              "name": "label",
-                                              "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.label",
-                                              "type": "text",
-                                              "category": "scalar",
-                                              "required": true,
-                                              "unique": false,
-                                              "admin": {
-                                                "label": "Label"
-                                              },
-                                              "text": {}
-                                            },
-                                            {
-                                              "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-destination",
-                                              "name": "destination",
-                                              "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.destination",
-                                              "type": "relationship",
-                                              "category": "relationship",
-                                              "required": false,
-                                              "unique": false,
-                                              "admin": {
-                                                "label": "Destination"
-                                              },
-                                              "relationship": {
-                                                "collectionId": "pages",
-                                                "collectionSlug": "pages",
-                                                "onDelete": "nullify"
-                                              }
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ],
-                              "key": "richtext",
-                              "config": {
-                                "features": [
-                                  "blocks",
-                                  "code",
-                                  "horizontal-rule",
-                                  "links",
-                                  "lists",
-                                  "relationships",
-                                  "uploads"
-                                ]
-                              },
-                              "referenceKeys": [
-                                "relationTo"
-                              ]
-                            }
-                          },
-                          {
-                            "id": "articles-localized-body-blocks-block-callout-aside",
-                            "name": "aside",
-                            "path": "localizedBody.blocks.block.callout.aside",
-                            "type": "plugin",
-                            "category": "plugin",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Aside"
-                            },
-                            "plugin": {
-                              "embeddedTrees": [
-                                {
-                                  "version": 1,
-                                  "key": "blocks",
-                                  "root": [
-                                    "root"
-                                  ],
-                                  "children": "children",
-                                  "tag": "type",
-                                  "cases": [
-                                    {
-                                      "tagValue": "block",
-                                      "payload": "fields",
-                                      "discriminator": "blockType",
-                                      "identity": "_key"
-                                    }
-                                  ]
-                                }
-                              ],
-                              "key": "richtext",
-                              "config": {
-                                "features": [
-                                  "code",
-                                  "horizontal-rule",
-                                  "links",
-                                  "lists",
-                                  "relationships",
-                                  "uploads"
-                                ]
-                              },
-                              "referenceKeys": [
-                                "relationTo"
-                              ]
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "typeName": "Media",
-                        "admin": {
-                          "rowLabel": "caption"
-                        },
-                        "slug": "media",
-                        "labels": {
-                          "singular": "Media",
-                          "plural": "Media"
-                        },
-                        "fields": [
-                          {
-                            "id": "articles-localized-body-blocks-block-media-asset",
-                            "name": "asset",
-                            "path": "localizedBody.blocks.block.media.asset",
-                            "type": "relationship",
-                            "category": "relationship",
-                            "required": true,
-                            "unique": false,
-                            "admin": {
-                              "label": "Asset"
-                            },
-                            "relationship": {
-                              "collectionId": "assets",
-                              "collectionSlug": "assets",
-                              "onDelete": "restrict"
-                            }
-                          },
-                          {
-                            "id": "articles-localized-body-blocks-block-media-caption",
-                            "name": "caption",
-                            "path": "localizedBody.blocks.block.media.caption",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Caption"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-localized-body-blocks-block-media-block-name",
-                            "name": "blockName",
-                            "path": "localizedBody.blocks.block.media.blockName",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "default": "",
-                            "admin": {
-                              "label": "Block name"
-                            },
-                            "text": {}
-                          }
-                        ]
-                      },
-                      {
-                        "typeName": "CTA",
-                        "admin": {
-                          "rowLabel": "label"
-                        },
-                        "slug": "cta",
-                        "labels": {
-                          "singular": "CTA",
-                          "plural": "Ctas"
-                        },
-                        "fields": [
-                          {
-                            "id": "articles-localized-body-blocks-block-cta-block-name",
-                            "name": "blockName",
-                            "path": "localizedBody.blocks.block.cta.blockName",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Block name"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-localized-body-blocks-block-cta-label",
-                            "name": "label",
-                            "path": "localizedBody.blocks.block.cta.label",
-                            "type": "text",
-                            "category": "scalar",
-                            "required": true,
-                            "unique": false,
-                            "admin": {
-                              "label": "Label"
-                            },
-                            "text": {}
-                          },
-                          {
-                            "id": "articles-localized-body-blocks-block-cta-destination",
-                            "name": "destination",
-                            "path": "localizedBody.blocks.block.cta.destination",
-                            "type": "relationship",
-                            "category": "relationship",
-                            "required": false,
-                            "unique": false,
-                            "admin": {
-                              "label": "Destination"
-                            },
-                            "relationship": {
-                              "collectionId": "pages",
-                              "collectionSlug": "pages",
-                              "onDelete": "nullify"
-                            }
-                          }
-                        ]
-                      }
-                    ]
+                    "identity": "_key"
                   }
                 ]
               }

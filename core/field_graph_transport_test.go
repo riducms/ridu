@@ -38,10 +38,10 @@ func TestUnifiedFieldsRESTLocalAgreement(t *testing.T) {
 		"title": store.String("Contract"), "sku": store.String(" sku-root "), "author": store.String(user.ID),
 		"meta":           store.Object(store.Values{"accent": store.String("green")}),
 		"sections":       store.List(store.Object(store.Values{"_key": store.String("A"), "sku": store.String("sku-a"), "products": store.List(row("B", "sku-b"))}), row("C", "sku-c")),
-		"content":        store.List(store.Object(store.Values{"_key": store.String("card-1"), "blockType": store.String("card"), "sku": store.String("sku-card"), "accent": store.String("red")})),
+		"content":        store.List(store.Object(store.Values{"_key": store.String("card-1"), "blockType": store.String(unifiedfields.CardSlug), "sku": store.String("sku-card"), "accent": store.String("red")})),
 		"localizedTitle": store.String("English"), "localizedMeta": store.Object(store.Values{"description": store.String("English description")}),
 		"privateNote": store.String("must be redacted"), "presentationHidden": store.String("still readable"),
-		"body": richtextblocks.Document(richtextblocks.Block("card", "embedded-1", store.Values{"sku": store.String("sku-embedded"), "accent": store.String("orange")})),
+		"body": richtextblocks.Document(richtextblocks.Block(unifiedfields.CardSlug, "embedded-1", store.Values{"sku": store.String("sku-embedded"), "accent": store.String("orange")})),
 	}
 	local, err := app.Local().Create(t.Context(), "unified-articles", input, ridu.MutationOptions{})
 	if err != nil {
@@ -151,7 +151,7 @@ func TestUnifiedSaveIssuesFollowServerReorderAndEmbeddedIdentity(t *testing.T) {
 	input := store.Values{"title": store.String("Issues"), "sections": store.List(
 		store.Object(store.Values{"_key": store.String("A"), "products": store.List(store.Object(store.Values{"_key": store.String("B"), "sku": store.String("invalid")}))}),
 		store.Object(store.Values{"_key": store.String("C")})),
-		"body": richtextblocks.Document(richtextblocks.Block("card", "embedded-A", store.Values{"sku": store.String("invalid")})),
+		"body": richtextblocks.Document(richtextblocks.Block(unifiedfields.CardSlug, "embedded-A", store.Values{"sku": store.String("invalid")})),
 	}
 	_, err = app.Local().Create(t.Context(), "unified-articles", input, ridu.MutationOptions{})
 	var local *ridu.OperationError

@@ -80,11 +80,7 @@ func TestGraphQLPostgresCRUDLocalizationAndPopulation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := backend.Plan(ctx, manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, manifest); err != nil {
 		t.Fatal(err)
 	}
 	application, err := ridu.New(config, backend)
@@ -113,7 +109,7 @@ func TestGraphQLPostgresCRUDLocalizationAndPopulation(t *testing.T) {
 	}
 	result := graphQL(t, server.URL, `query($id: ID!, $category: ID!) {
   Post(id: $id, locale: FR) { title category { name } }
-  Posts(where: {seo__description: {equals: "Indexed"}, links__label: {equals: "Docs"}}) { totalDocs }
+  Posts(where: {seo: {description: {equals: "Indexed"}}, links: {label: {equals: "Docs"}}}) { totalDocs }
   Category(id: $category) { posts(count: true) { docs { title } totalDocs } }
 }`, map[string]interface{}{"id": postID, "category": categoryID})
 	if objectAt(t, result, "data")["Post"] == nil {

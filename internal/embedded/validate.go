@@ -87,11 +87,8 @@ func ValidateValue(field schema.Field, value store.Value, path string, allLocale
 				fields = field.Nested.ResolvedFields()
 			} else if field.Type == schema.FieldTypeBlocks && field.Blocks != nil {
 				kind, _ := row.Get("blockType").StringValue()
-				for _, block := range field.Blocks.ResolvedTypes() {
-					if block.Slug == kind {
-						fields = block.ResolvedFields()
-						break
-					}
+				if block, found := field.Blocks.Definition(kind); found {
+					fields = block.ResolvedFields()
 				}
 			}
 			if err := validateObject(fields, row, path+"."+strconv.Itoa(i), allLocales, budget); err != nil {

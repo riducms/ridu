@@ -51,11 +51,11 @@ func sqliteRenameIntentFor(t *testing.T, before, after schema.Manifest, want int
 	t.Helper()
 	var renames []migration.Rename
 	for _, candidate := range schemadiff.RenameCandidates(before, after) {
-		if candidate.Kind != schemadiff.RenameField {
+		if candidate.Kind == schemadiff.RenameCollection {
 			t.Fatalf("unexpected rename candidate %#v", candidate)
 		}
 		renames = append(renames, migration.Rename{
-			CollectionBefore: candidate.BeforeCollection.Slug, CollectionAfter: candidate.AfterCollection.Slug,
+			CollectionBefore: candidate.BeforeCollection.Slug, CollectionAfter: candidate.AfterCollection.Slug, Block: candidate.Block,
 			FieldBefore: candidate.BeforeField.Path.String(), FieldAfter: candidate.AfterField.Path.String(),
 		})
 	}

@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -100,6 +101,10 @@ const (
 	// StepDataTransform invokes one application-compiled, checksum-bound
 	// callback inside the adapter's migration transaction.
 	StepDataTransform StepKind = "data_transform"
+	// StepAuditRequiredValues fails the migration while a stored document has
+	// no value for a field the artifact makes required. It runs after every
+	// data transform in its transaction, so a transform can backfill values.
+	StepAuditRequiredValues StepKind = "audit_required_values"
 )
 
 // DataTransformDescriptor is the immutable artifact identity of one compiled
@@ -113,14 +118,27 @@ type DataTransformDescriptor struct {
 // DataTransaction is the transaction-bound semantic surface available to a
 // migration callback. It intentionally omits Commit, Rollback, and generic SQL
 // so the adapter retains ownership of the enclosing schema/data transaction.
+// Update locks and reads the stored document itself; a callback never
+// supplies it. Delete also removes the framework state the document owns,
+// such as its versions, sessions, and preferences.
 type DataTransaction interface {
 	Create(context.Context, store.CreateRequest) (store.Document, error)
 	Find(context.Context, store.Request) (store.Document, error)
 	List(context.Context, store.Request) (store.Page, error)
-	Update(context.Context, store.UpdateRequest) (store.Document, error)
+	Update(context.Context, UpdateRequest) (store.Document, error)
 	Trash(context.Context, store.Request) (store.Document, error)
 	Restore(context.Context, store.Request) (store.Document, error)
 	Delete(context.Context, store.Request) (store.Document, error)
+}
+
+// UpdateRequest changes one document from a data transform. Values patch the
+// stored document unless ReplaceValues makes them its complete authored
+// state. The transaction applies the patch to the stored row it locks, never
+// to a document the callback read or edited.
+type UpdateRequest struct {
+	store.Request
+	Values        store.Values
+	ReplaceValues bool
 }
 
 // DataTransformCallback performs one direction of a reviewed migration.
@@ -189,11 +207,17 @@ type Risk struct {
 // Rename records explicit, committed content identity intent. Inference is
 // allowed only while proposing this value; runners execute only persisted intent.
 type Rename struct {
-	// CollectionBefore and CollectionAfter are current public slugs.
-	CollectionBefore schema.CollectionSlug `json:"collectionBefore"`
-	CollectionAfter  schema.CollectionSlug `json:"collectionAfter"`
-	// FieldBefore and FieldAfter are canonical field paths. Empty paths mean the
-	// rename applies to the collection itself.
+	// CollectionBefore and CollectionAfter are current public slugs. Both are
+	// empty for a block field rename.
+	CollectionBefore schema.CollectionSlug `json:"collectionBefore,omitempty"`
+	CollectionAfter  schema.CollectionSlug `json:"collectionAfter,omitempty"`
+	// Block names the block definition whose field is renamed. The definition
+	// is shared, so the rename moves the field's content in every stored block
+	// of it, in every resource and version snapshot.
+	Block string `json:"block,omitempty"`
+	// FieldBefore and FieldAfter are canonical field paths, relative to Block
+	// for a block field rename. Empty paths mean the rename applies to the
+	// collection itself.
 	FieldBefore string `json:"fieldBefore,omitempty"`
 	FieldAfter  string `json:"fieldAfter,omitempty"`
 	// Fields records every nested or top-level field path whose identity changed
@@ -226,6 +250,8 @@ type Operation struct {
 	// historical version rows could otherwise restore references to a retired
 	// resource. It is present only while planning StepRetireResources.
 	PurgeVersionOwnerIDs []schema.StableID `json:"purgeVersionOwnerIds,omitempty"`
+	// RequiredFields is present only for StepAuditRequiredValues.
+	RequiredFields []RequiredFieldAddress `json:"requiredFields,omitempty"`
 }
 
 // Artifact is the immutable source of truth for one migration. It embeds both
@@ -257,14 +283,83 @@ type Artifact struct {
 	Risks []Risk `json:"risks"`
 }
 
-// DigestManifest returns the SHA-256 digest of a canonical manifest.
+// DigestManifest returns the SHA-256 digest of a canonical manifest: its
+// schema.Manifest.Bytes encoding. Readiness checks and every migration step
+// digest whole manifests, so the indented form is streamed into the hash from
+// the compact encoding instead of being materialized.
 func DigestManifest(manifest schema.Manifest) (string, error) {
-	encoded, err := manifest.Bytes()
+	compact, err := manifest.MarshalJSON()
 	if err != nil {
 		return "", err
 	}
-	digest := sha256.Sum256(encoded)
-	return hex.EncodeToString(digest[:]), nil
+	hash := sha256.New()
+	writeCanonicalIndent(hash, compact)
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// writeCanonicalIndent writes compact JSON as json.MarshalIndent(value, "",
+// "  ") formats it, followed by the canonical trailing newline. Empty objects
+// and arrays stay "{}" and "[]"; string contents are copied verbatim.
+func writeCanonicalIndent(writer io.Writer, compact []byte) {
+	const flushSize = 32 << 10
+	buffer := make([]byte, 0, flushSize+512)
+	depth := 0
+	inString, escaped, opened := false, false, false
+	newline := func() {
+		buffer = append(buffer, '\n')
+		for range depth {
+			buffer = append(buffer, ' ', ' ')
+		}
+	}
+	for _, character := range compact {
+		if inString {
+			buffer = append(buffer, character)
+			switch {
+			case escaped:
+				escaped = false
+			case character == '\\':
+				escaped = true
+			case character == '"':
+				inString = false
+			}
+		} else {
+			// An opening bracket indents only once its first member appears.
+			if opened && character != '}' && character != ']' {
+				opened = false
+				depth++
+				newline()
+			}
+			switch character {
+			case '"':
+				inString = true
+				buffer = append(buffer, character)
+			case '{', '[':
+				opened = true
+				buffer = append(buffer, character)
+			case ',':
+				buffer = append(buffer, character)
+				newline()
+			case ':':
+				buffer = append(buffer, ':', ' ')
+			case '}', ']':
+				if opened {
+					opened = false
+				} else {
+					depth--
+					newline()
+				}
+				buffer = append(buffer, character)
+			default:
+				buffer = append(buffer, character)
+			}
+		}
+		if len(buffer) >= flushSize {
+			_, _ = writer.Write(buffer)
+			buffer = buffer[:0]
+		}
+	}
+	buffer = append(buffer, '\n')
+	_, _ = writer.Write(buffer)
 }
 
 // Digest returns the SHA-256 digest of the canonical artifact JSON.

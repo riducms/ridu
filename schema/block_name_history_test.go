@@ -36,14 +36,16 @@ func TestParseHistoricalPreservesBlockSchemas(t *testing.T) {
 					t.Fatal(err)
 				}
 				snapshot := current.Snapshot()
+				// Every carrier records the block once, as a definition its
+				// container selects.
 				var historical *schema.BlockType
-				switch carrier {
-				case "inline":
-					historical = &snapshot.Collections[0].Fields[0].Blocks.Types[0]
-				case "registered":
-					historical = &snapshot.Blocks[0]
-				case "embedded":
-					historical = &snapshot.Collections[0].Fields[0].Plugin.EmbeddedTrees[0].Cases[0].Types[0]
+				for i := range snapshot.Blocks {
+					if snapshot.Blocks[i].Slug == "card" {
+						historical = &snapshot.Blocks[i]
+					}
+				}
+				if historical == nil {
+					t.Fatal("the block definition was not recorded")
 				}
 				if previousName == "number child" {
 					name := &historical.Fields[1]

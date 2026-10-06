@@ -42,13 +42,15 @@ func TestGraphQLRejectsVariablesInsideJSONLiterals(t *testing.T) {
 	if rejected["data"] != nil || len(errors) != 2 || !strings.Contains(joined, `"$caption"`) || !strings.Contains(joined, `"$note"`) || !strings.Contains(joined, "pass the whole JSON value as a variable") {
 		t.Fatalf("nested JSON variables were not rejected: %#v", rejected)
 	}
-	if page, err := app.Local().List(context.Background(), "pages", ridu.ListOptions{}); err != nil || page.Total != 0 {
-		t.Fatalf("rejected mutation stored %d pages: %v", page.Total, err)
+	if page, err := app.Local().List(context.Background(), "pages", ridu.ListOptions{}); err != nil {
+		t.Fatal(err)
+	} else if *page.Total != 0 {
+		t.Fatalf("rejected mutation stored %d pages", *page.Total)
 	}
 
 	accepted := graphQL(t, server.URL, `mutation($layout: JSON, $metadata: JSON) {
   createPage(data: {title: "Whole", layout: $layout, metadata: $metadata}) {
-    layout { ... on PageLayoutBlockCard { caption } }
+    layout { ... on CardBlock { caption } }
     metadata
   }
 }`, map[string]interface{}{

@@ -43,11 +43,11 @@ func TestMongoUploadMetadataAllowsFieldPoliciesWithinFixedStorageShape(t *testin
 		t.Fatalf("private metadata blocked an internal upload lookup: %v", err)
 	}
 	values := mongoUploadValues("original", "thumbnail")
-	if err := validateCompleteValues(media, values); err != nil {
+	if err := validateStoredValues(media, values); err != nil {
 		t.Fatalf("private image-size metadata was rejected: %v", err)
 	}
 	values["sizes"] = store.Object(store.Values{"thumb": store.String("invalid variant")})
-	if err := validateCompleteValues(media, values); err == nil {
+	if err := validateStoredValues(media, values); err == nil {
 		t.Fatal("private sizes bypassed managed image-size value validation")
 	}
 	for _, mutate := range []func(*schema.Field){
@@ -96,10 +96,10 @@ func TestMongoUploadEnvelopeAdmitsOnlyBoundedFrameworkShapes(t *testing.T) {
 	}
 
 	values := mongoUploadValues("original", "$historic")
-	if err := validateCompleteValues(media, values); err != nil {
+	if err := validateStoredValues(media, values); err != nil {
 		t.Fatalf("dynamic partial upload sizes rejected: %v", err)
 	}
-	if err := validateCompleteValues(media, store.Values{
+	if err := validateStoredValues(media, store.Values{
 		"filename": store.String("asset.txt"), "mimeType": store.String("text/plain"),
 		"filesize": store.Number(5), "url": store.String("/asset.txt"), "objectKey": store.String("original"),
 		"sizes": store.Object(store.Values{"legacy": store.Object(store.Values{
@@ -183,10 +183,17 @@ func TestMongoUploadValuesPreserveRelationshipSemantics(t *testing.T) {
 	if err := validateMongoUploadValue(hasMany, store.List(tooMany...), "content.gallery"); err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("oversized upload list error = %v", err)
 	}
+	// A has-many upload stores a list of IDs, filtered by membership as on
+	// every store; no scalar ID equals the list.
 	galleryPath, _ := query.NewPath("content", "gallery")
 	for _, role := range []string{"filter", "access"} {
-		if _, err := compileMongoNode(posts, query.Equal(galleryPath, "asset-a").Node(), role, mongoPredicateScope{}); err == nil || !strings.Contains(err.Error(), "unsupported nested or reference repeated field") {
-			t.Fatalf("has-many upload %s error = %v", role, err)
+		if compiled, err := compileMongoNode(posts, query.Equal(galleryPath, "asset-a").Node(), role, mongoPredicateScope{}); err == nil {
+			t.Fatalf("has-many upload %s equality compiled: %#v", role, compiled)
+		}
+		for _, expression := range []query.Expression{query.In(galleryPath, "asset-a"), query.Exists(galleryPath, true)} {
+			if _, err := compileMongoNode(posts, expression.Node(), role, mongoPredicateScope{}); err != nil {
+				t.Fatalf("has-many upload %s %v: %v", role, expression.Node().Comparison, err)
+			}
 		}
 	}
 

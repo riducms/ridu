@@ -7,7 +7,7 @@ import { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { PluginFieldBinding } from "@admin/core/forms/plugin-field-binding";
 import { guardPluginAuthoring } from "@admin/core/forms/plugin-field-authoring";
 import { createEmbeddedSchemaDraft } from "@admin/core/forms/embedded-schema-draft.svelte";
-import { draftFixture, tree } from "./draft-fixture";
+import { card, draftFixture, tree } from "./draft-fixture";
 
 const Drawer = svelte`
 	<script>
@@ -99,18 +99,19 @@ it("a rendered derived read can revoke nested drafts without unsafe reactive cle
 	const fixture = draftFixture(
 		[
 			{
-				id: "inner",
+				id: "block-card-inner",
 				name: "inner",
-				path: "body.inner",
+				path: "inner",
 				type: "plugin",
 				category: "plugin",
 				required: false,
 				unique: false,
 				admin: { label: "Inner" },
-				plugin: { key: "outline", config: {}, embeddedTrees: [tree([])] },
+				plugin: { key: "outline", config: {}, embeddedTrees: [tree("note")] },
 			},
 		],
-		{ inner: { outline: [] } }
+		{ inner: { outline: [] } },
+		[card([], "note")]
 	);
 	fixture.authoring.beginSchemaDraft!({ treeKey: "widgets", identity: "a" });
 	const session = fixture.sessions[0]!;
@@ -138,7 +139,7 @@ it("a rendered derived read can revoke nested drafts without unsafe reactive cle
 	const nested = authoring.beginSchemaDraft!({
 		treeKey: "widgets",
 		caseTag: "widget",
-		variantSlug: "card",
+		variantSlug: "note",
 	});
 	const screen = await render(DerivedReader, { child });
 	await expect.element(screen.getByRole("status")).toHaveTextContent("Active");

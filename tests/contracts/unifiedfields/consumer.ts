@@ -10,7 +10,7 @@ import {
 const create: UnifiedArticlesCreate = {
 	title: "Unified contract",
 	sections: [{ products: [{ sku: "SKU-A" }] }],
-	content: [{ blockType: "card", accent: "red" }],
+	content: [{ blockType: "unified-card", accent: "red" }],
 	author: "user",
 	localizedTitle: "English",
 	privateNote: "Read access does not prohibit a write",
@@ -23,7 +23,7 @@ const selected: UnifiedArticles = { id: "id", createdAt: "", updatedAt: "" };
 const output: UnifiedArticles = {
 	...selected,
 	sections: [{ _key: "A", products: [{ _key: "B" }] }],
-	content: [{ blockType: "note", _key: "C" }],
+	content: [{ blockType: "unified-note", _key: "C" }],
 	author: { id: "user", createdAt: "", updatedAt: "", name: "Ada" },
 	summary: "Article: Unified contract",
 };

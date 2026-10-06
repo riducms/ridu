@@ -332,6 +332,12 @@ Development synchronization never drops state or guesses how stored content shou
 compiled transform, index replacement, or reviewed retirement, create and apply an immutable
 production migration instead of repairing MongoDB by hand.
 
+MongoDB stores what a save accepted: drafts may stay incomplete, and a document saved before a
+field became required stays readable. A synchronization or migration that
+[makes a field required](/docs/migrations/#required-fields) reads the same documents as on
+PostgreSQL and SQLite and stops with `RIDU_REQUIRED_VALUES_MISSING` while any lacks the value. The
+migration needs `--allow-maintenance`, because MongoDB cannot lock collections against old writers.
+
 A change that looks like a rename is the exception in an interactive terminal: `ridu dev` asks
 whether to preserve the data. Answer `y` and it writes the rename migration, records the
 migrations the database already has, stops the running server, applies the rename with maintenance
@@ -341,6 +347,54 @@ migration yourself.
 
 `--no-sync` skips additive mutation, but it does not weaken verification: the candidate starts only
 when another owner has already prepared the selected database.
+
+## Concurrency and server limits {#concurrency}
+
+MongoDB has no row locks, so Ridu builds them from writes, which MongoDB lets only one open
+transaction make to a document. Where PostgreSQL share-locks a relationship target so it cannot
+change or be deleted while a save that references it commits, Ridu increments a small shared
+fence record of the target in the `z_ridu_reference_fences` collection. Each open save of a Ridu
+process uses its own record, so saves that share a target, such as one image used by many pages,
+proceed together. Updating or deleting a document increments a fence on the document itself and
+each of its fence records, which conflicts with every save that holds one: the update or delete
+waits for those saves to commit and then sees their references, so `restrict` and `nullify` apply to
+them. A document has at most 32 fence records. They stay for later saves and are removed when the
+document is deleted.
+
+Until a transaction writes content, Ridu absorbs a lock conflict. It waits, restarts the
+transaction on a newer snapshot, locks again every document it had locked, and continues when each
+is unchanged. The first save to use one of a document's fence records also fences the document
+itself, so concurrent first saves take turns once. Replicas coordinate through the same records;
+two replicas, or more concurrent saves in one process than records, can share one and then take
+turns on it. A save still fails with a `409` conflict when a document it locked changed meanwhile,
+when the conflict follows its first content write, or when 10 seconds or its request deadline pass
+first.
+
+Within one Ridu process, lock requests also wait in order, as they do on PostgreSQL. An update or
+delete that waits for a document holds back the references of saves that began after it, so it
+waits only for saves already under way, however many keep arriving. A request that waits for
+another request of the same process resumes as soon as that one ends, and a later update of a
+document a waiting save already locked waits for that save. The order does not span
+processes: a conflict with another replica is retried after a short randomized pause. An update of
+a document that saves on other replicas reference without pause can therefore still wait for up to
+10 seconds and fail.
+
+Every database statement of an operation carries a server time limit: its caller's deadline, and
+at most 60 seconds, MongoDB's default transaction lifetime. MongoDB stops a query whose caller gave
+up instead of finishing it.
+
+List totals, filtered bulk selections, and `distinct` values count only documents whose stored
+root matches the schema: every top-level and group field's type and, for array and blocks fields,
+the row count, row keys, and block types. The content of rows, including nested blocks, is
+validated when a document is read. A filter through arrays or blocks also checks the rows on its
+path against their fields and row keys, so a negated filter cannot count a malformed row as a
+non-match. The check runs for every row the filter traverses in a matching document, so a filter
+that matches many documents through several block levels costs noticeably more than one through
+a single level.
+
+The database's schema record stores the manifest compressed. The manifest stores each block once,
+however often it is used, so even block-heavy schemas are a small fraction of MongoDB's 16 MiB
+document limit. A schema that still exceeds the limit is rejected before anything is written.
 
 ## Production connection and credentials {#production-connection}
 
@@ -371,7 +425,7 @@ plaintext to another development host only. They do not expand the production su
 
 ## Immutable migration lifecycle {#migrations}
 
-New artifacts created by `ridu migrate create` use MongoDB planner contract `3.0.0` inside shared
+New artifacts created by `ridu migrate create` use MongoDB planner contract `5.0.0` inside shared
 artifact-envelope format `1`. Create and inspect the plan before the cutover:
 
 ```bash title="terminal"
@@ -379,7 +433,7 @@ ridu migrate create --name add-post-summary
 ridu migrate plan --json
 ```
 
-Ridu accepts only planner `3.0.0` artifacts, binds them to their manifest history, and rejects
+Ridu accepts only planner `5.0.0` artifacts, binds them to their manifest history, and rejects
 altered or reordered migration files. Its initial layout includes independent live heads and
 cross-head unique reservations. Earlier framework layouts and planner histories are unsupported;
 recreate the database and migration history rather than rewriting old artifacts. Startup and

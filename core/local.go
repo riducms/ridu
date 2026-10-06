@@ -26,6 +26,9 @@ type ListOptions struct {
 	Page int
 	// Limit is the maximum documents returned per page.
 	Limit int
+	// SkipTotal skips counting every match, like REST pagination=false. The
+	// page then has a nil Total and an exact HasNextPage.
+	SkipTotal bool
 	// Sort orders results by authored field paths without Read rules on the field or ancestors.
 	// Container sorts also require all descendants to have no Read rules.
 	Sort []query.Sort
@@ -226,9 +229,18 @@ type FieldCapabilities struct {
 	Update bool
 }
 
+// AccessCapabilities is the evaluated access of an actor and optional document
+// or input snapshot.
 type AccessCapabilities struct {
 	Operations OperationCapabilities
-	Fields     map[string]FieldCapabilities
+	// Fields holds field capabilities by runtime path for each located value,
+	// and by canonical path for each resource field and each block placement
+	// with located values.
+	Fields map[string]FieldCapabilities
+	// BlockFields holds, by block slug and definition-relative path, the
+	// capabilities of a block definition's field at any other placement, such
+	// as a row a client has yet to add.
+	BlockFields map[string]map[string]FieldCapabilities
 }
 
 type OperationError = operationengine.Error
@@ -358,7 +370,7 @@ func (local *LocalAPI) ListJoin(ctx context.Context, collection, id, field strin
 func listRequest(collection string, options ListOptions) operationengine.Request {
 	return operationengine.Request{
 		Operation: operation.Read, Collection: collection, Filter: options.Where,
-		Page: options.Page, Limit: options.Limit, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
+		Page: options.Page, Limit: options.Limit, SkipTotal: options.SkipTotal, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		Sort: options.Sort, Select: options.Select, Populate: options.Populate, OutputFields: cloneOptionalPaths(options.OutputFields), Draft: cloneOptionalBool(options.Draft), TrashOnly: options.TrashOnly,
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -396,7 +408,7 @@ func (local *LocalAPI) ListWindow(ctx context.Context, collection string, option
 	if result.Page == nil {
 		return store.Window{}, fmt.Errorf("operation engine returned no window")
 	}
-	return store.Window{Documents: result.Page.Documents, HasMore: result.WindowHasMore}, nil
+	return store.Window{Documents: result.Page.Documents, HasMore: result.Page.HasNextPage}, nil
 }
 
 // Capabilities evaluates collection, document, and field access without
@@ -415,13 +427,23 @@ func (local *LocalAPI) Capabilities(ctx context.Context, collection, id string, 
 	for path, capabilities := range result.Fields {
 		fields[path] = FieldCapabilities{Read: capabilities.Read, Create: capabilities.Create, Update: capabilities.Update}
 	}
+	var blockFields map[string]map[string]FieldCapabilities
+	for slug, definition := range result.BlockFields {
+		if blockFields == nil {
+			blockFields = make(map[string]map[string]FieldCapabilities, len(result.BlockFields))
+		}
+		blockFields[slug] = make(map[string]FieldCapabilities, len(definition))
+		for path, capabilities := range definition {
+			blockFields[slug][path] = FieldCapabilities{Read: capabilities.Read, Create: capabilities.Create, Update: capabilities.Update}
+		}
+	}
 	operations := result.Operations
 	return AccessCapabilities{Operations: OperationCapabilities{
 		Admin: operations.Admin, Create: operations.Create, Read: operations.Read, ReadVersions: operations.ReadVersions,
 		Update: operations.Update, Delete: operations.Delete, Duplicate: operations.Duplicate,
 		Publish: operations.Publish, Unpublish: operations.Unpublish, RestoreDeleted: operations.RestoreDeleted,
 		DeletePermanent: operations.DeletePermanent, SelectAll: operations.SelectAll, Unlock: operations.Unlock,
-	}, Fields: fields}, nil
+	}, Fields: fields, BlockFields: blockFields}, nil
 }
 
 // Update updates a document and applies the requested bounded
@@ -631,7 +653,7 @@ func (local *LocalAPI) BulkDeletePermanent(ctx context.Context, collection strin
 // EmptyTrash permanently deletes every accessible trashed document in one
 // bounded atomic batch.
 func (local *LocalAPI) EmptyTrash(ctx context.Context, collection string, options BulkOptions) ([]store.Document, error) {
-	listOptions := ListOptions{Page: 1, Limit: 100, TrashOnly: true,
+	listOptions := ListOptions{Page: 1, Limit: 100, SkipTotal: true, TrashOnly: true,
 		Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		Locale: options.Locale, FallbackLocales: options.FallbackLocales,
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -640,10 +662,10 @@ func (local *LocalAPI) EmptyTrash(ctx context.Context, collection string, option
 	if err != nil {
 		return nil, err
 	}
-	if page.Total == 0 {
+	if len(page.Documents) == 0 {
 		return []store.Document{}, nil
 	}
-	if page.Total > 100 {
+	if page.HasNextPage {
 		return nil, &operationengine.Error{Code: "bad_request", Status: 400, Message: "empty trash supports at most 100 documents per atomic operation"}
 	}
 	ids := make([]string, len(page.Documents))

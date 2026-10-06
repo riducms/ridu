@@ -10,6 +10,7 @@ import { FormController, FormValidationError } from "@admin/core/forms/form-cont
 import { FieldEditorBinding } from "@admin/core/forms/field-editor-binding";
 import { PluginFieldBinding } from "@admin/core/forms/plugin-field-binding";
 import { indexFieldValues } from "@admin/core/forms/form-issue-correlation";
+import { bindBlockField, blockDefinition } from "../block-manifest";
 import { draftFixture } from "./draft-fixture";
 
 const Harness = svelte`
@@ -290,24 +291,25 @@ for (const kind of ["array", "blocks", "embedded"] as const)
 			];
 			const embedded =
 				kind === "embedded" ? draftFixture([child], { values: rows[0]!.values }) : undefined;
-			const field: SchemaField = embedded?.schema ?? {
-				...list(),
-				id: "rows",
-				name: "rows",
-				path: "rows",
-				type: kind === "array" ? "array" : "blocks",
-				category: "nested",
-				...(kind === "array"
-					? { nested: { fields: [child] } }
-					: {
-							blocks: {
-								types: [
-									{ slug: "card", labels: { singular: "Card", plural: "Cards" }, fields: [child] },
-									{ slug: "note", labels: { singular: "Note", plural: "Notes" }, fields: [child] },
-								],
-							},
-						}),
-			};
+			const field: SchemaField =
+				embedded?.schema ??
+				bindBlockField(
+					[
+						blockDefinition("card", [child], { singular: "Card", plural: "Cards" }),
+						blockDefinition("note", [child], { singular: "Note", plural: "Notes" }),
+					],
+					{
+						...list(),
+						id: "rows",
+						name: "rows",
+						path: "rows",
+						type: kind === "array" ? "array" : "blocks",
+						category: "nested",
+						...(kind === "array"
+							? { nested: { fields: [child] } }
+							: { blocks: { blockReferences: ["card", "note"] } }),
+					}
+				);
 			const form = embedded?.form ?? new FormController();
 			if (!embedded) form.reset({ rows }, [field]);
 			const write = (items: typeof rows) =>

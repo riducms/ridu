@@ -165,10 +165,6 @@ func TestMongoDBArtifactRejectsNonAdditiveTransitions(t *testing.T) {
 			snapshot.Collections[0].Fields[0].Index = false
 			return snapshot
 		},
-		"required field addition": func(snapshot schema.Snapshot) schema.Snapshot {
-			snapshot.Collections[0].Fields = append(snapshot.Collections[0].Fields, mongoDBMigrationTextField(t, "posts-required", "required", true, false, false))
-			return snapshot
-		},
 		"content localization change": func(snapshot schema.Snapshot) schema.Snapshot {
 			snapshot.Application.Localization = &schema.LocalizationSettings{
 				Locales: []schema.Locale{{Code: "en", Label: "English"}}, DefaultLocale: "en",
@@ -243,8 +239,10 @@ func TestMongoDBArtifactExactReplanRejectsSelfConsistentTampering(t *testing.T) 
 		t.Fatalf("wrong planner error = %v", err)
 	}
 	unsupported := mongoDBMigrationCloneArtifact(t, artifact)
-	unsupported.Planner.Version = "2.0.0"
-	if err := validateMongoDBArtifactPlan(context.Background(), unsupported, "unsupported"); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
+	// 3.0.0 is the previous released planner; its artifacts cannot replay.
+	unsupported.Planner.Version = "3.0.0"
+	wantUnsupported := `MongoDB migration unsupported uses unsupported planner version "3.0.0"; this Ridu release supports only mongodb "` + mongoDBPlannerVersion + `", so create a new migration history`
+	if err := validateMongoDBArtifactPlan(context.Background(), unsupported, "unsupported"); err == nil || !strings.Contains(err.Error(), wantUnsupported) {
 		t.Fatalf("unsupported planner error = %v", err)
 	}
 }
@@ -355,7 +353,7 @@ func TestMongoDBArtifactPublicationRejectsAHeadInsertedAfterExactValidation(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	intervening.Phases, err = mongoDBArtifactPhases(intervening.FromDigest, &manifest, manifest, mongoDBSemanticRenamePlan{}, nil, nil, mongoDBIndexDelta{})
+	intervening.Phases, err = mongoDBArtifactPhases(intervening.FromDigest, &manifest, manifest, mongoDBSemanticRenamePlan{}, nil, nil, mongoDBIndexDelta{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

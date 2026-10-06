@@ -5,11 +5,30 @@ sessions and transactions. Opening it does not create collections, indexes, or m
 
 Draft-enabled versioned content keeps a working document and a separate live-head document;
 the live head is independent of retained version history. MongoDB migration history uses the
-current planner `3.0.0`; older planner artifacts and physical layouts are unsupported and must
+current planner `5.0.0`; older planner artifacts and physical layouts are unsupported and must
 be handled outside Ridu before startup. Readiness rejects incomplete live-head coverage.
 Unique-index additions to versioned content use a maintenance-admitted,
 resumable reservation rebuild before the new indexes are built; typed field renames
 rebuild those reservations in their semantic transaction.
+
+Document locks are fence writes, because MongoDB has no row locks. A reference takes a shared
+lock: it increments one of the target's fence records in `z_ridu_reference_fences`, one per open
+transaction of a Store, so saves that share a popular target do not conflict. An update or delete
+takes an exclusive lock: it increments the document's own fence and each of its fence records,
+which conflicts with every holder. The records stay for later saves, at most 32 per document, and
+are removed with the document, its collection's retirement or a collection rename. A transaction that meets a conflicting lock before its first
+content write restarts on a newer snapshot, locks again what it held and waits its turn instead of
+failing. Within one Store the turns are queued, as PostgreSQL queues lock requests: a waiting
+update or delete holds back the references of transactions that began after it, so a stream of
+saves cannot starve it, and a transaction waiting for another one of the Store resumes when that
+one ends or gives way. The queue is local to the process; replicas coordinate only through the
+fences and retry after a jittered backoff. Operation statements carry a server time limit of the
+caller's deadline, at most 60 seconds. Database-side shape guards for counts and selections check
+the authored root and each repeated field's row identity, so their size follows definitions rather
+than block placements. A filter through repeated fields nests one `$elemMatch` per level and guards
+the rows along its own path by their declared fields; see the
+[concurrency and limits](../../website/src/content/docs/mongodb.md#concurrency) section of the
+guide.
 
 New projects can select it during scaffolding:
 

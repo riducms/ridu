@@ -23,14 +23,12 @@
 
 	let panel = $state<"columns" | "filters">();
 
-	const readableFields = $derived(
-		filterFields.filter((field) => list.controller.canReadField(field.path))
-	);
+	const readableFields = $derived(filterFields.readable(list.controller.canReadField));
 
 	const statusLabel = $derived(
 		filterFields
-			.find((field) => field.path === "status")
-			?.select?.options.find((option) => option.value === view.status)?.label ?? view.status
+			.resolve("status")
+			?.field.select?.options.find((option) => option.value === view.status)?.label ?? view.status
 	);
 
 	function clearSearch() {
@@ -89,7 +87,7 @@
 					class={panel === "columns" ? "ridu-list__chevron-up" : undefined}
 				/>
 			</button>
-			{#if filterFields.length > 0}
+			{#if !filterFields.empty}
 				<button
 					type="button"
 					class="ridu-list__pill"

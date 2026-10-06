@@ -99,9 +99,17 @@ All returned options must be declared on the field. See
 
 At least one non-empty unique option is required. Defaults must be in the option list. Select also
 supports `Required`, localization, indexing/uniqueness where appropriate, conditions, and common
-admin options. Query single choices with equality or inequality and multi-selects with the
-list operators accepted by the generated SDK. Localizing the field stores different selected values per content
-locale; translating option labels alone uses `Option.LabelTranslations`.
+admin options. Localizing the field stores different selected values per content locale;
+translating option labels alone uses `Option.LabelTranslations`.
+
+## Filter by choice {#queries}
+
+Query a single choice with `equals`, `notEquals` or `in`. A multi-select is filtered by
+membership: `{ audiences: { in: ['editors', 'reviewers'] } }` matches a document that selected
+either option, and `query.Not(query.In("audiences", "editors"))` excludes those that selected
+editors. Equality, `contains` and sorting are unavailable for multi-selects and fail with
+`bad_query`. The admin list offers **is any of** and **is none of** with the field's options. See
+[Filter by membership](/docs/querying/#membership).
 
 ## Common mistakes {#troubleshooting}
 

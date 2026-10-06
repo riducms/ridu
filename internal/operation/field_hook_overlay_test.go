@@ -1,6 +1,7 @@
 package operation
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func TestFieldHookLeafRemovalRefreshesPresenceAndRetainedViews(t *testing.T) {
+func TestFieldHookLeafReplacementRefreshesViewsAndKeepsRetainedViews(t *testing.T) {
 	path, err := query.NewPath("value")
 	if err != nil {
 		t.Fatal(err)
@@ -20,36 +21,39 @@ func TestFieldHookLeafRemovalRefreshesPresenceAndRetainedViews(t *testing.T) {
 	values := store.Values{"value": store.String("original"), "marker": store.String("unchanged")}
 	var snapshots []operation.View
 	var identities []string
-	observe := func(ctx Context, expected store.Value, present bool) {
+	observe := func(ctx Context, expected store.Value) {
 		t.Helper()
-		if ctx.ValuePresent != present || !reflect.DeepEqual(ctx.Value, expected) {
-			t.Fatalf("input=%v present=%v, want %v present=%v", ctx.Value, ctx.ValuePresent, expected, present)
+		if !ctx.ValuePresent || !reflect.DeepEqual(ctx.Value, expected) {
+			t.Fatalf("input=%v present=%v, want %v", ctx.Value, ctx.ValuePresent, expected)
 		}
-		for _, view := range []store.Values{ctx.Data, ctx.SiblingData} {
-			value, exists := view["value"]
-			if exists != present || !reflect.DeepEqual(value, expected) {
-				t.Fatalf("callback view=%v present=%v, want %v present=%v", value, exists, expected, present)
+		if ctx.Data != nil {
+			t.Fatal("field callback received the operation's working map")
+		}
+		for _, view := range []store.Value{ctx.Root, ctx.Siblings} {
+			value, exists := view.Lookup("value")
+			if !exists || !reflect.DeepEqual(value, expected) {
+				t.Fatalf("callback view=%v present=%v, want %v", value, exists, expected)
 			}
-			if marker, _ := view["marker"].StringValue(); marker != "unchanged" {
+			if marker, _ := view.Get("marker").StringValue(); marker != "unchanged" {
 				t.Fatal("unrelated sibling changed")
 			}
 		}
-		snapshots = append(snapshots, operation.Snapshot(ctx.SiblingData))
+		snapshots = append(snapshots, operation.ObjectView(ctx.Siblings))
 		identities = append(identities, ctx.OccurrenceID)
 	}
 	binding := FieldBinding{ID: "value", Field: field, Hooks: Hooks{BeforeChange: []Hook{
 		func(ctx Context) error {
-			observe(ctx, store.String("original"), true)
-			delete(ctx.SiblingData, "value")
+			observe(ctx, store.String("original"))
+			ctx.ReplaceValue(store.String("first"))
 			return nil
 		},
 		func(ctx Context) error {
-			observe(ctx, store.Value{}, false)
-			ctx.SiblingData["value"] = store.Null()
+			observe(ctx, store.String("first"))
+			ctx.ReplaceValue(store.Null())
 			return nil
 		},
 		func(ctx Context) error {
-			observe(ctx, store.Null(), true)
+			observe(ctx, store.Null())
 			return nil
 		},
 	}}}
@@ -61,13 +65,54 @@ func TestFieldHookLeafRemovalRefreshesPresenceAndRetainedViews(t *testing.T) {
 	if len(snapshots) != 3 || identities[0] != identities[1] || identities[1] != identities[2] {
 		t.Fatalf("callback identities=%v", identities)
 	}
-	for i, expected := range []store.Value{store.String("original"), {}, store.Null()} {
+	for i, expected := range []store.Value{store.String("original"), store.String("first"), store.Null()} {
 		value, present := snapshots[i].Lookup("value")
-		if present != (i != 1) || !reflect.DeepEqual(value, expected) {
-			t.Fatalf("retained snapshot %d changed: value=%v present=%v", i, value, present)
+		if !present || !reflect.DeepEqual(value, expected) {
+			t.Fatalf("retained view %d changed: value=%v present=%v", i, value, present)
 		}
 	}
 	if value, present := values["value"]; !present || value.Kind() != store.ValueNull {
 		t.Fatal("final explicit null was lost")
+	}
+}
+
+func TestCallbackObjectNormalizesScalarsAndSharesCompleteObjects(t *testing.T) {
+	fields := []schema.Field{
+		{Name: "title", Type: schema.FieldTypeText, Localized: true},
+		{Name: "count", Type: schema.FieldTypeNumber},
+		{Name: "seo", Type: schema.FieldTypeGroup},
+	}
+	encoded := func(value store.Value) string {
+		t.Helper()
+		data, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	complete := store.Object(store.Values{"title": store.String("a"), "count": store.Number(1)})
+	if view := callbackObject(fields, complete, false, ownMember{}); !view.SameBacking(complete) {
+		t.Fatal("a complete object was copied")
+	}
+	partial := store.Object(store.Values{"count": store.Number(1)})
+	for _, test := range []struct {
+		name          string
+		origin        store.Value
+		skipLocalized bool
+		own           ownMember
+		want          string
+	}{
+		{"missing scalars read as null; containers stay sparse", partial, false, ownMember{}, `{"count":1,"title":null}`},
+		{"all-locales roots keep localized members sparse", partial, true, ownMember{}, `{"count":1}`},
+		{"own value replaces a stale member", complete, false, ownMember{name: "count", value: store.Number(2), present: true, apply: true}, `{"count":2,"title":"a"}`},
+		{"absent own scalar reads as null", complete, false, ownMember{name: "count", apply: true}, `{"count":null,"title":"a"}`},
+		{"a non-object origin becomes an object", store.Null(), false, ownMember{}, `{"count":null,"title":null}`},
+	} {
+		if got := encoded(callbackObject(fields, test.origin, test.skipLocalized, test.own)); got != test.want {
+			t.Errorf("%s: got %s, want %s", test.name, got, test.want)
+		}
+	}
+	if encoded(partial) != `{"count":1}` || encoded(complete) != `{"count":1,"title":"a"}` {
+		t.Fatal("normalization changed its origin")
 	}
 }

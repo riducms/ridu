@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -8,22 +9,39 @@ import (
 	"testing"
 )
 
-func embeddedMigrationField(children ...schema.Field) schema.Field {
+// embeddedMigrationField places the card definition, whose fields are
+// definition-relative, in an embedded tree case.
+func embeddedMigrationField(t *testing.T, children ...schema.Field) schema.Field {
 	path, _ := query.ParsePath("canvas")
-	tree := schema.EmbeddedTree{Version: 1, Key: "parts", Root: []string{"document"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "attributes", Identity: "uid", Discriminator: "variant", Types: []schema.BlockType{{Slug: "card", Fields: children}}}}}
-	return schema.Field{ID: "canvas", Name: "canvas", Path: path, Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{Key: "canvas", EmbeddedTrees: []schema.EmbeddedTree{tree}}}
+	tree := schema.EmbeddedTree{Version: 1, Key: "parts", Root: []string{"document"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "attributes", Identity: "uid", Discriminator: "variant", BlockReferences: []string{"card"}}}}
+	card := schema.BlockType{Slug: "card", TypeName: "Card", Fields: children}
+	return schematest.Bind(t, "pages", []schema.BlockType{card}, schema.Field{ID: "canvas", Name: "canvas", Path: path, Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{Key: "canvas", EmbeddedTrees: []schema.EmbeddedTree{tree}}})[0]
 }
+
+func embeddedMigrationText(name string, required bool) schema.Field {
+	path, _ := query.ParsePath(name)
+	return schema.Field{ID: schema.StableID("block-card-" + name), Name: name, Path: path, Type: schema.FieldTypeText, Required: required}
+}
+
+// embeddedMigrationTransition validates one collection holding the field
+// before and after, with each embedded definition validated once.
+func embeddedMigrationTransition(before, after schema.Field) error {
+	snapshot := func(field schema.Field) schema.Snapshot {
+		return schema.Snapshot{Collections: []schema.Collection{{ID: "pages", Slug: "pages", Fields: []schema.Field{field}}}}
+	}
+	return sqliteAdditiveRules{}.snapshot(snapshot(before), snapshot(after))
+}
+
 func TestEmbeddedAdditiveEvolutionAndRollback(t *testing.T) {
-	before := embeddedMigrationField(schema.Field{ID: "title", Name: "title", Type: schema.FieldTypeText})
-	after := embeddedMigrationField(schema.Field{ID: "title", Name: "title", Type: schema.FieldTypeText}, schema.Field{ID: "caption", Name: "caption", Type: schema.FieldTypeText})
-	if err := validateSQLiteAdditiveFields("pages", []schema.Field{before}, []schema.Field{after}); err != nil {
+	before := embeddedMigrationField(t, embeddedMigrationText("title", false))
+	after := embeddedMigrationField(t, embeddedMigrationText("title", false), embeddedMigrationText("caption", false))
+	if err := embeddedMigrationTransition(before, after); err != nil {
 		t.Fatal(err)
 	}
-	after.Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0].ResolvedFields()[1].Required = true
-	if err := validateSQLiteAdditiveFields("pages", []schema.Field{before}, []schema.Field{after}); err == nil || !strings.Contains(err.Error(), "caption") {
+	required := embeddedMigrationField(t, embeddedMigrationText("title", false), embeddedMigrationText("caption", true))
+	if err := embeddedMigrationTransition(before, required); err == nil || !strings.Contains(err.Error(), "caption") {
 		t.Fatalf("required addition: %v", err)
 	}
-	after.Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0].ResolvedFields()[1].Required = false
 	payload := store.Object(store.Values{"uid": store.String("one"), "variant": store.String("card"), "title": store.String("Title"), "caption": store.String("Caption")})
 	value := store.Object(store.Values{"document": store.Object(store.Values{"kind": store.String("widget"), "attributes": payload})})
 	updated, changed := scrubSQLiteRollbackFieldValue(after, before, value)

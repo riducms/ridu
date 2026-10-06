@@ -6,13 +6,41 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
+
+// applyUnrecordedDevelopmentSchema builds manifest's physical schema without
+// recording it, the state of a database whose schema Ridu cannot know.
+func applyUnrecordedDevelopmentSchema(t *testing.T, backend *Store, manifest schema.Manifest) {
+	t.Helper()
+	ctx := t.Context()
+	database := stdlib.OpenDB(*backend.pool.Config().ConnConfig)
+	defer database.Close()
+	transaction, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer transaction.Rollback()
+	statements, err := planPostgresDevelopmentSchema(ctx, transaction, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range statements {
+		if _, err := transaction.ExecContext(ctx, statement.sql); err != nil {
+			t.Fatalf("apply %s: %v", statement.kind, err)
+		}
+	}
+	if err := transaction.Commit(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestPostgresDevelopmentSyncPreservesHistoricalBlocksAndStoredHeads(t *testing.T) {
 	ctx := t.Context()
@@ -27,7 +55,7 @@ func TestPostgresDevelopmentSyncPreservesHistoricalBlocksAndStoredHeads(t *testi
 		t.Fatal(err)
 	}
 	prior := current.Snapshot()
-	block := &prior.Collections[0].Fields[0].Blocks.Types[0]
+	block := &prior.Blocks[0]
 	if len(block.Fields) != 2 || block.Fields[1].Name != "blockName" {
 		t.Fatalf("current block fields = %#v", block.Fields)
 	}
@@ -44,13 +72,7 @@ func TestPostgresDevelopmentSyncPreservesHistoricalBlocksAndStoredHeads(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := backend.Plan(ctx, historical)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
-		t.Fatal(err)
-	}
+	applyUnrecordedDevelopmentSchema(t, backend, historical)
 	if _, err := backend.pool.Exec(ctx, `CREATE TABLE ridu_postgres_schema (
 singleton integer PRIMARY KEY CHECK (singleton = 1),
 manifest_json text NOT NULL,
@@ -99,7 +121,7 @@ manifest_digest text NOT NULL
 	if _, err := write.(store.VersionTransaction).SaveVersion(ctx, collection, published, 0); err != nil {
 		t.Fatal(err)
 	}
-	draft, err := write.Update(ctx, store.UpdateRequest{
+	draft, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: published.ID, ExpectedRevision: published.Revision},
 		Intent:  store.WriteIntentSaveDraft, Values: store.Values{"layout": row("Draft card")},
 	})
@@ -189,8 +211,8 @@ func TestPostgresDevelopmentSchemaRecordPublishesOnlySuccessfulSync(t *testing.T
 	if err != nil || !exists || !recorded.Equal(before) {
 		t.Fatalf("failed sync certified candidate: %t, %v, %#v", exists, err, recorded.Snapshot())
 	}
-	if plan, err := backend.Plan(ctx, before); err != nil || len(plan) != 0 {
-		t.Fatalf("failed sync changed physical schema: %#v, %v", plan, err)
+	if err := backend.VerifySchema(ctx, before); err != nil {
+		t.Fatalf("failed sync changed physical schema: %v", err)
 	}
 	// Schema-only changes also publish, even when Atlas has no SQL to run.
 	cosmetic := before.Snapshot()
@@ -217,7 +239,7 @@ func TestPostgresDevelopmentSchemaRecordPublishesOnlySuccessfulSync(t *testing.T
 	}
 }
 
-func TestPostgresDevelopmentPlanRejectsMissingPublishedHeadStorage(t *testing.T) {
+func TestPostgresDevelopmentSyncRejectsMissingLiveTable(t *testing.T) {
 	ctx := t.Context()
 	backend := migrationArtifactTestBackend(t)
 	snapshot := atlasTestManifest(atlasTextField("posts-title", "title")).Snapshot()
@@ -226,11 +248,11 @@ func TestPostgresDevelopmentPlanRejectsMissingPublishedHeadStorage(t *testing.T)
 	if err := backend.SyncDevelopmentSchema(ctx, manifest); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := backend.pool.Exec(ctx, `DROP TABLE ridu_published_documents`); err != nil {
+	if _, err := backend.pool.Exec(ctx, `DROP TABLE `+quote(publishedCollectionTable(snapshot.Collections[0].ID))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := backend.Plan(ctx, manifest); err == nil || !strings.Contains(err.Error(), "unsupported PostgreSQL development schema layout") {
-		t.Fatalf("plan with missing published-head storage = %v", err)
+	if err := backend.SyncDevelopmentSchema(ctx, manifest); err == nil || !strings.Contains(err.Error(), "unsupported PostgreSQL development schema layout") {
+		t.Fatalf("sync with a missing live table = %v", err)
 	}
 }
 
@@ -247,15 +269,9 @@ func TestPostgresDevelopmentSchemaUnknownCannotBeCertifiedByPhysicalEquality(t *
 	}
 	before := resolve(field.JSON("body"))
 	after := resolve(field.Group("body", field.Fields{field.Text("note")}))
-	plan, err := backend.Plan(ctx, before)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
-		t.Fatal(err)
-	}
-	if plan, err := backend.Plan(ctx, after); err != nil || len(plan) != 0 {
-		t.Fatalf("fixture does not demonstrate equal physical shapes: %#v, %v", plan, err)
+	applyUnrecordedDevelopmentSchema(t, backend, before)
+	if err := backend.VerifySchema(ctx, after); err != nil {
+		t.Fatalf("fixture does not demonstrate equal physical shapes: %v", err)
 	}
 	if _, _, err := backend.DevelopmentManifest(ctx); err == nil || !strings.Contains(err.Error(), "RIDU_DEVELOPMENT_SCHEMA_UNKNOWN") {
 		t.Fatalf("unrecorded schema was inferred: %v", err)
@@ -432,7 +448,7 @@ func TestPostgresDevelopmentSchemaPublicationRechecksCurrentAndSnapshotValues(t 
 				t.Fatal(err)
 			}
 			if snapshotsOnly {
-				document, err = write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: resource, ID: document.ID, ExpectedRevision: document.Revision}, Values: store.Values{"body": store.Null()}})
+				document, err = conformance.LockedUpdate(ctx, write, store.UpdateRequest{Request: store.Request{Collection: resource, ID: document.ID, ExpectedRevision: document.Revision}, Values: store.Values{"body": store.Null()}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -473,5 +489,27 @@ func TestPostgresDevelopmentSchemaPublicationRechecksCurrentAndSnapshotValues(t 
 				t.Fatalf("explicitly cleared values still blocked publication: %v", err)
 			}
 		})
+	}
+}
+
+// VerifySchema only reads the catalog and reports drift as readiness does;
+// changing the schema is left to SyncDevelopmentSchema and artifacts.
+func TestPostgresVerifySchemaReportsDriftWithoutChangingIt(t *testing.T) {
+	ctx := t.Context()
+	backend := migrationArtifactTestBackend(t)
+	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
+	if err := backend.SyncDevelopmentSchema(ctx, manifest); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.VerifySchema(ctx, manifest); err != nil {
+		t.Fatalf("synchronized schema = %v", err)
+	}
+	if _, err := backend.pool.Exec(ctx, `CREATE TABLE "z_c_unexpected_drift" ("id" text PRIMARY KEY)`); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := backend.VerifySchema(ctx, manifest); err == nil || !strings.Contains(err.Error(), "physical schema drift") {
+			t.Fatalf("drifted schema = %v", err)
+		}
 	}
 }

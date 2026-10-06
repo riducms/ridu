@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/riducms/ridu/query"
@@ -65,7 +66,12 @@ type Request struct {
 	Access      *query.Node
 	Page        int
 	Limit       int
-	Sort        []query.Sort
+	// SkipTotal reads a list page without counting every match. Adapters
+	// execute no count, read at most Limit+1 rows at the page's offset, return
+	// at most Limit, and set Page.HasNextPage from the extra row; Page.Total
+	// is nil. Predicates, sorting, locales, heads and population are unchanged.
+	SkipTotal bool
+	Sort      []query.Sort
 	// IndexWindow is set only for a count-free range read over one direct,
 	// unique, indexed text field. Adapters must not broaden this range into a
 	// count or offset query.
@@ -145,6 +151,63 @@ type UpdateRequest struct {
 	// Framework version restore uses replacement after access, validation, hooks,
 	// and reference checks have produced the canonical snapshot candidate.
 	ReplaceValues bool
+	// Current is required. It is the whole working document as it stands in
+	// this transaction, including its published metadata: read with Find and
+	// Request.CurrentRequest, and read again in the same way whenever this
+	// transaction wrote the row after that read. The row lock keeps other
+	// transactions from changing it, so adapters update from it and never
+	// read the row again. Only framework code supplies it: the operation
+	// engine, which re-reads a locked document that an earlier write in the
+	// transaction (such as a hook's nested Local API call) changed, and the
+	// migration data transaction, which performs the read itself.
+	//
+	// Adapters write only while the stored row is still the version Current
+	// describes. Every write advances updated_at, and revision on a versioned
+	// or upload resource, so a Current that misses a later write in the same
+	// transaction, or was not read from the store at all, fails with
+	// ErrConflict and never becomes the basis of a write.
+	Current *Document
+}
+
+// CurrentRequest is the read that supplies an update's Current: the request's
+// document, collection, access and filter predicates, deletion mode and
+// locales, read whole from the working head with LockMutation. Update checks
+// an expected revision itself.
+func (request Request) CurrentRequest() Request {
+	request.Lock = LockMutation
+	request.ExpectedRevision = 0
+	request.PublishedOnly = false
+	request.Select, request.Populate = nil, nil
+	request.PopulationAccess, request.PopulationPublishedOnly, request.PopulationBudget = nil, nil, nil
+	return request
+}
+
+// HasLiveHead reports whether a working document read for an update has a
+// live head. Authoring reads of draft-enabled collections carry the live
+// revision. Without drafts, every write publishes or removes the live head
+// together with the working status, so the document is published exactly when
+// its live head exists.
+func HasLiveHead(collection schema.Collection, working Document) bool {
+	if collection.Versions == nil {
+		return false
+	}
+	if collection.Versions.Drafts {
+		return working.PublishedRevision != 0
+	}
+	return working.Status == StatusPublished
+}
+
+// LockedCurrent returns the required Current document after checking that it
+// identifies the requested document. The returned Values are shared: callers
+// that edit them must clone first.
+func (request UpdateRequest) LockedCurrent() (Document, error) {
+	if request.Current == nil {
+		return Document{}, fmt.Errorf("update of %q requires Current, the working document this transaction read with LockMutation", request.ID)
+	}
+	if request.Current.ID != request.ID {
+		return Document{}, fmt.Errorf("update Current identifies %q, not %q", request.Current.ID, request.ID)
+	}
+	return *request.Current, nil
 }
 
 // WriteIntent selects the atomic relationship between a versioned document's
@@ -182,7 +245,11 @@ type VersionRequest struct {
 // VersionTransaction is required for version-enabled collections. Snapshots
 // participate in the same transaction as their document mutation. History reads
 // apply access to each stored snapshot. CountVersions counts retained, authorized
-// snapshots in the store without returning their documents.
+// snapshots in the store without returning their documents. Saving revision 1
+// starts a document's history: it removes every later revision, which can
+// only belong to an earlier document with the same ID, and replaces revision
+// 1, so a reused ID never inherits a history. Re-saving a revision keeps its
+// created time.
 type VersionTransaction interface {
 	SaveVersion(context.Context, schema.Collection, Document, int) (Version, error)
 	ListVersions(context.Context, VersionRequest) ([]Version, error)
@@ -192,11 +259,41 @@ type VersionTransaction interface {
 	FindVersion(context.Context, schema.Collection, string, int) (Version, error)
 }
 
+// Page is one normalized list page. HasNextPage is always exact: true only
+// when at least one matching document follows this page.
 type Page struct {
 	Documents []Document
 	Page      int
 	Limit     int
-	Total     int
+	// Total is the exact number of matching documents. It is nil when
+	// Request.SkipTotal skipped the count; it is never estimated.
+	Total       *int
+	HasNextPage bool
+}
+
+// CountedPage returns the normalized page for documents read at the bounds
+// ListPageBounds computes for the requested page, limit and exact total.
+func CountedPage(documents []Document, page, limit, total int) Page {
+	page, limit, _, end := ListPageBounds(page, limit, total)
+	return Page{Documents: documents, Page: page, Limit: limit, Total: &total, HasNextPage: end < total}
+}
+
+// UncountedPageBounds normalizes a SkipTotal list read without a total. The
+// adapter reads at most limit+1 rows starting at offset; an offset of
+// math.MaxInt cannot hold a document.
+func UncountedPageBounds(page, limit int) (normalizedPage, normalizedLimit, offset int) {
+	page, limit, offset, _ = ListPageBounds(page, limit, math.MaxInt)
+	return page, limit, offset
+}
+
+// TrimUncountedPage removes the overflow row from a SkipTotal read of at most
+// limit+1 documents and reports whether it existed. Adapters trim before
+// population so the overflow row is never materialized further.
+func TrimUncountedPage(documents []Document, limit int) ([]Document, bool) {
+	if len(documents) > limit {
+		return documents[:limit], true
+	}
+	return documents, false
 }
 
 // DistinctRequest selects the unique scalar values visible through one

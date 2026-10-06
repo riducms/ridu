@@ -158,7 +158,7 @@ type PluginTransportContext struct {
 	Manifest schema.Manifest
 	// Snapshot is the resolved schema the operation engine runs on. It is shared,
 	// read-only state: a transport must not modify it, and reading it reuses the
-	// engine's placement views instead of materializing another copy.
+	// engine's block definition views instead of binding another copy.
 	Snapshot schema.Snapshot
 	Local    *LocalAPI
 	// App exposes public authentication and other application-owned operations

@@ -141,7 +141,7 @@ func TestReferenceWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if listed.Total < 1 || len(listed.Documents) == 0 {
+	if *listed.Total < 1 || len(listed.Documents) == 0 {
 		t.Fatal("populated list is empty")
 	}
 	for _, document := range listed.Documents {
@@ -341,7 +341,7 @@ func TestReferenceWorkflow(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if os.Getenv("RIDU_BLOCKS_REFERENCE_EVOLVED") == "1" && previous.Total < 2 {
+		if os.Getenv("RIDU_BLOCKS_REFERENCE_EVOLVED") == "1" && *previous.Total < 2 {
 			t.Fatal("migration lost existing content")
 		}
 	}

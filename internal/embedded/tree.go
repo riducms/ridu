@@ -70,6 +70,8 @@ func failure(code, path, message string) error {
 
 // Occurrence is one schema-owned payload. Identity is stable under structural
 // moves within this tree. Callers namespace it by the containing occurrence.
+// Type and Fields describe the payload's block definition: a registered block
+// is its shared definition view, whose paths and IDs are definition-relative.
 type Occurrence struct {
 	Tree        schema.EmbeddedTree
 	Case        schema.EmbeddedTreeCase
@@ -182,16 +184,11 @@ func walk(field schema.Field, value store.Value, prefix string, budget *Budget, 
 					return value, false, failure("invalid_embedded_payload", payloadPath, "embedded payload must be an object")
 				}
 				kind, ok := payload.Get(candidate.Discriminator).StringValue()
-				var variant *schema.BlockType
+				var variant schema.BlockType
 				if ok {
-					for i := range candidate.ResolvedTypes() {
-						if candidate.ResolvedTypes()[i].Slug == kind {
-							variant = &candidate.ResolvedTypes()[i]
-							break
-						}
-					}
+					variant, ok = candidate.Definition(kind)
 				}
-				if variant == nil {
+				if !ok {
 					return value, false, failure("unknown_embedded_schema", join(payloadPath, candidate.Discriminator), "embedded discriminator does not name a configured schema")
 				}
 				key := ""
@@ -205,7 +202,7 @@ func walk(field schema.Field, value store.Value, prefix string, budget *Budget, 
 					}
 					seen[key] = join(payloadPath, candidate.Identity)
 				}
-				updated, changed, err := transform(ReadOccurrence{Tree: tree, Case: candidate, Type: *variant, Fields: variant.ResolvedFields(), Payload: payload, RuntimePath: payloadPath, Identity: identity(tree.Key, candidate.TagValue+"/"+variant.Slug, key), Key: key})
+				updated, changed, err := transform(ReadOccurrence{Tree: tree, Case: candidate, Type: variant, Fields: variant.ResolvedFields(), Payload: payload, RuntimePath: payloadPath, Identity: identity(tree.Key, candidate.TagValue+"/"+variant.Slug, key), Key: key})
 				if err != nil {
 					return value, false, err
 				}
@@ -315,13 +312,14 @@ func HasFields(field schema.Field) bool {
 }
 
 // SchemaFields visits declared payload schemas, without inspecting any values.
+// Registered payload blocks are their shared definitions.
 func SchemaFields(field schema.Field, visit func([]schema.Field)) {
 	if field.Plugin == nil {
 		return
 	}
 	for _, tree := range field.Plugin.EmbeddedTrees {
 		for _, candidate := range tree.Cases {
-			for _, variant := range candidate.ResolvedTypes() {
+			for _, variant := range candidate.Definitions() {
 				visit(variant.ResolvedFields())
 			}
 		}

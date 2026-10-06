@@ -25,7 +25,10 @@ func TestReadManifestPreservesPriorGeneratedBlockSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	previousSnapshot := current.Snapshot()
-	block := &previousSnapshot.Collections[0].Fields[0].Blocks.Types[0]
+	block := &previousSnapshot.Blocks[0]
+	if previousSnapshot.Collections[0].Fields[0].Blocks.BlockReferences[0] != block.Slug {
+		t.Fatalf("the inline block was not recorded as the container's definition: %#v", previousSnapshot.Blocks)
+	}
 	if len(block.Fields) != 2 || block.Fields[1].Name != "blockName" {
 		t.Fatalf("unexpected current block fields: %#v", block.Fields)
 	}

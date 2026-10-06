@@ -2,11 +2,13 @@ import { expect, it } from "vitest";
 import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
-import type { SchemaField } from "@riducms/protocol";
+import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
 import { richTextAdminPlugin } from "@riducms/plugin-richtext";
 import { createAdminClient } from "@admin/core/api/admin-client";
 import { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { FormController } from "@admin/core/forms/form-controller.svelte";
+
+import { bindBlockField } from "../block-manifest";
 
 const Harness = svelte`
  <script>
@@ -22,7 +24,23 @@ const Harness = svelte`
 `;
 
 function bodyField(type: "code" | "json"): SchemaField {
-	return {
+	const note: SchemaBlockType = {
+		slug: "note",
+		labels: { singular: "Note", plural: "Notes" },
+		fields: [
+			{
+				id: "block-note-value",
+				name: "value",
+				path: "value",
+				type,
+				category: "scalar",
+				required: false,
+				unique: false,
+				admin: { label: type === "json" ? "Metadata" : "Code" },
+			},
+		],
+	};
+	return bindBlockField([note], {
 		id: "body",
 		name: "body",
 		path: "body",
@@ -47,30 +65,13 @@ function bodyField(type: "code" | "json"): SchemaField {
 							payload: "fields",
 							discriminator: "blockType",
 							identity: "_key",
-							types: [
-								{
-									slug: "note",
-									labels: { singular: "Note", plural: "Notes" },
-									fields: [
-										{
-											id: "value",
-											name: "value",
-											path: "body.blocks.block.note.value",
-											type,
-											category: "scalar",
-											required: false,
-											unique: false,
-											admin: { label: type === "json" ? "Metadata" : "Code" },
-										},
-									],
-								},
-							],
+							blockReferences: ["note"],
 						},
 					],
 				},
 			],
 		},
-	};
+	});
 }
 
 function blocks(form: FormController) {

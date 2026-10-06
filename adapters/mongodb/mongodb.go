@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net/url"
 	"regexp"
 	"strings"
@@ -58,6 +59,9 @@ type Store struct {
 	closed   bool
 	closeErr error
 
+	// contracts remembers validated collection contracts per resolved value.
+	contracts mongoCollectionContracts
+
 	indexLifecycleMu            sync.Mutex
 	indexesMu                   sync.RWMutex
 	verifiedIndexes             map[schema.StableID]mongoVerifiedIndexPlan
@@ -68,6 +72,12 @@ type Store struct {
 	verifiedTaskIndexes         bool
 	verifiedAuthIndexes         bool
 	verifiedUploadLockIndexes   bool
+
+	// fenceSlots assigns shared-fence slots to open transactions.
+	fenceSlots mongoFenceSlots
+	// lockQueue orders this Store's transactions that wait for one another's
+	// locks; see lock_queue.go.
+	lockQueue mongoLockQueue
 
 	uploadLockRetry time.Duration
 	uploadLockWait  time.Duration
@@ -135,6 +145,7 @@ func OpenWithConfig(ctx context.Context, config Config) (*Store, error) {
 		client: client, database: client.Database(databaseName), now: time.Now,
 		verifiedIndexes:           make(map[schema.StableID]mongoVerifiedIndexPlan),
 		verifiedVersionIndexes:    make(map[schema.StableID]bool),
+		fenceSlots:                mongoFenceSlots{first: rand.IntN(mongoReferenceFenceSlots)},
 		uploadLockRetry:           defaultUploadLockRetry,
 		uploadLockWait:            defaultUploadLockWait,
 		uploadLockLifecycleCtx:    uploadLockLifecycleCtx,

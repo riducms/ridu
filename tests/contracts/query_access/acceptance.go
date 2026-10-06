@@ -48,7 +48,7 @@ func Run(t *testing.T, factory Factory, options Options) {
 			"rows":         store.List(store.Object(store.Values{"secret": store.String("orchid")})),
 			"lockedRows":   store.List(store.Object(store.Values{"value": store.String("orchid")})),
 			"layout":       store.List(store.Object(store.Values{"blockType": store.String("hero"), "secret": store.String("orchid")})),
-			"lockedLayout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "value": store.String("orchid")})),
+			"lockedLayout": store.List(store.Object(store.Values{"blockType": store.String("locked-hero"), "value": store.String("orchid")})),
 			"body":         richTextSecret(t),
 			"translation":  store.String("orchid"),
 		}, ridu.MutationOptions{})
@@ -104,12 +104,16 @@ func Run(t *testing.T, factory Factory, options Options) {
 			_, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Sort: []query.Sort{{Path: path("salary"), Direction: direction}}})
 			denied(t, err, "salary")
 		}
-		// PostgreSQL can order an entire JSONB container, comparing hidden
-		// descendants even though its parent has no Read rule of its own.
+		// Ordering a whole container would compare its hidden descendants even
+		// though the parent has no Read rule of its own. No container sorts,
+		// so none reaches a store.
 		for _, container := range []string{"profile", "rows", "layout", "body"} {
 			for _, direction := range []query.Direction{query.Ascending, query.Descending} {
 				_, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Sort: []query.Sort{{Path: path(container), Direction: direction}}, Limit: 1})
-				denied(t, err, container)
+				var failure *operation.Error
+				if !errors.As(err, &failure) || failure.Status != http.StatusBadRequest || len(failure.Issues) != 1 || failure.Issues[0].Code != "unsupported_path" || failure.Issues[0].Path != container {
+					t.Fatalf("container sort %s error = %#v, want unsupported_path (400)", container, err)
+				}
 			}
 		}
 		for _, sort := range []string{"salary", "-salary", "name&sort=-salary"} {
@@ -117,7 +121,7 @@ func Run(t *testing.T, factory Factory, options Options) {
 		}
 	})
 	t.Run("schema-paths-ancestors-locales-and-actors", func(t *testing.T) {
-		for _, name := range []string{"profile.secret", "vault.value", "rows.secret", "lockedRows.value", "layout.hero.secret", "lockedLayout.hero.value", "layout.private.value.label", "body.blocks.block.hero.secret", "body.blocks.block.hero.vault.value", "translation"} {
+		for _, name := range []string{"profile.secret", "vault.value", "rows.secret", "lockedRows.value", "layout.hero.secret", "lockedLayout.locked-hero.value", "layout.private.value.label", "body.blocks.block.embedded-hero.secret", "body.blocks.block.embedded-hero.vault.value", "translation"} {
 			for _, locale := range []schema.LocaleCode{"en", "fr"} {
 				_, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.Equal(path(name), "orchid"), Locale: locale})
 				denied(t, err, name)
@@ -144,7 +148,7 @@ func Run(t *testing.T, factory Factory, options Options) {
 	t.Run("trusted-hidden-access-predicate-preserves-pagination", func(t *testing.T) {
 		for pageNumber, want := range []string{"Alpha", "Beta"} {
 			page, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.Contains(path("name"), "a"), Sort: []query.Sort{{Path: path("name"), Direction: query.Ascending}}, Page: pageNumber + 1, Limit: 1})
-			if err != nil || page.Total != 2 || len(page.Documents) != 1 {
+			if err != nil || *page.Total != 2 || len(page.Documents) != 1 {
 				t.Fatalf("trusted access pagination: %#v, %v", page, err)
 			}
 			got, _ := page.Documents[0].Values["name"].StringValue()
@@ -213,8 +217,10 @@ func configuration() ridu.Config {
 				field.Array("rows", field.Fields{field.Text("secret").Access(deny)}),
 				field.Array("lockedRows", field.Fields{field.Text("value")}).Access(deny),
 				field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("secret").Access(deny)}}, field.Block{Slug: "private", Fields: field.Fields{field.Group("value", field.Fields{field.Text("label")}).Access(deny)}}),
-				field.Blocks("lockedLayout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("value")}}).Access(deny),
-				richtext.Field("body", richtext.Config{Blocks: []field.Block{{Slug: "hero", Fields: field.Fields{field.Text("secret").Access(deny), field.Group("vault", field.Fields{field.Text("value")}).Access(deny)}}}}),
+				// A slug names one block definition per application, so the
+				// differently shaped hero blocks have their own slugs.
+				field.Blocks("lockedLayout", field.Block{Slug: "locked-hero", Labels: field.BlockLabels{Singular: "Hero", Plural: "Heroes"}, Fields: field.Fields{field.Text("value")}}).Access(deny),
+				richtext.Field("body", richtext.Config{Blocks: []field.Block{{Slug: "embedded-hero", Labels: field.BlockLabels{Singular: "Hero", Plural: "Heroes"}, Fields: field.Fields{field.Text("secret").Access(deny), field.Group("vault", field.Fields{field.Text("value")}).Access(deny)}}}}),
 			}, Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 				return ridu.Where(query.Equal(path("audience"), "public")), nil
 			}}},
@@ -235,7 +241,7 @@ func path(value string) query.Path {
 func richTextSecret(t *testing.T) store.Value {
 	t.Helper()
 	var value store.Value
-	if err := json.Unmarshal([]byte(`{"version":1,"root":{"type":"root","version":1,"format":"","indent":0,"direction":null,"children":[{"type":"block","version":1,"fields":{"blockType":"hero","secret":"orchid","vault":{"value":"orchid"}}}]}}`), &value); err != nil {
+	if err := json.Unmarshal([]byte(`{"version":1,"root":{"type":"root","version":1,"format":"","indent":0,"direction":null,"children":[{"type":"block","version":1,"fields":{"blockType":"embedded-hero","secret":"orchid","vault":{"value":"orchid"}}}]}}`), &value); err != nil {
 		t.Fatal(err)
 	}
 	return value

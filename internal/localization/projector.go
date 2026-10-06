@@ -18,20 +18,30 @@ const projectionEntriesPerField = 4
 // for concurrent use. Call Clear when the operation finishes to release its values.
 type Projector struct {
 	fields []schema.Field
-	roots  []projectionRoot
+	// roots[i] caches projections of fields[i]. A root is allocated when its
+	// field is first projected and grows to its bound only for a second selection.
+	roots []*projectionRoot
+	// selections are owned copies of recent selections. Cache entries share
+	// them because neither a copy nor its slices are ever mutated.
+	selections []*Selection
+	// scratch collects provenance while one root is projected.
+	scratch localeSources
 }
 
 type projectionRoot struct {
-	entries [projectionEntriesPerField]projectionEntry
+	// source is the generation every entry projects.
+	source store.Value
+	// entries are projections of source, most recent first, bounded by
+	// projectionEntriesPerField.
+	entries []projectionEntry
 }
 
 type projectionEntry struct {
-	valid     bool
-	selection Selection
-	source    store.Value
+	selection *Selection
 	value     store.Value
 	visible   bool
-	sources   map[string]schema.LocaleCode
+	// sources is nil when no localized value supplied the projection.
+	sources *localeSources
 }
 
 // NewProjector borrows one resolved schema, which must remain immutable for the
@@ -44,6 +54,7 @@ func NewProjector(fields []schema.Field) *Projector {
 // fixed schema remains available if the projector is used again.
 func (projector *Projector) Clear() {
 	projector.roots = nil
+	projector.selections = nil
 }
 
 // Values returns a detached root map containing immutable projected values.
@@ -92,9 +103,10 @@ func (projector *Projector) project(values store.Values, selection Selection, in
 		return nil
 	}
 	if projector.roots == nil {
-		projector.roots = make([]projectionRoot, len(projector.fields))
+		projector.roots = make([]*projectionRoot, len(projector.fields))
 	}
 	var sources map[string]schema.LocaleCode
+	var owned *Selection
 	for index, field := range projector.fields {
 		value, exists := values[field.Name]
 		if !exists {
@@ -102,58 +114,107 @@ func (projector *Projector) project(values store.Values, selection Selection, in
 			// cached field to the result or evict an unchanged document root.
 			continue
 		}
-		entry := projector.roots[index].project(field, value, selection)
+		root := projector.roots[index]
+		if root == nil {
+			root = &projectionRoot{}
+			projector.roots[index] = root
+		}
+		entry, hit := root.cached(value, selection)
+		if !hit {
+			if owned == nil {
+				owned = projector.ownedSelection(selection)
+			}
+			projector.scratch = localeSources{}
+			projected, visible, _ := projectValueAt(field, value, *owned, field.Name, &projector.scratch)
+			entry = projectionEntry{selection: owned, value: projected, visible: visible}
+			if projector.scratch.len() != 0 {
+				recorded := projector.scratch
+				entry.sources = &recorded
+			}
+			projector.scratch = localeSources{}
+			root.store(value, entry)
+		}
 		if entry.visible {
 			values[field.Name] = entry.value
 		} else {
 			delete(values, field.Name)
 		}
-		if includeSources && len(entry.sources) != 0 {
+		if includeSources && entry.sources != nil {
 			if sources == nil {
-				sources = make(map[string]schema.LocaleCode, len(entry.sources))
+				sources = make(map[string]schema.LocaleCode, entry.sources.len())
 			}
-			for path, locale := range entry.sources {
-				sources[path] = locale
-			}
+			entry.sources.copyInto(sources)
 		}
 	}
 	return sources
 }
 
-func (root *projectionRoot) project(field schema.Field, value store.Value, selection Selection) projectionEntry {
-	// Keep locale variants only for the current source. Earlier callback views
-	// retain their own immutable Values without the cache pinning old roots.
-	if root.entries[0].valid && !root.entries[0].source.SameBacking(value) {
-		*root = projectionRoot{}
+// cached returns a retained projection of value for selection. Locale variants
+// are kept only for the current source: earlier callback views retain their
+// own immutable Values without the cache pinning old roots.
+func (root *projectionRoot) cached(value store.Value, selection Selection) (projectionEntry, bool) {
+	if len(root.entries) == 0 {
+		return projectionEntry{}, false
+	}
+	if !root.source.SameBacking(value) {
+		clear(root.entries)
+		root.entries = root.entries[:0]
+		root.source = store.Value{}
+		return projectionEntry{}, false
 	}
 	for index, entry := range root.entries {
-		if entry.valid && sameProjectionSelection(entry.selection, selection) && entry.source.SameBacking(value) {
+		if sameProjectionSelection(*entry.selection, selection) {
 			copy(root.entries[1:index+1], root.entries[:index])
 			root.entries[0] = entry
-			return entry
+			return entry, true
 		}
 	}
-	sources := make(map[string]schema.LocaleCode)
-	projected, visible, _ := projectValueAt(field, value, selection, field.Name, sources)
-	if len(sources) == 0 {
-		sources = nil
+	return projectionEntry{}, false
+}
+
+// store records entry for source as the most recent projection, evicting the
+// least recently used selection when the bound is reached.
+func (root *projectionRoot) store(source store.Value, entry projectionEntry) {
+	root.source = source
+	switch {
+	case len(root.entries) < cap(root.entries):
+		root.entries = root.entries[:len(root.entries)+1]
+	case len(root.entries) == 0:
+		// Most roots see one selection; grow to the bound only for a second.
+		root.entries = make([]projectionEntry, 1)
+	case len(root.entries) < projectionEntriesPerField:
+		grown := make([]projectionEntry, len(root.entries)+1, projectionEntriesPerField)
+		copy(grown, root.entries)
+		clear(root.entries)
+		root.entries = grown
 	}
-	entry := projectionEntry{
-		valid: true, selection: cloneProjectionSelection(selection),
-		source: value, value: projected, visible: visible, sources: sources,
-	}
-	copy(root.entries[1:], root.entries[:projectionEntriesPerField-1])
+	copy(root.entries[1:], root.entries[:len(root.entries)-1])
 	root.entries[0] = entry
-	return entry
+}
+
+// ownedSelection returns a retained copy of selection whose slices no caller
+// can mutate, reusing an equal copy so cache entries share one allocation.
+func (projector *Projector) ownedSelection(selection Selection) *Selection {
+	for _, owned := range projector.selections {
+		if sameProjectionSelection(*owned, selection) {
+			return owned
+		}
+	}
+	copied := selection
+	copied.Chain = slices.Clone(selection.Chain)
+	copied.Configured = slices.Clone(selection.Configured)
+	owned := &copied
+	if len(projector.selections) == projectionEntriesPerField {
+		// Entries holding an evicted copy keep it alive; only sharing ends.
+		copy(projector.selections, projector.selections[1:])
+		projector.selections[len(projector.selections)-1] = owned
+	} else {
+		projector.selections = append(projector.selections, owned)
+	}
+	return owned
 }
 
 func sameProjectionSelection(left, right Selection) bool {
 	return left.Locale == right.Locale && left.All == right.All && left.PreserveNull == right.PreserveNull &&
 		slices.Equal(left.Chain, right.Chain) && slices.Equal(left.Configured, right.Configured)
-}
-
-func cloneProjectionSelection(selection Selection) Selection {
-	selection.Chain = slices.Clone(selection.Chain)
-	selection.Configured = slices.Clone(selection.Configured)
-	return selection
 }

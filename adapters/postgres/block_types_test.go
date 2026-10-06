@@ -7,9 +7,9 @@ import (
 )
 
 func TestBlockGeneratedNameIsMetadataOnly(t *testing.T) {
-	before := atlasTestManifest(phaseOneBlocks())
+	before := phaseOneManifest()
 	snapshot := before.Snapshot()
-	snapshot.Collections[0].Fields[0].Blocks.ResolvedTypes()[0].TypeName = "Hero"
+	snapshot.Blocks[0].TypeName = "Banner"
 	after := schema.NewManifest(snapshot)
 	if _, err := buildPostgresTransformTestArtifact(context.Background(), "name-block", &before, after); err != nil {
 		t.Fatal(err)

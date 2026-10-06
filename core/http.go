@@ -217,11 +217,9 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 			return nil, &operationengine.Error{Status: http.StatusNotFound, Code: "admin_loader_not_found", Message: "Admin loader not found."}
 		},
 		Manifest: application.manifest, Snapshot: application.runtime, Engine: application.local.engine,
-		ManifestForRequest: func(ctx context.Context, identity *httpapi.AuthIdentity) (schema.Snapshot, error) {
-			return application.manifestForIdentity(ctx, httpIdentityActor(identity), httpIdentityCollection(identity))
-		},
-		AdminAssets:  assets,
-		MaxBodyBytes: options.MaxBodyBytes, SecureCookies: options.SecureCookies,
+		LocalizationForRequest: application.localizationForRequest(),
+		AdminAssets:            assets,
+		MaxBodyBytes:           options.MaxBodyBytes, SecureCookies: options.SecureCookies,
 		AllowedOrigins: append([]string(nil), options.AllowedOrigins...), AllowedRequestHeaders: append([]string(nil), options.AllowedRequestHeaders...), AllowedHosts: append([]string(nil), options.AllowedHosts...), TrustedProxies: trusted,
 		AuthRateLimit: options.AuthRateLimit, AuthRateWindow: options.AuthRateWindow,
 		Login: func(ctx context.Context, collection, email, password string, metadata httpapi.LoginMetadata) (httpapi.AuthSession, error) {

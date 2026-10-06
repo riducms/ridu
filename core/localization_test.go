@@ -179,7 +179,7 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	title, _ := query.NewPath("title")
 	where := query.Equal(title, "Bonjour")
 	page, err := application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: where})
-	if err != nil || page.Total != 1 || page.Documents[0].ID != english.ID {
+	if err != nil || *page.Total != 1 || page.Documents[0].ID != english.ID {
 		t.Fatalf("French localized query = %#v, %v", page, err)
 	}
 	if len(accessLocales) == 0 || accessLocales[len(accessLocales)-1] != "fr" {
@@ -630,7 +630,7 @@ func TestLocalizedDescendantsPreserveSharedNestedStructure(t *testing.T) {
 	}
 	path, _ := query.NewPath("seo", "title")
 	page, err := application.Local().List(ctx, "pages", ridu.ListOptions{Locale: "fr", Where: query.Equal(path, "Accueil")})
-	if err != nil || page.Total != 1 {
+	if err != nil || *page.Total != 1 {
 		t.Fatalf("localized nested query = %#v, %v", page, err)
 	}
 }

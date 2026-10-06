@@ -76,7 +76,7 @@ func TestMongoDBProductionReplicaSetTLSAuthenticationAndElection(t *testing.T) {
 
 	collection := mongoScalarCollection(false)
 	manifest := mongoIndexTestManifest(collection)
-	if err := backend.SyncIndexes(ctx, manifest); err != nil {
+	if err := backend.syncIndexes(ctx, manifest); err != nil {
 		t.Fatalf("prepare production fixture indexes: %v", err)
 	}
 	before, err := createMongoDBProductionFixtureDocument(ctx, backend, collection, "before-election", "before election")

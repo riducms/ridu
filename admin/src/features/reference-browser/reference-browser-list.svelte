@@ -14,11 +14,7 @@
 	import ColumnPicker from "@admin/features/collections/controls/column-picker.svelte";
 	import FilterBuilder from "@admin/features/collections/controls/filter-builder.svelte";
 	import { createCollectionListCellFormatter } from "@admin/features/collections/collection-list-cell-values";
-	import {
-		filterableFields,
-		listMetadataFields,
-		type ListColumn,
-	} from "@admin/features/collections/list-workspace";
+	import type { ListColumn } from "@admin/features/collections/list-workspace";
 	import type { AdminDocument } from "@admin/core/api/admin-client";
 	import type { ReferenceBrowserWorkflow } from "@admin/features/reference-browser/reference-browser-workflow.svelte";
 	import "@admin/features/collections/collection-list.scss";
@@ -69,7 +65,6 @@
 	const customListCells = $derived(
 		resolveListCells(collection, runtime.config.extensions.listCellRenderers)
 	);
-	const metadataFields = $derived(listMetadataFields(collection, i18n));
 	const availableColumns = $derived(resolveListColumns(collection, i18n, customListCells));
 	const visibleColumns = $derived.by(() => {
 		const selected = columns.flatMap((selection) => {
@@ -80,11 +75,7 @@
 			? selected
 			: availableColumns.filter((column) => column.path === "id" && controller.canReadField("id"));
 	});
-	const filterFields = $derived(
-		[...filterableFields(collection.fields), ...metadataFields].filter((field) =>
-			controller.canReadField(field.path)
-		)
-	);
+	const filterFields = $derived(controller.filterFields.readable(controller.canReadField));
 	const linkedColumn = $derived(
 		visibleColumns.find(
 			(column) => !customListCells.some((cell) => cell.field.path === column.path)
@@ -167,7 +158,7 @@
 					{i18n.t("collections:columns")}
 					<Chevron class={panel === "columns" ? "ridu-list__chevron-up" : undefined} />
 				</button>
-				{#if filterFields.length > 0}
+				{#if !filterFields.empty}
 					<button
 						type="button"
 						class="ridu-list__pill"

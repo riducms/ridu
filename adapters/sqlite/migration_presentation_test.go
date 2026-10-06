@@ -309,16 +309,25 @@ func TestSQLitePresentationMigrationNestedAndEmbeddedMetadata(t *testing.T) {
 	after.Collections[0].Fields[0].Nested.RowLabel = "title"
 	after.Collections[0].Fields[0].Nested.ResolvedFields()[0].Admin.Label = "Item title"
 	after.Collections[0].Fields[1].Select.Options[0].Label = "Light theme"
-	after.Collections[0].Fields[2].Blocks.ResolvedTypes()[0].Labels = schema.BlockLabels{Singular: "Banner", Plural: "Banners"}
-	after.Collections[0].Fields[3].Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0].Labels = schema.BlockLabels{Singular: "Inline banner", Plural: "Inline banners"}
-	after.Collections[0].Fields[2].Blocks.ResolvedTypes()[0].ResolvedFields()[0].Admin.Description = "Banner heading"
-	after.Collections[0].Fields[3].Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0].ResolvedFields()[0].Admin.Label = "Inline heading"
+	// The blocks field and the rich text field place one hero definition.
+	hero := &after.Blocks[0]
+	if hero.Slug != "hero" || len(after.Blocks) != 1 {
+		t.Fatalf("block definitions = %#v", after.Blocks)
+	}
+	hero.Labels = schema.BlockLabels{Singular: "Banner", Plural: "Banners"}
+	hero.Fields[0].Admin.Description = "Banner heading"
+	hero.Fields[0].Admin.Label = "Inline heading"
 	after.Globals[0].Fields[0].Nested.ResolvedFields()[0].Admin.Placeholder = "Site title"
 	frozen := schema.NewManifest(after)
+	after = frozen.Snapshot()
+	if placed := after.Collections[0].Fields[3].Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[0]; placed.Labels.Singular != "Banner" || placed.ResolvedFields()[0].Admin.Label != "Inline heading" {
+		t.Fatalf("embedded placement = %#v", placed)
+	}
 	if err := validateSQLiteAdditiveTransition(before, after); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(before, manifest.Snapshot()) || !reflect.DeepEqual(after, frozen.Snapshot()) {
+	if sqlitePlacements(t, before) != sqlitePlacements(t, manifest.Snapshot()) || !schema.NewManifest(before).Equal(manifest) ||
+		sqlitePlacements(t, after) != sqlitePlacements(t, frozen.Snapshot()) || !schema.NewManifest(after).Equal(frozen) {
 		t.Fatal("presentation comparison mutated input")
 	}
 	directory := t.TempDir()
@@ -328,6 +337,50 @@ func TestSQLitePresentationMigrationNestedAndEmbeddedMetadata(t *testing.T) {
 	if _, err := CreateArtifact(context.Background(), directory, "presentation", frozen, time.Unix(2, 0), false); !errors.Is(err, migrationartifact.ErrOnlyPresentationChanges) {
 		t.Fatalf("presentation migration = %v", err)
 	}
+}
+
+// sqlitePlacements renders the snapshot's resources with every lazily derived
+// block placement view, so a mutation check also covers placements that a
+// canonical encoding, which records only definitions, does not show.
+func sqlitePlacements(t *testing.T, snapshot schema.Snapshot) string {
+	t.Helper()
+	var rendered strings.Builder
+	write := func(value any) {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rendered.Write(append(encoded, '\n'))
+	}
+	var fields func([]schema.Field)
+	blocks := func(types []schema.BlockType) {
+		for _, block := range types {
+			write(block)
+			fields(block.ResolvedFields())
+		}
+	}
+	fields = func(list []schema.Field) {
+		for _, candidate := range list {
+			write(candidate)
+			if candidate.Nested != nil {
+				fields(candidate.Nested.ResolvedFields())
+			}
+			if candidate.Blocks != nil {
+				blocks(candidate.Blocks.ResolvedTypes())
+			}
+			if candidate.Plugin != nil {
+				for _, tree := range candidate.Plugin.EmbeddedTrees {
+					for _, c := range tree.Cases {
+						blocks(c.ResolvedTypes())
+					}
+				}
+			}
+		}
+	}
+	for _, resource := range append(append([]schema.Collection(nil), snapshot.Collections...), snapshot.Globals...) {
+		fields(resource.Fields)
+	}
+	return rendered.String()
 }
 
 func TestSQLitePresentationMigrationStillRejectsStorageChanges(t *testing.T) {
@@ -343,7 +396,6 @@ func TestSQLitePresentationMigrationStillRejectsStorageChanges(t *testing.T) {
 			s.Collections[0].Fields[0].Path, _ = query.NewPath("headline")
 		},
 		"change field type": func(s *schema.Snapshot) { s.Collections[0].Fields[0].Type = schema.FieldTypeTextarea },
-		"change required":   func(s *schema.Snapshot) { s.Collections[0].Fields[0].Required = false },
 		"remove uniqueness": func(s *schema.Snapshot) { s.Collections[0].Fields[0].Unique = false },
 		"remove index":      func(s *schema.Snapshot) { s.Collections[0].Fields[0].Index = false },
 		"change default":    func(s *schema.Snapshot) { value := "Default"; s.Collections[0].Fields[0].Default = &value },
@@ -595,14 +647,19 @@ func TestSQLitePresentationWithUnversionedBackfill(t *testing.T) {
 				t.Fatal(err)
 			}
 			descriptor := migration.DataTransformDescriptor{Name: "backfill-notes", Checksum: migration.DataTransformChecksum([]byte("backfill-notes-v1"))}
-			if _, err := CreateArtifact(ctx, directory, "backfill", after, time.Unix(2, 0), true); err == nil {
-				t.Fatal("required transition admitted without a transform")
-			}
-			if _, err := CreateArtifact(ctx, directory, "backfill", after, time.Unix(2, 0), false, descriptor); err == nil || !strings.Contains(err.Error(), "explicit safety resolution") {
-				t.Fatalf("destructive approval error = %v", err)
-			}
-			if _, err := CreateArtifact(ctx, directory, "backfill", after, time.Unix(2, 0), true, descriptor); err != nil {
+			// Requiring a field is additive: the artifact audits stored values
+			// after its transforms instead of asking for destructive approval.
+			if _, err := CreateArtifact(ctx, directory, "backfill", after, time.Unix(2, 0), false, descriptor); err != nil {
 				t.Fatal(err)
+			}
+			if kinds := sqliteLatestStepKinds(t, directory); len(kinds) != 3 || kinds[0] != migration.StepDataTransform || kinds[1] != migration.StepAuditRequiredValues {
+				t.Fatalf("backfill steps = %v, want the transform before the required-value audit", kinds)
+			}
+			if err := backend.ApplyArtifacts(ctx, directory, migration.DataTransform{DataTransformDescriptor: descriptor,
+				Up:   func(context.Context, migration.DataTransaction) error { return nil },
+				Down: func(context.Context, migration.DataTransaction) error { return nil },
+			}); err == nil || !strings.Contains(err.Error(), "RIDU_REQUIRED_VALUES_MISSING") || !strings.Contains(err.Error(), "notes.body in 1 document") {
+				t.Fatalf("a transform that writes nothing passed the audit: %v", err)
 			}
 			// Raw manifest shapes stay authoritative at runtime; comparison projection
 			// must never admit callback mutations to this versioned collection.
@@ -615,12 +672,12 @@ func TestSQLitePresentationWithUnversionedBackfill(t *testing.T) {
 						return err
 					}
 					for _, document := range page.Documents {
-						if _, err := tx.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: notes, ID: document.ID}, Values: store.Values{"body": store.String("Backfilled")}}); err != nil {
+						if _, err := tx.Update(ctx, migration.UpdateRequest{Request: store.Request{Collection: notes, ID: document.ID}, Values: store.Values{"body": store.String("Backfilled")}}); err != nil {
 							return err
 						}
 					}
 					if attemptVersionedMutation {
-						_, err := tx.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: after.Snapshot().Collections[0], ID: post.ID}, Values: store.Values{"title": store.String("Forbidden")}})
+						_, err := tx.Update(ctx, migration.UpdateRequest{Request: store.Request{Collection: after.Snapshot().Collections[0], ID: post.ID}, Values: store.Values{"title": store.String("Forbidden")}})
 						return err
 					}
 					return nil
@@ -677,7 +734,8 @@ func TestSQLitePresentationRegisteredBlockLabels(t *testing.T) {
 		t.Fatal(err)
 	}
 	changed := manifest.Snapshot()
-	changed.Blocks[0].Fields[0].Required = true
+	maximum := 3
+	changed.Blocks[0].Fields[0].Text = &schema.TextField{MaxLength: &maximum}
 	if err := validateSQLiteAdditiveTransition(before, changed); err == nil {
 		t.Fatal("comparison skipped changed referenced child constraints")
 	}

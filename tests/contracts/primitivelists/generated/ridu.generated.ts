@@ -26,12 +26,8 @@ export interface ScalarWhere<Value> {
 
 export type TimestampWhere = Omit<ScalarWhere<string>, "contains" | "like">;
 
-export interface MultiSelectWhere<Value extends string> {
-	contains?: Value;
-	exists?: boolean;
-}
-
-export interface PrimitiveListWhere<Value extends string | number> {
+/** Item membership for lists, multi-selects, reference lists and polymorphic relationships; wrap `in` in `not` to exclude. */
+export interface MembershipWhere<Value> {
 	in?: readonly Value[];
 	equals?: null;
 	notEquals?: null;
@@ -42,174 +38,135 @@ export interface ExistsWhere {
 	exists?: boolean;
 }
 
-export type PrimitiveProductsBodyBlocksBlockCardInput = {
+/** Places a nested definition's relative dotted paths under the path prefix of one placement. */
+export type RiduPrefixedPaths<Prefix extends string, Paths> = {
+	[Path in keyof Paths as `${Prefix}${Path & string}`]: Paths[Path];
+};
+
+export type CardInput = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "card"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
-export type PrimitiveProductsBodyBlocksBlockCardUpdate = {
+export type CardUpdate = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
-export type PrimitiveProductsBodyBlocksBlockCard = {
+export type Card = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
-export type PrimitiveProductsBodyBlocksBlockCardAllLocales = {
+export type CardAllLocales = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
-export type PrimitiveProductsBodyBlocksBlockCardAllLocalesValue = {
+export type CardAllLocalesValue = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
-export type PrimitiveProductsContentCardInput = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key?: string };
-
-/** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
-export type PrimitiveProductsContentCardUpdate = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type PrimitiveProductsContentCard = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type PrimitiveProductsContentCardAllLocales = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type PrimitiveProductsContentCardAllLocalesValue = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type PrimitiveProductsContentNoteInput = {
+export type NoteInput = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "note"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
-export type PrimitiveProductsContentNoteUpdate = {
+export type NoteUpdate = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
-export type PrimitiveProductsContentNote = {
+export type Note = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
-export type PrimitiveProductsContentNoteAllLocales = {
+export type NoteAllLocales = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
-export type PrimitiveProductsContentNoteAllLocalesValue = {
+export type NoteAllLocalesValue = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
 	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
-export type PrimitiveProductsLocalizedBodyBlocksBlockCardInput = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key?: string };
-
-/** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
-export type PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type PrimitiveProductsLocalizedBodyBlocksBlockCard = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue = {
-	"points"?: string[] | null;
-	"sizes"?: number[] | null;
-	"blockName"?: string | null;
-} & { blockType: "card"; _key: string };
-
-export type PrimitiveProductsBodyBlocksBlockBlockInput = PrimitiveProductsBodyBlocksBlockCardInput;
+export type PrimitiveProductsBodyBlocksBlockBlockInput = CardInput;
 export type PrimitiveProductsBodyBlocksBlockInput = Array<PrimitiveProductsBodyBlocksBlockBlockInput>;
 
-export type PrimitiveProductsBodyBlocksBlockBlockUpdate = PrimitiveProductsBodyBlocksBlockCardUpdate | PrimitiveProductsBodyBlocksBlockCardInput;
+export type PrimitiveProductsBodyBlocksBlockBlockUpdate = CardUpdate | CardInput;
 export type PrimitiveProductsBodyBlocksBlockUpdate = Array<PrimitiveProductsBodyBlocksBlockBlockUpdate>;
 
-export type PrimitiveProductsBodyBlocksBlockBlock = PrimitiveProductsBodyBlocksBlockCard;
+export type PrimitiveProductsBodyBlocksBlockBlock = Card;
 export type PrimitiveProductsBodyBlocksBlock = Array<PrimitiveProductsBodyBlocksBlockBlock>;
 
-export type PrimitiveProductsBodyBlocksBlockBlockAllLocales = PrimitiveProductsBodyBlocksBlockCardAllLocales;
+export type PrimitiveProductsBodyBlocksBlockBlockAllLocales = CardAllLocales;
 export type PrimitiveProductsBodyBlocksBlockAllLocales = Array<PrimitiveProductsBodyBlocksBlockBlockAllLocales>;
 
-export type PrimitiveProductsBodyBlocksBlockBlockAllLocalesValue = PrimitiveProductsBodyBlocksBlockCardAllLocalesValue;
+export type PrimitiveProductsBodyBlocksBlockBlockAllLocalesValue = CardAllLocalesValue;
 export type PrimitiveProductsBodyBlocksBlockAllLocalesValue = Array<PrimitiveProductsBodyBlocksBlockBlockAllLocalesValue>;
 
-export type PrimitiveProductsContentBlockInput = PrimitiveProductsContentCardInput | PrimitiveProductsContentNoteInput;
+export type PrimitiveProductsContentBlockInput = CardInput | NoteInput;
 export type PrimitiveProductsContentInput = Array<PrimitiveProductsContentBlockInput>;
 
-export type PrimitiveProductsContentBlockUpdate = PrimitiveProductsContentCardUpdate | PrimitiveProductsContentCardInput | PrimitiveProductsContentNoteUpdate | PrimitiveProductsContentNoteInput;
+export type PrimitiveProductsContentBlockUpdate = CardUpdate | CardInput | NoteUpdate | NoteInput;
 export type PrimitiveProductsContentUpdate = Array<PrimitiveProductsContentBlockUpdate>;
 
-export type PrimitiveProductsContentBlock = PrimitiveProductsContentCard | PrimitiveProductsContentNote;
+export type PrimitiveProductsContentBlock = Card | Note;
 export type PrimitiveProductsContent = Array<PrimitiveProductsContentBlock>;
 
-export type PrimitiveProductsContentBlockAllLocales = PrimitiveProductsContentCardAllLocales | PrimitiveProductsContentNoteAllLocales;
+export type PrimitiveProductsContentBlockAllLocales = CardAllLocales | NoteAllLocales;
 export type PrimitiveProductsContentAllLocales = Array<PrimitiveProductsContentBlockAllLocales>;
 
-export type PrimitiveProductsContentBlockAllLocalesValue = PrimitiveProductsContentCardAllLocalesValue | PrimitiveProductsContentNoteAllLocalesValue;
+export type PrimitiveProductsContentBlockAllLocalesValue = CardAllLocalesValue | NoteAllLocalesValue;
 export type PrimitiveProductsContentAllLocalesValue = Array<PrimitiveProductsContentBlockAllLocalesValue>;
 
-export type PrimitiveProductsLocalizedBodyBlocksBlockBlockInput = PrimitiveProductsLocalizedBodyBlocksBlockCardInput;
+export type PrimitiveProductsLocalizedBodyBlocksBlockBlockInput = CardInput;
 export type PrimitiveProductsLocalizedBodyBlocksBlockInput = Array<PrimitiveProductsLocalizedBodyBlocksBlockBlockInput>;
 
-export type PrimitiveProductsLocalizedBodyBlocksBlockBlockUpdate = PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate | PrimitiveProductsLocalizedBodyBlocksBlockCardInput;
+export type PrimitiveProductsLocalizedBodyBlocksBlockBlockUpdate = CardUpdate | CardInput;
 export type PrimitiveProductsLocalizedBodyBlocksBlockUpdate = Array<PrimitiveProductsLocalizedBodyBlocksBlockBlockUpdate>;
 
-export type PrimitiveProductsLocalizedBodyBlocksBlockBlock = PrimitiveProductsLocalizedBodyBlocksBlockCard;
+export type PrimitiveProductsLocalizedBodyBlocksBlockBlock = Card;
 export type PrimitiveProductsLocalizedBodyBlocksBlock = Array<PrimitiveProductsLocalizedBodyBlocksBlockBlock>;
 
-export type PrimitiveProductsLocalizedBodyBlocksBlockBlockAllLocales = PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales;
+export type PrimitiveProductsLocalizedBodyBlocksBlockBlockAllLocales = CardAllLocales;
 export type PrimitiveProductsLocalizedBodyBlocksBlockAllLocales = Array<PrimitiveProductsLocalizedBodyBlocksBlockBlockAllLocales>;
 
-export type PrimitiveProductsLocalizedBodyBlocksBlockBlockAllLocalesValue = PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue;
+export type PrimitiveProductsLocalizedBodyBlocksBlockBlockAllLocalesValue = CardAllLocalesValue;
 export type PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValue = Array<PrimitiveProductsLocalizedBodyBlocksBlockBlockAllLocalesValue>;
+
+/** Filters relative to one Card block row; a resource filter prefixes them with the row's path. */
+export interface CardWhere {
+	"points"?: MembershipWhere<string>;
+	"sizes"?: MembershipWhere<number>;
+	"blockName"?: ScalarWhere<string>;
+}
+
+/** Filters relative to one Note block row; a resource filter prefixes them with the row's path. */
+export interface NoteWhere {
+	"points"?: MembershipWhere<string>;
+	"sizes"?: MembershipWhere<number>;
+	"blockName"?: ScalarWhere<string>;
+}
+
+export type CardValidationPath = "points" | "sizes" | "blockName";
+
+export type NoteValidationPath = "points" | "sizes" | "blockName";
 
 export interface PrimitiveProducts {
 	id: ID;
@@ -306,7 +263,9 @@ export interface PrimitiveProductsUpdate {
 	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocumentInput<PrimitiveProductsLocalizedBodyBlocksBlockUpdate[number]> | null;
 }
 
-export interface PrimitiveProductsWhere {
+export interface PrimitiveProductsWhere extends
+	RiduPrefixedPaths<"content.card.", CardWhere>,
+	RiduPrefixedPaths<"content.note.", NoteWhere> {
 	and?: readonly PrimitiveProductsWhere[];
 	or?: readonly PrimitiveProductsWhere[];
 	not?: PrimitiveProductsWhere;
@@ -315,23 +274,17 @@ export interface PrimitiveProductsWhere {
 	updatedAt?: TimestampWhere;
 	_status?: ScalarWhere<"published">;
 	"title"?: ScalarWhere<string>;
-	"sellingPoints"?: PrimitiveListWhere<string>;
-	"availableSizes"?: PrimitiveListWhere<number>;
-	"localizedPoints"?: PrimitiveListWhere<string>;
-	"localizedSizes"?: PrimitiveListWhere<number>;
+	"sellingPoints"?: MembershipWhere<string>;
+	"availableSizes"?: MembershipWhere<number>;
+	"localizedPoints"?: MembershipWhere<string>;
+	"localizedSizes"?: MembershipWhere<number>;
 	"details"?: ExistsWhere;
-	"details.points"?: PrimitiveListWhere<string>;
-	"details.sizes"?: PrimitiveListWhere<number>;
+	"details.points"?: MembershipWhere<string>;
+	"details.sizes"?: MembershipWhere<number>;
 	"variants"?: ExistsWhere;
-	"variants.points"?: PrimitiveListWhere<string>;
-	"variants.sizes"?: PrimitiveListWhere<number>;
+	"variants.points"?: MembershipWhere<string>;
+	"variants.sizes"?: MembershipWhere<number>;
 	"content"?: ExistsWhere;
-	"content.card.points"?: PrimitiveListWhere<string>;
-	"content.card.sizes"?: PrimitiveListWhere<number>;
-	"content.card.blockName"?: ScalarWhere<string>;
-	"content.note.points"?: PrimitiveListWhere<string>;
-	"content.note.sizes"?: PrimitiveListWhere<number>;
-	"content.note.blockName"?: ScalarWhere<string>;
 	"body"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsBodyBlocksBlock[number]>>;
 	"localizedBody"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsLocalizedBodyBlocksBlock[number]>>;
 }
@@ -374,11 +327,7 @@ export interface PrimitiveProductsPopulationSelect {
 
 export type PrimitiveProductsPopulate = Record<string, never>;
 
-export type PrimitiveProductsPopulateOutput = Record<string, never>;
-
-export type PrimitiveProductsAllLocalesPopulateOutput = Record<string, never>;
-
-export type PrimitiveProductsValidationPath = "title" | "sellingPoints" | "availableSizes" | "localizedPoints" | `localizedPoints.${Locale}` | "localizedSizes" | `localizedSizes.${Locale}` | "details" | "details.points" | "details.sizes" | "variants" | `variants.${number}` | `variants.${number}._key` | `variants.${number}.points` | `variants.${number}.sizes` | "content" | `content.${number}` | `content.${number}._key` | `content.${number}.blockType` | `content.${number}.points` | `content.${number}.sizes` | `content.${number}.blockName` | "body" | `body.${string}` | "localizedBody" | `localizedBody.${Locale}` | `localizedBody.${string}` | `localizedBody.${Locale}.${string}`;
+export type PrimitiveProductsValidationPath = "title" | "sellingPoints" | "availableSizes" | "localizedPoints" | `localizedPoints.${Locale}` | "localizedSizes" | `localizedSizes.${Locale}` | "details" | "details.points" | "details.sizes" | "variants" | `variants.${number}` | `variants.${number}._key` | `variants.${number}.points` | `variants.${number}.sizes` | "content" | `content.${number}` | `content.${number}._key` | `content.${number}.blockType` | `content.${number}.${CardValidationPath}` | `content.${number}.${NoteValidationPath}` | "body" | `body.${string}` | "localizedBody" | `localizedBody.${Locale}` | `localizedBody.${string}` | `localizedBody.${Locale}.${string}`;
 
 export interface RiduConfig {
 	locale: Locale;
@@ -397,8 +346,6 @@ export interface RiduConfig {
 			where: PrimitiveProductsWhere;
 			select: PrimitiveProductsSelect;
 			populate: PrimitiveProductsPopulate;
-			populateOutput: PrimitiveProductsPopulateOutput;
-			allPopulateOutput: PrimitiveProductsAllLocalesPopulateOutput;
 			validationPath: PrimitiveProductsValidationPath;
 		};
 	};

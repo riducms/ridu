@@ -214,10 +214,11 @@ nonempty strings and unique within their list. Changing a block's type requires 
 
 Use `CopyObject()` when you need a mutable field map, `CopyList()` when you need a mutable slice,
 and `CopyDocument()` for a populated document. Editing these detached copies leaves the original
-value unchanged. To replace one list item, `WithListItem` builds a new list that shares its
+value unchanged. To set some members of an object, `WithMembers` builds the edited object with a
+single copy of its map. To replace one list item, `WithListItem` builds a new list that shares its
 unchanged items. This avoids copying the whole list just to edit one row:
 
-```go title="nested.go" focus={14-25}
+```go title="nested.go" focus={14-23}
 package content
 
 import (
@@ -234,14 +235,12 @@ func RenameFirstLink(
 	if !ok {
 		return store.Value{}, fmt.Errorf("links must be a nonempty list")
 	}
-	row, ok := first.CopyObject()
+	// Only this row is copied. Its _key and other fields are retained.
+	row, ok := first.WithMembers(store.Values{"label": store.String(label)})
 	if !ok {
 		return store.Value{}, fmt.Errorf("first link must be an object")
 	}
-
-	// Only this row needs a mutable copy. Preserve its _key and other fields.
-	row["label"] = store.String(label)
-	updated, _ := links.WithListItem(0, store.Object(row))
+	updated, _ := links.WithListItem(0, row)
 	return updated, nil
 }
 ```

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -116,22 +117,36 @@ func TestPredicateCompilerSupportsNestedOpaqueJSONPaths(t *testing.T) {
 	}
 }
 
-func TestPredicateCompilerTreatsMultiSelectContainsAsExactMembership(t *testing.T) {
-	roles, err := query.ParsePath("roles")
-	if err != nil {
-		t.Fatal(err)
+func TestPredicateCompilerMatchesMembershipByJSONContainment(t *testing.T) {
+	collection := schema.Collection{ID: "users", Slug: "users", Fields: []schema.Field{
+		{ID: "users-roles", Name: "roles", Type: schema.FieldTypeSelect, Select: &schema.SelectField{HasMany: true, Options: []schema.SelectOption{{Value: "admin"}, {Value: "editor"}}}},
+		{ID: "users-teams", Name: "teams", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{CollectionSlug: "teams", HasMany: true}},
+		{ID: "users-subjects", Name: "subjects", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{HasMany: true, Polymorphic: true, Targets: []schema.RelationshipTarget{{CollectionSlug: "posts"}}}},
+		{ID: "users-subject", Name: "subject", Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true, Targets: []schema.RelationshipTarget{{CollectionSlug: "posts"}}}},
+	}}
+	for _, test := range []struct {
+		expression query.Expression
+		want       string
+	}{
+		{query.In("roles", "admin"), "@> jsonb_build_array($1::text)"},
+		{query.In("teams", "t1"), "@> jsonb_build_array($1::text)"},
+		{query.In("subjects", query.Reference("posts", "p1")), "@> jsonb_build_array(jsonb_build_object('relationTo', $1::text, 'id', $2::text))"},
+		{query.In("subject", query.Reference("posts", "p1")), "@> jsonb_build_object('relationTo', $1::text, 'id', $2::text)"},
+	} {
+		compiler := predicateCompiler{collection: collection}
+		compiled, err := compiler.compile(test.expression.Node())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(compiled, test.want) {
+			t.Fatalf("membership predicate = %s, want %s", compiled, test.want)
+		}
 	}
-	collection := schema.Collection{ID: "users", Slug: "users", Fields: []schema.Field{{
-		ID: "users-roles", Name: "roles", Type: schema.FieldTypeSelect,
-		Select: &schema.SelectField{HasMany: true, Options: []schema.SelectOption{{Value: "admin"}, {Value: "editor"}}},
-	}}}
-	compiler := predicateCompiler{collection: collection}
-	compiled, err := compiler.compile(query.Contains(roles, "admin").Node())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(compiled, "@> jsonb_build_array($1::text)") {
-		t.Fatalf("multi-select contains predicate = %s", compiled)
+	for _, expression := range []query.Expression{query.Contains("roles", "admin"), query.Equal("teams", "t1"), query.In("subjects", "p1")} {
+		compiler := predicateCompiler{collection: collection}
+		if _, err := compiler.compile(expression.Node()); err == nil {
+			t.Fatalf("%v compiled outside the membership contract", expression.Node().Comparison)
+		}
 	}
 	if columnType(collection.Fields[0]) != "jsonb" || !isJSONStoredField(collection.Fields[0]) {
 		t.Fatalf("multi-select storage = %q/json=%v", columnType(collection.Fields[0]), isJSONStoredField(collection.Fields[0]))
@@ -285,7 +300,7 @@ func TestVersionPredicateCompilerReadsSnapshotValues(t *testing.T) {
 }
 
 func TestPredicateCompilerInsertsLocaleAtIntermediateContainerBoundaries(t *testing.T) {
-	collection := localizedIntermediatePredicateCollection()
+	collection := localizedIntermediatePredicateCollection(t)
 	tests := []struct {
 		name    string
 		path    string
@@ -352,7 +367,7 @@ func TestPredicateCompilerInsertsLocaleAtIntermediateContainerBoundaries(t *test
 }
 
 func TestAccessPredicateCompilerChecksIntermediateLocalizedContainersForEveryLocale(t *testing.T) {
-	collection := localizedIntermediatePredicateCollection()
+	collection := localizedIntermediatePredicateCollection(t)
 	path, err := query.ParsePath("content.rows.label")
 	if err != nil {
 		t.Fatal(err)
@@ -373,7 +388,7 @@ func TestAccessPredicateCompilerChecksIntermediateLocalizedContainersForEveryLoc
 }
 
 func TestVersionPredicateCompilerInsertsLocaleAtIntermediateContainers(t *testing.T) {
-	collection := localizedIntermediatePredicateCollection()
+	collection := localizedIntermediatePredicateCollection(t)
 	tests := []struct {
 		path string
 		want []string
@@ -403,7 +418,7 @@ func TestVersionPredicateCompilerInsertsLocaleAtIntermediateContainers(t *testin
 }
 
 func TestPredicateCompilerSelectsLocalizedContainersBeforeDescendants(t *testing.T) {
-	collection := localizedIntermediatePredicateCollection()
+	collection := localizedIntermediatePredicateCollection(t)
 	tests := []struct {
 		path string
 		want []string
@@ -481,23 +496,23 @@ func TestPredicateCompilerSelectsLocalizedContainersBeforeDescendants(t *testing
 }
 
 func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
-	collection := schema.Collection{ID: "posts", Slug: "posts", Fields: []schema.Field{
-		{ID: "subtitle", Name: "subtitle", Type: schema.FieldTypeText},
-		{ID: "score", Name: "score", Type: schema.FieldTypeNumber},
-		{ID: "metadata", Name: "metadata", Type: schema.FieldTypeJSON},
-		{ID: "plugin-data", Name: "pluginData", Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{Key: "test"}},
-		{
+	collection := schema.Collection{ID: "posts", Slug: "posts", Fields: schematest.Bind(t, "posts", []schema.BlockType{predicateHeroBlock()},
+		schema.Field{ID: "subtitle", Name: "subtitle", Type: schema.FieldTypeText},
+		schema.Field{ID: "score", Name: "score", Type: schema.FieldTypeNumber},
+		schema.Field{ID: "metadata", Name: "metadata", Type: schema.FieldTypeJSON},
+		schema.Field{ID: "plugin-data", Name: "pluginData", Type: schema.FieldTypePlugin, Plugin: &schema.PluginField{Key: "test"}},
+		schema.Field{
 			ID: "rows", Name: "rows", Type: schema.FieldTypeArray,
 			Nested: &schema.NestedField{Fields: []schema.Field{
 				{ID: "rows-label", Name: "label", Type: schema.FieldTypeText},
 				{ID: "rows-payload", Name: "payload", Type: schema.FieldTypeJSON},
 			}},
 		},
-		{
-			ID: "layout", Name: "layout", Type: schema.FieldTypeBlocks,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{{ID: "layout-hero-heading", Name: "heading", Type: schema.FieldTypeText}}}}},
+		schema.Field{
+			ID: "layout", Name: "layout", Path: query.Field("layout"), Type: schema.FieldTypeBlocks,
+			Blocks: &schema.BlocksField{BlockReferences: []string{"hero"}},
 		},
-	}}
+	)}
 	path, err := query.ParsePath("subtitle")
 	if err != nil {
 		t.Fatal(err)
@@ -813,8 +828,13 @@ func TestLocalizedScalarCompilerPreservesTheFinalEmptyCandidate(t *testing.T) {
 	}
 }
 
-func localizedIntermediatePredicateCollection() schema.Collection {
-	return schema.Collection{ID: "pages", Slug: "pages", Fields: []schema.Field{{
+// predicateHeroBlock is the hero definition that the predicate fixtures place.
+func predicateHeroBlock() schema.BlockType {
+	return schema.BlockType{Slug: "hero", TypeName: "Hero", Fields: []schema.Field{{ID: "block-hero-heading", Name: "heading", Path: query.Field("heading"), Type: schema.FieldTypeText}}}
+}
+
+func localizedIntermediatePredicateCollection(t *testing.T) schema.Collection {
+	return schema.Collection{ID: "pages", Slug: "pages", Fields: schematest.Bind(t, "pages", []schema.BlockType{predicateHeroBlock()}, schema.Field{
 		ID: "content", Name: "content", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{
 			{
 				ID: "content-details", Name: "details", Type: schema.FieldTypeGroup, Localized: true,
@@ -825,8 +845,8 @@ func localizedIntermediatePredicateCollection() schema.Collection {
 				Nested: &schema.NestedField{Fields: []schema.Field{{ID: "content-rows-label", Name: "label", Type: schema.FieldTypeText}}},
 			},
 			{
-				ID: "content-layout", Name: "layout", Type: schema.FieldTypeBlocks, Localized: true,
-				Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{{ID: "content-layout-hero-heading", Name: "heading", Type: schema.FieldTypeText}}}}},
+				ID: "content-layout", Name: "layout", Path: query.Field("content", "layout"), Type: schema.FieldTypeBlocks, Localized: true,
+				Blocks: &schema.BlocksField{BlockReferences: []string{"hero"}},
 			},
 			{
 				ID: "content-entries", Name: "entries", Type: schema.FieldTypeArray,
@@ -843,17 +863,17 @@ func localizedIntermediatePredicateCollection() schema.Collection {
 						Nested: &schema.NestedField{Fields: []schema.Field{{ID: "content-sections-items-label", Name: "label", Type: schema.FieldTypeText}}},
 					},
 					{
-						ID: "content-sections-panels", Name: "panels", Type: schema.FieldTypeBlocks,
-						Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{{ID: "content-sections-panels-hero-heading", Name: "heading", Type: schema.FieldTypeText}}}}},
+						ID: "content-sections-panels", Name: "panels", Path: query.Field("content", "sections", "panels"), Type: schema.FieldTypeBlocks,
+						Blocks: &schema.BlocksField{BlockReferences: []string{"hero"}},
 					},
 				}},
 			},
 		}},
-	}, {
+	}, schema.Field{
 		ID: "localized-root", Name: "localizedRoot", Type: schema.FieldTypeGroup, Localized: true,
 		Nested: &schema.NestedField{Fields: []schema.Field{{
 			ID: "localized-root-rows", Name: "rows", Type: schema.FieldTypeArray,
 			Nested: &schema.NestedField{Fields: []schema.Field{{ID: "localized-root-rows-label", Name: "label", Type: schema.FieldTypeText}}},
 		}}},
-	}}}
+	})}
 }

@@ -7,6 +7,7 @@ import {
 	normalizeColumnSelection,
 	encodeColumnSelection,
 	type ListColumnSelection,
+	type ListFilterFieldLookup,
 	type ListFilterGroup,
 	type ListPageSize,
 } from "@admin/features/collections/list-workspace";
@@ -80,7 +81,7 @@ export class CollectionListQuery {
 		return field !== undefined && sortableField(field) ? this.sort : "";
 	}
 
-	filters(fields: readonly SchemaField[]) {
+	filters(fields: ListFilterFieldLookup) {
 		return parseListFilters(this.params.current.get("filters"), fields);
 	}
 

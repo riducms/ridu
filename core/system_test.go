@@ -104,7 +104,7 @@ func TestSystemCallsSkipAccessRulesButNotTheLifecycle(t *testing.T) {
 		t.Fatalf("a learner queried a protected field: %v", err)
 	}
 	page, err := local.List(ctx, "profiles", ridu.ListOptions{Where: query.Equal("note", "staff only"), System: true})
-	if err != nil || page.Total != 1 {
+	if err != nil || *page.Total != 1 {
 		t.Fatalf("system query of a protected field = %#v, %v", page, err)
 	}
 
@@ -114,7 +114,7 @@ func TestSystemCallsSkipAccessRulesButNotTheLifecycle(t *testing.T) {
 		t.Fatalf("system draft create = %#v, %v", draft, err)
 	}
 	lessons, err := local.List(ctx, "lessons", ridu.ListOptions{System: true})
-	if err != nil || lessons.Total != 1 {
+	if err != nil || *lessons.Total != 1 {
 		t.Fatalf("system lesson list = %#v, %v", lessons, err)
 	}
 	if _, err := local.Create(ctx, "bookmarks", store.Values{"lesson": store.String(draft.ID)}, ridu.MutationOptions{System: true}); err != nil {

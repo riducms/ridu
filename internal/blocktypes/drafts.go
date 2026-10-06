@@ -2,14 +2,22 @@ package blocktypes
 
 import "github.com/riducms/ridu/schema"
 
-// DraftReadFields identifies authored fields that may be incomplete in a read.
+// DraftReadFields identifies authored fields that may be incomplete in a read,
+// by the field IDs a definition traversal sees (see Catalog.Fields).
 // Reused block families inherit this from every owning resource: a single named
 // output type must describe both its published and unfinished occurrences.
 func (catalog *Catalog) DraftReadFields(snapshot schema.Snapshot) map[schema.StableID]bool {
 	fields := map[schema.StableID]bool{}
 	variants := map[string]bool{}
+	// A shared definition's fields are the same values at every placement, so
+	// each field list is marked once.
+	marked := map[*schema.Field]bool{}
 	var mark func([]schema.Field)
 	mark = func(children []schema.Field) {
+		if len(children) == 0 || marked[&children[0]] {
+			return
+		}
+		marked[&children[0]] = true
 		for _, field := range children {
 			fields[field.ID] = true
 			if blocks, ok := catalog.Fields[field.ID]; ok {
@@ -17,8 +25,24 @@ func (catalog *Catalog) DraftReadFields(snapshot schema.Snapshot) map[schema.Sta
 					variants[name] = true
 				}
 			}
-			mark(schema.EmbeddedBlocks(field))
-			mark(schema.ChildFields(field))
+			mark(schema.EmbeddedDefinitionBlocks(field))
+			if field.Nested != nil {
+				mark(field.Nested.ResolvedFields())
+			}
+			if field.Blocks != nil {
+				for _, block := range field.Blocks.Definitions() {
+					mark(block.ResolvedFields())
+				}
+			}
+			if field.Plugin != nil {
+				for _, tree := range field.Plugin.EmbeddedTrees {
+					for _, c := range tree.Cases {
+						for _, block := range c.Definitions() {
+							mark(block.ResolvedFields())
+						}
+					}
+				}
+			}
 		}
 	}
 	for _, resource := range append(append([]schema.Collection{}, snapshot.Collections...), snapshot.Globals...) {
@@ -35,12 +59,12 @@ func (catalog *Catalog) DraftReadFields(snapshot schema.Snapshot) map[schema.Sta
 	}
 	// The catalog may have selected a non-draft occurrence as the representative
 	// of a reused family. Include that representative's stable child identities.
-	marked := map[string]bool{}
+	markedVariants := map[string]bool{}
 	for {
 		progressed := false
 		for _, variant := range catalog.Variants {
-			if variants[variant.Name] && !marked[variant.Name] {
-				marked[variant.Name] = true
+			if variants[variant.Name] && !markedVariants[variant.Name] {
+				markedVariants[variant.Name] = true
 				mark(variant.Block.ResolvedFields())
 				progressed = true
 			}

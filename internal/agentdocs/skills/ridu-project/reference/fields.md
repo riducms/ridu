@@ -151,6 +151,9 @@ the rules for nested and translated content.
 
 Options such as `.Required()`, `.Min(...)`, and `.MaxLength(...)` check
 values before saving, regardless of whether the change comes from the admin or an API.
+Documents saved before a field became required are checked once, by the migration or `ridu dev`
+synchronization that makes it required: it stops while a published or unversioned document has no
+value. See [Making a field required](./migrations.md#required-fields).
 
 For a rule specific to your application, attach `.Validate(yourFunction)`. The
 [Custom validation guide](./fields/validation.md) shows a complete URL validator, explains

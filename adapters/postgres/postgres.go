@@ -9,21 +9,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/riducms/ridu/internal/localization"
 	"github.com/riducms/ridu/internal/localnet"
+	"github.com/riducms/ridu/internal/membership"
 	populationwalk "github.com/riducms/ridu/internal/population"
-	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/querypath"
 	"github.com/riducms/ridu/internal/referenceindex"
-	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -33,6 +35,7 @@ type Store struct {
 	pool           *pgxpool.Pool
 	uploadLockPool *pgxpool.Pool
 	uploadLockWait time.Duration
+	readiness      readinessCache
 }
 
 // PoolConfig defines bounded production connection and PostgreSQL session
@@ -213,118 +216,8 @@ func (backend *Store) Ping(ctx context.Context) error {
 	return nil
 }
 
-// Ready proves connectivity and that the latest complete immutable migration
-// targets the exact manifest embedded in this process. In-progress migration work is
-// rejected even if an older completed digest happens to match.
-func (backend *Store) Ready(ctx context.Context, manifest schema.Manifest) error {
-	return backend.ready(ctx, manifest, nil)
-}
-
-// ReadyWithMigrationHistory verifies the complete ordered migration history,
-// recorded head and executable storage schema. Admin presentation may differ.
-func (backend *Store) ReadyWithMigrationHistory(ctx context.Context, manifest schema.Manifest, expectedHistoryDigest string) error {
-	return backend.ready(ctx, manifest, &expectedHistoryDigest)
-}
-
-func (backend *Store) ready(ctx context.Context, manifest schema.Manifest, expectedHistoryDigest *string) error {
-	if err := backend.Ping(ctx); err != nil {
-		return err
-	}
-	var ledgerExists bool
-	if err := backend.pool.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.ridu_migrations') IS NOT NULL`).Scan(&ledgerExists); err != nil {
-		return fmt.Errorf("inspect migration ledger: %w", err)
-	}
-	if !ledgerExists {
-		return fmt.Errorf("immutable migration ledger is missing")
-	}
-	var actual, plannerName, plannerVersion string
-	// Artifact names begin with a fixed-width UTC timestamp and are the immutable
-	// history order. Database clocks can move backwards, so applied_at must not
-	// decide which manifest is current.
-	if err := backend.pool.QueryRow(ctx, `SELECT to_digest, planner_name, planner_version FROM ridu_migrations ORDER BY name DESC LIMIT 1`).Scan(&actual, &plannerName, &plannerVersion); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("immutable migration ledger has no applied migration")
-		}
-		return fmt.Errorf("read migration ledger: %w", err)
-	}
-	if expectedHistoryDigest != nil {
-		if err := backend.validateMigrationHistory(ctx, actual, manifest, *expectedHistoryDigest); err != nil {
-			return err
-		}
-	} else {
-		expected, err := ridumigration.DigestManifest(manifest)
-		if err != nil {
-			return fmt.Errorf("digest expected manifest: %w", err)
-		}
-		if actual != expected {
-			return fmt.Errorf("database manifest digest %s does not match executable digest %s", actual, expected)
-		}
-	}
-	if plannerName != atlasPlannerName || plannerVersion != AtlasVersion {
-		return fmt.Errorf("database migration ledger head uses unsupported PostgreSQL planner %s %q; this Ridu release supports only %s %q, so create a new migration history with ridu migrate create and apply it to a new database", plannerName, plannerVersion, atlasPlannerName, AtlasVersion)
-	}
-	var stepsExist bool
-	if err := backend.pool.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.ridu_migration_steps') IS NOT NULL`).Scan(&stepsExist); err != nil {
-		return fmt.Errorf("inspect migration step ledger: %w", err)
-	}
-	if stepsExist {
-		var incomplete bool
-		if err := backend.pool.QueryRow(ctx, `SELECT EXISTS (
-SELECT 1 FROM ridu_migration_steps steps
-WHERE NOT EXISTS (SELECT 1 FROM ridu_migrations migrations WHERE migrations.name = steps.artifact_name AND migrations.artifact_digest = steps.artifact_digest)
-)`).Scan(&incomplete); err != nil {
-			return fmt.Errorf("inspect incomplete migration work: %w", err)
-		}
-		if incomplete {
-			return fmt.Errorf("database has incomplete migration work")
-		}
-	}
-	database := stdlib.OpenDBFromPool(backend.pool)
-	defer database.Close()
-	connection, err := database.Conn(ctx)
-	if err != nil {
-		return fmt.Errorf("inspect PostgreSQL physical state: %w", err)
-	}
-	defer connection.Close()
-	if err := verifyPostgresPhysicalState(ctx, connection, &manifest); err != nil {
-		return fmt.Errorf("database physical state: %w", err)
-	}
-	return nil
-}
-
-func (backend *Store) validateMigrationHistory(ctx context.Context, headDigest string, manifest schema.Manifest, expected string) error {
-	rows, err := backend.pool.Query(ctx, `SELECT name, artifact_digest FROM ridu_migrations ORDER BY name`)
-	if err != nil {
-		return fmt.Errorf("read ordered PostgreSQL migration history: %w", err)
-	}
-	defer rows.Close()
-	identities := make([]ridumigration.ArtifactIdentity, 0)
-	for rows.Next() {
-		var identity ridumigration.ArtifactIdentity
-		if err := rows.Scan(&identity.Name, &identity.Digest); err != nil {
-			return fmt.Errorf("read ordered PostgreSQL migration history: %w", err)
-		}
-		identities = append(identities, identity)
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("read ordered PostgreSQL migration history: %w", err)
-	}
-	return validatePostgresMigrationHistory(identities, headDigest, manifest, expected)
-}
-
-func validatePostgresMigrationHistory(identities []ridumigration.ArtifactIdentity, headDigest string, manifest schema.Manifest, expected string) error {
-	actual, err := ridumigration.DigestArtifactHistory(identities, headDigest, manifest)
-	if err != nil {
-		return fmt.Errorf("digest applied PostgreSQL migration history: %w", err)
-	}
-	if actual != expected {
-		return fmt.Errorf("applied PostgreSQL migration history digest %s does not match executable history digest %s", actual, expected)
-	}
-	return nil
-}
-
 func (backend *Store) Begin(ctx context.Context) (store.Transaction, error) {
-	transaction, err := backend.pool.BeginTx(ctx, pgx.TxOptions{})
+	transaction, err := beginPipelined(ctx, backend.pool, beginReadCommitted)
 	if err != nil {
 		return nil, err
 	}
@@ -332,10 +225,7 @@ func (backend *Store) Begin(ctx context.Context) (store.Transaction, error) {
 }
 
 func (backend *Store) BeginSnapshot(ctx context.Context) (store.Transaction, error) {
-	transaction, err := backend.pool.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.RepeatableRead,
-		AccessMode: pgx.ReadOnly,
-	})
+	transaction, err := beginPipelined(ctx, backend.pool, beginRepeatableReadOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +233,7 @@ func (backend *Store) BeginSnapshot(ctx context.Context) (store.Transaction, err
 }
 
 type documentTransaction struct {
-	transaction pgx.Tx
+	transaction documentConnection
 	tableExists map[string]bool
 }
 
@@ -379,9 +269,6 @@ func (transaction *documentTransaction) CreateAuthCredential(ctx context.Context
 }
 
 func (transaction *documentTransaction) Create(ctx context.Context, request store.CreateRequest) (store.Document, error) {
-	if err := transaction.lockUniqueUnion(ctx, request.Collection); err != nil {
-		return store.Document{}, err
-	}
 	id := request.ID
 	if id == "" {
 		var err error
@@ -393,9 +280,12 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 	if err := store.ValidateDocumentID(id); err != nil {
 		return store.Document{}, err
 	}
-	fields := storedSchemaFields(request.Collection.Fields)
+	fields := storedSchemaFields(request.Collection)
 	values := store.CloneValues(request.Values)
 	canonicalizePostgresAuthIdentity(request.Collection, values)
+	if err := transaction.lockUniqueUnion(ctx, request.Collection, request.Locales, values); err != nil {
+		return store.Document{}, err
+	}
 	columns := []string{quote("id")}
 	placeholders := []string{"$1"}
 	arguments := []any{id}
@@ -461,22 +351,28 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 	}
 	statement := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) RETURNING %s",
 		quote(collectionTable(request.Collection.ID)), strings.Join(columns, ", "), strings.Join(placeholders, ", "), selectColumns(request.Collection, fields, request.Locales))
-	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields)
+	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields, request.Locales)
 	if err != nil {
 		return store.Document{}, translateError(err)
 	}
-	if err := transaction.replaceDocumentReferences(ctx, request.Collection, document); err != nil {
+	// The insert claimed this ID, and every owner removal deletes its index
+	// rows, so the new row has none yet.
+	entries, err := referenceindex.Collect(request.Collection, document)
+	if err != nil {
+		return store.Document{}, err
+	}
+	if err := transaction.insertDocumentReferences(ctx, store.DocumentReference{CollectionID: request.Collection.ID, DocumentID: document.ID}, entries, false); err != nil {
 		return store.Document{}, err
 	}
 	if request.Collection.Versions != nil && document.Status == store.StatusPublished {
-		if err := transaction.putPublishedHead(ctx, request.Collection, document); err != nil {
+		if err := transaction.putPublishedHead(ctx, request.Collection, document, request.Locales); err != nil {
 			return store.Document{}, err
 		}
 		if request.Collection.Versions.Drafts {
 			document.PublishedRevision = document.Revision
 		}
 	}
-	if err := transaction.checkUniqueUnion(ctx, request.Collection, request.Locales); err != nil {
+	if err := transaction.checkUniqueUnion(ctx, request.Collection, request.Locales, document); err != nil {
 		return store.Document{}, err
 	}
 	return document, nil
@@ -488,26 +384,26 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 		return store.Document{}, err
 	}
 	fields := fieldsForRead(request)
-	statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s", readColumns(request, fields), readSource(request), predicate)
+	lock := ""
 	switch request.Lock {
 	case store.LockNone:
 	case store.LockReference:
-		statement += " FOR SHARE"
+		lock = " FOR SHARE"
 	case store.LockMutation:
-		statement += " FOR UPDATE"
+		lock = " FOR UPDATE"
 	default:
 		return store.Document{}, fmt.Errorf("unsupported document lock mode %q", request.Lock)
 	}
-	document, err := scanRequestedDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request, fields)
-	if err != nil {
-		return store.Document{}, translateError(err)
+	var document store.Document
+	if lock != "" && readsPublishedMetadata(request) {
+		document, err = transaction.findLockedWorking(ctx, request, fields, predicate, lock, arguments)
+	} else {
+		statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s%s", readColumns(request, fields), readSource(request), predicate, lock)
+		document, err = scanRequestedDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request, fields)
+		err = translateError(err)
 	}
-	if !request.PublishedOnly {
-		loaded := []store.Document{document}
-		if err := transaction.attachPublishedMetadata(ctx, request.Collection, loaded); err != nil {
-			return store.Document{}, err
-		}
-		document = loaded[0]
+	if err != nil {
+		return store.Document{}, err
 	}
 	documents, err := transaction.populate(ctx, []store.Document{document}, request)
 	if err != nil {
@@ -516,46 +412,65 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 	return projectDocument(documents[0], request.Select), nil
 }
 
-func (transaction *documentTransaction) List(ctx context.Context, request store.Request) (store.Page, error) {
+// listStatements compiles a list request's count statement and its page
+// statement. The page statement's final two parameters are LIMIT and OFFSET,
+// following the shared predicate arguments. A SkipTotal request has no count
+// statement.
+func listStatements(request store.Request) (count, page string, arguments []any, fields []schema.Field, err error) {
 	predicate, arguments, err := requestPredicate(request, false)
 	if err != nil {
-		return store.Page{}, err
+		return "", "", nil, nil, err
 	}
-	var total int
-	countStatement := fmt.Sprintf("SELECT count(*) FROM %s WHERE %s", readSource(request), predicate)
-	if err := transaction.transaction.QueryRow(ctx, countStatement, arguments...).Scan(&total); err != nil {
-		return store.Page{}, translateError(err)
-	}
-	page, limit, offset, _ := store.ListPageBounds(request.Page, request.Limit, total)
-	fields := fieldsForRead(request)
 	order, err := sortClause(request)
 	if err != nil {
+		return "", "", nil, nil, err
+	}
+	fields = fieldsForRead(request)
+	if !request.SkipTotal {
+		count = fmt.Sprintf("SELECT count(*) FROM %s WHERE %s", readSource(request), predicate)
+	}
+	page = fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT $%d OFFSET $%d",
+		readColumns(request, fields), readSource(request), predicate, order, len(arguments)+1, len(arguments)+2)
+	return count, page, arguments, fields, nil
+}
+
+func (transaction *documentTransaction) List(ctx context.Context, request store.Request) (store.Page, error) {
+	countStatement, statement, arguments, fields, err := listStatements(request)
+	if err != nil {
 		return store.Page{}, err
 	}
-	arguments = append(arguments, limit, offset)
-	statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT $%d OFFSET $%d",
-		readColumns(request, fields), readSource(request), predicate, order, len(arguments)-1, len(arguments))
-	rows, err := transaction.transaction.Query(ctx, statement, arguments...)
-	if err != nil {
-		return store.Page{}, translateError(err)
-	}
-	defer rows.Close()
+	// The page window does not depend on the total: a page past the last row
+	// reads no rows, exactly as the total-clamped bounds do. The count and the
+	// page therefore travel in one pipeline and, in a snapshot, share its view.
+	// Without a total, one extra row proves whether a next page exists.
+	pageNumber, limit, offset := store.UncountedPageBounds(request.Page, request.Limit)
+	var page store.Page
 	var documents []store.Document
-	for rows.Next() {
-		document, err := scanRequestedDocument(rows, request, fields)
+	if request.SkipTotal {
+		rows, queryError := transaction.transaction.Query(ctx, statement, append(slices.Clip(arguments), limit+1, offset)...)
+		if queryError != nil {
+			return store.Page{}, translateError(queryError)
+		}
+		documents, err = scanListRows(rows, request, fields)
 		if err != nil {
 			return store.Page{}, err
 		}
-		documents = append(documents, document)
-	}
-	if err := rows.Err(); err != nil {
-		return store.Page{}, err
-	}
-	rows.Close()
-	if !request.PublishedOnly {
-		if err := transaction.attachPublishedMetadata(ctx, request.Collection, documents); err != nil {
+		page = store.Page{Page: pageNumber, Limit: limit}
+		documents, page.HasNextPage = store.TrimUncountedPage(documents, limit)
+	} else {
+		batch := &pgx.Batch{}
+		batch.Queue(countStatement, arguments...)
+		batch.Queue(statement, append(slices.Clip(arguments), limit, offset)...)
+		results := transaction.transaction.SendBatch(ctx, batch)
+		var total int
+		documents, total, err = scanListResults(results, request, fields)
+		if closeErr := results.Close(); err == nil && closeErr != nil {
+			err = translateError(closeErr)
+		}
+		if err != nil {
 			return store.Page{}, err
 		}
+		page = store.CountedPage(nil, request.Page, request.Limit, total)
 	}
 	documents, err = transaction.populate(ctx, documents, request)
 	if err != nil {
@@ -564,7 +479,42 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 	for index := range documents {
 		documents[index] = projectDocument(documents[index], request.Select)
 	}
-	return store.Page{Documents: documents, Page: page, Limit: limit, Total: total}, nil
+	page.Documents = documents
+	return page, nil
+}
+
+// scanListResults reads a list pipeline's count and page results.
+func scanListResults(results pgx.BatchResults, request store.Request, fields []schema.Field) ([]store.Document, int, error) {
+	var total int
+	if err := results.QueryRow().Scan(&total); err != nil {
+		return nil, 0, translateError(err)
+	}
+	rows, err := results.Query()
+	if err != nil {
+		return nil, 0, translateError(err)
+	}
+	documents, err := scanListRows(rows, request, fields)
+	if err != nil {
+		return nil, 0, err
+	}
+	return documents, total, nil
+}
+
+// scanListRows reads and closes one list page's rows.
+func scanListRows(rows pgx.Rows, request store.Request, fields []schema.Field) ([]store.Document, error) {
+	defer rows.Close()
+	var documents []store.Document
+	for rows.Next() {
+		document, err := scanRequestedDocument(rows, request, fields)
+		if err != nil {
+			return nil, err
+		}
+		documents = append(documents, document)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, translateError(err)
+	}
+	return documents, nil
 }
 
 func (transaction *documentTransaction) Distinct(ctx context.Context, request store.DistinctRequest) (store.DistinctPage, error) {
@@ -580,7 +530,7 @@ func (transaction *documentTransaction) Distinct(ctx context.Context, request st
 	if err != nil {
 		return store.DistinctPage{}, err
 	}
-	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain, snapshot: request.PublishedOnly && request.Collection.Versions != nil}
+	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain}
 	column, err := compiler.column(request.Field)
 	if err != nil {
 		return store.DistinctPage{}, err
@@ -668,11 +618,6 @@ func (transaction *documentTransaction) ListWindow(ctx context.Context, request 
 		return store.Window{}, err
 	}
 	rows.Close()
-	if !request.PublishedOnly {
-		if err := transaction.attachPublishedMetadata(ctx, request.Collection, documents); err != nil {
-			return store.Window{}, err
-		}
-	}
 	hasMore := len(documents) > request.Limit
 	if hasMore {
 		documents = documents[:request.Limit]
@@ -695,7 +640,7 @@ func listWindowQuery(request store.Request) (string, []any, []schema.Field, erro
 	if err != nil {
 		return "", nil, nil, err
 	}
-	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain, snapshot: request.PublishedOnly && request.Collection.Versions != nil}
+	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain}
 	column, err := compiler.column(request.IndexWindow.Path)
 	if err != nil {
 		return "", nil, nil, err
@@ -756,7 +701,7 @@ func (transaction *documentTransaction) ResolveFilteredSelection(ctx context.Con
 
 func fieldsForRead(request store.Request) []schema.Field {
 	if request.Select == nil {
-		return storedSchemaFields(request.Collection.Fields)
+		return storedSchemaFields(request.Collection)
 	}
 	wanted := make(map[string]bool, len(request.Select)+len(request.Populate))
 	for _, path := range request.Select {
@@ -789,7 +734,7 @@ func sortClause(request store.Request) (string, error) {
 	if !hasID {
 		terms = append(terms, query.Asc("id"))
 	}
-	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain, snapshot: request.PublishedOnly && request.Collection.Versions != nil}
+	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain}
 	parts := make([]string, len(terms))
 	for index, term := range terms {
 		column, err := compiler.column(term.Path)
@@ -830,7 +775,7 @@ func (transaction *documentTransaction) populate(ctx context.Context, documents 
 			if len(ids) == 0 {
 				continue
 			}
-			targetFields := storedSchemaFields(target.Fields)
+			targetFields := storedSchemaFields(target)
 			publishedOnly := request.PublishedOnly
 			if selected, exists := request.PopulationPublishedOnly[target.ID]; exists {
 				publishedOnly = selected
@@ -842,7 +787,7 @@ func (transaction *documentTransaction) populate(ctx context.Context, documents 
 			predicate := fmt.Sprintf("%s = ANY($1) AND %s IS NULL", quote("id"), quote("deleted_at"))
 			arguments := []any{ids}
 			if access := request.PopulationAccess[target.ID]; access != nil {
-				compiler := predicateCompiler{collection: target, next: 1, arguments: arguments, localeChain: request.LocaleChain, snapshot: publishedOnly && target.Versions != nil}
+				compiler := predicateCompiler{collection: target, next: 1, arguments: arguments, localeChain: request.LocaleChain}
 				compiled, compileError := compileAccessPredicate(&compiler, *access, request.AllLocales, request.Locales)
 				if compileError != nil {
 					return nil, compileError
@@ -870,11 +815,6 @@ func (transaction *documentTransaction) populate(ctx context.Context, documents 
 				return nil, err
 			}
 			rows.Close()
-			if !publishedOnly {
-				if err := transaction.attachPublishedMetadata(ctx, target, targetDocuments); err != nil {
-					return nil, err
-				}
-			}
 			if population.Depth > 1 {
 				targetDocuments, err = transaction.populate(ctx, targetDocuments, store.Request{
 					Collection: target, Collections: request.Collections, Populate: populationwalk.DepthPopulations(target, population.Depth-1), PopulationAccess: request.PopulationAccess,
@@ -1026,41 +966,35 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 	if request.Collection.Versions != nil && request.Collection.Versions.Drafts && request.Intent == store.WriteIntentDefault {
 		return store.Document{}, fmt.Errorf("write intent is required for a draft-enabled collection")
 	}
-	if err := transaction.lockUniqueUnion(ctx, request.Collection); err != nil {
+	current, err := request.LockedCurrent()
+	if err != nil {
 		return store.Document{}, err
 	}
-	var live store.Document
-	var hasLive bool
-	if request.Collection.Versions != nil {
-		probe := request.Request
-		probe.ExpectedRevision = 0
-		probe.Lock = store.LockMutation
-		probe.Select = nil
-		probe.Populate = nil
-		current, err := transaction.Find(ctx, probe)
+	if request.ExpectedRevision > 0 && current.Revision != request.ExpectedRevision {
+		return store.Document{}, store.ErrConflict
+	}
+	hasLive := store.HasLiveHead(request.Collection, current)
+	liveRevision := current.PublishedRevision
+	if request.Intent == store.WriteIntentDiscardDraft {
+		// Only a discard needs the live content; every other intent derives
+		// the live state from the locked working read.
+		live, found, err := transaction.publishedHead(ctx, request.Collection, current.ID, request.Locales)
 		if err != nil {
 			return store.Document{}, err
 		}
-		if request.ExpectedRevision > 0 && current.Revision != request.ExpectedRevision {
+		if !found || !live.HasDraftChanges {
 			return store.Document{}, store.ErrConflict
 		}
-		live, hasLive, err = transaction.publishedHead(ctx, request.Collection, current.ID)
-		if err != nil {
-			return store.Document{}, err
-		}
-		if request.Intent == store.WriteIntentDiscardDraft {
-			if !hasLive || !live.HasDraftChanges {
-				return store.Document{}, store.ErrConflict
-			}
-			request.Values = store.CloneValues(live.Values)
-			request.ReplaceValues = true
-		}
+		request.Values = store.CloneValues(live.Values)
+		request.ReplaceValues = true
+		liveRevision = live.Revision
 	}
-	assignments := []string{fmt.Sprintf("%s = now()", quote("updated_at"))}
+	assignments := []string{quote("updated_at") + " = " + nextUpdatedAt}
 	values := store.CloneValues(request.Values)
 	canonicalizePostgresAuthIdentity(request.Collection, values)
+	candidateValues := store.CloneValues(current.Values)
 	arguments := make([]any, 0, len(values)+1)
-	fields := storedSchemaFields(request.Collection.Fields)
+	fields := storedSchemaFields(request.Collection)
 	for _, field := range fields {
 		value, exists := values[field.Name]
 		if !exists && !request.ReplaceValues {
@@ -1073,6 +1007,10 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 			}
 			if !exists && !request.ReplaceValues {
 				return store.Document{}, fmt.Errorf("localized field %q requires locale-keyed storage", field.Path.String())
+			}
+			candidateLocalized, _ := candidateValues[field.Name].CopyObject()
+			if candidateLocalized == nil {
+				candidateLocalized = make(store.Values)
 			}
 			for _, locale := range request.Locales {
 				localizedValue, exists := localized.Lookup(string(locale))
@@ -1088,7 +1026,9 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 				}
 				arguments = append(arguments, encoded)
 				assignments = append(assignments, fmt.Sprintf("%s = $%d", quote(localizedFieldColumn(field.ID, locale)), len(arguments)))
+				candidateLocalized[string(locale)] = localizedValue
 			}
+			candidateValues[field.Name] = store.Object(candidateLocalized)
 			continue
 		}
 		if !exists {
@@ -1100,6 +1040,7 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		}
 		arguments = append(arguments, encoded)
 		assignments = append(assignments, fmt.Sprintf("%s = $%d", quote(fieldColumn(field.ID)), len(arguments)))
+		candidateValues[field.Name] = value
 	}
 	if request.Collection.Versions != nil || request.Collection.Upload != nil {
 		assignments = append(assignments, quote("_revision")+" = "+quote("_revision")+" + 1")
@@ -1141,9 +1082,24 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		return store.Document{}, err
 	}
 	arguments = append(arguments, predicateArguments...)
+	// The row must still be the stored version Current describes. Every write
+	// advances updated_at, and revision when the table has one, so a stale or
+	// caller-built Current matches no row and becomes a conflict instead of a
+	// write derived from the wrong state.
+	arguments = append(arguments, current.UpdatedAt)
+	predicate += fmt.Sprintf(" AND %s = $%d", quote("updated_at"), len(arguments))
+	if request.Collection.Versions != nil || request.Collection.Upload != nil {
+		arguments = append(arguments, current.Revision)
+		predicate += fmt.Sprintf(" AND %s = $%d", quote("_revision"), len(arguments))
+	}
+	if err := transaction.lockUniqueUnion(ctx, request.Collection, request.Locales, candidateValues); err != nil {
+		return store.Document{}, err
+	}
 	statement := fmt.Sprintf("UPDATE %s SET %s WHERE %s RETURNING %s", quote(collectionTable(request.Collection.ID)), strings.Join(assignments, ", "), predicate, selectColumns(request.Collection, fields, request.Locales))
-	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields)
-	if errors.Is(err, pgx.ErrNoRows) && request.ExpectedRevision > 0 {
+	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields, request.Locales)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// A visible row that matched nothing changed after Current was read or
+		// has another revision than the expected one.
 		probe := request.Request
 		probe.ExpectedRevision = 0
 		visiblePredicate, visibleArguments, predicateError := requestPredicate(probe, true)
@@ -1163,49 +1119,65 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 	if err != nil {
 		return store.Document{}, translateError(err)
 	}
-	if err := transaction.replaceDocumentReferences(ctx, request.Collection, document); err != nil {
+	if err := transaction.updateDocumentReferences(ctx, request.Collection, current, document); err != nil {
 		return store.Document{}, err
 	}
 	if request.Collection.Versions != nil {
+		// liveRevision becomes the resulting live revision; zero means no live head.
+		pending := false
+		if !hasLive {
+			liveRevision = 0
+		}
 		switch request.Intent {
 		case store.WriteIntentDefault:
 			if document.Status == store.StatusPublished {
-				if err := transaction.putPublishedHead(ctx, request.Collection, document); err != nil {
+				if err := transaction.putPublishedHead(ctx, request.Collection, document, request.Locales); err != nil {
 					return store.Document{}, err
 				}
-			} else if err := transaction.deletePublishedHead(ctx, request.Collection, document.ID); err != nil {
-				return store.Document{}, err
+				liveRevision = document.Revision
+			} else {
+				if err := transaction.deletePublishedHead(ctx, request.Collection, document.ID); err != nil {
+					return store.Document{}, err
+				}
+				liveRevision = 0
 			}
 		case store.WriteIntentSaveDraft:
 			if hasLive {
 				if err := transaction.setPublishedPending(ctx, request.Collection, document.ID, true); err != nil {
 					return store.Document{}, err
 				}
+				pending = true
 			}
 		case store.WriteIntentPublish:
-			if err := transaction.putPublishedHead(ctx, request.Collection, document); err != nil {
+			if err := transaction.putPublishedHead(ctx, request.Collection, document, request.Locales); err != nil {
 				return store.Document{}, err
 			}
+			liveRevision = document.Revision
 		case store.WriteIntentUnpublish:
 			if err := transaction.deletePublishedHead(ctx, request.Collection, document.ID); err != nil {
 				return store.Document{}, err
 			}
+			liveRevision = 0
 		case store.WriteIntentDiscardDraft:
 			if err := transaction.setPublishedPending(ctx, request.Collection, document.ID, false); err != nil {
 				return store.Document{}, err
 			}
 		}
-		loaded := []store.Document{document}
-		if err := transaction.attachPublishedMetadata(ctx, request.Collection, loaded); err != nil {
-			return store.Document{}, err
+		if request.Collection.Versions.Drafts {
+			document.PublishedRevision, document.HasDraftChanges = liveRevision, pending
 		}
-		document = loaded[0]
 	}
-	if err := transaction.checkUniqueUnion(ctx, request.Collection, request.Locales); err != nil {
+	if err := transaction.checkUniqueUnion(ctx, request.Collection, request.Locales, document); err != nil {
 		return store.Document{}, err
 	}
 	return document, nil
 }
+
+// nextUpdatedAt advances updated_at on every document write. now() is the
+// transaction's start time, so a later write in the same transaction moves the
+// value forward by a microsecond instead: updated_at strictly increases with
+// each write and, with revision, identifies the stored version of a row.
+const nextUpdatedAt = `GREATEST(now(), "updated_at" + interval '1 microsecond')`
 
 func canonicalizePostgresAuthIdentity(collection schema.Collection, values store.Values) {
 	if collection.Auth == nil || values == nil {
@@ -1226,17 +1198,17 @@ func (transaction *documentTransaction) Delete(ctx context.Context, request stor
 	if err != nil {
 		return store.Document{}, err
 	}
-	fields := storedSchemaFields(request.Collection.Fields)
-	statement := fmt.Sprintf("DELETE FROM %s WHERE %s RETURNING %s", quote(collectionTable(request.Collection.ID)), predicate, selectColumns(request.Collection, fields, request.Locales))
-	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields)
+	fields := storedSchemaFields(request.Collection)
+	// Deleting the working row deletes its live row through the foreign key;
+	// its working and live index rows leave in the same statement.
+	arguments = append(arguments, string(request.Collection.ID))
+	statement := fmt.Sprintf(`WITH removed AS (DELETE FROM %s WHERE %s RETURNING %s), unindexed AS (
+DELETE FROM ridu_document_references AS reference USING removed
+WHERE reference.owner_collection_id = $%d AND reference.owner_document_id = removed.id)
+SELECT * FROM removed`, quote(collectionTable(request.Collection.ID)), predicate, selectColumns(request.Collection, fields, request.Locales), len(arguments))
+	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields, request.Locales)
 	if err != nil {
 		return store.Document{}, translateError(err)
-	}
-	if err := transaction.deleteDocumentReferences(ctx, store.DocumentReference{CollectionID: request.Collection.ID, DocumentID: request.ID}); err != nil {
-		return store.Document{}, err
-	}
-	if err := transaction.deletePublishedHead(ctx, request.Collection, request.ID); err != nil {
-		return store.Document{}, err
 	}
 	return document, nil
 }
@@ -1253,7 +1225,10 @@ func (transaction *documentTransaction) ApplyReferenceDelete(ctx context.Context
 	if request.Target.CollectionID == "" || request.Target.DocumentID == "" {
 		return fmt.Errorf("reference delete requires a target collection and document ID")
 	}
-	ignored := make(map[store.DocumentReference]struct{}, len(request.IgnoreOwners))
+	// An ignored owner is skipped once it no longer exists. Removing a row
+	// removes its index rows in the same statement, so a removed owner has no
+	// rows to skip; only the target's references to itself are ignored here.
+	ignored := make(map[store.DocumentReference]struct{}, 1)
 	for _, owner := range request.IgnoreOwners {
 		if owner == request.Target {
 			ignored[owner] = struct{}{}
@@ -1261,14 +1236,6 @@ func (transaction *documentTransaction) ApplyReferenceDelete(ctx context.Context
 		}
 		if _, exists := request.Collections[owner.CollectionID]; !exists {
 			return fmt.Errorf("ignored reference owner collection %q is unavailable", owner.CollectionID)
-		}
-		var stillExists bool
-		statement := fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM %s WHERE %s = $1)", quote(collectionTable(owner.CollectionID)), quote("id"))
-		if err := transaction.transaction.QueryRow(ctx, statement, owner.DocumentID).Scan(&stillExists); err != nil {
-			return translateError(err)
-		}
-		if !stillExists {
-			ignored[owner] = struct{}{}
 		}
 	}
 	rows, err := transaction.transaction.Query(ctx, `SELECT
@@ -1334,19 +1301,17 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 		return &store.DeleteRestrictedError{Constraints: constraints}
 	}
 
+	// Working and live heads share one physical layout. A live owner's
+	// nullified reference is the same typed column update on its live table.
 	type rootMutation struct {
 		owner      store.DocumentReference
 		collection schema.Collection
 		root       schema.Field
 		locale     schema.LocaleCode
+		published  bool
 	}
 	mutations := make(map[string]rootMutation)
-	publishedOwners := make(map[store.DocumentReference]schema.Collection)
 	for _, match := range matches {
-		if match.published {
-			publishedOwners[match.entry.Owner] = match.collection
-			continue
-		}
 		locale := schema.LocaleCode("")
 		if match.root.Localized {
 			locale = match.entry.Locale
@@ -1354,8 +1319,8 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 				return fmt.Errorf("localized reference field %q has an unscoped derived index row", match.entry.FieldID)
 			}
 		}
-		key := string(match.entry.Owner.CollectionID) + "\x00" + match.entry.Owner.DocumentID + "\x00" + string(match.root.ID) + "\x00" + string(locale)
-		mutations[key] = rootMutation{owner: match.entry.Owner, collection: match.collection, root: match.root, locale: locale}
+		key := fmt.Sprintf("%t\x00%s\x00%s\x00%s\x00%s", match.published, match.entry.Owner.CollectionID, match.entry.Owner.DocumentID, match.root.ID, locale)
+		mutations[key] = rootMutation{owner: match.entry.Owner, collection: match.collection, root: match.root, locale: locale, published: match.published}
 	}
 	keys := make([]string, 0, len(mutations))
 	for key := range mutations {
@@ -1368,17 +1333,24 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 		if mutation.locale != "" {
 			column = localizedFieldColumn(mutation.root.ID, mutation.locale)
 		}
-		statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1 FOR UPDATE", quote(column), quote(collectionTable(mutation.owner.CollectionID)), quote("id"))
+		table := collectionTable(mutation.owner.CollectionID)
+		if mutation.published {
+			table = publishedCollectionTable(mutation.owner.CollectionID)
+		}
+		statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1 FOR UPDATE", quote(column), quote(table), quote("id"))
 		value, found, err := scanReferenceRootValue(transaction.transaction.QueryRow(ctx, statement, mutation.owner.DocumentID), mutation.root)
 		if err != nil {
 			return err
 		}
 		if !found {
-			// Remove stale rows only after every restrict decision was planned.
-			if err := transaction.deleteWorkingDocumentReferences(ctx, mutation.owner); err != nil {
-				return err
+			// Every path that removes a working or live row removes its index
+			// rows in the same transaction, so an index row always has its
+			// owner row. One without it is corruption, not a state to repair.
+			head := "working"
+			if mutation.published {
+				head = "live"
 			}
-			continue
+			return fmt.Errorf("reference index row for %s/%s has no stored %s owner row", mutation.owner.CollectionID, mutation.owner.DocumentID, head)
 		}
 		updated, changed, referenceErr := referenceindex.NullifyField(mutation.root, value, request.Target, mutation.locale)
 		if referenceErr != nil {
@@ -1391,61 +1363,11 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 		if err != nil {
 			return err
 		}
-		update := fmt.Sprintf("UPDATE %s SET %s = $1 WHERE %s = $2", quote(collectionTable(mutation.owner.CollectionID)), quote(column), quote("id"))
+		update := fmt.Sprintf("UPDATE %s SET %s = $1 WHERE %s = $2", quote(table), quote(column), quote("id"))
 		if _, err := transaction.transaction.Exec(ctx, update, encoded, mutation.owner.DocumentID); err != nil {
 			return translateError(err)
 		}
-		if err := transaction.replaceReferenceRootEntries(ctx, mutation.owner, mutation.root, updated, mutation.locale); err != nil {
-			return err
-		}
-	}
-	owners := make([]store.DocumentReference, 0, len(publishedOwners))
-	for owner := range publishedOwners {
-		owners = append(owners, owner)
-	}
-	sort.Slice(owners, func(left, right int) bool {
-		if owners[left].CollectionID != owners[right].CollectionID {
-			return owners[left].CollectionID < owners[right].CollectionID
-		}
-		return owners[left].DocumentID < owners[right].DocumentID
-	})
-	for _, owner := range owners {
-		collection := publishedOwners[owner]
-		live, found, err := transaction.publishedHead(ctx, collection, owner.DocumentID)
-		if err != nil {
-			return err
-		}
-		if !found {
-			if _, err := transaction.transaction.Exec(ctx, `DELETE FROM ridu_document_references
-WHERE owner_collection_id = $1 AND owner_document_id = $2 AND published_head = true`, string(owner.CollectionID), owner.DocumentID); err != nil {
-				return translateError(err)
-			}
-			continue
-		}
-		values, changed, err := referenceindex.NullifyTarget(collection, live.Values, request.Target)
-		if err != nil {
-			return err
-		}
-		if !changed {
-			return fmt.Errorf("published reference index for owner collection %q is inconsistent with current values", owner.CollectionID)
-		}
-		live.Values = values
-		live.PublishedRevision = 0
-		live.HasDraftChanges = false
-		live.LocalizationSources = nil
-		encoded, err := json.Marshal(live)
-		if err != nil {
-			return fmt.Errorf("encode PostgreSQL published head: %w", err)
-		}
-		command, err := transaction.transaction.Exec(ctx, `UPDATE ridu_published_documents SET snapshot = $3
-WHERE collection_id = $1 AND document_id = $2`, string(collection.ID), owner.DocumentID, encoded)
-		if err != nil {
-			return translateError(err)
-		}
-		if command.RowsAffected() != 1 {
-			return store.ErrConflict
-		}
-		if err := transaction.replacePublishedReferences(ctx, collection, live); err != nil {
+		if err := transaction.replaceReferenceRootEntries(ctx, mutation.owner, mutation.root, updated, mutation.locale, mutation.published); err != nil {
 			return err
 		}
 	}
@@ -1537,8 +1459,8 @@ func scanReferenceRootValue(row pgx.Row, field schema.Field) (store.Value, bool,
 	}
 }
 
-func (transaction *documentTransaction) replaceReferenceRootEntries(ctx context.Context, owner store.DocumentReference, root schema.Field, value store.Value, locale schema.LocaleCode) error {
-	fieldIDs := referenceindex.ReferenceFieldIDs(root)
+func (transaction *documentTransaction) replaceReferenceRootEntries(ctx context.Context, owner store.DocumentReference, root schema.Field, value store.Value, locale schema.LocaleCode, published bool) error {
+	fieldIDs := referenceindex.ReferenceFieldIDs(owner.CollectionID, root)
 	if len(fieldIDs) == 0 {
 		return nil
 	}
@@ -1547,32 +1469,20 @@ func (transaction *documentTransaction) replaceReferenceRootEntries(ctx context.
 		ids[index] = string(id)
 	}
 	statement := `DELETE FROM ridu_document_references
-WHERE owner_collection_id = $1 AND owner_document_id = $2 AND field_id = ANY($3) AND published_head = false`
-	arguments := []any{string(owner.CollectionID), owner.DocumentID, ids}
+WHERE owner_collection_id = $1 AND owner_document_id = $2 AND field_id = ANY($3) AND published_head = $4`
+	arguments := []any{string(owner.CollectionID), owner.DocumentID, ids, published}
 	if root.Localized {
-		statement += " AND locale = $4"
+		statement += " AND locale = $5"
 		arguments = append(arguments, string(locale))
 	}
 	if _, err := transaction.transaction.Exec(ctx, statement, arguments...); err != nil {
 		return translateError(err)
 	}
-	insert := `INSERT INTO ridu_document_references (
-  owner_collection_id, owner_document_id, field_id,
-  target_collection_id, target_document_id, locale, occurrence
-) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 	entries, referenceErr := referenceindex.CollectField(owner, root, value, locale)
 	if referenceErr != nil {
 		return referenceErr
 	}
-	for _, entry := range entries {
-		if _, err := transaction.transaction.Exec(ctx, insert,
-			string(entry.Owner.CollectionID), entry.Owner.DocumentID, string(entry.FieldID),
-			string(entry.Target.CollectionID), entry.Target.DocumentID, string(entry.Locale), entry.Occurrence,
-		); err != nil {
-			return translateError(err)
-		}
-	}
-	return nil
+	return transaction.insertDocumentReferences(ctx, owner, entries, published)
 }
 
 func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context, reference store.DocumentReference) error {
@@ -1584,7 +1494,6 @@ func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context,
 		query string
 	}{
 		{"ridu_versions", `DELETE FROM ridu_versions WHERE collection_id = $1 AND document_id = $2`},
-		{"ridu_published_documents", `DELETE FROM ridu_published_documents WHERE collection_id = $1 AND document_id = $2`},
 		{"ridu_tasks", `DELETE FROM ridu_tasks WHERE (target_collection_id = $1 AND target_document_id = $2) OR (requested_by_collection_id = $1 AND requested_by_document_id = $2)`},
 		{"ridu_document_locks", `DELETE FROM ridu_document_locks WHERE (collection_id = $1 AND document_id = $2) OR (owner_collection_id = $1 AND owner_id = $2)`},
 		{"ridu_auth_tokens", `DELETE FROM ridu_auth_tokens WHERE collection_id = $1 AND user_id = $2`},
@@ -1611,38 +1520,115 @@ func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context,
 	return nil
 }
 
+// The reference index is derived state. Every adapter write of a document
+// row maintains its rows in the same transaction: Create inserts them, Update
+// and ApplyReferenceDelete replace them when references change, Delete removes
+// them with the owner, publication replaces the live head's rows, and
+// unpublication removes them with the live row. Trash and restore change no
+// values. Resource retirement removes every row owned by or targeting the
+// retired resources before its tables are dropped. Migrations that change
+// reference topology rebuild the whole index (StepBackfillReferences), as does
+// development synchronization, and data transforms write through these same
+// methods. The index therefore always equals Collect of the stored rows: an
+// update whose references are unchanged leaves it untouched, Create needs no
+// replacement, and an index row without its owner row is corruption.
+
+// replaceDocumentReferences makes the working row's index rows exactly the
+// document's references.
 func (transaction *documentTransaction) replaceDocumentReferences(ctx context.Context, collection schema.Collection, document store.Document) error {
-	owner := store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}
-	if err := transaction.deleteWorkingDocumentReferences(ctx, owner); err != nil {
+	entries, err := referenceindex.Collect(collection, document)
+	if err != nil {
 		return err
 	}
-	statement := `INSERT INTO ridu_document_references (
+	return transaction.replaceReferenceSet(ctx, store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}, entries, false)
+}
+
+// updateDocumentReferences maintains the working row's index after an update
+// from current, the locked row before the write.
+func (transaction *documentTransaction) updateDocumentReferences(ctx context.Context, collection schema.Collection, current, document store.Document) error {
+	before, err := referenceindex.Collect(collection, current)
+	if err != nil {
+		return err
+	}
+	after, err := referenceindex.Collect(collection, document)
+	if err != nil {
+		return err
+	}
+	if slices.Equal(before, after) {
+		return nil
+	}
+	return transaction.replaceReferenceSet(ctx, store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}, after, false)
+}
+
+// insertDocumentReferences indexes rows that have no index rows yet, such as
+// a row this transaction just inserted.
+func (transaction *documentTransaction) insertDocumentReferences(ctx context.Context, owner store.DocumentReference, entries []referenceindex.Entry, published bool) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	arguments, err := referenceSetArguments(owner, entries, published)
+	if err != nil {
+		return err
+	}
+	_, err = transaction.transaction.Exec(ctx, `INSERT INTO ridu_document_references (
   owner_collection_id, owner_document_id, field_id,
-  target_collection_id, target_document_id, locale, occurrence
-) VALUES ($1, $2, $3, $4, $5, $6, $7)`
-	entries, referenceErr := referenceindex.Collect(collection, document)
-	if referenceErr != nil {
-		return referenceErr
+  target_collection_id, target_document_id, locale, occurrence, published_head
+) SELECT $1, $2, entry.field_id, entry.target_collection_id, entry.target_document_id, entry.locale, entry.occurrence, $8
+FROM unnest($3::text[], $4::text[], $5::text[], $6::text[], $7::integer[])
+  AS entry(field_id, target_collection_id, target_document_id, locale, occurrence)`, arguments...)
+	return translateError(err)
+}
+
+// replaceReferenceSet makes one owner's working or live index rows exactly
+// entries in one statement: it deletes rows outside the set and inserts the
+// missing ones. The deleted and inserted rows are disjoint, and the caller
+// holds the owner's row lock, so no other statement changes these rows.
+func (transaction *documentTransaction) replaceReferenceSet(ctx context.Context, owner store.DocumentReference, entries []referenceindex.Entry, published bool) error {
+	arguments, err := referenceSetArguments(owner, entries, published)
+	if err != nil {
+		return err
 	}
-	for _, entry := range entries {
-		if _, err := transaction.transaction.Exec(ctx, statement,
-			string(entry.Owner.CollectionID), entry.Owner.DocumentID, string(entry.FieldID),
-			string(entry.Target.CollectionID), entry.Target.DocumentID, string(entry.Locale), entry.Occurrence,
-		); err != nil {
-			return translateError(err)
+	_, err = transaction.transaction.Exec(ctx, `WITH entry AS (
+  SELECT * FROM unnest($3::text[], $4::text[], $5::text[], $6::text[], $7::integer[])
+    AS entry(field_id, target_collection_id, target_document_id, locale, occurrence)
+), removed AS (
+  DELETE FROM ridu_document_references AS reference
+  WHERE reference.owner_collection_id = $1 AND reference.owner_document_id = $2 AND reference.published_head = $8
+    AND NOT EXISTS (SELECT 1 FROM entry WHERE entry.field_id = reference.field_id
+      AND entry.target_collection_id = reference.target_collection_id
+      AND entry.target_document_id = reference.target_document_id
+      AND entry.locale = reference.locale AND entry.occurrence = reference.occurrence)
+)
+INSERT INTO ridu_document_references (
+  owner_collection_id, owner_document_id, field_id,
+  target_collection_id, target_document_id, locale, occurrence, published_head
+) SELECT $1, $2, field_id, target_collection_id, target_document_id, locale, occurrence, $8 FROM entry
+ON CONFLICT DO NOTHING`, arguments...)
+	return translateError(err)
+}
+
+// referenceSetArguments transposes one owner's entries into the parameters of
+// the set statements: owner, five column arrays, and the head flag.
+func referenceSetArguments(owner store.DocumentReference, entries []referenceindex.Entry, published bool) ([]any, error) {
+	fields := make([]string, len(entries))
+	targetCollections := make([]string, len(entries))
+	targetDocuments := make([]string, len(entries))
+	locales := make([]string, len(entries))
+	occurrences := make([]int32, len(entries))
+	for index, entry := range entries {
+		if entry.Owner != owner {
+			return nil, fmt.Errorf("reference index entry owner %s/%s does not match %s/%s", entry.Owner.CollectionID, entry.Owner.DocumentID, owner.CollectionID, owner.DocumentID)
 		}
+		if entry.Occurrence < 0 || entry.Occurrence > math.MaxInt32 {
+			return nil, fmt.Errorf("reference index occurrence %d is out of range", entry.Occurrence)
+		}
+		fields[index] = string(entry.FieldID)
+		targetCollections[index] = string(entry.Target.CollectionID)
+		targetDocuments[index] = entry.Target.DocumentID
+		locales[index] = string(entry.Locale)
+		occurrences[index] = int32(entry.Occurrence)
 	}
-	return nil
-}
-
-func (transaction *documentTransaction) deleteWorkingDocumentReferences(ctx context.Context, owner store.DocumentReference) error {
-	_, err := transaction.transaction.Exec(ctx, `DELETE FROM ridu_document_references WHERE owner_collection_id = $1 AND owner_document_id = $2 AND published_head = false`, string(owner.CollectionID), owner.DocumentID)
-	return translateError(err)
-}
-
-func (transaction *documentTransaction) deleteDocumentReferences(ctx context.Context, owner store.DocumentReference) error {
-	_, err := transaction.transaction.Exec(ctx, `DELETE FROM ridu_document_references WHERE owner_collection_id = $1 AND owner_document_id = $2`, string(owner.CollectionID), owner.DocumentID)
-	return translateError(err)
+	return []any{string(owner.CollectionID), owner.DocumentID, fields, targetCollections, targetDocuments, locales, occurrences, published}, nil
 }
 
 func (transaction *documentTransaction) Trash(ctx context.Context, request store.Request) (store.Document, error) {
@@ -1651,25 +1637,43 @@ func (transaction *documentTransaction) Trash(ctx context.Context, request store
 	if err != nil {
 		return store.Document{}, err
 	}
-	fields := storedSchemaFields(request.Collection.Fields)
-	statement := fmt.Sprintf("UPDATE %s SET %s = now(), %s = now() WHERE %s RETURNING %s", quote(collectionTable(request.Collection.ID)), quote("deleted_at"), quote("updated_at"), predicate, selectColumns(request.Collection, fields, request.Locales))
-	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields)
+	fields := storedSchemaFields(request.Collection)
+	table := quote(collectionTable(request.Collection.ID))
+	statement := fmt.Sprintf("UPDATE %s SET %s = now(), %s = %s WHERE %s RETURNING %s", table, quote("deleted_at"), quote("updated_at"), nextUpdatedAt,
+		predicate, selectColumns(request.Collection, fields, request.Locales))
+	if request.Collection.Versions == nil {
+		document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields, request.Locales)
+		return document, translateError(err)
+	}
+	// Mirror trash state into the live row, so live reads and live uniqueness
+	// observe it without consulting the working row. The mirror is a second
+	// statement in the same pipeline: if trash waited for the working row lock,
+	// only a statement that starts afterwards sees a live row committed
+	// during the wait. It copies the working row's state, so it is idempotent
+	// when trash matched nothing, and returns the live state trash keeps.
+	batch := &pgx.Batch{}
+	batch.Queue(statement, arguments...)
+	batch.Queue(fmt.Sprintf(`UPDATE %s AS live SET deleted_at = working.deleted_at FROM %s AS working
+WHERE live.id = $1 AND working.id = live.id RETURNING live._revision, live.has_draft_changes`, quote(publishedCollectionTable(request.Collection.ID)), table), request.ID)
+	results := transaction.transaction.SendBatch(ctx, batch)
+	document, err := scanDocument(results.QueryRow(), request.Collection, fields, request.Locales)
+	if err == nil {
+		err = scanLiveState(results.QueryRow(), &document)
+	}
+	if closeErr := results.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return store.Document{}, translateError(err)
 	}
-	if err := transaction.setPublishedDeletion(ctx, request.Collection, document); err != nil {
-		return store.Document{}, err
+	if !readsPublishedMetadata(request) {
+		document.PublishedRevision, document.HasDraftChanges = 0, false
 	}
-	loaded := []store.Document{document}
-	if err := transaction.attachPublishedMetadata(ctx, request.Collection, loaded); err != nil {
-		return store.Document{}, err
-	}
-	document = loaded[0]
 	return document, nil
 }
 
 func (transaction *documentTransaction) Restore(ctx context.Context, request store.Request) (store.Document, error) {
-	if err := transaction.lockUniqueUnion(ctx, request.Collection); err != nil {
+	if err := transaction.lockUniqueUnion(ctx, request.Collection, request.Locales); err != nil {
 		return store.Document{}, err
 	}
 	request.Deletion = store.DeletionTrash
@@ -1677,21 +1681,23 @@ func (transaction *documentTransaction) Restore(ctx context.Context, request sto
 	if err != nil {
 		return store.Document{}, err
 	}
-	fields := storedSchemaFields(request.Collection.Fields)
-	statement := fmt.Sprintf("UPDATE %s SET %s = NULL, %s = now() WHERE %s RETURNING %s", quote(collectionTable(request.Collection.ID)), quote("deleted_at"), quote("updated_at"), predicate, selectColumns(request.Collection, fields, request.Locales))
-	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields)
+	fields := storedSchemaFields(request.Collection)
+	statement := fmt.Sprintf("UPDATE %s SET %s = NULL, %s = %s WHERE %s RETURNING %s", quote(collectionTable(request.Collection.ID)), quote("deleted_at"), quote("updated_at"), nextUpdatedAt, predicate, selectColumns(request.Collection, fields, request.Locales))
+	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields, request.Locales)
 	if err != nil {
 		return store.Document{}, translateError(err)
 	}
-	if err := transaction.setPublishedDeletion(ctx, request.Collection, document); err != nil {
+	candidates := []store.Document{document}
+	if live, found, err := transaction.restorePublishedHead(ctx, request.Collection, document.ID, request.Locales); err != nil {
 		return store.Document{}, err
+	} else if found {
+		candidates = append(candidates, live)
+		if readsPublishedMetadata(request) {
+			candidates[0].PublishedRevision, candidates[0].HasDraftChanges = live.Revision, live.HasDraftChanges
+			document = candidates[0]
+		}
 	}
-	loaded := []store.Document{document}
-	if err := transaction.attachPublishedMetadata(ctx, request.Collection, loaded); err != nil {
-		return store.Document{}, err
-	}
-	document = loaded[0]
-	if err := transaction.checkUniqueUnion(ctx, request.Collection, request.Locales); err != nil {
+	if err := transaction.checkUniqueUnion(ctx, request.Collection, request.Locales, candidates...); err != nil {
 		return store.Document{}, err
 	}
 	return document, nil
@@ -1704,10 +1710,31 @@ func (transaction *documentTransaction) SaveVersion(ctx context.Context, collect
 	}
 	statement := "INSERT INTO " + quote("ridu_versions") + " (" + quote("collection_id") + ", " + quote("document_id") + ", " + quote("revision") + ", " + quote("status") + ", " + quote("snapshot") + ") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (" + quote("collection_id") + ", " + quote("document_id") + ", " + quote("revision") + ") DO UPDATE SET " + quote("status") + " = EXCLUDED." + quote("status") + ", " + quote("snapshot") + " = EXCLUDED." + quote("snapshot") + " RETURNING " + quote("created_at")
 	version := store.Version{ID: document.ID + ":" + fmt.Sprint(document.Revision), DocumentID: document.ID, Revision: document.Revision, Status: document.Status, Snapshot: store.CloneDocument(document)}
-	if err := transaction.transaction.QueryRow(ctx, statement, collection.ID, document.ID, document.Revision, document.Status, encoded).Scan(&version.CreatedAt); err != nil {
+	batch := &pgx.Batch{}
+	if document.Revision == 1 {
+		// Revision 1 starts a document's history: any later revision belongs
+		// to an earlier document with the same ID, so discard it in the same
+		// round trip. Revision 1 itself is replaced below, keeping a re-save's
+		// created_at.
+		batch.Queue(`DELETE FROM ridu_versions WHERE collection_id = $1 AND document_id = $2 AND revision > 1`, collection.ID, document.ID)
+	}
+	batch.Queue(statement, collection.ID, document.ID, document.Revision, document.Status, encoded)
+	results := transaction.transaction.SendBatch(ctx, batch)
+	if document.Revision == 1 {
+		_, err = results.Exec()
+	}
+	if err == nil {
+		err = results.QueryRow().Scan(&version.CreatedAt)
+	}
+	if closeErr := results.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		return store.Version{}, translateError(err)
 	}
-	if maximum > 0 {
+	// Revisions only increase during a row's lifetime and its history starts
+	// at revision 1, so a document holds at most Revision versions.
+	if maximum > 0 && document.Revision > maximum {
 		prune := "DELETE FROM " + quote("ridu_versions") + " WHERE " + quote("collection_id") + " = $1 AND " + quote("document_id") + " = $2 AND " + quote("revision") + " NOT IN (SELECT " + quote("revision") + " FROM " + quote("ridu_versions") + " WHERE " + quote("collection_id") + " = $1 AND " + quote("document_id") + " = $2 ORDER BY " + quote("revision") + " DESC LIMIT $3)"
 		if _, err := transaction.transaction.Exec(ctx, prune, collection.ID, document.ID, maximum); err != nil {
 			return store.Version{}, translateError(err)
@@ -1793,9 +1820,9 @@ func (transaction *documentTransaction) Rollback(ctx context.Context) error {
 
 type rowScanner interface{ Scan(...any) error }
 
-func scanDocument(row rowScanner, collection schema.Collection, fields []schema.Field) (store.Document, error) {
+func scanDocument(row rowScanner, collection schema.Collection, fields []schema.Field, locales []schema.LocaleCode) (store.Document, error) {
 	var document store.Document
-	destinations, finish := documentDestinations(&document, collection, fields)
+	destinations, finish := documentDestinations(&document, collection, fields, locales)
 	if err := row.Scan(destinations...); err != nil {
 		return store.Document{}, err
 	}
@@ -1805,7 +1832,86 @@ func scanDocument(row rowScanner, collection schema.Collection, fields []schema.
 	return document, nil
 }
 
-func documentDestinations(document *store.Document, collection schema.Collection, fields []schema.Field) ([]any, func() error) {
+// columnValue receives one physical value column in its native type, so no
+// value takes a JSON round trip unless it is stored as JSON.
+type columnValue struct {
+	kind   columnKind
+	bytes  []byte
+	text   *string
+	number *float64
+	flag   *bool
+}
+
+type columnKind uint8
+
+const (
+	columnText columnKind = iota
+	columnJSON
+	columnNumber
+	columnBoolean
+)
+
+func physicalColumnKind(field schema.Field) columnKind {
+	switch {
+	case isJSONStoredField(field):
+		return columnJSON
+	case field.Type == schema.FieldTypeNumber:
+		return columnNumber
+	case field.Type == schema.FieldTypeCheckbox:
+		return columnBoolean
+	default:
+		return columnText
+	}
+}
+
+func (column *columnValue) destination() any {
+	switch column.kind {
+	case columnJSON:
+		return &column.bytes
+	case columnNumber:
+		return &column.number
+	case columnBoolean:
+		return &column.flag
+	default:
+		return &column.text
+	}
+}
+
+// value decodes a scanned column. SQL NULL reports absent.
+func (column *columnValue) value(field schema.Field) (store.Value, bool, error) {
+	switch column.kind {
+	case columnJSON:
+		if column.bytes == nil {
+			return store.Value{}, false, nil
+		}
+		var decoded store.Value
+		if err := decoded.UnmarshalJSON(column.bytes); err != nil {
+			return store.Value{}, false, fmt.Errorf("decode JSON field %s: %w", field.Name, err)
+		}
+		return decoded, true, nil
+	case columnNumber:
+		if column.number == nil {
+			return store.Value{}, false, nil
+		}
+		return store.Number(*column.number), true, nil
+	case columnBoolean:
+		if column.flag == nil {
+			return store.Value{}, false, nil
+		}
+		return store.Boolean(*column.flag), true, nil
+	default:
+		if column.text == nil {
+			return store.Value{}, false, nil
+		}
+		return store.String(*column.text), true, nil
+	}
+}
+
+// documentDestinations scans the columns selectColumns emits for the same
+// fields and locales. A localized field reads one native column per locale and
+// becomes a locale-keyed object holding only the locales with a value; with
+// none it is an empty object.
+func documentDestinations(document *store.Document, collection schema.Collection, fields []schema.Field, locales []schema.LocaleCode) ([]any, func() error) {
 	destinations := []any{&document.ID, &document.CreatedAt, &document.UpdatedAt, &document.DeletedAt}
 	if collection.Versions != nil {
 		destinations = append(destinations, &document.Status)
@@ -1813,76 +1919,58 @@ func documentDestinations(document *store.Document, collection schema.Collection
 	if collection.Versions != nil || collection.Upload != nil {
 		destinations = append(destinations, &document.Revision)
 	}
-	fieldValues := make([]any, len(fields))
-	for index, field := range fields {
+	count := 0
+	for _, field := range fields {
 		if field.Localized {
-			var value []byte
-			fieldValues[index] = &value
-			destinations = append(destinations, &value)
-			continue
+			count += len(locales)
+		} else {
+			count++
 		}
-		if isJSONStoredField(field) {
-			var value []byte
-			fieldValues[index] = &value
-			destinations = append(destinations, &value)
-			continue
+	}
+	columns := make([]columnValue, count)
+	position := 0
+	for _, field := range fields {
+		width := 1
+		if field.Localized {
+			width = len(locales)
 		}
-		switch field.Type {
-		case schema.FieldTypeRelationship:
-			var value *string
-			fieldValues[index] = &value
-			destinations = append(destinations, &value)
-		case schema.FieldTypeUpload:
-			var value *string
-			fieldValues[index] = &value
-			destinations = append(destinations, &value)
-		case schema.FieldTypeNumber:
-			var value *float64
-			fieldValues[index] = &value
-			destinations = append(destinations, &value)
-		case schema.FieldTypeCheckbox:
-			var value *bool
-			fieldValues[index] = &value
-			destinations = append(destinations, &value)
-		default:
-			var value *string
-			fieldValues[index] = &value
-			destinations = append(destinations, &value)
+		kind := physicalColumnKind(field)
+		for offset := 0; offset < width; offset++ {
+			columns[position].kind = kind
+			destinations = append(destinations, columns[position].destination())
+			position++
 		}
 	}
 	return destinations, func() error {
 		document.Values = make(store.Values, len(fields))
-		for index, field := range fields {
-			switch value := fieldValues[index].(type) {
-			case **string:
-				if *value == nil {
-					document.Values[field.Name] = store.Null()
-				} else {
-					document.Values[field.Name] = store.String(**value)
+		position := 0
+		for _, field := range fields {
+			if !field.Localized {
+				value, present, err := columns[position].value(field)
+				if err != nil {
+					return err
 				}
-			case *[]byte:
-				if *value == nil {
-					document.Values[field.Name] = store.Null()
-				} else {
-					var decoded store.Value
-					if err := decoded.UnmarshalJSON(*value); err != nil {
-						return fmt.Errorf("decode JSON field %s: %w", field.Name, err)
-					}
-					document.Values[field.Name] = decoded
+				if !present {
+					value = store.Null()
 				}
-			case **float64:
-				if *value == nil {
-					document.Values[field.Name] = store.Null()
-				} else {
-					document.Values[field.Name] = store.Number(**value)
-				}
-			case **bool:
-				if *value == nil {
-					document.Values[field.Name] = store.Null()
-				} else {
-					document.Values[field.Name] = store.Boolean(**value)
-				}
+				document.Values[field.Name] = value
+				position++
+				continue
 			}
+			localized := make(store.Values, len(locales))
+			for _, locale := range locales {
+				value, present, err := columns[position].value(field)
+				if err != nil {
+					return err
+				}
+				// A JSON null is absent, like SQL NULL: a locale holds a value or
+				// is missing from the wrapper.
+				if present && value.Kind() != store.ValueNull {
+					localized[string(locale)] = value
+				}
+				position++
+			}
+			document.Values[field.Name] = store.Object(localized)
 		}
 		return nil
 	}
@@ -1893,10 +1981,10 @@ func requestPredicate(request store.Request, requireID bool) (string, []any, err
 }
 
 func requestPredicateFrom(request store.Request, requireID bool, offset int) (string, []any, error) {
-	if err := primitivefield.ValidateRequest(request); err != nil {
+	if err := membership.ValidateRequest(request); err != nil {
 		return "", nil, err
 	}
-	compiler := predicateCompiler{collection: request.Collection, next: offset, localeChain: request.LocaleChain, snapshot: request.PublishedOnly && request.Collection.Versions != nil}
+	compiler := predicateCompiler{collection: request.Collection, next: offset, localeChain: request.LocaleChain}
 	var predicates []string
 	if requireID {
 		if request.ID == "" {
@@ -1976,16 +2064,16 @@ func (compiler *predicateCompiler) compile(node query.Node) (string, error) {
 		resolved, err := resolvePredicatePath(compiler.collection, node.Comparison.Path)
 		if err != nil {
 			if compiler.callerFilter {
-				return "", primitivefield.UnsupportedPath(compiler.collection.Fields, node.Comparison.Path, err)
+				return "", querypath.Unsupported(node.Comparison.Path, err)
 			}
 			return "", err
 		}
-		if err := primitivefield.ValidateComparison(resolved.leaf, *node.Comparison); err != nil {
+		if err := membership.ValidateComparison(resolved.leaf, *node.Comparison); err != nil {
 			return "", err
 		}
 		resolved.snapshot = compiler.snapshot
 		resolved.localeChain = compiler.localeChain
-		if resolved.many {
+		if resolved.many() {
 			return compiler.compileManyComparison(resolved, *node.Comparison)
 		}
 		return compiler.compilePathComparison(resolved, false, *node.Comparison)
@@ -2024,10 +2112,10 @@ func (compiler *predicateCompiler) column(path query.Path) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if primitivefield.IsList(resolved.leaf) {
-		return "", fmt.Errorf("primitive list %q cannot be sorted", path.String())
+	if membership.KindOf(resolved.leaf) != membership.None {
+		return "", fmt.Errorf("membership field %q cannot be sorted", path.String())
 	}
-	if resolved.many {
+	if resolved.many() {
 		return "", fmt.Errorf("sort field %q traverses a repeated field", path.String())
 	}
 	resolved.snapshot = compiler.snapshot
@@ -2182,27 +2270,12 @@ func (compiler *predicateCompiler) compileTimestampComparison(column string, com
 }
 
 func (compiler *predicateCompiler) compileJSONComparison(raw string, field schema.Field, comparison query.Comparison) (string, error) {
-	if primitivefield.IsList(field) {
-		if err := primitivefield.ValidateComparison(field, comparison); err != nil {
+	if kind := membership.KindOf(field); kind != membership.None {
+		if err := membership.ValidateComparison(field, comparison); err != nil {
 			return "", err
 		}
 		if comparison.Operator == query.OperatorIn {
-			predicates := make([]string, 0, len(comparison.Value.Values()))
-			cast := "::text"
-			if field.Type == schema.FieldTypeNumberList {
-				cast = "::double precision"
-			}
-			for _, item := range comparison.Value.Values() {
-				placeholder, err := compiler.operand(item)
-				if err != nil {
-					return "", err
-				}
-				predicates = append(predicates, "COALESCE("+raw+" @> jsonb_build_array("+placeholder+cast+"), FALSE)")
-			}
-			if len(predicates) == 0 {
-				return "FALSE", nil
-			}
-			return "(" + strings.Join(predicates, " OR ") + ")", nil
+			return compiler.compileMembership(raw, field, kind, comparison.Value.Values())
 		}
 	}
 
@@ -2243,16 +2316,7 @@ func (compiler *predicateCompiler) compileJSONComparison(raw string, field schem
 		return equal, nil
 	}
 	if comparison.Operator == query.OperatorContains || comparison.Operator == query.OperatorLike {
-		if field.Type == schema.FieldTypeSelect && field.Select != nil && field.Select.HasMany {
-			if comparison.Operator == query.OperatorLike {
-				return "FALSE", nil
-			}
-			placeholder, err := compiler.operand(comparison.Value)
-			if err != nil {
-				return "", err
-			}
-			return "COALESCE(" + raw + " @> jsonb_build_array(" + placeholder + "::text), FALSE)", nil
-		}
+		// Only a stored string contains text; a JSON array or object never does.
 		column := jsonTypedColumn(raw, query.ValueString)
 		return compiler.compileScalarComparison(column, "", field, comparison)
 	}
@@ -2272,6 +2336,51 @@ func (compiler *predicateCompiler) compileJSONComparison(raw string, field schem
 		return "COALESCE((" + column + " " + operators[comparison.Operator] + " " + placeholder + "), FALSE)", nil
 	}
 	return "", fmt.Errorf("unsupported JSON comparison operator %q", comparison.Operator)
+}
+
+// compileMembership holds when the stored JSON list contains any candidate.
+// jsonb containment compares strings and numbers exactly and reference
+// objects by both members. A singular polymorphic relationship stores one
+// reference object, which contains the candidate object directly.
+func (compiler *predicateCompiler) compileMembership(raw string, field schema.Field, kind membership.Kind, candidates []query.Value) (string, error) {
+	predicates := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		var item string
+		switch kind {
+		case membership.References:
+			relationTo, id, _ := candidate.ReferenceValue()
+			relationToPlaceholder, err := compiler.operand(query.String(relationTo))
+			if err != nil {
+				return "", err
+			}
+			idPlaceholder, err := compiler.operand(query.String(id))
+			if err != nil {
+				return "", err
+			}
+			item = "jsonb_build_object('relationTo', " + relationToPlaceholder + "::text, 'id', " + idPlaceholder + "::text)"
+		case membership.Numbers:
+			placeholder, err := compiler.operand(candidate)
+			if err != nil {
+				return "", err
+			}
+			item = placeholder + "::double precision"
+		default:
+			placeholder, err := compiler.operand(candidate)
+			if err != nil {
+				return "", err
+			}
+			item = placeholder + "::text"
+		}
+		contained := "jsonb_build_array(" + item + ")"
+		if kind == membership.References && !field.Relationship.HasMany {
+			contained = item
+		}
+		predicates = append(predicates, "COALESCE("+raw+" @> "+contained+", FALSE)")
+	}
+	if len(predicates) == 0 {
+		return "FALSE", nil
+	}
+	return "(" + strings.Join(predicates, " OR ") + ")", nil
 }
 
 func (compiler *predicateCompiler) compileJSONEqual(raw string, expected query.Value) (string, error) {
@@ -2311,27 +2420,61 @@ func comparisonIncludesNull(values []query.Value) bool {
 	return false
 }
 
+// compileManyComparison compiles a path through repeated fields. The values a
+// path reaches are the leaf values of every row chain: some row at each
+// repeated level whose block type matches its path segment. A comparison holds
+// when some reached value satisfies it, so it is an EXISTS over the innermost
+// rows; negated forms negate the whole EXISTS.
+//
+// One row source enumerates the rows of a hop of repeated levels. A single
+// level expands its array with jsonb_array_elements. Several levels use one
+// strict jsonpath query instead of nesting a correlated subquery per level,
+// whose per-row rescans cost about six times as much. Fallback between locales
+// has no jsonpath form, so a level reached through a localized container
+// starts a new hop, read in SQL from the enclosing hop's row.
 func (compiler *predicateCompiler) compileManyComparison(resolved predicatePath, comparison query.Comparison) (string, error) {
-	array := safeJSONArray(resolved.arrayColumn())
-	var blockCondition string
-	if resolved.blockType != "" {
-		compiler.arguments = append(compiler.arguments, resolved.blockType)
-		compiler.next++
-		blockCondition = fmt.Sprintf("ridu_item.value ->> 'blockType' = $%d", compiler.next)
+	hops := resolved.hops()
+	sources := make([]string, len(hops))
+	blockConditions := make([]string, len(hops))
+	for index, hop := range hops {
+		enclosing := ""
+		if index > 0 {
+			enclosing = rowAlias(index-1) + ".value"
+		}
+		column := resolved.repeatColumn(hop.start, enclosing)
+		if hop.start == hop.end {
+			sources[index] = "jsonb_array_elements(" + safeJSONArray(column) + ")"
+			if blockType := resolved.repeats[hop.start].blockType; blockType != "" {
+				compiler.arguments = append(compiler.arguments, blockType)
+				compiler.next++
+				blockConditions[index] = fmt.Sprintf("%s.value ->> 'blockType' = $%d", rowAlias(index), compiler.next)
+			}
+			continue
+		}
+		path, variables, err := resolved.hopJSONPath(hop)
+		if err != nil {
+			return "", err
+		}
+		compiler.arguments = append(compiler.arguments, path, variables)
+		compiler.next += 2
+		sources[index] = fmt.Sprintf("jsonb_path_query(%s, $%d::jsonpath, $%d::jsonb)", column, compiler.next-1, compiler.next)
 	}
 	exists := func(condition string) string {
-		conditions := make([]string, 0, 2)
-		if condition != "" {
-			conditions = append(conditions, condition)
+		for index := len(hops) - 1; index >= 0; index-- {
+			conditions := make([]string, 0, 2)
+			if condition != "" {
+				conditions = append(conditions, condition)
+			}
+			if blockConditions[index] != "" {
+				conditions = append(conditions, blockConditions[index])
+			}
+			where := ""
+			if len(conditions) != 0 {
+				where = " WHERE " + strings.Join(conditions, " AND ")
+			}
+			condition = fmt.Sprintf("EXISTS (SELECT 1 FROM %s AS %s(value)%s)", sources[index], rowAlias(index), where)
 		}
-		if blockCondition != "" {
-			conditions = append(conditions, blockCondition)
-		}
-		where := ""
-		if len(conditions) != 0 {
-			where = " WHERE " + strings.Join(conditions, " AND ")
-		}
-		return fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements(%s) AS ridu_item(value)%s)", array, where)
+		return condition
 	}
 	present := resolved.rowPresenceColumn()
 	if comparison.Operator == query.OperatorIn {
@@ -2410,19 +2553,120 @@ func (compiler *predicateCompiler) compileInComparison(column string, values []q
 	return "(" + strings.Join(parts, " OR ") + ")", includesNull, nil
 }
 
+// predicatePath locates a predicate's leaf in a document. Without repeated
+// fields, jsonSegments lead from the root column to the leaf. Otherwise each
+// repeats entry is one array or blocks field the path traverses, and rowPath
+// leads from a row of the last one to the leaf.
 type predicatePath struct {
-	root                schema.Field
-	leaf                schema.Field
-	jsonSegments        []string
-	jsonLocalizedAfter  []int
-	arrayPath           []string
-	arrayLocalizedAfter []int
-	rowPath             []string
-	rowLocalizedAfter   []int
-	blockType           string
-	many                bool
-	snapshot            bool
-	localeChain         []schema.LocaleCode
+	root               schema.Field
+	leaf               schema.Field
+	jsonSegments       []string
+	jsonLocalizedAfter []int
+	repeats            []predicateRepeat
+	rowPath            []string
+	rowLocalizedAfter  []int
+	snapshot           bool
+	localeChain        []schema.LocaleCode
+}
+
+// predicateRepeat is one traversed array or blocks field. path leads to it
+// from the root column for the first, and from a row of the previous one
+// otherwise; blockType binds its rows when it is a blocks field.
+type predicateRepeat struct {
+	path           []string
+	localizedAfter []int
+	blockType      string
+}
+
+func (path predicatePath) many() bool { return len(path.repeats) != 0 }
+
+// predicateHop is a run of consecutive repeated levels, start to end, whose
+// rows one row source enumerates.
+type predicateHop struct{ start, end int }
+
+// hops starts a hop at the first repeated field and at each one reached
+// through a localized container.
+func (path predicatePath) hops() []predicateHop {
+	var hops []predicateHop
+	for depth, repeat := range path.repeats {
+		if depth == 0 || len(repeat.localizedAfter) != 0 {
+			hops = append(hops, predicateHop{start: depth, end: depth})
+			continue
+		}
+		hops[len(hops)-1].end = depth
+	}
+	return hops
+}
+
+// rowAlias names the rows of the hop at index in nested EXISTS.
+func rowAlias(index int) string {
+	if index == 0 {
+		return "ridu_item"
+	}
+	return fmt.Sprintf("ridu_item_%d", index+1)
+}
+
+// rowValue is the innermost row, which the leaf's row path starts from.
+func (path predicatePath) rowValue() string {
+	return rowAlias(len(path.hops())-1) + ".value"
+}
+
+// repeatColumn is the JSON array of the repeated field at depth, read from
+// the root column or from enclosing, a row of the previous hop.
+func (path predicatePath) repeatColumn(depth int, enclosing string) string {
+	if depth == 0 {
+		return path.arrayColumn()
+	}
+	repeat := path.repeats[depth]
+	if len(repeat.localizedAfter) != 0 && len(path.localeChain) != 0 {
+		return localizedJSONColumn(enclosing, repeat.path, repeat.localizedAfter, path.localeChain)
+	}
+	return jsonValueAt(enclosing, repeat.path)
+}
+
+// hopJSONPath enumerates the rows of a hop's last level from the array of its
+// first, with each block level bound to its block type through a jsonpath
+// variable. Strict mode never wraps a non-array as one row; the filters keep
+// every accessor and [*] to values that have them, because a strict
+// structural error outside a filter would end the whole query instead of
+// skipping the row. A row is an element of an array, like
+// jsonb_array_elements, and a key path reaches what #> reaches.
+func (path predicatePath) hopJSONPath(hop predicateHop) (string, string, error) {
+	keys := func(segments []string) string {
+		var result strings.Builder
+		for _, segment := range segments {
+			encoded, _ := json.Marshal(segment)
+			result.WriteString(".")
+			result.Write(encoded)
+		}
+		return result.String()
+	}
+	var expression strings.Builder
+	expression.WriteString("strict $")
+	variables := map[string]string{}
+	for depth := hop.start; depth <= hop.end; depth++ {
+		if depth > hop.start {
+			expression.WriteString(keys(path.repeats[depth].path))
+		}
+		expression.WriteString(` ? (@.type() == "array")[*]`)
+		var filters []string
+		if blockType := path.repeats[depth].blockType; blockType != "" {
+			name := fmt.Sprintf("block%d", depth)
+			variables[name] = blockType
+			filters = append(filters, `@."blockType" == $`+name)
+		}
+		if depth < hop.end {
+			filters = append(filters, "exists(@"+keys(path.repeats[depth+1].path)+")")
+		}
+		if len(filters) != 0 {
+			expression.WriteString(" ? (" + strings.Join(filters, " && ") + ")")
+		}
+	}
+	encoded, err := json.Marshal(variables)
+	if err != nil {
+		return "", "", err
+	}
+	return expression.String(), string(encoded), nil
 }
 
 func (path predicatePath) scalarComparisonColumn(operator query.Operator) (string, string) {
@@ -2509,19 +2753,22 @@ func (path predicatePath) scalarColumn() string {
 	return castJSONScalar(column, path.leaf.Type, len(path.jsonSegments) != 0)
 }
 
+// arrayColumn is the first traversed repeated field's JSON array, read from
+// the root column.
 func (path predicatePath) arrayColumn() string {
+	arrayPath, arrayLocalizedAfter := path.repeats[0].path, path.repeats[0].localizedAfter
 	if path.snapshot {
 		if path.root.Localized && len(path.localeChain) != 0 {
 			containers := make([]string, 0, len(path.localeChain))
 			for _, locale := range path.localeChain {
 				containers = append(containers, quote("snapshot")+" #> '{Values,"+path.root.Name+","+string(locale)+"}'")
 			}
-			return jsonValueAt(coalescedJSONValue(containers), path.arrayPath)
+			return jsonValueAt(coalescedJSONValue(containers), arrayPath)
 		}
-		if len(path.arrayLocalizedAfter) != 0 && len(path.localeChain) != 0 {
-			return localizedJSONColumn(quote("snapshot"), append([]string{"Values", path.root.Name}, path.arrayPath...), offsetBoundaries(path.arrayLocalizedAfter, 2), path.localeChain)
+		if len(arrayLocalizedAfter) != 0 && len(path.localeChain) != 0 {
+			return localizedJSONColumn(quote("snapshot"), append([]string{"Values", path.root.Name}, arrayPath...), offsetBoundaries(arrayLocalizedAfter, 2), path.localeChain)
 		}
-		segments := append([]string{"Values", path.root.Name}, path.arrayPath...)
+		segments := append([]string{"Values", path.root.Name}, arrayPath...)
 		return quote("snapshot") + " #> '{" + strings.Join(segments, ",") + "}'"
 	}
 	column := quote(fieldColumn(path.root.ID))
@@ -2530,19 +2777,19 @@ func (path predicatePath) arrayColumn() string {
 		for _, locale := range path.localeChain {
 			containers = append(containers, quote(localizedFieldColumn(path.root.ID, locale)))
 		}
-		return jsonValueAt(coalescedJSONValue(containers), path.arrayPath)
+		return jsonValueAt(coalescedJSONValue(containers), arrayPath)
 	}
-	if len(path.arrayLocalizedAfter) != 0 && len(path.localeChain) != 0 {
-		return localizedJSONColumn(column, path.arrayPath, path.arrayLocalizedAfter, path.localeChain)
+	if len(arrayLocalizedAfter) != 0 && len(path.localeChain) != 0 {
+		return localizedJSONColumn(column, arrayPath, arrayLocalizedAfter, path.localeChain)
 	}
-	if len(path.arrayPath) != 0 {
-		column += " #> '{" + strings.Join(path.arrayPath, ",") + "}'"
+	if len(arrayPath) != 0 {
+		column += " #> '{" + strings.Join(arrayPath, ",") + "}'"
 	}
 	return column
 }
 
 func (path predicatePath) rowColumn() string {
-	column := "ridu_item.value"
+	column := path.rowValue()
 	if len(path.rowLocalizedAfter) != 0 && len(path.localeChain) != 0 {
 		return localizedScalarColumn(column, path.rowPath, path.rowLocalizedAfter, path.localeChain, path.leaf)
 	}
@@ -2609,11 +2856,11 @@ func (path predicatePath) scalarJSONColumn() string {
 func (path predicatePath) rowJSONColumn() string {
 	if len(path.rowLocalizedAfter) != 0 && len(path.localeChain) != 0 {
 		if path.rowLocalizedAfter[0] == len(path.rowPath) {
-			return localizedJSONScalar("ridu_item.value", path.rowPath, path.rowLocalizedAfter[0], path.localeChain)
+			return localizedJSONScalar(path.rowValue(), path.rowPath, path.rowLocalizedAfter[0], path.localeChain)
 		}
-		return localizedJSONColumn("ridu_item.value", path.rowPath, path.rowLocalizedAfter, path.localeChain)
+		return localizedJSONColumn(path.rowValue(), path.rowPath, path.rowLocalizedAfter, path.localeChain)
 	}
-	return jsonValueAt("ridu_item.value", path.rowPath)
+	return jsonValueAt(path.rowValue(), path.rowPath)
 }
 
 func (path predicatePath) rowPresenceColumn() string {
@@ -2621,12 +2868,12 @@ func (path predicatePath) rowPresenceColumn() string {
 		if path.rowLocalizedAfter[0] == len(path.rowPath) {
 			return path.rowColumn() + " IS NOT NULL"
 		}
-		return localizedJSONColumn("ridu_item.value", path.rowPath, path.rowLocalizedAfter, path.localeChain) + " IS NOT NULL"
+		return localizedJSONColumn(path.rowValue(), path.rowPath, path.rowLocalizedAfter, path.localeChain) + " IS NOT NULL"
 	}
 	if len(path.rowPath) == 0 {
-		return "ridu_item.value IS NOT NULL"
+		return path.rowValue() + " IS NOT NULL"
 	}
-	return "ridu_item.value #> '{" + strings.Join(path.rowPath, ",") + "}' IS NOT NULL"
+	return path.rowValue() + " #> '{" + strings.Join(path.rowPath, ",") + "}' IS NOT NULL"
 }
 
 func (path predicatePath) rowNullPredicate() string {
@@ -2859,70 +3106,57 @@ func resolvePredicatePath(collection schema.Collection, path query.Path) (predic
 	}
 	resolved := predicatePath{root: *root, leaf: *root}
 	current := root
+	// segments and localizedAfter lead from the current scope, the root column
+	// or a row of the last repeated field, to the field reached so far.
+	var segmentsInScope []string
+	var localizedAfter []int
+	enterRows := func(blockType string) {
+		resolved.repeats = append(resolved.repeats, predicateRepeat{path: segmentsInScope, localizedAfter: localizedAfter, blockType: blockType})
+		segmentsInScope, localizedAfter = nil, nil
+	}
 	for index := 1; index < len(segments); index++ {
 		segment := segments[index]
 		if current.Type == schema.FieldTypeJSON {
 			// JSON fields intentionally have no authored child schema, but callers
 			// may still address a bounded path within their opaque value. Framework
 			// upload delivery relies on this for generated image-size object keys.
-			resolved.jsonSegments = append(resolved.jsonSegments, segments[index:]...)
+			segmentsInScope = append(segmentsInScope, segments[index:]...)
 			resolved.leaf = schema.Field{ID: current.ID, Name: segments[len(segments)-1], Type: schema.FieldTypeJSON}
-			return resolved, nil
+			break
 		}
-		if current.Type == schema.FieldTypeBlocks {
-			if current.Blocks == nil || resolved.many {
-				return predicatePath{}, fmt.Errorf("predicate path %q traverses unsupported repeated fields", path.String())
-			}
-			resolved.many = true
-			resolved.blockType = segment
-			if len(resolved.jsonSegments) > 0 {
-				resolved.arrayPath = append([]string(nil), resolved.jsonSegments...)
-				resolved.arrayLocalizedAfter = append([]int(nil), resolved.jsonLocalizedAfter...)
-			}
-			var block *schema.BlockType
-			for blockIndex := range current.Blocks.ResolvedTypes() {
-				if current.Blocks.ResolvedTypes()[blockIndex].Slug == segment {
-					block = &current.Blocks.ResolvedTypes()[blockIndex]
-					break
-				}
-			}
-			if block == nil || index+1 >= len(segments) {
+		switch {
+		case current.Type == schema.FieldTypeBlocks && current.Blocks != nil:
+			// The predicate needs only field structure, which a registered
+			// block's shared definition supplies at every placement.
+			block, found := current.Blocks.Definition(segment)
+			if !found || index+1 >= len(segments) {
 				return predicatePath{}, fmt.Errorf("predicate field %q is not in collection %q", path.String(), collection.Slug)
 			}
+			enterRows(segment)
 			index++
 			segment = segments[index]
 			current = fieldNamed(block.ResolvedFields(), segment)
-		} else {
+		case (current.Type == schema.FieldTypeArray || current.Type == schema.FieldTypeGroup) && current.Nested != nil:
 			if current.Type == schema.FieldTypeArray {
-				if resolved.many {
-					return predicatePath{}, fmt.Errorf("predicate path %q traverses unsupported repeated fields", path.String())
-				}
-				resolved.many = true
-				if len(resolved.jsonSegments) > 0 {
-					resolved.arrayPath = append([]string(nil), resolved.jsonSegments...)
-					resolved.arrayLocalizedAfter = append([]int(nil), resolved.jsonLocalizedAfter...)
-				}
-			}
-			if current.Nested == nil {
-				return predicatePath{}, fmt.Errorf("predicate field %q is not in collection %q", path.String(), collection.Slug)
+				enterRows("")
 			}
 			current = fieldNamed(current.Nested.ResolvedFields(), segment)
+		default:
+			return predicatePath{}, fmt.Errorf("predicate field %q is not in collection %q", path.String(), collection.Slug)
 		}
 		if current == nil {
 			return predicatePath{}, fmt.Errorf("predicate field %q is not in collection %q", path.String(), collection.Slug)
 		}
 		resolved.leaf = *current
-		if resolved.many {
-			resolved.rowPath = append(resolved.rowPath, segment)
-			if current.Localized {
-				resolved.rowLocalizedAfter = append(resolved.rowLocalizedAfter, len(resolved.rowPath))
-			}
-		} else {
-			resolved.jsonSegments = append(resolved.jsonSegments, segment)
-			if current.Localized {
-				resolved.jsonLocalizedAfter = append(resolved.jsonLocalizedAfter, len(resolved.jsonSegments))
-			}
+		segmentsInScope = append(segmentsInScope, segment)
+		if current.Localized {
+			localizedAfter = append(localizedAfter, len(segmentsInScope))
 		}
+	}
+	if resolved.many() {
+		resolved.rowPath, resolved.rowLocalizedAfter = segmentsInScope, localizedAfter
+	} else {
+		resolved.jsonSegments, resolved.jsonLocalizedAfter = segmentsInScope, localizedAfter
 	}
 	return resolved, nil
 }
@@ -2988,22 +3222,45 @@ func selectColumns(collection schema.Collection, fields []schema.Field, locales 
 			columns = append(columns, quote(fieldColumn(field.ID)))
 			continue
 		}
-		pairs := make([]string, 0, len(locales)*2)
+		// Each locale is its own native column; documentDestinations assembles
+		// the locale-keyed value without a JSON round trip.
 		for _, locale := range locales {
-			pairs = append(pairs, "'"+strings.ReplaceAll(string(locale), "'", "''")+"'", quote(localizedFieldColumn(field.ID, locale)))
+			columns = append(columns, quote(localizedFieldColumn(field.ID, locale)))
 		}
-		columns = append(columns, "jsonb_strip_nulls(jsonb_build_object("+strings.Join(pairs, ", ")+")) AS "+quote(fieldColumn(field.ID)))
 	}
 	return strings.Join(columns, ", ")
 }
 
-func storedSchemaFields(fields []schema.Field) []schema.Field {
+// storedFieldsCache memoizes each collection's stored fields. An entry pins
+// the field slice it was derived from, so a matching backing array identifies
+// the same immutable resolved definition, and a reloaded definition replaces
+// its entry. Entries are bounded by the number of collection IDs.
+var storedFieldsCache sync.Map
+
+type storedFieldsEntry struct {
+	source []schema.Field
+	stored []schema.Field
+}
+
+// storedSchemaFields returns a collection's physically stored root fields.
+// The result is shared and read-only; its capacity is capped so an append
+// always copies.
+func storedSchemaFields(collection schema.Collection) []schema.Field {
+	fields := collection.Fields
+	if cached, found := storedFieldsCache.Load(collection.ID); found {
+		entry := cached.(*storedFieldsEntry)
+		if len(entry.source) == len(fields) && (len(fields) == 0 || &entry.source[0] == &fields[0]) {
+			return entry.stored
+		}
+	}
 	stored := make([]schema.Field, 0, len(fields))
 	for _, field := range fields {
 		if field.Category != schema.FieldCategoryPresentation {
 			stored = append(stored, field)
 		}
 	}
+	stored = stored[:len(stored):len(stored)]
+	storedFieldsCache.Store(collection.ID, &storedFieldsEntry{source: fields, stored: stored})
 	return stored
 }
 
@@ -3035,6 +3292,19 @@ func collectionTable(id schema.StableID) string { return "z_c_" + identifierHash
 func fieldColumn(id schema.StableID) string     { return "f_" + identifierHash(string(id)) }
 func localizedFieldColumn(id schema.StableID, locale schema.LocaleCode) string {
 	return "f_" + identifierHash(string(id)+"\x00"+string(locale))
+}
+
+// publishedCollectionTable holds a versioned resource's live rows with the
+// working table's physical layout.
+func publishedCollectionTable(id schema.StableID) string { return "z_p_" + identifierHash(string(id)) }
+
+// documentTables lists a resource's document tables: the working table and,
+// for a versioned resource, its live table. Both share one physical layout.
+func documentTables(resource schema.Collection, id schema.StableID) []string {
+	if resource.Versions == nil {
+		return []string{collectionTable(id)}
+	}
+	return []string{collectionTable(id), publishedCollectionTable(id)}
 }
 
 func identifierHash(value string) string {

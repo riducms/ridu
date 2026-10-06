@@ -4,37 +4,107 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/riducms/ridu/field"
 	configresolver "github.com/riducms/ridu/internal/config"
-	"github.com/riducms/ridu/internal/embedded"
+
 	operationengine "github.com/riducms/ridu/internal/operation"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
 
-// lowerFieldGraph runs exactly once during application construction. Its output
-// owns callback closures and resolved schema metadata, never authoring nodes or
-// a request-time graph lookup. The engine owns concrete value traversal.
-// occurrences is graph.Occurrences(), copied once for every resource.
-func lowerFieldGraph(graph configresolver.Graph, occurrences []configresolver.Occurrence, resourceKind, resource string, fields []schema.Field, local **LocalAPI) ([]operationengine.FieldBinding, error) {
-	var byID map[schema.StableID]schema.Field
-	var index func([]schema.Field)
-	index = func(fields []schema.Field) {
-		for _, f := range fields {
-			byID[f.ID] = f
-			if f.Nested != nil {
-				index(f.Nested.ResolvedFields())
+// fieldBindings lowers an application's field graph once: each resource's own
+// bound fields, and each block definition's bound fields once for every
+// resource and placement that uses the definition. Its output owns callback
+// closures and resolved schema metadata, never authoring nodes or a
+// request-time graph lookup. The engine owns concrete value traversal.
+type fieldBindings struct {
+	graph configresolver.Graph
+	// occurrences holds the graph's occurrences of each resource and definition.
+	occurrences map[[2]string][]configresolver.Occurrence
+	local       **LocalAPI
+	definitions map[string][]operationengine.FieldBinding
+}
+
+func newFieldBindings(graph configresolver.Graph, local **LocalAPI) *fieldBindings {
+	lowering := &fieldBindings{graph: graph, occurrences: map[[2]string][]configresolver.Occurrence{}, local: local, definitions: map[string][]operationengine.FieldBinding{}}
+	for _, occurrence := range graph.Occurrences() {
+		owner := [2]string{occurrence.ResourceKind, occurrence.Resource}
+		lowering.occurrences[owner] = append(lowering.occurrences[owner], occurrence)
+	}
+	return lowering
+}
+
+// resource lists a resource's bindings: its own fields' and those of every
+// block definition it places, each definition once, in the order a
+// depth-first walk of its fields first meets them.
+func (lowering *fieldBindings) resource(kind, slug string, fields []schema.Field) ([]operationengine.FieldBinding, error) {
+	bindings, err := lowerFieldGraph(lowering.graph, lowering.occurrences[[2]string{kind, slug}], kind, slug, fields, lowering.local)
+	if err != nil {
+		return nil, err
+	}
+	placed := map[string]bool{}
+	var walk func([]schema.Field) error
+	walk = func(fields []schema.Field) error {
+		for _, candidate := range fields {
+			var blocks []schema.BlockType
+			if candidate.Blocks != nil {
+				blocks = candidate.Blocks.Definitions()
 			}
-			if f.Blocks != nil {
-				for _, block := range f.Blocks.ResolvedTypes() {
-					index(block.ResolvedFields())
+			if candidate.Plugin != nil {
+				for _, tree := range candidate.Plugin.EmbeddedTrees {
+					for _, c := range tree.Cases {
+						blocks = append(blocks, c.Definitions()...)
+					}
 				}
 			}
-			embedded.SchemaFields(f, index)
+			for _, block := range blocks {
+				if placed[block.Slug] {
+					continue
+				}
+				placed[block.Slug] = true
+				definition, err := lowering.definition(block)
+				if err != nil {
+					return err
+				}
+				bindings = append(bindings, definition...)
+				if err := walk(block.ResolvedFields()); err != nil {
+					return err
+				}
+			}
+			if candidate.Nested != nil {
+				if err := walk(candidate.Nested.ResolvedFields()); err != nil {
+					return err
+				}
+			}
 		}
+		return nil
 	}
+	if err := walk(fields); err != nil {
+		return nil, err
+	}
+	return bindings, nil
+}
+
+// definition lowers a block definition's bound fields on first use.
+func (lowering *fieldBindings) definition(block schema.BlockType) ([]operationengine.FieldBinding, error) {
+	if bindings, lowered := lowering.definitions[block.Slug]; lowered {
+		return bindings, nil
+	}
+	bindings, err := lowerFieldGraph(lowering.graph, lowering.occurrences[[2]string{configresolver.BlockResource, block.Slug}], configresolver.BlockResource, block.Slug, block.ResolvedFields(), lowering.local)
+	if err != nil {
+		return nil, err
+	}
+	lowering.definitions[block.Slug] = bindings
+	return bindings, nil
+}
+
+// lowerFieldGraph lowers the bound occurrences of one resource or block
+// definition, whose fields are given. A definition's bindings name it and
+// carry its definition-relative fields.
+func lowerFieldGraph(graph configresolver.Graph, occurrences []configresolver.Occurrence, resourceKind, resource string, fields []schema.Field, local **LocalAPI) ([]operationengine.FieldBinding, error) {
 	var bindings []operationengine.FieldBinding
 	for _, occurrence := range occurrences {
 		if occurrence.ResourceKind != resourceKind || occurrence.Resource != resource {
@@ -44,19 +114,23 @@ func lowerFieldGraph(graph configresolver.Graph, occurrences []configresolver.Oc
 		if !found || !definition.HasBehavior() {
 			continue
 		}
-		if byID == nil {
-			byID = make(map[schema.StableID]schema.Field)
-			index(fields)
-		}
 		unsupported := func(message string) error {
-			return schema.NewValidationError([]schema.Issue{{Code: "unsupported_field_policy", Path: occurrence.AuthoredPath, Message: fmt.Sprintf("field %q: %s", occurrence.ResolvedPath, message)}})
+			label := fmt.Sprintf("field %q", occurrence.ResolvedPath)
+			if resourceKind == configresolver.BlockResource {
+				label += fmt.Sprintf(" of block %q", resource)
+			}
+			return schema.NewValidationError([]schema.Issue{{Code: "unsupported_field_policy", Path: occurrence.AuthoredPath, Message: fmt.Sprintf("%s: %s", label, message)}})
 		}
-		resolved, found := byID[occurrence.SchemaID]
-		if !found {
+		// A binding retains its own field, found along its path.
+		resolved, found := schema.FieldAtPath(fields, strings.Split(occurrence.ResolvedPath, "."))
+		if !found || occurrence.SchemaID == "" || resolved.ID != occurrence.SchemaID {
 			return nil, unsupported("executable policy has no resolved stored field")
 		}
-		binding := operationengine.FieldBinding{ID: occurrence.ID, Field: resolved, LocaleOwned: occurrence.LocaleOwner != ""}
-		binding.Access = lowerGraphAccess(definition.AccessPolicy(), occurrence.ID, local)
+		binding := operationengine.FieldBinding{ID: occurrence.ID, Field: resolved}
+		if resourceKind == configresolver.BlockResource {
+			binding.Block = resource
+		}
+		binding.Access = lowerGraphAccess(definition.AccessPolicy(), local)
 		switch definition.Kind() {
 		case field.KindText, field.KindCode, field.KindTextarea:
 			facade, _ := field.AsText(definition)
@@ -209,10 +283,9 @@ func lowerVirtual[T field.VirtualValue](binding *operationengine.FieldBinding, d
 	if resolver == nil {
 		return fmt.Errorf("computed output requires an attached resolver")
 	}
-	id := binding.ID
 	binding.Computed = func(ctx operationengine.Context, document store.Document) (store.Value, error) {
 		ctx.ID, ctx.Document = document.ID, &document
-		value, err := resolver(operation.Context(graphCallbackContext(ctx, id, local)))
+		value, err := resolver(operation.Context(graphCallbackContext(ctx, local)))
 		if result, present := value.Get(); present {
 			return codec.encode(result), err
 		}
@@ -278,11 +351,11 @@ func finiteCodec(kind store.ValueKind, expected string) graphCodec[store.Value] 
 }
 
 func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks field.Hooks[W], reads []field.OutputTransform[R], validators []field.Validator[W], liveValidators []field.LiveValidator[W], write graphCodec[W], read graphCodec[R], local **LocalAPI) {
-	f, id := binding.Field, binding.ID
-	adaptContext := func(ctx operationengine.Context) operation.Context { return graphCallbackContext(ctx, id, local) }
+	f := binding.Field
+	adaptContext := func(ctx operationengine.Context) operation.Context { return graphCallbackContext(ctx, local) }
 	rejected := func(ctx operationengine.Context, err error) error {
 		return lowerRejection(err, ctx, func(target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
-			return operationengine.ResolveIssueTarget(f, ctx, target)
+			return operationengine.ResolveIssueTarget(ctx, target)
 		})
 	}
 	raw := func(callbacks []field.RawTransform) []operationengine.Hook {
@@ -295,7 +368,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				}
 				change, err := callback(adaptContext(ctx), value)
 				if err == nil {
-					applyGraphChange(ctx, f.Name, change, func(value store.Value) store.Value { return value })
+					err = applyGraphChange(ctx, change, func(value store.Value) store.Value { return value })
 				}
 				return rejected(ctx, err)
 			}
@@ -312,7 +385,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				}
 				change, err := callback(adaptContext(ctx), value)
 				if err == nil {
-					applyGraphChange(ctx, f.Name, change, write.encode)
+					err = applyGraphChange(ctx, change, write.encode)
 				}
 				return rejected(ctx, err)
 			}
@@ -350,7 +423,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 			}
 			change, err := callback(adaptContext(ctx), value)
 			if err == nil {
-				applyGraphChange(ctx, f.Name, change, read.encode)
+				err = applyGraphChange(ctx, change, read.encode)
 			}
 			return rejected(ctx, err)
 		})
@@ -367,7 +440,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 			}
 			result := make([]schema.Issue, len(issues))
 			for i, issue := range issues {
-				targetField, path, locale, err := operationengine.ResolveIssueTarget(f, ctx, issue.Target)
+				targetField, path, locale, err := operationengine.ResolveIssueTarget(ctx, issue.Target)
 				if err != nil {
 					return nil, err
 				}
@@ -384,14 +457,10 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				return nil, false, nil
 			}
 			base := adaptContext(ctx)
-			root := base.Root
-			if ctx.RootData != nil {
-				root = operation.Snapshot(ctx.RootData)
-			}
 			live := operation.LiveValidationContext{
 				Context: base.Context, Operation: base.Operation, WritePhase: base.WritePhase, CollectionID: base.CollectionID, GlobalID: base.GlobalID,
-				ID: base.ID, Actor: base.Actor, Locale: base.Locale, Root: root, Siblings: base.Siblings, Prior: base.Prior,
-				Input: operation.Snapshot(ctx.InputSiblingData),
+				ID: base.ID, Actor: base.Actor, Locale: base.Locale, Root: base.Root, Siblings: base.Siblings, Prior: base.Prior,
+				Input: operation.ObjectView(ctx.Input),
 				Local: graphReader{local: local, context: ctx.Context, actor: cloneDocument(ctx.Actor), actorCollection: ctx.ActorCollection, locale: ctx.Locale, live: true},
 			}
 			issues, err := callback(live, value)
@@ -403,7 +472,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 			}
 			result := make([]schema.Issue, len(issues))
 			for i, issue := range issues {
-				targetField, path, locale, err := operationengine.ResolveIssueTarget(f, ctx, issue.Target)
+				targetField, path, locale, err := operationengine.ResolveIssueTarget(ctx, issue.Target)
 				if err != nil {
 					return nil, true, err
 				}
@@ -421,9 +490,8 @@ func lowerDefault[T any](binding *operationengine.FieldBinding, callback field.D
 	if callback == nil {
 		return
 	}
-	id := binding.ID
 	binding.Default = func(ctx operationengine.Context) (store.Value, bool, error) {
-		result, err := callback(operation.Context(graphCallbackContext(ctx, id, local)))
+		result, err := callback(operation.Context(graphCallbackContext(ctx, local)))
 		if err != nil {
 			return store.Value{}, false, err
 		}
@@ -435,51 +503,54 @@ func lowerDefault[T any](binding *operationengine.FieldBinding, callback field.D
 	}
 }
 
-func applyGraphChange[T any](ctx operationengine.Context, name string, change operation.Change[T], encode func(T) store.Value) {
+func applyGraphChange[T any](ctx operationengine.Context, change operation.Change[T], encode func(T) store.Value) error {
 	replacement, replace := change.Replacement()
 	if !replace {
-		return
+		return nil
 	}
 	if value, present := replacement.Get(); present {
-		ctx.SiblingData[name] = encode(value)
-	} else {
-		// Clearing the own logical value uses the existing portable empty state;
-		// it does not introduce public Unset or a durable presence distinction.
-		ctx.SiblingData[name] = store.Null()
+		return ctx.ReplaceValue(encode(value))
 	}
+	// Clearing the own logical value uses the existing portable empty state;
+	// it does not introduce public Unset or a durable presence distinction.
+	return ctx.ReplaceValue(store.Null())
 }
 
-func lowerGraphAccess(access field.Access, id string, local **LocalAPI) operationengine.FieldRules {
+func lowerGraphAccess(access field.Access, local **LocalAPI) operationengine.FieldRules {
 	adapt := func(rule field.AccessRule) operationengine.FieldAccess {
 		if rule == nil {
 			return nil
 		}
 		return func(ctx operationengine.Context) (bool, error) {
-			return rule(operation.Context(graphCallbackContext(ctx, id, local)))
+			return rule(operation.Context(graphCallbackContext(ctx, local)))
 		}
 	}
 	return operationengine.FieldRules{Create: adapt(access.Create), Read: adapt(access.Read), Update: adapt(access.Update)}
 }
 
-func graphCallbackContext(ctx operationengine.Context, id string, local **LocalAPI) operation.Context {
+func graphCallbackContext(ctx operationengine.Context, local **LocalAPI) operation.Context {
 	collectionID, globalID := resourceIDs(ctx.Collection)
-	root := ctx.Data
-	if ctx.RootData != nil {
-		root = ctx.RootData
-	}
-	if root == nil && ctx.Document != nil {
-		root = ctx.Document.Values
+	// Scoped field callbacks carry immutable views; other callback contexts
+	// present their working values through a detached snapshot.
+	root := operation.ObjectView(ctx.Root)
+	if ctx.Root.IsZero() {
+		values := ctx.Data
+		if values == nil && ctx.Document != nil {
+			values = ctx.Document.Values
+		}
+		root = operation.Snapshot(values)
 	}
 	actor := operation.Actor{Collection: ctx.ActorCollection}
 	if ctx.Actor != nil {
 		actor.ID = operation.ID(ctx.Actor.ID)
-		actor.Data = operation.Snapshot(ctx.Actor.Values)
+		actor.Data = operation.ObjectView(ctx.ActorValues())
 	}
 	return operation.Context{
 		Context: ctx.Context, Operation: ctx.Operation, WritePhase: ctx.WritePhase, CollectionID: collectionID, GlobalID: globalID,
-		OccurrenceID: operation.OccurrenceID(ctx.OccurrenceID), SchemaOccurrenceID: operation.OccurrenceID(id), ID: operation.ID(ctx.ID),
-		Actor: actor, System: ctx.System, Locale: ctx.Locale, AllLocales: ctx.AllLocales, Root: operation.Snapshot(root), Siblings: operation.Snapshot(ctx.SiblingData), Prior: operation.Snapshot(ctx.OriginalSiblingData),
-		Local: graphReader{live: ctx.LiveValidation, local: local, context: ctx.Context, actor: cloneDocument(ctx.Actor), actorCollection: ctx.ActorCollection, system: ctx.System, locale: ctx.Locale},
+		OccurrenceID: operation.OccurrenceID(ctx.OccurrenceID), SchemaOccurrenceID: operation.OccurrenceID(ctx.SchemaOccurrenceID), ID: operation.ID(ctx.ID),
+		Actor: actor, System: ctx.System, Locale: ctx.Locale, AllLocales: ctx.AllLocales, Root: root, Siblings: operation.ObjectView(ctx.Siblings), Prior: operation.ObjectView(ctx.Prior),
+		// The operation never changes its actor, and reads copy it at use.
+		Local: graphReader{live: ctx.LiveValidation, local: local, context: ctx.Context, actor: ctx.Actor, actorCollection: ctx.ActorCollection, system: ctx.System, locale: ctx.Locale},
 	}
 }
 

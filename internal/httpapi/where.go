@@ -188,7 +188,25 @@ func queryValue(encoded []byte) (query.Value, error) {
 	if err := json.Unmarshal(encoded, &boolean); err == nil {
 		return query.Boolean(boolean), nil
 	}
-	return query.Value{}, fmt.Errorf("comparison value must be a scalar or null")
+	if reference, ok := decodeReference(encoded); ok {
+		return reference, nil
+	}
+	return query.Value{}, fmt.Errorf("comparison value must be a scalar, null, or a polymorphic {\"relationTo\", \"id\"} reference")
+}
+
+// decodeReference reads a polymorphic relationship candidate in the
+// relationship's own value shape. The engine decides where one is accepted.
+func decodeReference(encoded []byte) (query.Value, bool) {
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	var reference struct {
+		RelationTo *string `json:"relationTo"`
+		ID         *string `json:"id"`
+	}
+	if decoder.Decode(&reference) != nil || reference.RelationTo == nil || reference.ID == nil {
+		return query.Value{}, false
+	}
+	return query.Reference(*reference.RelationTo, *reference.ID), true
 }
 
 func queryValueForPath(path query.Path, encoded []byte) (query.Value, error) {
@@ -261,11 +279,8 @@ func schemaFieldIn(
 			if field.Blocks == nil || index+2 >= len(segments) {
 				return nil, false, false
 			}
-			for blockIndex := range field.Blocks.ResolvedTypes() {
-				block := &field.Blocks.ResolvedTypes()[blockIndex]
-				if block.Slug == segments[index+1] {
-					return schemaFieldIn(segments, index+2, block.ResolvedFields(), true)
-				}
+			if block, found := field.Blocks.Definition(segments[index+1]); found {
+				return schemaFieldIn(segments, index+2, block.ResolvedFields(), true)
 			}
 		}
 		return nil, false, false

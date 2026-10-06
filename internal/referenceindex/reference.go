@@ -6,8 +6,10 @@ package referenceindex
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -21,6 +23,35 @@ type Entry struct {
 	Target     store.DocumentReference
 	Locale     schema.LocaleCode
 	Occurrence int
+}
+
+// placement locates a field while references are collected. Entries name each
+// field by its placement: a block's fields are its shared definition, whose IDs are definition-relative, so their placement IDs derive
+// from the canonical path the walk followed through the document.
+type placement struct {
+	resource  schema.StableID
+	canonical []string
+	shared    bool
+}
+
+func (p placement) child(name string) placement {
+	p.canonical = append(p.canonical, name)
+	return p
+}
+
+// enter locates the fields of a block selected beneath this container: a
+// definition's fields, shared at every placement.
+func (p placement) enter(segments ...string) placement {
+	p.canonical = append(p.canonical, segments...)
+	p.shared = true
+	return p
+}
+
+func (p placement) fieldID(field schema.Field) schema.StableID {
+	if p.shared {
+		return schema.PlacementFieldID(p.resource, p.canonical)
+	}
+	return field.ID
 }
 
 // Collect derives every relationship and upload reference in one canonical
@@ -45,27 +76,18 @@ func collectUnchecked(collection schema.Collection, document store.Document) []E
 // shape and may itself contain locale maps.
 func collectFieldUnchecked(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode) []Entry {
 	var entries []Entry
+	at := placement{resource: owner.CollectionID, canonical: field.Path.Segments()}
 	if locale != "" && field.Localized {
 		field.Localized = false
-		collectFieldValue(owner, field, value, locale, &entries)
+		collectFieldValue(owner, field, value, locale, at, &entries)
 	} else {
-		collectField(owner, field, value, locale, &entries)
+		collectField(owner, field, value, locale, at, &entries)
 	}
 	assignOccurrences(entries)
 	return entries
 }
 
-func collectFields(owner store.DocumentReference, fields []schema.Field, values store.Values, locale schema.LocaleCode, entries *[]Entry) {
-	for _, field := range fields {
-		value, exists := values[field.Name]
-		if !exists {
-			continue
-		}
-		collectField(owner, field, value, locale, entries)
-	}
-}
-
-func collectField(owner store.DocumentReference, field schema.Field, value store.Value, inheritedLocale schema.LocaleCode, entries *[]Entry) {
+func collectField(owner store.DocumentReference, field schema.Field, value store.Value, inheritedLocale schema.LocaleCode, at placement, entries *[]Entry) {
 	if value.Kind() == store.ValueNull {
 		return
 	}
@@ -80,20 +102,20 @@ func collectField(owner store.DocumentReference, field schema.Field, value store
 		sort.Strings(locales)
 		field.Localized = false
 		for _, locale := range locales {
-			collectFieldValue(owner, field, value.Get(locale), schema.LocaleCode(locale), entries)
+			collectFieldValue(owner, field, value.Get(locale), schema.LocaleCode(locale), at, entries)
 		}
 		return
 	}
-	collectFieldValue(owner, field, value, inheritedLocale, entries)
+	collectFieldValue(owner, field, value, inheritedLocale, at, entries)
 }
 
-func collectFieldValue(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, entries *[]Entry) {
+func collectFieldValue(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, at placement, entries *[]Entry) {
 	if value.Kind() == store.ValueNull {
 		return
 	}
 	if embedded.HasFields(field) {
 		_ = embedded.Visit(field, value, field.Name, embedded.NewBudget(), func(o embedded.ReadOccurrence) error {
-			collectObjectFields(owner, o.Fields, o.Payload, locale, entries)
+			collectObjectFields(owner, o.Fields, o.Payload, locale, at.enter(o.Tree.Key, o.Case.TagValue, o.Type.Slug), entries)
 			return nil
 		})
 		return
@@ -101,12 +123,12 @@ func collectFieldValue(owner store.DocumentReference, field schema.Field, value 
 
 	switch field.Type {
 	case schema.FieldTypeRelationship:
-		collectRelationship(owner, field, value, locale, entries)
+		collectRelationship(owner, field, value, locale, at.fieldID(field), entries)
 	case schema.FieldTypeUpload:
-		collectUpload(owner, field, value, locale, entries)
+		collectUpload(owner, field, value, locale, at.fieldID(field), entries)
 	case schema.FieldTypeGroup:
 		if value.Kind() == store.ValueObject && field.Nested != nil {
-			collectObjectFields(owner, field.Nested.ResolvedFields(), value, locale, entries)
+			collectObjectFields(owner, field.Nested.ResolvedFields(), value, locale, at, entries)
 		}
 	case schema.FieldTypeArray:
 		if value.Kind() != store.ValueList || field.Nested == nil {
@@ -114,7 +136,7 @@ func collectFieldValue(owner store.DocumentReference, field schema.Field, value 
 		}
 		for item := range value.Elements() {
 			if item.Kind() == store.ValueObject {
-				collectObjectFields(owner, field.Nested.ResolvedFields(), item, locale, entries)
+				collectObjectFields(owner, field.Nested.ResolvedFields(), item, locale, at, entries)
 			}
 		}
 	case schema.FieldTypeBlocks:
@@ -126,25 +148,22 @@ func collectFieldValue(owner store.DocumentReference, field schema.Field, value 
 				continue
 			}
 			blockType, _ := item.Get("blockType").StringValue()
-			for _, block := range field.Blocks.ResolvedTypes() {
-				if block.Slug == blockType {
-					collectObjectFields(owner, block.ResolvedFields(), item, locale, entries)
-					break
-				}
+			if block, found := field.Blocks.Definition(blockType); found {
+				collectObjectFields(owner, block.ResolvedFields(), item, locale, at.enter(block.Slug), entries)
 			}
 		}
 	}
 }
 
-func collectObjectFields(owner store.DocumentReference, fields []schema.Field, object store.Value, locale schema.LocaleCode, entries *[]Entry) {
+func collectObjectFields(owner store.DocumentReference, fields []schema.Field, object store.Value, locale schema.LocaleCode, at placement, entries *[]Entry) {
 	for _, field := range fields {
 		if value, exists := object.Lookup(field.Name); exists {
-			collectField(owner, field, value, locale, entries)
+			collectField(owner, field, value, locale, at.child(field.Name), entries)
 		}
 	}
 }
 
-func collectRelationship(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, entries *[]Entry) {
+func collectRelationship(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, fieldID schema.StableID, entries *[]Entry) {
 	relationship := field.Relationship
 	if relationship == nil {
 		return
@@ -154,7 +173,7 @@ func collectRelationship(owner store.DocumentReference, field schema.Field, valu
 			id, valid := item.StringValue()
 			if valid && id != "" {
 				*entries = append(*entries, Entry{
-					Owner: owner, FieldID: field.ID, Locale: locale,
+					Owner: owner, FieldID: fieldID, Locale: locale,
 					Target: store.DocumentReference{CollectionID: relationship.CollectionID, DocumentID: id},
 				})
 			}
@@ -168,7 +187,7 @@ func collectRelationship(owner store.DocumentReference, field schema.Field, valu
 		for _, target := range relationship.Targets {
 			if string(target.CollectionSlug) == slug {
 				*entries = append(*entries, Entry{
-					Owner: owner, FieldID: field.ID, Locale: locale,
+					Owner: owner, FieldID: fieldID, Locale: locale,
 					Target: store.DocumentReference{CollectionID: target.CollectionID, DocumentID: id},
 				})
 				break
@@ -184,7 +203,7 @@ func collectRelationship(owner store.DocumentReference, field schema.Field, valu
 	}
 }
 
-func collectUpload(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, entries *[]Entry) {
+func collectUpload(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, fieldID schema.StableID, entries *[]Entry) {
 	upload := field.Upload
 	if upload == nil {
 		return
@@ -193,7 +212,7 @@ func collectUpload(owner store.DocumentReference, field schema.Field, value stor
 		id, valid := item.StringValue()
 		if valid && id != "" {
 			*entries = append(*entries, Entry{
-				Owner: owner, FieldID: field.ID, Locale: locale,
+				Owner: owner, FieldID: fieldID, Locale: locale,
 				Target: store.DocumentReference{CollectionID: upload.CollectionID, DocumentID: id},
 			})
 		}
@@ -219,58 +238,103 @@ func assignOccurrences(entries []Entry) {
 }
 
 // FindReferenceField locates a relationship/upload field and its stored root
-// field by stable ID.
+// field by stable ID. A registered block's field is returned with its
+// placement path and ID. Placement IDs extend their ancestors' IDs, so the
+// search follows only the path that can lead to fieldID.
 func FindReferenceField(collection schema.Collection, fieldID schema.StableID) (reference schema.Field, root schema.Field, found bool) {
 	for _, candidate := range collection.Fields {
-		if reference, found = findReferenceField(candidate, fieldID); found {
-			return reference, candidate, true
+		schema.WalkPlacements([]schema.Field{candidate}, func(segments []string, field schema.Field, shared bool) bool {
+			if found {
+				return false
+			}
+			id := field.ID
+			if shared {
+				id = schema.PlacementFieldID(collection.ID, segments)
+			}
+			if id == fieldID && (field.Relationship != nil || field.Upload != nil) {
+				if shared {
+					field.Path, _ = query.NewPath(segments...)
+					field.ID = id
+				}
+				reference, root, found = field, candidate, true
+				return false
+			}
+			// A resource's own fields may carry recorded IDs; prune only beneath
+			// shared definitions, whose placement IDs derive from their paths.
+			return !shared || strings.HasPrefix(string(fieldID), string(id)+"-")
+		})
+		if found {
+			return reference, root, true
 		}
 	}
 	return schema.Field{}, schema.Field{}, false
 }
 
-func findReferenceField(field schema.Field, fieldID schema.StableID) (schema.Field, bool) {
-	if field.ID == fieldID && (field.Relationship != nil || field.Upload != nil) {
-		return field, true
-	}
-	for _, child := range schema.ChildFields(field) {
-		if found, ok := findReferenceField(child, fieldID); ok {
-			return found, true
-		}
-	}
-
-	return schema.Field{}, false
-}
-
-// ReferenceFieldIDs returns every relationship/upload field ID beneath one
-// stored root field.
-func ReferenceFieldIDs(root schema.Field) []schema.StableID {
+// ReferenceFieldIDs returns every relationship/upload field placement ID
+// beneath one stored root field of resource, skipping field lists without
+// references.
+func ReferenceFieldIDs(resource schema.StableID, root schema.Field) []schema.StableID {
 	var ids []schema.StableID
-	collectReferenceFieldIDs(root, &ids)
+	references := referenceLists{}
+	schema.WalkPlacements([]schema.Field{root}, func(segments []string, field schema.Field, shared bool) bool {
+		if !references.field(field) {
+			return false
+		}
+		if field.Relationship != nil || field.Upload != nil {
+			id := field.ID
+			if shared {
+				id = schema.PlacementFieldID(resource, segments)
+			}
+			ids = append(ids, id)
+		}
+		return true
+	})
 	return ids
 }
 
-func collectReferenceFieldIDs(field schema.Field, ids *[]schema.StableID) {
+// referenceLists memoizes which field lists contain a reference. A shared
+// block definition is one slice at every placement, so each is checked once.
+type referenceLists map[*schema.Field]bool
+
+func (lists referenceLists) list(fields []schema.Field) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	if known, ok := lists[&fields[0]]; ok {
+		return known
+	}
+	found := false
+	for _, field := range fields {
+		if lists.field(field) {
+			found = true
+			break
+		}
+	}
+	lists[&fields[0]] = found
+	return found
+}
+
+func (lists referenceLists) field(field schema.Field) bool {
 	if field.Relationship != nil || field.Upload != nil {
-		*ids = append(*ids, field.ID)
+		return true
 	}
-	for _, child := range schema.ChildFields(field) {
-		collectReferenceFieldIDs(child, ids)
-	}
+	found := false
+	schema.EachDefinitionChildList(field, func(children []schema.Field) {
+		found = found || lists.list(children)
+	})
+	return found
 }
 
 // TargetsAnyResource reports whether the collection's current reference or
 // upload topology can address one of the supplied resource IDs. Migration
 // rollback uses this to purge version snapshots that could otherwise restore
-// an identity after its resource is reintroduced.
+// an identity after its resource is reintroduced. Each block definition is
+// inspected once.
 func TargetsAnyResource(collection schema.Collection, resourceIDs []schema.StableID) bool {
 	targets := stableIDSet(resourceIDs)
-	for _, field := range collection.Fields {
-		if fieldTargetsAnyResource(field, targets) {
-			return true
-		}
-	}
-	return false
+	return !schema.WalkDefinitionFields(func(field schema.Field) bool {
+		return !fieldTargetsAnyResource(field, targets)
+	}, collection.Fields)
 }
 
 func fieldTargetsAnyResource(field schema.Field, targets map[schema.StableID]struct{}) bool {
@@ -292,12 +356,6 @@ func fieldTargetsAnyResource(field schema.Field, targets map[schema.StableID]str
 			return true
 		}
 	}
-	for _, child := range schema.ChildFields(field) {
-		if fieldTargetsAnyResource(child, targets) {
-			return true
-		}
-	}
-
 	return false
 }
 
@@ -435,16 +493,12 @@ func removeResourceFieldValue(field schema.Field, value store.Value, targets map
 				continue
 			}
 			blockType, _ := object["blockType"].StringValue()
-			for _, block := range field.Blocks.ResolvedTypes() {
-				if block.Slug != blockType {
-					continue
-				}
+			if block, found := field.Blocks.Definition(blockType); found {
 				itemValues, itemChanged := removeResourceFields(block.ResolvedFields(), object, targets)
 				if itemChanged {
 					updated[index] = store.Object(itemValues)
 					changed = true
 				}
-				break
 			}
 		}
 		if changed {
@@ -664,16 +718,12 @@ func nullifyFieldValue(field schema.Field, value store.Value, target store.Docum
 				continue
 			}
 			blockType, _ := object["blockType"].StringValue()
-			for _, block := range field.Blocks.ResolvedTypes() {
-				if block.Slug != blockType {
-					continue
-				}
+			if block, found := field.Blocks.Definition(blockType); found {
 				itemValues, itemChanged := nullifyFields(block.ResolvedFields(), object, target)
 				if itemChanged {
 					updated[index] = store.Object(itemValues)
 					changed = true
 				}
-				break
 			}
 		}
 		if changed {

@@ -159,10 +159,16 @@ query RecentPosts {
 }
 ```
 
-Typed filter inputs compile into Ridu's finite [query vocabulary](./querying.md). Nested group,
-array, and block filter paths use flattened double underscores such as `seo__description` and
-`links__label`. Selected relationship/upload fields become bounded operation-engine population and
-reapply target access and redaction.
+`totalDocs` and `totalPages` are counted by default. Pass `pagination: false` to skip the count when
+you only need `hasNextPage`, `nextPage`, and `prevPage`; both totals are then `null`, and the other
+fields stay exact (see [Paginate and count](./querying.md#pagination)). A join field counts only
+when it receives `count: true`. Otherwise its `totalDocs` is `null` and `hasNextPage` is still exact.
+
+Typed filter inputs compile into Ridu's finite [query vocabulary](./querying.md). Filters nest
+like the schema: a group or array field takes an input of its own fields, such as
+`seo: { description: { contains: "launch" } }`, and a blocks field takes an input keyed by block
+slug, such as `layout: { hero: { heading: { equals: "Welcome" } } }`. Selected relationship/upload
+fields become bounded operation-engine population and reapply target access and redaction.
 
 Groups and arrays have typed nested output/input objects. Select/radio choices use GraphQL enums.
 Blocks return typed output unions selected with inline fragments; mutation input uses JSON because
@@ -172,11 +178,16 @@ Write a JSON input as a literal or pass the whole value as one variable, such as
 Ridu rejects a variable nested inside a JSON literal, such as `layout: [{ caption: $caption }]`,
 because that value cannot be applied.
 
-A block registered in `Config.Blocks` has one output type, named from its type name, wherever it is
-referenced: `... on HeroBlock` selects a `hero` block in every collection and nested block. Filters
-share one operator input per value type, such as `RiduStringWhere` and `RiduNumberWhere`, and select
-filters reuse the field's output enum. The schema therefore grows with block definitions rather than
-with every place a block is used.
+A block registered in `Config.Blocks` has one output type and one filter input, named from its type
+name, wherever it is referenced: `... on HeroBlock` selects a `hero` block in every collection and
+nested block, and `HeroBlockWhere` filters it. Filters share one operator input per value type, such
+as `RiduStringWhere` and `RiduNumberWhere`, and select filters reuse the field's output enum. The
+schema therefore grows with block definitions rather than with every place a block is used.
+
+Lists, multi-selects, has-many relationships and uploads, and polymorphic relationships are
+filtered by [membership](./querying.md#membership) with `in`, `not_in` and `exists`. A
+polymorphic candidate uses the relationship's GraphQL shape:
+`subjects: { in: [{ relationTo: POSTS, value: "post_123" }] }`.
 
 ## Create and mutate {#mutations}
 
@@ -295,7 +306,10 @@ graphqlplugin.New(graphqlplugin.Options{
 						Actor: input.Actor, ActorCollection: input.ActorCollection,
 					},
 				)
-				return page.Total, err
+				if err != nil {
+					return nil, err
+				}
+				return *page.Total, nil
 			},
 		},
 	},

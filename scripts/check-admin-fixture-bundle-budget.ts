@@ -180,7 +180,10 @@ const measurements = {
 // Payload block headers, retained disclosure animation and inset group styling measure
 // 55,663 CSS bytes, 367 bytes above the previous cap. Allow a bounded 512-byte CSS slice;
 // preserve both JavaScript caps and the initial-route closure checks above.
-const budgets = { entryJS: 215 * 1024, largestAsyncJS: 131 * 1024, totalCSS: 54.5 * 1024 };
+// The list filter's hierarchical field picker (a nested-trail trigger plus a lazily loaded
+// panel with search and level navigation) measures 56,467 CSS bytes, 659 above the previous
+// cap. Allow a bounded 768-byte CSS slice; both JavaScript caps stay unchanged.
+const budgets = { entryJS: 215 * 1024, largestAsyncJS: 131 * 1024, totalCSS: 55.25 * 1024 };
 
 for (const [name, size] of Object.entries(measurements)) {
 	console.log(

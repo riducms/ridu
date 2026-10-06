@@ -11,25 +11,23 @@ import {
 	shouldSubmitLocalizedPath,
 	submissionFormValues,
 } from "../src/core/forms/form-schema";
+import { bindBlockField, blockDefinition } from "./block-manifest";
 
 describe("document update submissions", () => {
 	const heading = textField("heading", "heading", "Heading");
 	const locked: SchemaField = { ...heading, id: "locked", name: "locked", type: "checkbox" };
 	const links = arrayField("links", 0, [textField("label", "label", "Label")]);
-	const layout: SchemaField = {
-		...arrayField("layout", 0, []),
-		type: "blocks",
-		blocks: {
-			types: [
-				{
-					slug: "hero",
-					labels: { singular: "Hero", plural: "Heroes" },
-					fields: [heading, locked, links],
-				},
-				{ slug: "quote", labels: { singular: "Quote", plural: "Quotes" }, fields: [heading] },
-			],
-		},
-	};
+	const layout = bindBlockField(
+		[
+			blockDefinition("hero", [heading, locked, links], { singular: "Hero", plural: "Heroes" }),
+			blockDefinition("quote", [heading], { singular: "Quote", plural: "Quotes" }),
+		],
+		{
+			...arrayField("layout", 0, []),
+			type: "blocks",
+			blocks: { blockReferences: ["hero", "quote"] },
+		}
+	);
 
 	it("omits an unchanged heading when its sibling locks it", () => {
 		const hero = { _key: "one", blockType: "hero", heading: "Keep me" };

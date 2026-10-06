@@ -3,6 +3,7 @@ package operation
 import (
 	"crypto/rand"
 	"fmt"
+	"strconv"
 
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/schema"
@@ -11,10 +12,11 @@ import (
 
 // prepareRowIdentities materializes keys for all declared array, block and
 // embedded rows before writes and hooks. Supplied keys survive edits and reorder;
-// duplication gives every repeated row a fresh key.
-func prepareRowIdentities(fields []schema.Field, values store.Values, canonical, fresh bool) error {
+// duplication gives every repeated row a fresh key. It reports whether it
+// changed values.
+func prepareRowIdentities(fields []schema.Field, values store.Values, canonical, fresh bool) (bool, error) {
 	if err := embedded.ValidateValues(fields, values, "", canonical, nil); err != nil {
-		return embeddedOperationError(err, false)
+		return false, embeddedOperationError(err, false)
 	}
 	issues := &validationIssueCollector{}
 	budget := embedded.NewBudget()
@@ -146,7 +148,7 @@ func prepareRowIdentities(fields []schema.Field, values store.Values, canonical,
 				}
 				if field.Type == schema.FieldTypeBlocks && field.Blocks != nil {
 					kind, _ := row.Get("blockType").StringValue()
-					if block := findBlock(field.Blocks.ResolvedTypes(), kind); block != nil {
+					if block := findBlock(field.Blocks.Definitions(), kind); block != nil {
 						children = block.ResolvedFields()
 					}
 				}
@@ -169,6 +171,7 @@ func prepareRowIdentities(fields []schema.Field, values store.Values, canonical,
 		}
 		return value, false
 	}
+	prepared := false
 	for _, field := range fields {
 		if traversalError != nil {
 			break
@@ -182,80 +185,166 @@ func prepareRowIdentities(fields []schema.Field, values store.Values, canonical,
 		}
 		if updated, changed := walkField(field, value, field.Name); changed {
 			values[field.Name] = updated
+			prepared = true
 		}
 	}
 	if traversalError != nil {
-		return embeddedOperationError(traversalError, false)
+		return false, embeddedOperationError(traversalError, false)
 	}
 	if len(issues.values) != 0 {
-		return &Error{Code: "validation", Status: 422, Message: "document validation failed", Issues: issues.values}
+		return false, &Error{Code: "validation", Status: 422, Message: "document validation failed", Issues: issues.values}
 	}
-	return nil
+	return prepared, nil
 }
 
 // An existing occurrence cannot silently change schema: callers replace it with
 // a fresh key so deleted-field access and new-field validation remain explicit.
-func validateBlockTypeIdentity(fields []schema.Field, before, after store.Values, allLocales bool) error {
+// One walk visits the before and after values together, pairing rows and
+// embedded occurrences by identity and consulting each row's block definition,
+// so the work follows the documents rather than the schema's placements. Both
+// value maps hold one exact-locale view.
+func validateBlockTypeIdentity(fields []schema.Field, beforeValues, afterValues store.Values) error {
 	var issues []schema.Issue
-	var walk func([]schema.Field)
-	walk = func(children []schema.Field) {
-		for _, field := range children {
-			if embedded.HasFields(field) {
-				old := map[string]string{}
-				for _, location := range fieldLocationsAtPath(fields, before, field.Path.String(), allLocales) {
-					_ = embedded.Visit(field, location.value, location.runtimePath, nil, func(occurrence embedded.ReadOccurrence) error {
-						old[location.identity+"/"+occurrence.Tree.Key+"/"+occurrence.Key] = occurrence.Case.TagValue + "/" + occurrence.Type.Slug
-						return nil
-					})
-				}
-				for _, location := range fieldLocationsAtPath(fields, after, field.Path.String(), allLocales) {
-					_ = embedded.Visit(field, location.value, location.runtimePath, nil, func(occurrence embedded.ReadOccurrence) error {
-						if kind, exists := old[location.identity+"/"+occurrence.Tree.Key+"/"+occurrence.Key]; exists && kind != occurrence.Case.TagValue+"/"+occurrence.Type.Slug {
-							issues = append(issues, schema.Issue{Code: "block_type_identity", Path: occurrence.RuntimePath + "." + occurrence.Case.Discriminator, Message: "changing an embedded schema requires a new occurrence identity"})
-						}
-						return nil
-					})
-				}
+	var object func([]schema.Field, store.Value, store.Value, string)
+	var member func(schema.Field, store.Value, store.Value, string)
+	object = func(fields []schema.Field, before, after store.Value, prefix string) {
+		for _, field := range fields {
+			if !fieldContainsRowIdentities(field) {
+				continue
 			}
-			if field.Type == schema.FieldTypeBlocks && field.Blocks != nil {
-				old := map[string]map[string]string{}
-				for _, location := range fieldLocationsAtPath(fields, before, field.Path.String(), allLocales) {
-					types := map[string]string{}
-					for row := range location.value.Elements() {
-						key, _ := row.Get("_key").StringValue()
-						kind, _ := row.Get("blockType").StringValue()
-						if key != "" {
-							types[key] = kind
-						}
-					}
-					old[location.identity] = types
-				}
-				for _, location := range fieldLocationsAtPath(fields, after, field.Path.String(), allLocales) {
-					index := -1
-					for row := range location.value.Elements() {
-						index++
-						key, _ := row.Get("_key").StringValue()
-						kind, _ := row.Get("blockType").StringValue()
-						if previous, found := old[location.identity][key]; found && previous != kind {
-							issues = append(issues, schema.Issue{Code: "block_type_identity", Path: fmt.Sprintf("%s.%d.blockType", location.runtimePath, index), Message: "changing a block type requires a new row key"})
-						}
-					}
-				}
-				for _, block := range field.Blocks.ResolvedTypes() {
-					walk(block.ResolvedFields())
-				}
-			}
-			embedded.SchemaFields(field, walk)
-			if field.Nested != nil {
-				walk(field.Nested.ResolvedFields())
+			previous, existed := before.Lookup(field.Name)
+			next, exists := after.Lookup(field.Name)
+			if existed && exists && previous.Kind() != store.ValueNull && next.Kind() != store.ValueNull {
+				member(field, previous, next, joinFieldPath(prefix, field.Name))
 			}
 		}
 	}
-	walk(fields)
+	member = func(field schema.Field, before, after store.Value, path string) {
+		if embedded.HasFields(field) {
+			// The identity namespace is this occurrence of the plugin field.
+			old := map[string]embedded.ReadOccurrence{}
+			_ = embedded.Visit(field, before, path, nil, func(occurrence embedded.ReadOccurrence) error {
+				old[occurrence.Tree.Key+"/"+occurrence.Key] = occurrence
+				return nil
+			})
+			_ = embedded.Visit(field, after, path, nil, func(occurrence embedded.ReadOccurrence) error {
+				prior, exists := old[occurrence.Tree.Key+"/"+occurrence.Key]
+				switch {
+				case !exists:
+				case prior.Case.TagValue != occurrence.Case.TagValue || prior.Type.Slug != occurrence.Type.Slug:
+					issues = append(issues, schema.Issue{Code: "block_type_identity", Path: occurrence.RuntimePath + "." + occurrence.Case.Discriminator, Message: "changing an embedded schema requires a new occurrence identity"})
+				default:
+					object(occurrence.Fields, prior.Payload, occurrence.Payload, occurrence.RuntimePath)
+				}
+				return nil
+			})
+			return
+		}
+		switch field.Type {
+		case schema.FieldTypeGroup:
+			if field.Nested != nil && before.Kind() == store.ValueObject && after.Kind() == store.ValueObject {
+				object(field.Nested.ResolvedFields(), before, after, path)
+			}
+		case schema.FieldTypeArray:
+			if field.Nested == nil {
+				return
+			}
+			children := field.Nested.ResolvedFields()
+			prior := identifiedRows(before, nil)
+			for row := range identifiedRowsInOrder(after, nil) {
+				if previous, exists := prior[row.identity]; exists {
+					object(children, previous.value, row.value, path+"."+strconv.Itoa(row.index))
+				}
+			}
+		case schema.FieldTypeBlocks:
+			if field.Blocks == nil {
+				return
+			}
+			kinds := map[string]string{}
+			for row := range before.Elements() {
+				key, _ := row.Get("_key").StringValue()
+				kind, _ := row.Get("blockType").StringValue()
+				if key != "" {
+					kinds[key] = kind
+				}
+			}
+			index := -1
+			for row := range after.Elements() {
+				index++
+				key, _ := row.Get("_key").StringValue()
+				kind, _ := row.Get("blockType").StringValue()
+				if previous, found := kinds[key]; found && previous != kind {
+					issues = append(issues, schema.Issue{Code: "block_type_identity", Path: fmt.Sprintf("%s.%d.blockType", path, index), Message: "changing a block type requires a new row key"})
+				}
+			}
+			// Rows keep their nested occurrences only while their type is unchanged.
+			prior := identifiedRows(before, field.Blocks)
+			for row := range identifiedRowsInOrder(after, field.Blocks) {
+				previous, exists := prior[row.identity]
+				if !exists || previous.kind != row.kind {
+					continue
+				}
+				if block, found := field.Blocks.Definition(row.kind); found {
+					object(block.ResolvedFields(), previous.value, row.value, path+"."+strconv.Itoa(row.index))
+				}
+			}
+		}
+	}
+	object(fields, store.Object(beforeValues), store.Object(afterValues), "")
 	if len(issues) > 0 {
 		return &Error{Code: "validation", Status: 422, Message: "document validation failed", Issues: issues}
 	}
 	return nil
+}
+
+// identifiedRow is an object row with the identity collectFieldLocations gives
+// it: its key and occurrence number, or its index when keyless.
+type identifiedRow struct {
+	identity string
+	kind     string
+	index    int
+	value    store.Value
+}
+
+// identifiedRowsInOrder yields a list's object rows with their identities.
+// With blocks, only rows whose type the container defines take part.
+func identifiedRowsInOrder(list store.Value, blocks *schema.BlocksField) func(func(identifiedRow) bool) {
+	return func(yield func(identifiedRow) bool) {
+		occurrences := map[string]int{}
+		index := -1
+		for row := range list.Elements() {
+			index++
+			if row.Kind() != store.ValueObject {
+				continue
+			}
+			kind := ""
+			if blocks != nil {
+				var valid bool
+				if kind, valid = row.Get("blockType").StringValue(); !valid {
+					continue
+				}
+				if _, known := blocks.Definition(kind); !known {
+					continue
+				}
+			}
+			identity := "#" + strconv.Itoa(index)
+			if key, valid := row.Get("_key").StringValue(); valid && key != "" {
+				identity = keyedRowIdentity(key, occurrences[key])
+				occurrences[key]++
+			}
+			if !yield(identifiedRow{identity: identity, kind: kind, index: index, value: row}) {
+				return
+			}
+		}
+	}
+}
+
+func identifiedRows(list store.Value, blocks *schema.BlocksField) map[string]identifiedRow {
+	rows := map[string]identifiedRow{}
+	for row := range identifiedRowsInOrder(list, blocks) {
+		rows[row.identity] = row
+	}
+	return rows
 }
 
 // Only pre-write hooks may add input occurrences. Post-write/commit hooks must
@@ -266,7 +355,7 @@ func runIdentityHooks(hooks []Hook, ctx Context) error {
 			return err
 		}
 		if changesDocument(ctx.Operation) {
-			if err := prepareRowIdentities(ctx.Collection.Fields, ctx.Data, false, false); err != nil {
+			if _, err := prepareRowIdentities(ctx.Collection.Fields, ctx.Data, false, false); err != nil {
 				return err
 			}
 		}

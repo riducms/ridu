@@ -171,9 +171,6 @@ func validateMongoUploadValue(field schema.Field, value store.Value, path string
 		if !valid {
 			return fmt.Errorf("MongoDB upload value %q must be a list", path)
 		}
-		if field.Required && len(items) == 0 {
-			return fmt.Errorf("MongoDB document is missing required field %q", path)
-		}
 		if len(items) > maxMongoDocumentReferences {
 			return fmt.Errorf("MongoDB upload value %q exceeds %d references", path, maxMongoDocumentReferences)
 		}
@@ -187,7 +184,7 @@ func validateMongoUploadValue(field schema.Field, value store.Value, path string
 		if !valid {
 			return fmt.Errorf("MongoDB upload value %q must be a document ID string", itemPath)
 		}
-		if id == "" && !field.Required && !field.Upload.HasMany {
+		if id == "" && !field.Upload.HasMany {
 			continue
 		}
 		if err := store.ValidateDocumentID(id); err != nil {

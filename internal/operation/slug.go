@@ -125,7 +125,7 @@ func validateSlugUniqueness(
 		node := expression.Node()
 		page, err := transaction.List(ctx, store.Request{
 			Collection: collection, Collections: collections, Filter: &node,
-			Page: 1, Limit: 2, Deletion: store.DeletionActive, Locales: locales,
+			Page: 1, Limit: 2, SkipTotal: true, Deletion: store.DeletionActive, Locales: locales,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("check slug uniqueness for %q: %w", candidate.Path.String(), err)
@@ -245,7 +245,7 @@ func slugTaken(ctx context.Context, transaction store.Transaction, collection sc
 		return false, err
 	}
 	filter := query.Equal(path, slug).Node()
-	page, err := transaction.List(ctx, store.Request{Collection: collection, Filter: &filter, Limit: 1, Deletion: store.DeletionAll, Locales: locales})
+	page, err := transaction.List(ctx, store.Request{Collection: collection, Filter: &filter, Limit: 1, SkipTotal: true, Deletion: store.DeletionAll, Locales: locales})
 	if err != nil {
 		return false, err
 	}

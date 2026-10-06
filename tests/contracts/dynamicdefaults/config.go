@@ -8,6 +8,15 @@ import (
 	"github.com/riducms/ridu/plugins/richtext"
 )
 
+// Block slugs of this contract. A slug names one definition per application,
+// so the Blocks card and the differently shaped rich-text card have their own
+// slugs, distinct from the plain "card" blocks of other contracts mounted in
+// the admin fixture, while keeping the "Card" editor label.
+const (
+	CardSlug         = "default-card"
+	EmbeddedCardSlug = "default-embedded-card"
+)
+
 // Collection uses the same callback inside ordinary, repeated, and embedded fields.
 func Collection() core.Collection {
 	title := field.Text("title").Required().DefaultFrom(initialTitle)
@@ -23,8 +32,8 @@ func Collection() core.Collection {
 			field.Text("note").DefaultFrom(initialNote),
 			title.Rename("localizedTitle").Localized(),
 			field.Array("sections", field.Fields{title}),
-			field.Blocks("content", field.Block{Slug: "card", Fields: field.Fields{title}}),
-			richtext.Field("body", richtext.Config{Blocks: []field.Block{{Slug: "card", Fields: field.Fields{
+			field.Blocks("content", field.Block{Slug: CardSlug, Labels: field.BlockLabels{Singular: "Card", Plural: "Cards"}, Fields: field.Fields{title}}),
+			richtext.Field("body", richtext.Config{Blocks: []field.Block{{Slug: EmbeddedCardSlug, Labels: field.BlockLabels{Singular: "Card", Plural: "Cards"}, Fields: field.Fields{
 				title, field.Text("note").DefaultFrom(initialNote),
 			}}}}),
 		},

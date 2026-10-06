@@ -13,6 +13,7 @@ import (
 
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestSQLiteAuthCredentialSessionTokenAndAPIKeyLifecycle(t *testing.T) {
@@ -191,7 +192,7 @@ func TestSQLiteAuthIdentityCanonicalizationAtDirectStoreBoundary(t *testing.T) {
 		t.Fatalf("Create mutated caller value to %q", got)
 	}
 	updateValues := store.Values{"email": store.String(" Next@Example.COM ")}
-	updated, err := transaction.Update(ctx, store.UpdateRequest{
+	updated, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: created.ID}, Values: updateValues,
 	})
 	if err != nil {
@@ -465,7 +466,7 @@ func TestSQLiteAuthCrossStoreBootstrapAndFailedAttemptsAreAtomic(t *testing.T) {
 	if err := verification.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != "first" {
+	if *page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != "first" {
 		t.Fatalf("documents after bootstrap race = %#v", page)
 	}
 

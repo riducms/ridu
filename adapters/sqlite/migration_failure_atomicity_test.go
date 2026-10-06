@@ -44,7 +44,7 @@ func TestSQLiteResetRefreshAndFreshFailuresAreAtomic(t *testing.T) {
 					if action != "reset" {
 						return nil
 					}
-					if _, err := transaction.Update(ctx, store.UpdateRequest{
+					if _, err := transaction.Update(ctx, migration.UpdateRequest{
 						Request: store.Request{Collection: collection, ID: "kept"},
 						Values:  store.Values{"title": store.String("must roll back")},
 					}); err != nil {

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/riducms/ridu/internal/operation"
+	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/internal/teststore"
 	operationkind "github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/protocol"
@@ -155,7 +156,7 @@ func TestDecodeWhereAcceptsOnlyQueryableSystemFields(t *testing.T) {
 		}
 	}
 
-	sorts, err := decodeSort([]string{"-createdAt", "updatedAt"}, unversioned)
+	sorts, err := decodeSort([]string{"-createdAt", "updatedAt"})
 	if err != nil {
 		t.Fatalf("decode timestamp sort: %v", err)
 	}
@@ -845,13 +846,15 @@ func TestDecodeListQueryExpandsDepthIntoRelationshipPopulation(t *testing.T) {
 func TestDecodeListQueryPopulatesNestedGroupArrayAndBlockRelationships(t *testing.T) {
 	groupPath, _ := query.NewPath("meta", "reviewer")
 	arrayPath, _ := query.NewPath("sections", "editor")
-	blockPath, _ := query.NewPath("layout", "quote", "source")
+	sourcePath, _ := query.NewPath("source")
+	layoutPath, _ := query.NewPath("layout")
 	person := schema.RelationshipField{CollectionID: "people", CollectionSlug: "people"}
-	collection := schema.Collection{Fields: []schema.Field{
-		{Name: "meta", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "reviewer", Path: groupPath, Type: schema.FieldTypeRelationship, Relationship: &person}}}},
-		{Name: "sections", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "editor", Path: arrayPath, Type: schema.FieldTypeRelationship, Relationship: &person}}}},
-		{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "quote", Fields: []schema.Field{{Name: "source", Path: blockPath, Type: schema.FieldTypeRelationship, Relationship: &person}}}}}},
-	}}
+	quote := schema.BlockType{Slug: "quote", TypeName: "Quote", Fields: []schema.Field{{Name: "source", Path: sourcePath, Type: schema.FieldTypeRelationship, Relationship: &person}}}
+	collection := schema.Collection{ID: "posts", Slug: "posts", Fields: schematest.Bind(t, "posts", []schema.BlockType{quote},
+		schema.Field{Name: "meta", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "reviewer", Path: groupPath, Type: schema.FieldTypeRelationship, Relationship: &person}}}},
+		schema.Field{Name: "sections", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "editor", Path: arrayPath, Type: schema.FieldTypeRelationship, Relationship: &person}}}},
+		schema.Field{Name: "layout", Path: layoutPath, Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"quote"}}},
+	)}
 
 	request := httptest.NewRequest(http.MethodGet, `/api/collections/posts?populate=%7B%22meta.reviewer%22%3Atrue%2C%22sections.editor%22%3Atrue%2C%22layout.quote.source%22%3Atrue%7D`, nil)
 	options, err := decodeListQuery(request.URL.Query(), collection, false)
@@ -1055,6 +1058,102 @@ func TestDecodeListQueryAcceptsAccessEnrichmentOnlyOnCollectionLists(t *testing.
 	}
 	if _, err := decodeListQuery(request.URL.Query(), schema.Collection{}, false); err == nil {
 		t.Fatal("include-access succeeded outside a collection list")
+	}
+}
+
+func TestDecodeListQueryAcceptsPaginationOnlyOnCollectionLists(t *testing.T) {
+	for target, skipTotal := range map[string]bool{
+		"/api/collections/posts":                  false,
+		"/api/collections/posts?pagination=true":  false,
+		"/api/collections/posts?pagination=false": true,
+	} {
+		options, err := decodeListQuery(httptest.NewRequest(http.MethodGet, target, nil).URL.Query(), schema.Collection{}, true)
+		if err != nil || options.skipTotal != skipTotal {
+			t.Fatalf("%s = skip total %t, %v; want %t", target, options.skipTotal, err, skipTotal)
+		}
+	}
+	for target, message := range map[string]string{
+		"/api/collections/posts?pagination=0":                           "pagination query parameter must be true or false",
+		"/api/collections/posts?pagination=":                            "pagination query parameter must be true or false",
+		"/api/collections/posts?pagination=false&pagination=false":      "pagination query parameter must be provided once",
+		"/api/collections/posts?Pagination=false":                       `unknown query parameter "Pagination"`,
+		"/api/collections/posts?pagination=FALSE&include-access=true":   "pagination query parameter must be true or false",
+		"/api/collections/posts?include-access=true&pagination=invalid": "pagination query parameter must be true or false",
+	} {
+		_, err := decodeListQuery(httptest.NewRequest(http.MethodGet, target, nil).URL.Query(), schema.Collection{}, true)
+		var operationError *operation.Error
+		if !errors.As(err, &operationError) || operationError.Status != http.StatusBadRequest || operationError.Code != "bad_query" || operationError.Message != message {
+			t.Fatalf("%s error = %#v, want bad_query %q", target, err, message)
+		}
+	}
+	count := httptest.NewRequest(http.MethodGet, "/api/collections/posts/count?pagination=false", nil)
+	if _, err := decodeListQuery(count.URL.Query(), schema.Collection{}, false); err == nil {
+		t.Fatal("pagination succeeded on a count query")
+	}
+}
+
+func TestCollectionListPaginationFalseOmitsTotals(t *testing.T) {
+	collection := schema.Collection{
+		ID: "collection-posts", Slug: "posts",
+		Labels: schema.CollectionLabels{Singular: "Post", Plural: "Posts"},
+	}
+	engine, err := operation.New(operation.Config{
+		Store: teststore.New(), Collections: []operation.Collection{{Schema: collection}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"post_1", "post_2", "post_3"} {
+		if _, err := engine.Execute(t.Context(), operation.Request{
+			Operation: operationkind.Create, Collection: "posts", ImportID: id,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := New(Config{
+		Engine: engine,
+		Manifest: schema.NewManifest(schema.Snapshot{
+			Version: schema.CurrentVersion, Collections: []schema.Collection{collection},
+		}),
+	})
+	request := func(target string, status int) map[string]any {
+		t.Helper()
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, target, nil))
+		if response.Code != status {
+			t.Fatalf("GET %s = %d, want %d: %s", target, response.Code, status, response.Body.String())
+		}
+		var body map[string]any
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+	for target, want := range map[string]map[string]any{
+		"/api/collections/posts?limit=2&sort=id":                              {"page": 1.0, "limit": 2.0, "totalDocs": 3.0, "totalPages": 2.0, "hasNextPage": true, "hasPrevPage": false},
+		"/api/collections/posts?limit=2&sort=id&pagination=false":             {"page": 1.0, "limit": 2.0, "hasNextPage": true, "hasPrevPage": false},
+		"/api/collections/posts?limit=2&page=2&pagination=false":              {"page": 2.0, "limit": 2.0, "hasNextPage": false, "hasPrevPage": true},
+		"/api/collections/posts?limit=3&pagination=false":                     {"page": 1.0, "limit": 3.0, "hasNextPage": false, "hasPrevPage": false},
+		"/api/collections/posts?limit=2&page=3&pagination=false":              {"page": 3.0, "limit": 2.0, "hasNextPage": false, "hasPrevPage": true},
+		"/api/collections/posts?limit=2&pagination=false&include-access=true": {"page": 1.0, "limit": 2.0, "hasNextPage": true, "hasPrevPage": false},
+	} {
+		body := request(target, http.StatusOK)
+		if !reflect.DeepEqual(body["pagination"], want) {
+			t.Fatalf("GET %s pagination = %#v, want %#v", target, body["pagination"], want)
+		}
+	}
+	page := request("/api/collections/posts?limit=2&page=2&sort=id&pagination=false", http.StatusOK)
+	if docs, _ := page["docs"].([]any); len(docs) != 1 || docs[0].(map[string]any)["id"] != "post_3" {
+		t.Fatalf("last uncounted page docs = %#v", page["docs"])
+	}
+	for target, message := range map[string]string{
+		"/api/collections/posts?pagination=no":          "pagination query parameter must be true or false",
+		"/api/collections/posts/count?pagination=false": `unknown query parameter "pagination"`,
+	} {
+		failure, _ := request(target, http.StatusBadRequest)["error"].(map[string]any)
+		if failure["code"] != "bad_request" || failure["message"] != message {
+			t.Fatalf("GET %s error = %#v, want bad_request %q", target, failure, message)
+		}
 	}
 }
 

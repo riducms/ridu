@@ -8,12 +8,14 @@ import (
 	"github.com/riducms/ridu/schema"
 )
 
+// bindInputBlocks binds every container to a definition of the configuration's
+// block registry, interning inline declarations, so resolution sees one
+// representation: containers that select definitions by slug.
 func bindInputBlocks(input Input) (Input, error) {
 	registry, err := field.NewBlockRegistry(input.Blocks...)
 	if err != nil {
 		return input, err
 	}
-	input.Blocks = registry.Blocks()
 	input.Collections = append([]Collection(nil), input.Collections...)
 	input.Globals = append([]Global(nil), input.Globals...)
 	for i := range input.Collections {
@@ -28,41 +30,27 @@ func bindInputBlocks(input Input) (Input, error) {
 			return input, err
 		}
 	}
+	// Binding interned the inline declarations, so the registry now holds every definition.
+	input.Blocks = registry.Blocks()
 	return input, nil
 }
+
+// resolveBlocks resolves a bound container's definitions once each and binds
+// the container to them at this placement.
 func (r *fieldResolver) resolveBlocks(blocks []field.Block, refs []string, path string, segments []string) *schema.BlocksField {
 	if len(refs) == 0 {
-		return &schema.BlocksField{Types: r.resolveBlockTypes(blocks, path, segments)}
+		r.resolver.issue("missing_block_types", path+".blocks", "blocks field requires at least one block type")
+		return &schema.BlocksField{}
 	}
 	for _, b := range blocks {
 		r.resolver.resolveRegisteredBlock(b)
 	}
-	result := schema.ReferenceTypes(refs, r.resolver.blockTemplates, r.collectionID, segments)
-	var validatePlacement func([]schema.Field)
-	validatePlacement = func(fields []schema.Field) {
-		for _, f := range fields {
-			configPath := path + ".references." + f.Path.String()
-			if prior, exists := r.seenIDs[f.ID]; exists {
-				r.resolver.issue("duplicate_field_id", configPath, fmt.Sprintf("field ID %q is already used at %s", f.ID, prior))
-			} else {
-				r.seenIDs[f.ID] = configPath
-			}
-			if prior, exists := r.seenPaths[f.Path.String()]; exists {
-				r.resolver.issue("duplicate_field_path", configPath, fmt.Sprintf("field path %q is already used at %s", f.Path.String(), prior))
-			} else {
-				r.seenPaths[f.Path.String()] = configPath
-			}
-			validatePlacement(schema.ChildFields(f))
-
-		}
-	}
-	for _, b := range result.ResolvedTypes() {
-		validatePlacement(b.ResolvedFields())
-	}
-	return result
+	return schema.ReferenceTypes(refs, r.resolver.blockDefinitions, r.collectionID, segments)
 }
+
+// registeredBlocks resolves every definition, used or not, so invalid
+// definitions do not depend on use, and returns them in slug order.
 func (r *resolver) registeredBlocks() []schema.BlockType {
-	// Resolve unused declarations too, so invalid definitions do not depend on use.
 	for _, b := range r.input.Blocks {
 		r.resolveRegisteredBlock(b)
 	}
@@ -81,13 +69,14 @@ func (r *resolver) registeredBlocks() []schema.BlockType {
 	return out
 }
 
+// resolveRegisteredBlock resolves one definition on first use. Diagnostics name
+// the definition, "blocks.<slug>", wherever it was declared.
 func (r *resolver) resolveRegisteredBlock(b field.Block) {
 	if _, exists := r.blockTemplates[b.Slug]; exists {
 		return
 	}
-	f := fieldResolver{resolver: r, collectionID: schema.StableID("block-" + b.Slug), seenIDs: map[schema.StableID]string{}, seenPaths: map[string]string{}}
-	resolved := f.resolveBlockTypes([]field.Block{b}, "blocks."+b.Slug, []string{"definition"})
-	if len(resolved) == 1 {
-		r.blockTemplates[b.Slug] = schema.BlockTemplate(resolved[0], f.collectionID, []string{"definition", b.Slug})
-	}
+	path := "blocks." + b.Slug
+	r.validateDefinitionIndexes(b.Fields, path+".fields", true)
+	f := fieldResolver{resolver: r, collectionID: "block", seenIDs: map[schema.StableID]string{}, seenPaths: map[string]string{}}
+	r.blockTemplates[b.Slug] = schema.BlockTemplate(f.resolveBlockDefinition(b, path), f.collectionID, []string{b.Slug})
 }

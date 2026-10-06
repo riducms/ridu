@@ -6,6 +6,12 @@
 			"runtimeExecutable": "bun",
 			"runtimeArgs": ["run", "--cwd", "website", "dev", "--port", "4321"],
 			"port": 4321
+		},
+		{
+			"name": "admin-fixture",
+			"runtimeExecutable": "bun",
+			"runtimeArgs": ["run", "dev:admin-fixture"],
+			"port": 18081
 		}
 	]
 }

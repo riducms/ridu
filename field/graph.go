@@ -55,6 +55,12 @@ func (f Fields) Snapshot() Fields {
 	}
 	result := make(Fields, len(f))
 	for i, n := range f {
+		if _, frozen := n.(View); frozen {
+			// An interface-held View is already an immutable value snapshot.
+			// Reuse its box instead of copying the large node into a new one.
+			result[i] = n
+			continue
+		}
 		result[i] = Snapshot(n)
 	}
 	return result

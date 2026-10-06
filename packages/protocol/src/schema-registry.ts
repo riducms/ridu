@@ -18,36 +18,80 @@ interface Scope {
 const resolvers = new WeakMap<Container, () => SchemaBlockType[]>();
 const bound = new WeakSet<Resources>();
 const empty: SchemaBlockType[] = [];
+/** Fields nest at most this many levels along any placement, as the server enforces. */
+const maxFieldDepth = 48;
 
-/** Resolve definitions at this placement. Values, permissions and editor state are never cached here. */
+/**
+ * Resolve the block definitions a container selects, as placement views at its placement.
+ * Values, permissions and editor state are never cached here.
+ */
 export function resolveBlockTypes(container: Container | undefined): SchemaBlockType[] {
 	if (!container) return empty;
 	const resolve = resolvers.get(container);
 	if (resolve) return resolve();
 	if (container.blockReferences?.length)
 		throw new Error("Bind the schema manifest before traversing block references");
-	return container.types ?? empty;
+	return empty;
 }
 
-/** Preserve compact reference ownership when projecting schema metadata for an occurrence. */
+/**
+ * Locate a canonical field path's innermost block definition among bound fields: the
+ * definition's slug and the field's path within it. A resource's own field has none.
+ * Only the containers along the path are resolved.
+ */
+export function blockDefinitionPath(
+	fields: readonly SchemaField[],
+	path: string
+): { block: string; path: string } | undefined {
+	const segments = path.split(".");
+	let current = fields;
+	let located: { block: string; start: number } | undefined;
+	for (let index = 0; index < segments.length;) {
+		const field = current.find((candidate) => candidate.name === segments[index]);
+		if (field === undefined) return undefined;
+		index += 1;
+		if (index === segments.length) break;
+		let selected: SchemaBlockType | undefined;
+		if (field.blocks) {
+			selected = resolveBlockTypes(field.blocks).find((block) => block.slug === segments[index]);
+			index += 1;
+		} else if (field.plugin?.embeddedTrees?.length) {
+			const branch = field.plugin.embeddedTrees
+				.find((tree) => tree.key === segments[index])
+				?.cases.find((candidate) => candidate.tagValue === segments[index + 1]);
+			selected = resolveBlockTypes(branch).find((block) => block.slug === segments[index + 2]);
+			index += 3;
+		} else if (field.nested) {
+			current = field.nested.fields;
+			continue;
+		} else return undefined;
+		if (selected === undefined) return undefined;
+		located = { block: selected.slug, start: index };
+		current = selected.fields;
+	}
+	return located === undefined || located.start >= segments.length
+		? undefined
+		: { block: located.block, path: segments.slice(located.start).join(".") };
+}
+
+/** Project a container's placement views lazily, preserving its compact selection. */
 export function mapBlockTypes<T extends Container>(
 	container: T,
 	map: (block: SchemaBlockType) => SchemaBlockType
 ): T {
 	const result = { ...container };
 	if (container.blockReferences) result.blockReferences = [...container.blockReferences];
-	delete result.types;
 	resolvers.set(
 		result,
 		memo(() => resolveBlockTypes(container).map(map))
 	);
-	// Inline projections remain ordinary schema values for consumers that serialize them.
-	if (!result.blockReferences?.length)
-		Object.defineProperty(result, "types", { enumerable: true, get: resolvers.get(result)! });
 	return result;
 }
 
-/** Bind a compact wire manifest without expanding shared definitions into its resources. */
+/**
+ * Bind a compact wire manifest without expanding shared definitions into its resources.
+ * Each definition is checked once, so binding cost follows definitions, not placements.
+ */
 export function bindSchemaManifest<T extends Resources>(manifest: T): T {
 	if (bound.has(manifest)) return manifest;
 	const definitions = new Map<string, SchemaBlockType>();
@@ -56,66 +100,44 @@ export function bindSchemaManifest<T extends Resources>(manifest: T): T {
 			throw new Error(`blocks[${index}].slug: invalid or duplicate block slug ${block.slug}`);
 		definitions.set(block.slug, block);
 	}
-	type Cost = { nodes: number; height: number };
-	const visited = new Map<string, Cost>();
+	const depths = new Map<string, number>();
 	const stack: string[] = [];
-	let work = 0;
-	function inspect(fields: SchemaField[], depth: number): Cost {
-		if (depth + stack.length > 48 || (work += fields.length) > 100_000)
-			throw new Error("Block schema exceeds traversal bounds");
-		const total = { nodes: 0, height: 0 };
+	function depth(fields: SchemaField[]): number {
+		let deepest = 0;
 		for (const field of fields) {
-			const children: Cost[] = [];
-			if (field.nested) children.push(inspect(field.nested.fields, depth + 1));
-			if (field.blocks) children.push(inspectContainer(field.blocks, depth + 1));
+			let children = 0;
+			if (field.nested) children = depth(field.nested.fields);
+			if (field.blocks) children = Math.max(children, selection(field.blocks));
 			for (const tree of field.plugin?.embeddedTrees ?? [])
-				for (const branch of tree.cases) children.push(inspectContainer(branch, depth + 1));
-			total.nodes += 1;
-			let height = 1;
-			for (const child of children) {
-				total.nodes += child.nodes;
-				height = Math.max(height, 1 + child.height);
-			}
-			total.height = Math.max(total.height, height);
-			if (total.nodes > 100_000 || total.height > 48)
-				throw new Error(`${field.path}: resolved block graph exceeds traversal bounds`);
+				for (const branch of tree.cases) children = Math.max(children, selection(branch));
+			deepest = Math.max(deepest, 1 + children);
 		}
-		return total;
+		return deepest;
 	}
-	function inspectContainer(container: Container, depth: number): Cost {
+	function selection(container: Container): number {
 		const refs = container.blockReferences ?? [];
-		if (refs.length && container.types?.length)
-			throw new Error("Use either inline blocks or blockReferences");
 		if (new Set(refs).size !== refs.length) throw new Error("Duplicate block reference");
-		const children = refs.map(visit);
-		for (const block of container.types ?? []) children.push(inspect(block.fields, depth));
-		return children.reduce(
-			(total, child) => ({
-				nodes: total.nodes + child.nodes,
-				height: Math.max(total.height, child.height),
-			}),
-			{ nodes: 0, height: 0 }
-		);
+		return Math.max(0, ...refs.map(visit));
 	}
-	function visit(slug: string): Cost {
+	function visit(slug: string): number {
+		const known = depths.get(slug);
+		if (known !== undefined) return known;
 		if (stack.includes(slug))
 			throw new Error(`Block reference cycle: ${[...stack, slug].join(" -> ")}`);
 		const block = definitions.get(slug);
 		if (!block) throw new Error(`Unknown block reference ${slug}`);
-		const previous = visited.get(slug);
-		if (previous) return previous;
 		stack.push(slug);
-		const cost = inspect(block.fields, 0);
+		const levels = depth(block.fields);
 		stack.pop();
-		visited.set(slug, cost);
-		return cost;
+		if (levels > maxFieldDepth)
+			throw new Error(`Block ${slug}: fields nest ${levels} levels deep; at most ${maxFieldDepth}`);
+		depths.set(slug, levels);
+		return levels;
 	}
 	for (const slug of definitions.keys()) visit(slug);
-	let nodes = 0;
-	for (const resource of [...manifest.collections, ...(manifest.globals ?? [])]) {
-		nodes += inspect(resource.fields, 0).nodes;
-		if (nodes > 100_000) throw new Error("Resolved block graph exceeds traversal bounds");
-	}
+	for (const resource of [...manifest.collections, ...(manifest.globals ?? [])])
+		if (depth(resource.fields) > maxFieldDepth)
+			throw new Error(`${resource.slug}: fields nest more than ${maxFieldDepth} levels deep`);
 	// Placements share static metadata. Freeze that metadata once so a resource
 	// consumer cannot alter the definition for another placement. Extension APIs
 	// receive detached copies through cloneSchemaField.
@@ -185,20 +207,13 @@ function attach(fields: SchemaField[], scope: Scope): void {
 	for (const field of fields) {
 		const children = { ...scope, localized: scope.localized || !!field.localized };
 		if (field.nested) attach(field.nested.fields, children);
-		if (field.blocks) {
-			if (field.blocks.blockReferences?.length)
-				bind(field.blocks, { ...children, prefix: field.path.split(".") });
-			else for (const block of field.blocks.types ?? []) attach(block.fields, children);
-		}
+		if (field.blocks) bind(field.blocks, { ...children, prefix: field.path.split(".") });
 		for (const tree of field.plugin?.embeddedTrees ?? [])
-			for (const branch of tree.cases) {
-				if (branch.blockReferences?.length)
-					bind(branch, {
-						...children,
-						prefix: [...field.path.split("."), tree.key, branch.tagValue],
-					});
-				else for (const block of branch.types ?? []) attach(block.fields, children);
-			}
+			for (const branch of tree.cases)
+				bind(branch, {
+					...children,
+					prefix: [...field.path.split("."), tree.key, branch.tagValue],
+				});
 	}
 }
 function place(template: SchemaField, scope: Scope): SchemaField {
@@ -213,13 +228,16 @@ function place(template: SchemaField, scope: Scope): SchemaField {
 	// Static metadata is shared; only presentation identities depend on placement.
 	if (template.admin.row || template.admin.tabGroup || template.admin.collapsible) {
 		result.admin = { ...template.admin };
+		// Rebase like the server: replace the definition's ID prefix with the placement's.
+		const from = scope.templateID!;
+		const to = fieldID(scope.resource, scope.prefix);
 		for (const key of ["row", "tabGroup", "collapsible"] as const) {
 			const group = template.admin[key];
 			if (group)
 				Object.assign(result.admin, {
 					[key]: {
 						...group,
-						id: fieldID(scope.resource, scope.prefix) + group.id.slice(scope.templateID!.length),
+						id: to + (group.id.startsWith(from) ? group.id.slice(from.length) : group.id),
 					},
 				});
 		}
@@ -232,19 +250,9 @@ function place(template: SchemaField, scope: Scope): SchemaField {
 		});
 	}
 	function container<T extends Container>(source: T, prefix: string[]): T {
-		if (source.blockReferences?.length) {
-			const copy = { ...source };
-			bind(copy, { ...children, prefix });
-			return copy;
-		}
-		return mapBlockTypes(source, (block) => {
-			const copy = { ...block };
-			Object.defineProperty(copy, "fields", {
-				enumerable: true,
-				get: memo(() => block.fields.map((field) => place(field, children))),
-			});
-			return copy;
-		});
+		const copy = { ...source };
+		bind(copy, { ...children, prefix });
+		return copy;
 	}
 	if (template.blocks) result.blocks = container(template.blocks, path);
 	if (template.plugin)

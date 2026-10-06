@@ -71,8 +71,8 @@ func TestPostgresBaselineAdoptsADevelopmentSynchronizedDatabase(t *testing.T) {
 	}
 	requireCurrent(initial, first)
 	// ridu dev keeps synchronizing an adopted database.
-	if plan, err := backend.Plan(ctx, initial); err != nil || len(plan) != 0 {
-		t.Fatalf("development plan over adopted history = %v, %v", plan, err)
+	if err := backend.VerifySchema(ctx, initial); err != nil {
+		t.Fatalf("schema over adopted history = %v", err)
 	}
 
 	synchronize(withSummary)

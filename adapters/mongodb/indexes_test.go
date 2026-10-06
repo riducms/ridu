@@ -1,6 +1,7 @@
 package mongodb
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -11,6 +12,16 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
+
+// syncIndexes runs only the index slice of SyncDevelopmentSchema, so index
+// tests do not depend on the schema record or the content audits around it.
+func (backend *Store) syncIndexes(ctx context.Context, manifest schema.Manifest) error {
+	if backend != nil {
+		backend.indexLifecycleMu.Lock()
+		defer backend.indexLifecycleMu.Unlock()
+	}
+	return backend.syncMongoIndexes(ctx, manifest)
+}
 
 func mongoIndexTestRaw(t *testing.T, value bson.D) bson.Raw {
 	t.Helper()
@@ -576,7 +587,7 @@ func TestMongoLocalizedIndexPlanningRequiresLocalizationAndRejectsTooManyPhysica
 	backend := &Store{verifiedIndexes: map[schema.StableID]mongoVerifiedIndexPlan{
 		"previously-verified": {fingerprint: "sentinel"},
 	}}
-	if err := backend.SyncIndexes(t.Context(), manifest); err == nil || !strings.Contains(err.Error(), "require application localization settings") {
+	if err := backend.syncIndexes(t.Context(), manifest); err == nil || !strings.Contains(err.Error(), "require application localization settings") {
 		t.Fatalf("localized index sync preflight error = %v", err)
 	}
 	backend.indexesMu.RLock()
@@ -752,10 +763,10 @@ func TestMongoSystemIndexPlansCoverReferenceAndVersionQueries(t *testing.T) {
 	plans := mongoSystemIndexPlans([]mongoCollectionIndexPlan{
 		{collection: target}, {collection: owner}, {collection: versioned},
 	})
-	if len(plans) != 14 {
-		t.Fatalf("MongoDB system index plans = %#v, want reference, version, published, preference, document-lock, upload-lock, two task, and six auth plans", plans)
+	if len(plans) != 15 {
+		t.Fatalf("MongoDB system index plans = %#v, want reference, version, published, preference, document-lock, shared-fence, upload-lock, two task, and six auth plans", plans)
 	}
-	var referencePlan, versionPlan, preferencePlan, documentLockPlan, uploadLockPlan, taskPlan, taskConcurrencyPlan *mongoSystemIndexPlan
+	var referencePlan, versionPlan, preferencePlan, documentLockPlan, uploadLockPlan, fencePlan, taskPlan, taskConcurrencyPlan *mongoSystemIndexPlan
 	authPlans := 0
 	for index := range plans {
 		if _, err := mongoIndexFingerprint(plans[index].definitions); err != nil {
@@ -772,6 +783,8 @@ func TestMongoSystemIndexPlansCoverReferenceAndVersionQueries(t *testing.T) {
 			documentLockPlan = &plans[index]
 		case mongoSystemUploadLockIndexes:
 			uploadLockPlan = &plans[index]
+		case mongoSystemReferenceFenceIndexes:
+			fencePlan = &plans[index]
 		case mongoSystemTaskIndexes:
 			taskPlan = &plans[index]
 		case mongoSystemTaskConcurrencyIndexes:
@@ -851,14 +864,22 @@ func TestMongoSystemIndexPlansCoverReferenceAndVersionQueries(t *testing.T) {
 	if uploadLockPlan == nil || uploadLockPlan.physicalName != mongoUploadLockCollectionName || len(uploadLockPlan.definitions) != 0 {
 		t.Fatalf("upload-lock index plan = %#v", uploadLockPlan)
 	}
+	if fencePlan == nil || fencePlan.physicalName != mongoReferenceFenceCollectionName || len(fencePlan.definitions) != 1 ||
+		fencePlan.definitions[0].name != mongoReferenceFenceTargetIndexName || fencePlan.definitions[0].unique ||
+		!reflect.DeepEqual(fencePlan.definitions[0].keys, bson.D{
+			{Key: "collection", Value: mongoAscendingDirection},
+			{Key: "document", Value: mongoAscendingDirection},
+		}) {
+		t.Fatalf("shared-fence index plan = %#v", fencePlan)
+	}
 	if taskPlan == nil || taskPlan.physicalName != mongoTaskCollectionName || len(taskPlan.definitions) != 5 {
 		t.Fatalf("task index plan = %#v", taskPlan)
 	}
 	if taskConcurrencyPlan == nil || taskConcurrencyPlan.physicalName != mongoTaskConcurrencyCollectionName || len(taskConcurrencyPlan.definitions) != 3 {
 		t.Fatalf("task concurrency index plan = %#v", taskConcurrencyPlan)
 	}
-	if plans := mongoSystemIndexPlans([]mongoCollectionIndexPlan{{collection: target}}); len(plans) != 11 {
-		t.Fatalf("scalar manifest system plans = %#v, want preference, document-lock, upload-lock, two task, and six auth plans", plans)
+	if plans := mongoSystemIndexPlans([]mongoCollectionIndexPlan{{collection: target}}); len(plans) != 12 {
+		t.Fatalf("scalar manifest system plans = %#v, want preference, document-lock, shared-fence, upload-lock, two task, and six auth plans", plans)
 	}
 }
 

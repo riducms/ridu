@@ -15,10 +15,12 @@ import (
 	_ "ariga.io/atlas/sql/postgres/postgrescheck"
 	atlasschema "ariga.io/atlas/sql/schema"
 	"ariga.io/atlas/sql/sqlcheck"
+	"github.com/riducms/ridu/internal/blockgraph"
 	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/postgresmigration"
 	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/requiredfield"
 	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -81,13 +83,34 @@ func validateTransformColumnCasts(before, after schema.Snapshot) error {
 	return nil
 }
 
+// orderBlockFieldRenames keeps resource renames first, in order, then orders
+// block field renames so a definition's renames precede those of the
+// definitions it places. Each content step finds its blocks through the after
+// schema, so every container above them already has its after name.
+func orderBlockFieldRenames(after schema.Snapshot, renames []Rename) []Rename {
+	var resources, blocks []Rename
+	for _, rename := range renames {
+		if rename.Kind == RenameBlockField {
+			blocks = append(blocks, rename)
+		} else {
+			resources = append(resources, rename)
+		}
+	}
+	if len(blocks) == 0 {
+		return renames
+	}
+	depths := blockgraph.New(after).Depths()
+	sort.SliceStable(blocks, func(left, right int) bool { return depths[blocks[left].Block] < depths[blocks[right].Block] })
+	return append(resources, blocks...)
+}
+
 // validateFieldRenamesOnlyRename refuses a confirmed field rename that changes
 // more than the field's name; see schemadiff.ValidateFieldRenameOnly. A
 // change of the field's own localization would replace its columns and drop
 // the values the rename was confirmed to keep.
 func validateFieldRenamesOnlyRename(renames []Rename) error {
 	for _, rename := range renames {
-		if rename.Kind != RenameField || rename.BeforeField == nil || rename.AfterField == nil {
+		if rename.Kind != RenameField && rename.Kind != RenameBlockField || rename.BeforeField == nil || rename.AfterField == nil {
 			continue
 		}
 		if err := schemadiff.ValidateFieldRenameOnly(*rename.BeforeField, *rename.AfterField); err != nil {
@@ -146,6 +169,7 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 	if err := validateFieldRenamesOnlyRename(renames); err != nil {
 		return ridumigration.Artifact{}, err
 	}
+	renames = orderBlockFieldRenames(after.Snapshot(), renames)
 	if err := primitivefield.ValidateManifestIndexes(after); err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -178,6 +202,14 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 	artifact, err := ridumigration.NewArtifact(name, atlasPlanner(), before, after)
 	if err != nil {
 		return ridumigration.Artifact{}, err
+	}
+	// Newly required columns are added or kept nullable until the audit, which
+	// runs after every data transform, has proved that stored rows hold values.
+	var requirements []requiredfield.Requirement
+	relaxed := after
+	if before != nil {
+		requirements = requiredfield.Detect(before.Snapshot(), after.Snapshot(), postgresRequiredRenames(renames))
+		relaxed = relaxRequiredColumns(after, requirements)
 	}
 	var operations []ridumigration.Operation
 	if before != nil {
@@ -234,7 +266,7 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 			operations = append(operations, ridumigration.Operation{Kind: ridumigration.StepRenameContent, Name: renameStepName(rename), Rename: &intent})
 		}
 
-		changes, err := atlaspostgres.DefaultDiff.SchemaDiff(atlasSchema(*before, mapping), atlasSchema(after, atlasIdentityMap{}))
+		changes, err := atlaspostgres.DefaultDiff.SchemaDiff(atlasSchema(*before, mapping), atlasSchema(relaxed, atlasIdentityMap{}))
 		if err != nil {
 			return ridumigration.Artifact{}, fmt.Errorf("Atlas schema diff: %w", err)
 		}
@@ -302,6 +334,7 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 	if before != nil && artifact.FromDigest == artifact.ToDigest && len(transforms) == 0 {
 		return ridumigration.Artifact{}, fmt.Errorf("%w; no migration steps were planned", migrationartifact.ErrSchemaCurrent)
 	}
+	artifact.Risks = append(artifact.Risks, requiredfield.Risks(requirements)...)
 	artifact.Risks = normalizeRisks(artifact.Risks)
 	if !allowDestructive {
 		var blocked []ridumigration.Risk
@@ -313,6 +346,23 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 		if len(blocked) != 0 {
 			return ridumigration.Artifact{}, &SafetyError{Risks: blocked}
 		}
+	}
+	if len(requirements) != 0 {
+		// The audit and the NOT NULL constraints it admits share the final
+		// transaction phase, after every data transform; a failure rolls them
+		// back together.
+		tighten, err := atlaspostgres.DefaultDiff.SchemaDiff(atlasSchema(relaxed, atlasIdentityMap{}), atlasSchema(after, atlasIdentityMap{}))
+		if err != nil {
+			return ridumigration.Artifact{}, fmt.Errorf("Atlas required-column diff: %w", err)
+		}
+		constraints, _, err := atlasSteps(ctx, name, tighten)
+		if err != nil {
+			return ridumigration.Artifact{}, err
+		}
+		operations = append(operations, ridumigration.Operation{
+			Kind: ridumigration.StepAuditRequiredValues, Name: requiredfield.StepName, RequiredFields: requiredfield.Addresses(requirements),
+		})
+		operations = append(operations, constraints...)
 	}
 	operations = append(operations, ridumigration.Operation{Kind: ridumigration.StepAssertSchema, Name: "verify resulting PostgreSQL schema"})
 	artifact.Phases, err = phasesFromOperations(artifact.FromDigest, operations)
@@ -664,11 +714,69 @@ func payloadFromOperation(step ridumigration.Operation) (json.RawMessage, error)
 			ResourceIDs:          append([]schema.StableID(nil), step.ResourceIDs...),
 			PurgeVersionOwnerIDs: append([]schema.StableID(nil), step.PurgeVersionOwnerIDs...),
 		})
+	case ridumigration.StepAuditRequiredValues:
+		return ridumigration.MarshalStepPayload(ridumigration.AuditRequiredValuesPayload{Fields: step.RequiredFields})
 	case ridumigration.StepAssertSchema:
 		return ridumigration.MarshalStepPayload(ridumigration.AssertSchemaPayload{})
 	default:
 		return nil, fmt.Errorf("step %q has unsupported kind %q", step.Name, step.Kind)
 	}
+}
+
+// postgresRequiredRenames binds confirmed renames for required-field
+// detection, so a renamed field keeps the requiredness it already had.
+func postgresRequiredRenames(renames []Rename) requiredfield.Renames {
+	result := requiredfield.Renames{Resources: make(map[schema.StableID]schema.StableID), Fields: make(map[schema.StableID]schema.Field), Blocks: make(map[string]map[schema.StableID]schema.Field)}
+	for _, rename := range renames {
+		if rename.Kind == RenameCollection && rename.BeforeCollection.ID != rename.AfterCollection.ID {
+			result.Resources[rename.BeforeCollection.ID] = rename.AfterCollection.ID
+		}
+		if rename.Kind == RenameBlockField && rename.BeforeField != nil && rename.AfterField != nil {
+			if result.Blocks[rename.Block] == nil {
+				result.Blocks[rename.Block] = make(map[schema.StableID]schema.Field)
+			}
+			result.Blocks[rename.Block][rename.AfterField.ID] = *rename.BeforeField
+			continue
+		}
+		if rename.BeforeField != nil && rename.AfterField != nil {
+			result.Fields[rename.AfterField.ID] = *rename.BeforeField
+		}
+		for _, pair := range rename.Fields {
+			result.Fields[pair.After.ID] = pair.Before
+		}
+	}
+	return result
+}
+
+// relaxRequiredColumns returns after with the top-level fields that
+// requirements make required kept optional, so their columns stay nullable
+// until the required-value audit admits the NOT NULL constraint.
+func relaxRequiredColumns(after schema.Manifest, requirements []requiredfield.Requirement) schema.Manifest {
+	relaxed := make(map[schema.StableID]map[schema.StableID]bool)
+	for _, requirement := range requirements {
+		if !requirement.TopLevel() {
+			continue
+		}
+		if relaxed[requirement.Resource.ID] == nil {
+			relaxed[requirement.Resource.ID] = make(map[schema.StableID]bool)
+		}
+		relaxed[requirement.Resource.ID][requirement.Field.ID] = true
+	}
+	if len(relaxed) == 0 {
+		return after
+	}
+	snapshot := after.Snapshot()
+	for _, resources := range [][]schema.Collection{snapshot.Collections, snapshot.Globals} {
+		for resourceIndex := range resources {
+			fields := relaxed[resources[resourceIndex].ID]
+			for fieldIndex := range resources[resourceIndex].Fields {
+				if fields[resources[resourceIndex].Fields[fieldIndex].ID] {
+					resources[resourceIndex].Fields[fieldIndex].Required = false
+				}
+			}
+		}
+	}
+	return schema.NewManifest(snapshot)
 }
 
 func removedResourceIDs(before, after schema.Snapshot, mapping atlasIdentityMap) []schema.StableID {
@@ -713,19 +821,23 @@ func resourceRetirementReferencePolicy(before, after schema.Snapshot, mapping at
 	}
 	purgeOwners := make(map[schema.StableID]bool)
 	var blocked []ridumigration.Risk
+	roots := newRemovedReferenceRoots(before, removedSet, pluginTargets)
 	inspect := func(resource schema.Collection, current []schema.Collection, mappedID schema.StableID) {
 		survives := false
+		var survivor schema.Collection
 		for _, candidate := range current {
 			if candidate.ID == mappedID {
-				survives = true
+				survives, survivor = true, candidate
 				break
 			}
 		}
 		if !survives {
 			return
 		}
+		// Both surviving document tables must drop the complete root.
+		tables := documentTables(survivor, mappedID)
 		for _, root := range resource.Fields {
-			if !fieldRootReferencesRemovedResource(root, removedSet, pluginTargets) {
+			if !roots.root(root) {
 				continue
 			}
 			if resource.Versions != nil {
@@ -740,7 +852,11 @@ func resourceRetirementReferencePolicy(before, after schema.Snapshot, mapping at
 				}
 			}
 			for _, column := range columns {
-				if physicalColumnIsDropped(steps, collectionTable(mappedID), column) {
+				dropped := true
+				for _, table := range tables {
+					dropped = dropped && physicalColumnIsDropped(steps, table, column)
+				}
+				if dropped {
 					continue
 				}
 				blocked = append(blocked, ridumigration.Risk{
@@ -765,42 +881,6 @@ func resourceRetirementReferencePolicy(before, after schema.Snapshot, mapping at
 	return owners, blocked
 }
 
-func fieldRootReferencesRemovedResource(field schema.Field, removed, pluginTargets map[schema.StableID]bool) bool {
-	if field.Relationship != nil {
-		if !field.Relationship.Polymorphic && removed[field.Relationship.CollectionID] {
-			return true
-		}
-		for _, target := range field.Relationship.Targets {
-			if removed[target.CollectionID] {
-				return true
-			}
-		}
-	}
-	if field.Upload != nil && removed[field.Upload.CollectionID] {
-		return true
-	}
-	// A plugin reference key declares that matching JSON properties contain
-	// collection slugs, but intentionally does not narrow the possible target
-	// collections. Treat every collection in the source snapshot as a potential
-	// target. If any collection is retired, the complete plugin root must leave
-	// physical storage with it; otherwise current or historical nested values can
-	// become live again after the slug/stable identity is reused.
-	if field.Plugin != nil && len(field.Plugin.ReferenceKeys) != 0 {
-		for target := range pluginTargets {
-			if removed[target] {
-				return true
-			}
-		}
-	}
-	for _, child := range schema.ChildFields(field) {
-		if fieldRootReferencesRemovedResource(child, removed, pluginTargets) {
-			return true
-		}
-	}
-
-	return false
-}
-
 type referenceShapeFieldIdentity struct {
 	ID   schema.StableID
 	Path string
@@ -822,6 +902,11 @@ func referenceShapeMappingFromRenames(renames []Rename) (referenceShapeMapping, 
 	for _, rename := range renames {
 		if rename.Kind == RenameField && rename.BeforeField != nil && rename.AfterField != nil {
 			if err := result.add(rename.BeforeCollection.ID, *rename.BeforeField, *rename.AfterField); err != nil {
+				return referenceShapeMapping{}, err
+			}
+		}
+		if rename.Kind == RenameBlockField && rename.BeforeField != nil && rename.AfterField != nil {
+			if err := result.add(definitionOwner(rename.Block), *rename.BeforeField, *rename.AfterField); err != nil {
 				return referenceShapeMapping{}, err
 			}
 		}
@@ -852,40 +937,13 @@ func (mapping *referenceShapeMapping) add(ownerID schema.StableID, before, after
 	}
 	mapping.fields[sourceKey] = target
 	mapping.targets[targetKey] = sourceKey
+	// A renamed group or array carries its children's identities. Block
+	// definitions keep theirs: they are keyed by definition, not placement.
 	if before.Nested != nil && after.Nested != nil {
 		if err := mapping.addMatchingChildren(ownerID, before.Nested.ResolvedFields(), after.Nested.ResolvedFields()); err != nil {
 			return err
 		}
 	}
-	if before.Blocks != nil && after.Blocks != nil {
-		afterBlocks := make(map[string]schema.BlockType, len(after.Blocks.ResolvedTypes()))
-		for _, block := range after.Blocks.ResolvedTypes() {
-			afterBlocks[block.Slug] = block
-		}
-		for _, block := range before.Blocks.ResolvedTypes() {
-			if next, exists := afterBlocks[block.Slug]; exists {
-				if err := mapping.addMatchingChildren(ownerID, block.ResolvedFields(), next.ResolvedFields()); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	oldEmbedded, newEmbedded := schema.EmbeddedBlocks(before), schema.EmbeddedBlocks(after)
-	for i, container := range oldEmbedded {
-		if i < len(newEmbedded) && container.Name == newEmbedded[i].Name {
-			for _, block := range container.Blocks.ResolvedTypes() {
-				for _, next := range newEmbedded[i].Blocks.ResolvedTypes() {
-					if block.Slug == next.Slug {
-						if err := mapping.addMatchingChildren(ownerID, block.ResolvedFields(), next.ResolvedFields()); err != nil {
-							return err
-						}
-						break
-					}
-				}
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -917,193 +975,6 @@ func referenceShapeFieldKey(ownerID, fieldID schema.StableID) string {
 
 func referenceShapeTargetKey(ownerID schema.StableID, field referenceShapeFieldIdentity) string {
 	return string(ownerID) + "\x00" + string(field.ID) + "\x00" + field.Path
-}
-
-type persistedReferenceShape struct {
-	OwnerID          schema.StableID
-	OwnerVersioned   bool
-	RootID           schema.StableID
-	RootName         string
-	RootLocalized    bool
-	FieldID          schema.StableID
-	FieldPath        string
-	LeafLocalized    bool
-	UsesLocalization bool
-	Containers       string
-	Kind             string
-	Targets          []schema.StableID
-	HasMany          bool
-	Polymorphic      bool
-	PluginKey        string
-	PluginReference  string
-}
-
-func (shape persistedReferenceShape) key() string {
-	return string(shape.FieldID) + "\x00" + shape.FieldPath + "\x00" + shape.PluginReference
-}
-
-// unsafeReferenceShapeDecreases rejects the transition at which reference
-// semantics disappear or narrow, rather than waiting for a later target
-// removal. Otherwise a two-artifact sequence can hide values from the
-// immediate retirement comparison while leaving current storage or version
-// snapshots ready to reattach after the old shape and identity are restored.
-//
-// The one generic safe case is deliberately narrow: a target referenced by
-// the old leaf is retired in this artifact, the complete physical root column
-// is dropped, and every versioned owner is included in the same retirement's
-// full-history purge. That is the contract already enforced by
-// retire_resources; ordinary --allow-destructive is not a substitute.
-func unsafeReferenceShapeDecreases(
-	before, after schema.Snapshot,
-	mapping atlasIdentityMap,
-	fieldMapping referenceShapeMapping,
-	physicalSteps []ridumigration.Operation,
-	removed, purgeVersionOwners []schema.StableID,
-) []ridumigration.Risk {
-	removedSet := make(map[schema.StableID]bool, len(removed))
-	for _, id := range removed {
-		removedSet[id] = true
-	}
-	purgedOwners := make(map[schema.StableID]bool, len(purgeVersionOwners))
-	for _, id := range purgeVersionOwners {
-		purgedOwners[id] = true
-	}
-	var locales []schema.LocaleCode
-	if before.Application.Localization != nil {
-		locales = before.Application.Localization.LocaleCodes()
-	}
-	removedLocales := removedReferenceLocales(before, after)
-	beforePluginTargets := pluginReferenceTargets(before.Collections, mapping, true)
-	afterPluginTargets := pluginReferenceTargets(after.Collections, atlasIdentityMap{}, false)
-	afterCollections := make(map[schema.StableID]schema.Collection, len(after.Collections))
-	for _, resource := range after.Collections {
-		afterCollections[resource.ID] = resource
-	}
-	afterGlobals := make(map[schema.StableID]schema.Global, len(after.Globals))
-	for _, resource := range after.Globals {
-		afterGlobals[resource.ID] = resource
-	}
-
-	var risks []ridumigration.Risk
-	inspect := func(previous, next schema.Collection, previousOwnerID, nextOwnerID schema.StableID) {
-		beforeShapes := persistedReferenceShapes(previous, previousOwnerID, nextOwnerID, mapping, fieldMapping, beforePluginTargets, true)
-		afterShapes := persistedReferenceShapes(next, nextOwnerID, nextOwnerID, atlasIdentityMap{}, referenceShapeMapping{}, afterPluginTargets, false)
-		afterByKey := make(map[string]persistedReferenceShape, len(afterShapes))
-		for _, shape := range afterShapes {
-			afterByKey[shape.key()] = shape
-		}
-		for _, oldShape := range beforeShapes {
-			newShape, exists := afterByKey[oldShape.key()]
-			decreased, reason := referenceShapeDecreased(oldShape, newShape, exists)
-			if !decreased && oldShape.UsesLocalization && len(removedLocales) != 0 {
-				decreased = true
-				reason = "remove application locale " + strings.Join(removedLocales, ", ")
-			}
-			if !decreased {
-				continue
-			}
-			if referenceShapeDecreaseIsRetired(oldShape, removedSet, purgedOwners, physicalSteps, locales) {
-				continue
-			}
-			risks = append(risks, ridumigration.Risk{
-				Code: "RIDU_REFERENCE_SHAPE_DECREASE_UNSAFE", Level: ridumigration.RiskDestructive,
-				Message: fmt.Sprintf("cannot %s for stored reference %s.%s in a generic schema artifact; current values or version snapshots can become reachable again after the old reference shape and target identity are restored. Keep the reference shape, or retire a referenced target and drop the complete physical root in the same resource-retirement artifact so versioned owner history is purged; otherwise use a separately reviewed application-owned data migration", reason, nextOwnerID, oldShape.FieldPath),
-			})
-		}
-	}
-	for _, previous := range before.Collections {
-		nextID := mapping.collection(previous.ID)
-		if next, exists := afterCollections[nextID]; exists {
-			inspect(previous, next, previous.ID, nextID)
-		}
-	}
-	for _, previous := range before.Globals {
-		if next, exists := afterGlobals[previous.ID]; exists {
-			inspect(previous, next, previous.ID, previous.ID)
-		}
-	}
-	sort.Slice(risks, func(left, right int) bool { return risks[left].Message < risks[right].Message })
-	return risks
-}
-
-func persistedReferenceShapes(
-	resource schema.Collection,
-	previousOwnerID, ownerID schema.StableID,
-	collectionMapping atlasIdentityMap,
-	fieldMapping referenceShapeMapping,
-	pluginTargets []schema.StableID,
-	normalizeBefore bool,
-) []persistedReferenceShape {
-	var result []persistedReferenceShape
-	var inspect func(schema.Field, schema.Field, []string, bool)
-	inspect = func(field, root schema.Field, containers []string, ancestorLocalized bool) {
-		identity := referenceShapeFieldIdentity{ID: field.ID, Path: field.Path.String()}
-		rootIdentity := referenceShapeFieldIdentity{ID: root.ID, Path: root.Path.String()}
-		if normalizeBefore {
-			identity = fieldMapping.field(previousOwnerID, field)
-			rootIdentity.ID = collectionMapping.field(previousOwnerID, root.ID)
-		}
-		base := persistedReferenceShape{
-			OwnerID: ownerID, OwnerVersioned: resource.Versions != nil,
-			RootID: rootIdentity.ID, RootName: root.Name, RootLocalized: root.Localized,
-			FieldID: identity.ID, FieldPath: identity.Path, LeafLocalized: field.Localized,
-			UsesLocalization: root.Localized || field.Localized || ancestorLocalized,
-			Containers:       strings.Join(containers, "/"),
-		}
-		if field.Relationship != nil {
-			base.Kind = "relationship"
-			base.HasMany, base.Polymorphic = field.Relationship.HasMany, field.Relationship.Polymorphic
-			base.Targets = relationshipReferenceTargets(field.Relationship, collectionMapping, normalizeBefore)
-			result = append(result, base)
-		}
-		if field.Upload != nil {
-			base.Kind = "upload"
-			base.HasMany = field.Upload.HasMany
-			target := field.Upload.CollectionID
-			if normalizeBefore {
-				target = collectionMapping.collection(target)
-			}
-			base.Targets = []schema.StableID{target}
-			result = append(result, base)
-		}
-		if field.Plugin != nil {
-			for _, key := range field.Plugin.ReferenceKeys {
-				plugin := base
-				plugin.Kind = "plugin"
-				plugin.PluginKey = field.Plugin.Key
-				plugin.PluginReference = key
-				plugin.Targets = append([]schema.StableID(nil), pluginTargets...)
-				result = append(result, plugin)
-			}
-		}
-		if field.Nested != nil {
-			nested := appendReferenceContainer(containers, string(field.Type), field.Localized)
-			for _, child := range field.Nested.ResolvedFields() {
-				inspect(child, root, nested, ancestorLocalized || field.Localized)
-			}
-		}
-		if field.Blocks != nil {
-			for _, block := range field.Blocks.ResolvedTypes() {
-				blockContainers := appendReferenceContainer(containers, string(field.Type)+":"+block.Slug, field.Localized)
-				for _, child := range block.ResolvedFields() {
-					inspect(child, root, blockContainers, ancestorLocalized || field.Localized)
-				}
-			}
-		}
-		for _, container := range schema.EmbeddedBlocks(field) {
-			for _, block := range container.Blocks.ResolvedTypes() {
-				parents := appendReferenceContainer(containers, "embedded:"+container.Path.String()+":"+block.Slug, field.Localized)
-				for _, child := range block.ResolvedFields() {
-					inspect(child, root, parents, ancestorLocalized || field.Localized)
-				}
-			}
-		}
-
-	}
-	for _, root := range resource.Fields {
-		inspect(root, root, nil, false)
-	}
-	return result
 }
 
 func pluginReferenceTargets(collections []schema.Collection, mapping atlasIdentityMap, normalize bool) []schema.StableID {
@@ -1164,35 +1035,6 @@ func relationshipReferenceTargets(relationship *schema.RelationshipField, mappin
 	return targets
 }
 
-func referenceShapeDecreased(before, after persistedReferenceShape, exists bool) (bool, string) {
-	if !exists {
-		return true, "remove or retype the field"
-	}
-	if before.Kind != after.Kind {
-		return true, "change the reference kind"
-	}
-	if before.PluginKey != after.PluginKey {
-		return true, "change the plugin reference contract"
-	}
-	if before.RootID != after.RootID || before.RootLocalized != after.RootLocalized ||
-		before.LeafLocalized != after.LeafLocalized || before.Containers != after.Containers {
-		return true, "change the physical root or nested container shape"
-	}
-	if before.HasMany != after.HasMany || before.Polymorphic != after.Polymorphic {
-		return true, "change relationship cardinality or polymorphic shape"
-	}
-	afterTargets := make(map[schema.StableID]bool, len(after.Targets))
-	for _, target := range after.Targets {
-		afterTargets[target] = true
-	}
-	for _, target := range before.Targets {
-		if !afterTargets[target] {
-			return true, "remove or replace target " + string(target)
-		}
-	}
-	return false, ""
-}
-
 func referenceShapeDecreaseIsRetired(
 	shape persistedReferenceShape,
 	removed, purgedOwners map[schema.StableID]bool,
@@ -1219,12 +1061,26 @@ func referenceShapeDecreaseIsRetired(
 			columns = append(columns, localizedFieldColumn(shape.RootID, locale))
 		}
 	}
+	live := publishedCollectionTable(shape.OwnerID)
+	liveDropped := !shape.OwnerVersioned || physicalTableIsDropped(physicalSteps, live)
 	for _, column := range columns {
 		if !physicalColumnIsDropped(physicalSteps, collectionTable(shape.OwnerID), column) {
 			return false
 		}
+		if !liveDropped && !physicalColumnIsDropped(physicalSteps, live, column) {
+			return false
+		}
 	}
 	return true
+}
+
+func physicalTableIsDropped(steps []ridumigration.Operation, table string) bool {
+	for _, step := range steps {
+		if step.Kind == ridumigration.StepSQL && isDropTableStatement(step.SQL, table) {
+			return true
+		}
+	}
+	return false
 }
 
 func physicalColumnIsDropped(steps []ridumigration.Operation, table, column string) bool {
@@ -1284,122 +1140,6 @@ func joinStableIDs(ids []schema.StableID) string {
 		values[index] = string(id)
 	}
 	return strings.Join(values, ", ")
-}
-
-type referenceIndexTopology struct {
-	Locales   []schema.LocaleCode
-	Resources []referenceIndexResource
-}
-
-type referenceIndexResource struct {
-	ID     schema.StableID
-	Fields []referenceIndexField
-}
-
-type referenceIndexField struct {
-	ID             schema.StableID
-	Name           string
-	Type           schema.FieldType
-	Localized      bool
-	Relationship   *referenceIndexRelationship
-	Upload         *referenceIndexUpload
-	Nested         []referenceIndexField
-	Blocks         []referenceIndexBlock
-	Embedded       []schema.EmbeddedTree
-	EmbeddedFields []referenceIndexField
-}
-
-type referenceIndexRelationship struct {
-	CollectionID   schema.StableID
-	CollectionSlug schema.CollectionSlug
-	Targets        []schema.RelationshipTarget
-	HasMany        bool
-	Polymorphic    bool
-}
-
-type referenceIndexUpload struct {
-	CollectionID   schema.StableID
-	CollectionSlug schema.CollectionSlug
-	HasMany        bool
-}
-
-type referenceIndexBlock struct {
-	Slug   string
-	Fields []referenceIndexField
-}
-
-func referenceIndexTopologyChanged(before, after schema.Snapshot) bool {
-	return !reflect.DeepEqual(referenceTopology(before), referenceTopology(after))
-}
-
-func referenceTopology(snapshot schema.Snapshot) referenceIndexTopology {
-	topology := referenceIndexTopology{}
-	if snapshot.Application.Localization != nil {
-		topology.Locales = append([]schema.LocaleCode(nil), snapshot.Application.Localization.LocaleCodes()...)
-	}
-	resources := append(append([]schema.Collection(nil), snapshot.Collections...), snapshot.Globals...)
-	for _, resource := range resources {
-		fields := referenceTopologyFields(resource.Fields)
-		if len(fields) != 0 {
-			topology.Resources = append(topology.Resources, referenceIndexResource{ID: resource.ID, Fields: fields})
-		}
-	}
-	return topology
-}
-
-func referenceTopologyFields(fields []schema.Field) []referenceIndexField {
-	var result []referenceIndexField
-	for _, field := range fields {
-		candidate := referenceIndexField{ID: field.ID, Name: field.Name, Type: field.Type, Localized: field.Localized}
-		if field.Relationship != nil {
-			candidate.Relationship = &referenceIndexRelationship{
-				CollectionID: field.Relationship.CollectionID, CollectionSlug: field.Relationship.CollectionSlug,
-				Targets: append([]schema.RelationshipTarget(nil), field.Relationship.Targets...),
-				HasMany: field.Relationship.HasMany, Polymorphic: field.Relationship.Polymorphic,
-			}
-		}
-		if field.Upload != nil {
-			candidate.Upload = &referenceIndexUpload{
-				CollectionID: field.Upload.CollectionID, CollectionSlug: field.Upload.CollectionSlug,
-				HasMany: field.Upload.HasMany,
-			}
-		}
-		if field.Nested != nil {
-			candidate.Nested = referenceTopologyFields(field.Nested.ResolvedFields())
-		}
-		if field.Blocks != nil {
-			for _, block := range field.Blocks.ResolvedTypes() {
-				children := referenceTopologyFields(block.ResolvedFields())
-				if len(children) != 0 {
-					candidate.Blocks = append(candidate.Blocks, referenceIndexBlock{Slug: block.Slug, Fields: children})
-				}
-			}
-		}
-		if field.Plugin != nil && len(field.Plugin.EmbeddedTrees) != 0 {
-			candidate.EmbeddedFields = referenceTopologyFields(schema.ChildFields(field))
-			if len(candidate.EmbeddedFields) != 0 {
-				candidate.Embedded = make([]schema.EmbeddedTree, len(field.Plugin.EmbeddedTrees))
-				for ti, source := range field.Plugin.EmbeddedTrees {
-					tree := source
-					tree.Cases = make([]schema.EmbeddedTreeCase, len(source.Cases))
-					for ci, sourceCase := range source.Cases {
-						candidateCase := sourceCase
-						candidateCase.Types = make([]schema.BlockType, len(sourceCase.ResolvedTypes()))
-						for vi, variant := range sourceCase.ResolvedTypes() {
-							candidateCase.ResolvedTypes()[vi] = schema.BlockType{Slug: variant.Slug}
-						}
-						tree.Cases[ci] = candidateCase
-					}
-					candidate.Embedded[ti] = tree
-				}
-			}
-		}
-
-		if candidate.Relationship != nil || candidate.Upload != nil || len(candidate.Nested) != 0 || len(candidate.Blocks) != 0 || len(candidate.EmbeddedFields) != 0 {
-			result = append(result, candidate)
-		}
-	}
-	return result
 }
 
 func physicalChangeRisks(changes []atlasschema.Change) []ridumigration.Risk {
@@ -1462,6 +1202,11 @@ func atlasRenameMapping(renames []Rename) (atlasIdentityMap, error) {
 			if len(rename.BeforeField.Path.Segments()) == 1 && len(rename.AfterField.Path.Segments()) == 1 {
 				mapping.fields[statementFieldKey(rename.BeforeCollection.ID, rename.BeforeField.ID)] = rename.AfterField.ID
 			}
+		case RenameBlockField:
+			// A block's fields live inside JSONB columns; no column changes.
+			if rename.BeforeField == nil || rename.AfterField == nil || rename.Block == "" {
+				return atlasIdentityMap{}, fmt.Errorf("block field rename requires a block and before and after fields")
+			}
 		default:
 			return atlasIdentityMap{}, fmt.Errorf("unknown rename kind %q", rename.Kind)
 		}
@@ -1479,86 +1224,111 @@ func atlasRenameSteps(ctx context.Context, name string, before schema.Manifest, 
 	var steps []ridumigration.Operation
 	var risks []ridumigration.Risk
 	for _, rename := range renames {
-		var tableBeforeID, tableAfterID schema.StableID
-		switch rename.Kind {
-		case RenameCollection:
-			tableBeforeID, tableAfterID = rename.BeforeCollection.ID, rename.AfterCollection.ID
-		case RenameField:
-			tableBeforeID, tableAfterID = rename.BeforeCollection.ID, rename.AfterCollection.ID
+		if rename.Kind == RenameBlockField {
+			continue
 		}
+		tableBeforeID, tableAfterID := rename.BeforeCollection.ID, rename.AfterCollection.ID
 		oldTable, oldOK := original.Table(collectionTable(tableBeforeID))
 		newTable, newOK := rebased.Table(collectionTable(tableAfterID))
 		if !oldOK || !newOK {
 			return nil, nil, fmt.Errorf("rename %s cannot resolve its physical collection", renameStepName(rename))
 		}
-		if oldTable.Name != newTable.Name {
-			planned, found, err := atlasSteps(ctx, name, []atlasschema.Change{&atlasschema.RenameTable{From: oldTable, To: newTable}})
+		pairs := []renameTablePair{{before: oldTable, after: newTable, name: func(name string) string { return name }}}
+		// A versioned resource's live table is generated from the same
+		// definition and is renamed identically, with its derived names.
+		if oldLive, exists := original.Table(publishedCollectionTable(tableBeforeID)); exists {
+			if newLive, exists := rebased.Table(publishedCollectionTable(tableAfterID)); exists {
+				pairs = append(pairs, renameTablePair{before: oldLive, after: newLive, name: livePhysicalName})
+			}
+		}
+		for _, pair := range pairs {
+			planned, found, err := atlasRenameTableSteps(ctx, name, pair, rename, tableBeforeID, tableAfterID, locales)
 			if err != nil {
 				return nil, nil, err
 			}
 			steps, risks = append(steps, planned...), append(risks, found...)
 		}
-		var beforeColumnChanges, tableChanges, afterColumnChanges []atlasschema.Change
-		renamedIndexes := make(map[string]struct{})
-		for _, pair := range physicalFieldPairs(rename) {
-			for _, locale := range atlasRenameLocales(pair.Before, locales) {
-				oldColumn, oldExists := oldTable.Column(atlasRenameColumn(pair.Before.ID, locale))
-				newColumn, newExists := newTable.Column(atlasRenameColumn(pair.After.ID, locale))
-				if !oldExists || !newExists || oldColumn.Name == newColumn.Name {
-					continue
-				}
-				tableChanges = append(tableChanges, &atlasschema.RenameColumn{From: oldColumn, To: newColumn})
-				if pair.Before.Unique {
-					oldName := "z_u_" + identifierHash(atlasRenameFieldKey(tableBeforeID, pair.Before.ID, locale))
-					newName := "z_u_" + identifierHash(atlasRenameFieldKey(tableAfterID, pair.After.ID, locale))
-					oldIndex, oldIndexExists := oldTable.Index(oldName)
-					newIndex, newIndexExists := newTable.Index(newName)
-					if oldIndexExists && newIndexExists && oldName != newName {
-						tableChanges = append(tableChanges, &atlasschema.RenameIndex{From: oldIndex, To: newIndex})
-						renamedIndexes[oldName] = struct{}{}
-					}
-				}
-				if hasForeignKey(pair.Before) {
-					oldName := "z_fk_" + identifierHash(atlasRenameFieldKey(tableBeforeID, pair.Before.ID, locale))
-					newName := "z_fk_" + identifierHash(atlasRenameFieldKey(tableAfterID, pair.After.ID, locale))
-					oldForeignKey, oldForeignKeyExists := oldTable.ForeignKey(oldName)
-					newForeignKey, newForeignKeyExists := newTable.ForeignKey(newName)
-					if oldForeignKeyExists && newForeignKeyExists && oldName != newName {
-						beforeColumnChanges = append(beforeColumnChanges, &atlasschema.DropForeignKey{F: oldForeignKey})
-						afterColumnChanges = append(afterColumnChanges, &atlasschema.AddForeignKey{F: newForeignKey})
-					}
-				}
-			}
+	}
+	return steps, risks, nil
+}
+
+type renameTablePair struct {
+	before, after *atlasschema.Table
+	// name maps a working-table index or constraint name to this table's.
+	name func(string) string
+}
+
+func atlasRenameTableSteps(ctx context.Context, name string, pair renameTablePair, rename Rename, tableBeforeID, tableAfterID schema.StableID, locales []schema.LocaleCode) ([]ridumigration.Operation, []ridumigration.Risk, error) {
+	var steps []ridumigration.Operation
+	var risks []ridumigration.Risk
+	oldTable, newTable := pair.before, pair.after
+	if oldTable.Name != newTable.Name {
+		planned, found, err := atlasSteps(ctx, name, []atlasschema.Change{&atlasschema.RenameTable{From: oldTable, To: newTable}})
+		if err != nil {
+			return nil, nil, err
 		}
-		// Stable-ID rebasing changes deterministic ordinary and compound index
-		// names too. Match definitions after normalizing column identities; never
-		// pair indexes by position because topology can evolve independently.
-		rebasedIndexes := make(map[string][]*atlasschema.Index, len(newTable.Indexes))
-		for _, candidate := range newTable.Indexes {
-			signature := atlasIndexDefinitionSignature(candidate, newTable)
-			rebasedIndexes[signature] = append(rebasedIndexes[signature], candidate)
-		}
-		for _, oldIndex := range oldTable.Indexes {
-			if _, exists := renamedIndexes[oldIndex.Name]; exists {
+		steps, risks = append(steps, planned...), append(risks, found...)
+	}
+	var beforeColumnChanges, tableChanges, afterColumnChanges []atlasschema.Change
+	renamedIndexes := make(map[string]struct{})
+	for _, field := range physicalFieldPairs(rename) {
+		for _, locale := range atlasRenameLocales(field.Before, locales) {
+			oldColumn, oldExists := oldTable.Column(atlasRenameColumn(field.Before.ID, locale))
+			newColumn, newExists := newTable.Column(atlasRenameColumn(field.After.ID, locale))
+			if !oldExists || !newExists || oldColumn.Name == newColumn.Name {
 				continue
 			}
-			matches := rebasedIndexes[atlasIndexDefinitionSignature(oldIndex, oldTable)]
-			if len(matches) != 1 || oldIndex.Name == matches[0].Name {
-				continue
+			tableChanges = append(tableChanges, &atlasschema.RenameColumn{From: oldColumn, To: newColumn})
+			if field.Before.Unique {
+				oldName := pair.name("z_u_" + identifierHash(atlasRenameFieldKey(tableBeforeID, field.Before.ID, locale)))
+				newName := pair.name("z_u_" + identifierHash(atlasRenameFieldKey(tableAfterID, field.After.ID, locale)))
+				oldIndex, oldIndexExists := oldTable.Index(oldName)
+				newIndex, newIndexExists := newTable.Index(newName)
+				if oldIndexExists && newIndexExists && oldName != newName {
+					tableChanges = append(tableChanges, &atlasschema.RenameIndex{From: oldIndex, To: newIndex})
+					renamedIndexes[oldName] = struct{}{}
+				}
 			}
-			tableChanges = append(tableChanges, &atlasschema.RenameIndex{From: oldIndex, To: matches[0]})
-			renamedIndexes[oldIndex.Name] = struct{}{}
+			if hasForeignKey(field.Before) {
+				oldName := pair.name("z_fk_" + identifierHash(atlasRenameFieldKey(tableBeforeID, field.Before.ID, locale)))
+				newName := pair.name("z_fk_" + identifierHash(atlasRenameFieldKey(tableAfterID, field.After.ID, locale)))
+				oldForeignKey, oldForeignKeyExists := oldTable.ForeignKey(oldName)
+				newForeignKey, newForeignKeyExists := newTable.ForeignKey(newName)
+				if oldForeignKeyExists && newForeignKeyExists && oldName != newName {
+					beforeColumnChanges = append(beforeColumnChanges, &atlasschema.DropForeignKey{F: oldForeignKey})
+					afterColumnChanges = append(afterColumnChanges, &atlasschema.AddForeignKey{F: newForeignKey})
+				}
+			}
 		}
-		for _, orderedChanges := range [][]atlasschema.Change{beforeColumnChanges, tableChanges, afterColumnChanges} {
-			if len(orderedChanges) == 0 {
-				continue
-			}
-			planned, found, err := atlasSteps(ctx, name, []atlasschema.Change{&atlasschema.ModifyTable{T: newTable, Changes: orderedChanges}})
-			if err != nil {
-				return nil, nil, err
-			}
-			steps, risks = append(steps, planned...), append(risks, found...)
+	}
+	// Stable-ID rebasing changes deterministic ordinary and compound index
+	// names too. Match definitions after normalizing column identities; never
+	// pair indexes by position because topology can evolve independently.
+	rebasedIndexes := make(map[string][]*atlasschema.Index, len(newTable.Indexes))
+	for _, candidate := range newTable.Indexes {
+		signature := atlasIndexDefinitionSignature(candidate, newTable)
+		rebasedIndexes[signature] = append(rebasedIndexes[signature], candidate)
+	}
+	for _, oldIndex := range oldTable.Indexes {
+		if _, exists := renamedIndexes[oldIndex.Name]; exists {
+			continue
 		}
+		matches := rebasedIndexes[atlasIndexDefinitionSignature(oldIndex, oldTable)]
+		if len(matches) != 1 || oldIndex.Name == matches[0].Name {
+			continue
+		}
+		tableChanges = append(tableChanges, &atlasschema.RenameIndex{From: oldIndex, To: matches[0]})
+		renamedIndexes[oldIndex.Name] = struct{}{}
+	}
+	for _, orderedChanges := range [][]atlasschema.Change{beforeColumnChanges, tableChanges, afterColumnChanges} {
+		if len(orderedChanges) == 0 {
+			continue
+		}
+		planned, found, err := atlasSteps(ctx, name, []atlasschema.Change{&atlasschema.ModifyTable{T: newTable, Changes: orderedChanges}})
+		if err != nil {
+			return nil, nil, err
+		}
+		steps, risks = append(steps, planned...), append(risks, found...)
 	}
 	return steps, risks, nil
 }
@@ -1728,6 +1498,9 @@ func normalizeRisks(risks []ridumigration.Risk) []ridumigration.Risk {
 }
 
 func renameIntent(rename Rename) ridumigration.Rename {
+	if rename.Kind == RenameBlockField && rename.BeforeField != nil && rename.AfterField != nil {
+		return ridumigration.Rename{Block: rename.Block, FieldBefore: rename.BeforeField.Path.String(), FieldAfter: rename.AfterField.Path.String()}
+	}
 	intent := ridumigration.Rename{CollectionBefore: rename.BeforeCollection.Slug, CollectionAfter: rename.AfterCollection.Slug}
 	if rename.Kind == RenameField && rename.BeforeField != nil && rename.AfterField != nil {
 		intent.FieldBefore, intent.FieldAfter = rename.BeforeField.Path.String(), rename.AfterField.Path.String()
@@ -1741,6 +1514,9 @@ func renameIntent(rename Rename) ridumigration.Rename {
 }
 
 func renameStepName(rename Rename) string {
+	if rename.Kind == RenameBlockField && rename.BeforeField != nil && rename.AfterField != nil {
+		return fmt.Sprintf("preserve block field content %s.%s -> %s.%s", rename.Block, rename.BeforeField.Path, rename.Block, rename.AfterField.Path)
+	}
 	if rename.Kind == RenameField && rename.BeforeField != nil && rename.AfterField != nil {
 		return fmt.Sprintf("preserve field content %s.%s -> %s.%s", rename.BeforeCollection.Slug, rename.BeforeField.Path, rename.AfterCollection.Slug, rename.AfterField.Path)
 	}

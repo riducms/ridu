@@ -10,6 +10,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestPostgresAuthIdentityCanonicalizationAtDirectStoreBoundary(t *testing.T) {
@@ -44,7 +45,7 @@ func TestPostgresAuthIdentityCanonicalizationAtDirectStoreBoundary(t *testing.T)
 		t.Fatalf("Create mutated caller value to %q", got)
 	}
 	updateValues := store.Values{"email": store.String(" Next@Example.COM ")}
-	updated, err := transaction.Update(ctx, store.UpdateRequest{
+	updated, err := conformance.LockedUpdate(ctx, transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: created.ID}, Values: updateValues,
 	})
 	if err != nil {

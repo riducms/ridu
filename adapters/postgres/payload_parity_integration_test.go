@@ -47,9 +47,9 @@ func TestPostgresMultiSelectAndPublishedOnlyRelationshipParity(t *testing.T) {
 	}
 	rolesPath, _ := query.NewPath("roles")
 	admins, err := application.Local().List(ctx, "users", ridu.ListOptions{
-		Where: query.Contains(rolesPath, "admin"), Page: 1, Limit: 10,
+		Where: query.In(rolesPath, "admin"), Page: 1, Limit: 10,
 	})
-	if err != nil || admins.Total != 1 || admins.Documents[0].ID != user.ID {
+	if err != nil || *admins.Total != 1 || admins.Documents[0].ID != user.ID {
 		t.Fatalf("PostgreSQL multi-select membership = %#v, %v", admins, err)
 	}
 

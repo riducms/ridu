@@ -2426,7 +2426,7 @@ func TestSwallowedNestedUploadFailurePoisonsOuterTransactionAndCleansPreparation
 		t.Fatalf("failed nested upload object survived outer rollback: %v", err)
 	}
 	page, err := application.Local().List(context.Background(), "posts", ridu.ListOptions{Limit: 10})
-	if err != nil || page.Total != 0 {
+	if err != nil || *page.Total != 0 {
 		t.Fatalf("outer document committed after swallowed nested failure: %#v, %v", page, err)
 	}
 }

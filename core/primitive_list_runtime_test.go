@@ -20,6 +20,14 @@ import (
 	richtextblocks "github.com/riducms/ridu/tests/contracts/richtext_blocks"
 )
 
+func TestPrimitiveListsLocalRepeatedQueries(t *testing.T) {
+	app, err := core.New(primitivelists.RepeatedConfig(), teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	primitivelists.ExerciseRepeatedQueries(t, app)
+}
+
 func TestPrimitiveListsLocalRESTNestedAndLocalized(t *testing.T) {
 	points := store.List(store.String(""), store.String("Oak"), store.String("Oak"))
 	sizes := store.List(store.Number(0), store.Number(8.5), store.Number(8.5))

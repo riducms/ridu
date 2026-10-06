@@ -104,7 +104,7 @@ func (application *App) AuthInitialized(ctx context.Context, collection string) 
 			err = errors.Join(err, rollbackTransaction(ctx, transaction))
 		}
 	}()
-	page, err := transaction.List(ctx, store.Request{Collection: resolved, Collections: map[schema.StableID]schema.Collection{resolved.ID: resolved}, Page: 1, Limit: 1})
+	page, err := transaction.List(ctx, store.Request{Collection: resolved, Collections: map[schema.StableID]schema.Collection{resolved.ID: resolved}, Page: 1, Limit: 1, SkipTotal: true})
 	if err != nil {
 		return false, fmt.Errorf("read auth initialization state: %w", err)
 	}
@@ -112,7 +112,7 @@ func (application *App) AuthInitialized(ctx context.Context, collection string) 
 		return false, fmt.Errorf("commit auth initialization read: %w", err)
 	}
 	committed = true
-	return page.Total > 0, nil
+	return len(page.Documents) > 0, nil
 }
 
 // AuthBootstrapAvailable reports whether the configured admin-user collection

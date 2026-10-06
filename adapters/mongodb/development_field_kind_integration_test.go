@@ -10,6 +10,7 @@ import (
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestMongoDBFieldKindClearCountsLogicalHeadsAndCoversPublishedOnlyValues(t *testing.T) {
@@ -44,7 +45,7 @@ func TestMongoDBFieldKindClearCountsLogicalHeadsAndCoversPublishedOnlyValues(t *
 			}
 			continue
 		}
-		if _, err := write.Update(ctx, store.UpdateRequest{
+		if _, err := conformance.LockedUpdate(ctx, write, store.UpdateRequest{
 			Request: store.Request{Collection: collection, ID: id, ExpectedRevision: created.Revision},
 			Intent:  store.WriteIntentSaveDraft, Values: store.Values{"body": store.Null()},
 		}); err != nil {
@@ -96,7 +97,7 @@ func TestMongoDBDevelopmentFieldClearWaitsForMigrationLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := t.Context()
-	if err := backend.SyncIndexes(ctx, before); err != nil {
+	if err := backend.syncIndexes(ctx, before); err != nil {
 		t.Fatal(err)
 	}
 	transaction, err := backend.Begin(ctx)

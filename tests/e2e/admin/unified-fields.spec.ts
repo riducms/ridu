@@ -67,7 +67,7 @@ test("unified fields preserve generated editor settings, nested issue identities
 				},
 				{ label: "Second section", sku: "SKU-SECOND", accent: "Second accent" },
 			],
-			content: [{ blockType: "card", label: "Card one", accent: "Block accent" }],
+			content: [{ blockType: "unified-card", label: "Card one", accent: "Block accent" }],
 		},
 	});
 	expect(response.ok(), await response.text()).toBe(true);
@@ -153,7 +153,7 @@ test("unified rich-text fields host local editors and labels with inline undo an
 							type: "block",
 							version: 1,
 							fields: {
-								blockType: "card",
+								blockType: "unified-card",
 								label: "Embedded card",
 								sku: "SKU-CARD",
 								accent: "Original",
@@ -170,7 +170,9 @@ test("unified rich-text fields host local editors and labels with inline undo an
 	expect(response.ok(), await response.text()).toBe(true);
 	const original = (await response.json()).doc;
 	await page.goto(`/admin/collections/unified-articles/${original.id}`);
-	const card = page.locator('[data-field-path="body"] article[data-block-type="card"]').first();
+	const card = page
+		.locator('[data-field-path="body"] article[data-block-type="unified-card"]')
+		.first();
 	const accent = card.locator('input[name$=".accent"]').first();
 	const label = card.locator('input[name$=".products.0.label"]');
 	const sku = card.locator('input[name$=".products.0.sku"]');

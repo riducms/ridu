@@ -12,6 +12,7 @@ import (
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"github.com/riducms/ridu/store/conformance"
 )
 
 func TestMongoHeadReservationsUnionWorkingAndPublishedUniqueness(t *testing.T) {
@@ -76,7 +77,7 @@ func TestMongoPublishedHeadQueriesAndUniqueReservationsIntegration(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	collection := mongoDBSemanticLiveCollection(t, manifest, "posts")
@@ -88,13 +89,13 @@ func TestMongoPublishedHeadQueriesAndUniqueReservationsIntegration(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transaction.Update(t.Context(), store.UpdateRequest{
+	if _, err := conformance.LockedUpdate(t.Context(), transaction, store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1},
 		Values:  store.Values{"slug": store.String("implicit")},
 	}); err == nil {
 		t.Fatal("draft-capable default update accepted an implicit publication")
 	}
-	staged, err := transaction.Update(t.Context(), store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"slug": store.String("new")}})
+	staged, err := conformance.LockedUpdate(t.Context(), transaction, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"slug": store.String("new")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,12 +118,12 @@ func TestMongoPublishedHeadQueriesAndUniqueReservationsIntegration(t *testing.T)
 	}
 	filter := query.Equal("slug", "new").Node()
 	page, err := read.List(t.Context(), store.Request{Collection: collection, PublishedOnly: true, Filter: &filter})
-	if err != nil || page.Total != 0 {
+	if err != nil || *page.Total != 0 {
 		t.Fatalf("public pending-value page = %#v, %v", page, err)
 	}
 	filter = query.Equal("slug", "old").Node()
 	page, err = read.List(t.Context(), store.Request{Collection: collection, PublishedOnly: true, Filter: &filter})
-	if err != nil || page.Total != 1 {
+	if err != nil || *page.Total != 1 {
 		t.Fatalf("public live-value page = %#v, %v", page, err)
 	}
 	if err := read.Rollback(t.Context()); err != nil {
@@ -163,7 +164,7 @@ func TestMongoPublishedOnlyReferenceAndUploadRemainProtected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	collections := mongoCollectionsBySlug(manifest.Snapshot().Collections)
@@ -174,7 +175,7 @@ func TestMongoPublishedOnlyReferenceAndUploadRemainProtected(t *testing.T) {
 		mongoRollback(t, write)
 		t.Fatal(err)
 	}
-	if _, err := write.Update(t.Context(), store.UpdateRequest{
+	if _, err := conformance.LockedUpdate(t.Context(), write, store.UpdateRequest{
 		Request: store.Request{Collection: media, ID: asset.ID, ExpectedRevision: 1},
 		Intent:  store.WriteIntentSaveDraft, ReplaceValues: true, Values: mongoUploadValues("working-object", "working-variant"),
 	}); err != nil {
@@ -186,7 +187,7 @@ func TestMongoPublishedOnlyReferenceAndUploadRemainProtected(t *testing.T) {
 		mongoRollback(t, write)
 		t.Fatal(err)
 	}
-	if _, err := write.Update(t.Context(), store.UpdateRequest{
+	if _, err := conformance.LockedUpdate(t.Context(), write, store.UpdateRequest{
 		Request: store.Request{Collection: owners, ID: owner.ID, ExpectedRevision: 1},
 		Intent:  store.WriteIntentSaveDraft, ReplaceValues: true, Values: store.Values{"title": store.String("Owner draft")},
 	}); err != nil {
@@ -241,7 +242,7 @@ func TestMongoVersionedWithoutDraftsOmitsAuthoringHeadMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(t.Context(), manifest); err != nil {
+	if err := backend.syncIndexes(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	collection := mongoCollectionsBySlug(manifest.Snapshot().Collections)["pages"]
@@ -255,7 +256,7 @@ func TestMongoVersionedWithoutDraftsOmitsAuthoringHeadMetadata(t *testing.T) {
 		mongoRollback(t, write)
 		t.Fatalf("non-draft create leaked authoring metadata: %#v", created)
 	}
-	updated, err := write.Update(t.Context(), store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Values: store.Values{"title": store.String("Updated")}})
+	updated, err := conformance.LockedUpdate(t.Context(), write, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Values: store.Values{"title": store.String("Updated")}})
 	if err != nil {
 		mongoRollback(t, write)
 		t.Fatal(err)
@@ -320,7 +321,7 @@ func TestMongoMigrationPreservesCrossHeadUniqueReservations(t *testing.T) {
 				mongoRollback(t, write)
 				t.Fatal(err)
 			}
-			if _, err := write.Update(t.Context(), store.UpdateRequest{
+			if _, err := conformance.LockedUpdate(t.Context(), write, store.UpdateRequest{
 				Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1},
 				Intent:  store.WriteIntentSaveDraft, Values: store.Values{"slug": store.String("working")},
 			}); err != nil {

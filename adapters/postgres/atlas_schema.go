@@ -18,7 +18,7 @@ const atlasPlannerName = "atlas"
 // AtlasVersion is Ridu's embedded PostgreSQL planning contract version. It is
 // persisted in every migration artifact; the runner accepts only artifacts
 // planned by this exact version.
-const AtlasVersion = "1.2.0"
+const AtlasVersion = "1.3.0"
 
 func atlasPlanner() ridumigration.Planner {
 	return ridumigration.Planner{Name: atlasPlannerName, Version: AtlasVersion}
@@ -56,14 +56,21 @@ func atlasSchema(manifest schema.Manifest, mapping atlasIdentityMap) *atlasschem
 	}
 	resources := append(append([]schema.Collection(nil), snapshot.Collections...), snapshot.Globals...)
 	collections := make(map[schema.StableID]*atlasschema.Table, len(resources))
+	liveTables := make(map[schema.StableID]*atlasschema.Table)
 	for _, collection := range resources {
 		id := mapping.collection(collection.ID)
 		table := collectionAtlasTable(collection, id, mapping, locales)
 		collections[collection.ID] = table
 		physical.AddTables(table)
+		if collection.Versions != nil {
+			live := publishedCollectionAtlasTable(collection, id, mapping, locales, table)
+			liveTables[collection.ID] = live
+			physical.AddTables(live)
+		}
 	}
 	for _, collection := range resources {
 		table := collections[collection.ID]
+		live := liveTables[collection.ID]
 		for _, field := range collection.Fields {
 			if !hasForeignKey(field) {
 				continue
@@ -95,6 +102,10 @@ func atlasSchema(manifest schema.Manifest, mapping atlasIdentityMap) *atlasschem
 				}
 				constraint := "z_fk_" + identifierHash(constraintKey)
 				table.AddForeignKeys(atlasschema.NewForeignKey(constraint).SetTable(table).AddColumns(column).SetRefTable(refTable).AddRefColumns(refColumn))
+				if live != nil {
+					liveColumn, _ := live.Column(columnName)
+					live.AddForeignKeys(atlasschema.NewForeignKey(livePhysicalName(constraint)).SetTable(live).AddColumns(liveColumn).SetRefTable(refTable).AddRefColumns(refColumn))
+				}
 			}
 		}
 	}
@@ -103,7 +114,6 @@ func atlasSchema(manifest schema.Manifest, mapping atlasIdentityMap) *atlasschem
 	}
 	if hasVersionCollections(resources) {
 		physical.AddTables(versionsAtlasTable())
-		physical.AddTables(publishedDocumentsAtlasTable())
 	}
 	if hasDocumentLockCollections(snapshot.Collections) {
 		physical.AddTables(documentLocksAtlasTable())
@@ -130,19 +140,6 @@ func documentReferencesAtlasTable() *atlasschema.Table {
 		atlasschema.NewIndex("ridu_document_references_owner_idx").AddColumns(ownerCollection, ownerDocument),
 	)
 	return table
-}
-
-func publishedDocumentsAtlasTable() *atlasschema.Table {
-	table := atlasschema.NewTable("ridu_published_documents")
-	collection := atlasschema.NewStringColumn("collection_id", atlaspostgres.TypeText)
-	document := atlasschema.NewStringColumn("document_id", atlaspostgres.TypeText)
-	table.AddColumns(
-		collection, document,
-		atlasschema.NewIntColumn("revision", atlaspostgres.TypeInteger),
-		atlasschema.NewJSONColumn("snapshot", atlaspostgres.TypeJSONB),
-		atlasschema.NewBoolColumn("has_draft_changes", atlaspostgres.TypeBoolean).SetDefault(&atlasschema.Literal{V: "false"}),
-	)
-	return table.SetPrimaryKey(atlasschema.NewPrimaryKey(collection, document))
 }
 
 func preferencesAtlasTable() *atlasschema.Table {
@@ -268,6 +265,36 @@ func collectionAtlasTable(collection schema.Collection, id schema.StableID, mapp
 		}
 	}
 	return table
+}
+
+// liveWorkingForeignKey names every live table's reference to its working
+// row. Constraint names are table-scoped, so one stable name survives renames.
+const liveWorkingForeignKey = "z_p_working"
+
+// publishedCollectionAtlasTable is the live table of a versioned resource. It
+// is generated from the working table's definition, so both have the same
+// columns, unique constraints, declared and GIN indexes and relationship
+// foreign keys. Published reads therefore use the ordinary typed compiler,
+// statistics and indexes. Deleting the working row deletes its live row.
+func publishedCollectionAtlasTable(collection schema.Collection, id schema.StableID, mapping atlasIdentityMap, locales []schema.LocaleCode, working *atlasschema.Table) *atlasschema.Table {
+	table := collectionAtlasTable(collection, id, mapping, locales)
+	table.Name = publishedCollectionTable(id)
+	for _, index := range table.Indexes {
+		index.Name = livePhysicalName(index.Name)
+	}
+	table.AddColumns(atlasschema.NewBoolColumn("has_draft_changes", atlaspostgres.TypeBoolean).SetDefault(&atlasschema.Literal{V: "false"}))
+	idColumn, _ := table.Column("id")
+	workingID, _ := working.Column("id")
+	table.AddForeignKeys(atlasschema.NewForeignKey(liveWorkingForeignKey).
+		SetTable(table).AddColumns(idColumn).SetRefTable(working).AddRefColumns(workingID).
+		SetOnDelete(atlasschema.Cascade))
+	return table
+}
+
+// livePhysicalName derives a live-head index or constraint name from its
+// working-table counterpart. PostgreSQL index names share one namespace.
+func livePhysicalName(name string) string {
+	return "z_p" + strings.TrimPrefix(name, "z_")
 }
 
 type atlasIndexSpecification struct {

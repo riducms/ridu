@@ -190,6 +190,20 @@ func TestMCPListsExplicitToolsAndReadsThroughActorAccessAndRedaction(t *testing.
 	if _, exists := page.Documents[0].Values["secret"]; exists {
 		t.Fatalf("MCP page disclosed field-redacted value: %#v", page.Documents[0].Values)
 	}
+	uncounted, err := clientSession.CallTool(t.Context(), &mcpsdk.CallToolParams{
+		Name: "ridu_find_collection_posts", Arguments: map[string]any{"limit": 1, "pagination": false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uncounted.IsError {
+		t.Fatalf("uncounted posts tool error: %s", toolText(uncounted))
+	}
+	var uncountedPage map[string]any
+	decodeStructured(t, uncounted.StructuredContent, &uncountedPage)
+	if _, counted := uncountedPage["totalDocs"]; counted || uncountedPage["hasNextPage"] != false || len(uncountedPage["docs"].([]any)) != 1 {
+		t.Fatalf("pagination false MCP page = %#v", uncountedPage)
+	}
 
 	settings, err := clientSession.CallTool(t.Context(), &mcpsdk.CallToolParams{Name: "ridu_find_global_settings", Arguments: map[string]any{}})
 	if err != nil {

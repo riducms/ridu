@@ -328,6 +328,7 @@ export interface ErrorEnvelope {
 	error: ErrorPayload;
 }
 
+/** Page metadata from a counted list read, the default. */
 export interface Pagination {
 	page: number;
 	limit: number;
@@ -337,9 +338,22 @@ export interface Pagination {
 	hasPrevPage: boolean;
 }
 
-export interface PageEnvelope<Document> {
+/** Page metadata from a pagination=false list read: no count ran, so totals are absent. */
+export interface UncountedPagination {
+	page: number;
+	limit: number;
+	totalDocs?: never;
+	totalPages?: never;
+	hasNextPage: boolean;
+	hasPrevPage: boolean;
+}
+
+export interface PageEnvelope<
+	Document,
+	Metadata extends Pagination | UncountedPagination = Pagination,
+> {
 	docs: Document[];
-	pagination: Pagination;
+	pagination: Metadata;
 }
 
 export interface CollectionPageAccess {
@@ -347,7 +361,10 @@ export interface CollectionPageAccess {
 	documents: Record<string, AccessCapabilitiesEnvelope>;
 }
 
-export interface CollectionPageEnvelope<Document> extends PageEnvelope<Document> {
+export interface CollectionPageEnvelope<
+	Document,
+	Metadata extends Pagination | UncountedPagination = Pagination,
+> extends PageEnvelope<Document, Metadata> {
 	access: CollectionPageAccess;
 }
 
@@ -421,7 +438,10 @@ export interface FieldCapabilities {
 
 export interface AccessCapabilitiesEnvelope {
 	operations: OperationCapabilities;
+	/** Capabilities by runtime path, and by canonical path for resource fields and block placements with values. */
 	fields: Record<string, FieldCapabilities>;
+	/** A block definition's field capabilities at every other placement, by block slug and definition-relative path. */
+	blockFields?: Record<string, Record<string, FieldCapabilities>>;
 }
 
 export interface CollectionSelectionInput<Where = Record<string, unknown>> {
@@ -979,10 +999,10 @@ export interface SchemaArrayRowLabels {
 	pluralTranslations?: Record<string, string>;
 }
 
+/** Selects block definitions from the manifest's blocks registry by slug. */
 export interface SchemaBlocksField {
 	minRows?: number;
 	maxRows?: number;
-	types?: SchemaBlockType[];
 	blockReferences?: string[];
 }
 
@@ -1010,12 +1030,12 @@ export interface SchemaEmbeddedTree {
 	cases: SchemaEmbeddedTreeCase[];
 }
 
+/** Selects block definitions from the manifest's blocks registry by slug. */
 export interface SchemaEmbeddedTreeCase {
 	tagValue: string;
 	payload: string;
 	discriminator: string;
 	identity: string;
-	types?: SchemaBlockType[];
 	blockReferences?: string[];
 }
 

@@ -62,12 +62,12 @@ func (engine *Engine) preparePopulations(collection Collection, operationContext
 		populationContext.projections = nil
 		populationContext.Operation, populationContext.Collection = operation.Read, targetCollection.Schema
 		populationContext.ID, populationContext.Data = "", store.Values{}
-		populationContext.Value, populationContext.SiblingData = store.Value{}, nil
-		populationContext.Document, populationContext.Original, populationContext.FieldPath = nil, nil, ""
+		populationContext.Value, populationContext.Siblings = store.Value{}, store.Value{}
+		populationContext.Document, populationContext.Original, populationContext.bound = nil, nil, boundField{}
 		populationContext.Locale, populationContext.AllLocales = selection.Locale, selection.All
 		decision, err := authorize(targetCollection, populationContext)
 		if err != nil {
-			return &Error{Code: "access_failed", Status: 500, Message: "population access rule failed", Cause: err}
+			return accessRuleError("population access rule failed", err)
 		}
 		if decision.Kind == Deny {
 			request.PopulationAccess[targetID] = denyAllAccessPredicate()
@@ -88,7 +88,7 @@ func (engine *Engine) preparePopulations(collection Collection, operationContext
 			if errors.As(draftError, &operationError) {
 				return operationError
 			}
-			return &Error{Code: "access_failed", Status: 500, Message: "population draft access failed", Cause: draftError}
+			return accessRuleError("population draft access failed", draftError)
 		}
 		request.PopulationPublishedOnly[targetID] = request.PublishedOnly || publishedOnly
 		if decision.Kind == Where {
@@ -182,15 +182,13 @@ func (engine *Engine) populationTargetGraph(relationship *schema.RelationshipFie
 			if !exists || level+1 >= depth {
 				continue
 			}
-			references := populationwalk.ReferenceFields(collection.Fields)
-			expanded += len(references)
+			// Count reference placements and collect their targets from block
+			// definitions, without visiting every placement of the target.
+			expanded += populationwalk.ReferenceFieldCount(collection.Fields)
 			if expanded > populationwalk.MaxExpandedPaths {
 				return nil, expanded, &Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("population expands more than %d relationship fields", populationwalk.MaxExpandedPaths)}
 			}
-			for _, field := range references {
-				nested := populationwalk.RelationshipDetails(field)
-				next = append(next, relationshipSchemaTargets(nested)...)
-			}
+			next = append(next, populationwalk.ReferenceTargets(collection.Fields)...)
 		}
 		queue = next
 	}

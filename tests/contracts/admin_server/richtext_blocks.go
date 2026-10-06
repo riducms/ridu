@@ -12,7 +12,16 @@ import (
 
 // The browser fixture deliberately uses ordinary reusable block definitions,
 // including two finite inner editors. Nothing here extends the operation engine.
+// They are declared once and shared by every collection that places them: a
+// slug names one definition, and callbacks are identical only when shared from
+// one value.
+var richTextCallout, richTextCTA, richTextMedia = newRichTextBlockDefinitions()
+
 func richTextBlockDefinitions() (callout, cta, media field.Block) {
+	return richTextCallout, richTextCTA, richTextMedia
+}
+
+func newRichTextBlockDefinitions() (callout, cta, media field.Block) {
 	cta = field.Block{Admin: field.BlockAdmin{RowLabelPath: "label"}, Slug: "cta", Labels: field.BlockLabels{Singular: "CTA"}, Fields: field.Fields{
 		field.Text("label").Label("CTA label").Required().Localized(),
 		field.Relationship("destination", "pages"),
@@ -41,7 +50,8 @@ func richTextBlockDefinitions() (callout, cta, media field.Block) {
 		}).Admin(field.Admin{InitiallyCollapsed: true}),
 	}}
 
-	media = field.Block{Admin: field.BlockAdmin{RowLabelPath: "caption"}, Slug: "media", Fields: field.Fields{
+	// The derived type name Media would collide with the media collection.
+	media = field.Block{Admin: field.BlockAdmin{RowLabelPath: "caption"}, Slug: "media", TypeName: "MediaBlock", Fields: field.Fields{
 		field.Upload("asset", "media").Label("Block asset").Required(),
 		field.Text("caption").Localized(),
 	}}
@@ -71,7 +81,9 @@ func richTextBlocksCollection() ridu.Collection {
 
 func richTextBlockPagesCollection() ridu.Collection {
 	callout, cta, media := richTextBlockDefinitions()
-	hero := field.Block{Admin: field.BlockAdmin{RowLabelPath: "heading"}, Slug: "hero", Fields: field.Fields{
+	// The editorial pages fixture owns "hero"; this smaller layout hero keeps
+	// its editor label under its own slug.
+	hero := field.Block{Admin: field.BlockAdmin{RowLabelPath: "heading"}, Slug: "page-hero", Labels: field.BlockLabels{Singular: "Hero", Plural: "Heroes"}, Fields: field.Fields{
 		field.Text("heading").Required().Localized(),
 	}}
 	content := field.Block{Admin: field.BlockAdmin{RowLabelPath: "title"}, Slug: "content", Fields: field.Fields{

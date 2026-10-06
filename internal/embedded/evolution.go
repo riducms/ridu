@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"github.com/riducms/ridu/schema"
 	"reflect"
+	"strings"
 )
 
 // CompareEvolution checks embedded descriptor topology separately from ordinary
 // child schema evolution. Moving a payload boundary requires an explicit data
 // transform; adding ordinary fields/variants uses the adapter's existing rules.
-// The returned field has the prior types solely for the caller's outer-shape
-// comparison; neither input is mutated.
+// compare receives each case's shared definition views, the same values at
+// every placement, so a caller can compare each definition once. The returned
+// field has the prior types solely for the caller's outer-shape comparison;
+// neither input is mutated.
 func CompareEvolution(before, after schema.Field, compare func(string, []schema.BlockType, []schema.BlockType) error) (schema.Field, error) {
 	if !HasFields(before) && !HasFields(after) {
 		return after, nil
@@ -33,7 +36,7 @@ func CompareEvolution(before, after schema.Field, compare func(string, []schema.
 			if !reflect.DeepEqual(oldMetadata, candidate) {
 				return after, evolutionError(before)
 			}
-			if err := compare(before.Path.String()+"."+previous.Key+"."+old.TagValue, old.ResolvedTypes(), next.Cases[j].ResolvedTypes()); err != nil {
+			if err := compare(before.Path.String()+"."+previous.Key+"."+old.TagValue, old.Definitions(), next.Cases[j].Definitions()); err != nil {
 				return after, err
 			}
 			next.Cases[j] = old
@@ -50,25 +53,17 @@ func evolutionError(field schema.Field) error {
 	return fmt.Errorf("embedded descriptor %q changed its envelope; use an explicit data migration to transform stored payloads", field.Path.String())
 }
 
-// DescendantPath identifies an ordinary field reached through an embedded
-// payload boundary. The plugin root itself remains an ordinary stored field.
+// DescendantPath identifies a path that crosses an embedded payload boundary
+// among fields and their groups and arrays: the path of a plugin field that
+// declares embedded schemas, followed by more segments. The plugin root itself
+// remains an ordinary stored field. A block definition's fields have their own
+// definition-relative paths, so the walk never enters block definitions.
 func DescendantPath(fields []schema.Field, path string) bool {
 	for _, field := range fields {
-		if HasFields(field) {
-			var contains func([]schema.Field) bool
-			contains = func(children []schema.Field) bool {
-				for _, child := range children {
-					if child.Path.String() == path || contains(schema.ChildFields(child)) {
-						return true
-					}
-				}
-				return false
-			}
-			if contains(schema.ChildFields(field)) {
-				return true
-			}
+		if HasFields(field) && strings.HasPrefix(path, field.Path.String()+".") {
+			return true
 		}
-		if DescendantPath(schema.ChildFields(field), path) {
+		if field.Nested != nil && DescendantPath(field.Nested.ResolvedFields(), path) {
 			return true
 		}
 	}

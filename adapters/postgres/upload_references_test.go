@@ -31,10 +31,14 @@ func TestPostgresUploadReferenceStatementCoalescesCollectionsAndVersions(t *test
 	if got := strings.Count(statement, "ridu_versions"); got != 3 {
 		t.Fatalf("version branches = %d in %s", got, statement)
 	}
-	if got := strings.Count(statement, "ridu_published_documents"); got != 3 {
-		t.Fatalf("published-head branches = %d in %s", got, statement)
+	// The versioned collection's live table repeats its typed working lookups.
+	if got := strings.Count(statement, quote(publishedCollectionTable("media-b"))); got != 2 {
+		t.Fatalf("live-table branches = %d in %s", got, statement)
 	}
-	if got := strings.Count(statement, " = ANY($1::text[])"); got != 6 {
+	if strings.Contains(statement, quote(publishedCollectionTable("media-a"))) {
+		t.Fatalf("unversioned collection has a live-table branch: %s", statement)
+	}
+	if got := strings.Count(statement, " = ANY($1::text[])"); got != 5 {
 		t.Fatalf("candidate predicates = %d in %s", got, statement)
 	}
 	if got := strings.Count(statement, "jsonb_path_query_array("); got != 4 || strings.Contains(statement, "jsonb_each") {
