@@ -35,6 +35,8 @@ yarn add @riducms/sdk @riducms/sveltekit
 Browsers call Ridu from the SvelteKit origin, so list it in the CMS's
 [`AllowedOrigins`](https://riducms.com/docs/cors/), for example `RIDU_ALLOWED_ORIGINS=https://app.example.com`.
 
+The package supports SvelteKit 2.20 and later, and SvelteKit 3.
+
 ## Bind the generated client {#define}
 
 ```ts title="src/lib/ridu.ts"
@@ -54,6 +56,19 @@ export type Client = InferClient<typeof ridu>;
 `defineRidu` holds configuration and types; it never creates a shared authenticated client.
 `authCollection` must be an auth collection, and it types every session's `user`. The Ridu URL is
 public configuration because browsers call it.
+
+SvelteKit 3 declares environment variables in `src/env.ts` instead. Mark the URL public there and
+import it from `$app/env/public`:
+
+```ts title="src/env.ts"
+import { defineEnvVars } from '@sveltejs/kit/env';
+
+export const variables = defineEnvVars({
+	RIDU_URL: { public: true }
+});
+```
+
+Then use `import { RIDU_URL } from '$app/env/public'` and pass `baseURL: RIDU_URL`.
 
 ## Add the server hook {#hook}
 
@@ -79,7 +94,8 @@ export {};
 ```
 
 The hook gives each request its own client in `event.locals.ridu`. Compose it with other hooks
-through `sequence`. A server-side login, logout, or rejected token updates the session cookie on the
+through `sequence`, which SvelteKit 3 exports from `@sveltejs/kit/hooks` along with the `Handle`
+type. A server-side login, logout, or rejected token updates the session cookie on the
 response.
 
 Server requests go through SvelteKit's `event.fetch`. The client sends its token in the
