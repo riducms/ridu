@@ -66,7 +66,7 @@ const lazy = () => import('@riducms/ui');
 			specifier === "svelte" ||
 			specifier.startsWith("svelte/") ||
 			specifier === "@sveltejs/kit" ||
-			specifier === "$app/environment" ||
+			specifier === "esm-env" ||
 			specifier === "$app/navigation";
 		const violations = await forbiddenImports(
 			"packages/sveltekit/src",

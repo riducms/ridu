@@ -5,7 +5,7 @@ import type {
 	RiduConfigShape,
 	SessionFor,
 } from "@riducms/sdk";
-import type { Handle, RequestEvent } from "@sveltejs/kit";
+import type { RequestEvent } from "@sveltejs/kit";
 
 import { definitionKey, type RiduDefinition } from "./definition.js";
 import { RequestSessionStore } from "./request-session.js";
@@ -50,13 +50,22 @@ export function createServerClient<
 }
 
 /**
+ * A server `handle` hook. SvelteKit 2 exports `Handle` from `@sveltejs/kit` and SvelteKit 3 from
+ * `@sveltejs/kit/hooks`; this shape is assignable to both.
+ */
+export type RiduHandle = (input: {
+	event: RequestEvent;
+	resolve: (event: RequestEvent) => Response | Promise<Response>;
+}) => Response | Promise<Response>;
+
+/**
  * A SvelteKit `handle` that sets `event.locals.ridu` for each request. Compose it with other hooks
  * through `sequence`.
  */
 export function createRiduHandle<
 	Config extends RiduConfigShape,
 	Slug extends AuthCollectionSlug<Config>,
->(ridu: Binding<Config, Slug>, options: ServerClientOptions = {}): Handle {
+>(ridu: Binding<Config, Slug>, options: ServerClientOptions = {}): RiduHandle {
 	return ({ event, resolve }) => {
 		// Applications type `App.Locals.ridu` with their own client; assign without widening it.
 		Object.assign(event.locals, { ridu: createServerClient(ridu, event, options) });
