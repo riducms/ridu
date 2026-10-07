@@ -1,8 +1,9 @@
 import type { AuthCollectionSlug, RiduClient, RiduConfigShape, SessionFor } from "@riducms/sdk";
 import { getContext, onDestroy, onMount, setContext } from "svelte";
 import { createSubscriber } from "svelte/reactivity";
-import { browser } from "$app/environment";
 import { invalidate } from "$app/navigation";
+// SvelteKit 2 re-exports this from $app/environment, which SvelteKit 3 deprecates.
+import { BROWSER } from "esm-env";
 
 import { BrowserSessionStore } from "./browser-session.js";
 import {
@@ -78,7 +79,7 @@ export function defineRidu<
 			const provided = provideOptions.session;
 			const snapshot =
 				typeof provided === "function" ? provided : () => provided as Session | null | undefined;
-			const client = browser
+			const client = BROWSER
 				? browserClient(definition, snapshot)
 				: renderClient(definition, snapshot);
 			setContext(clientKey, client);
