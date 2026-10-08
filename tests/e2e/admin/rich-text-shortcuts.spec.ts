@@ -34,3 +34,28 @@ test("rich-text shortcuts create editable checklists and persist headings and li
 	expect(consoleErrors).toEqual([]);
 	expect(pageErrors).toEqual([]);
 });
+
+test("rich-text list shortcuts save with any Markdown bullet", async ({ page }) => {
+	const { consoleErrors, pageErrors } = observePageErrors(page);
+	await loginAsEditor(page);
+	consoleErrors.length = 0;
+	await page.goto("/admin/collections/posts/create");
+	const editor = page.getByRole("textbox", { name: "Content" });
+	await editor.click();
+	// Lexical records a `*` or `+` bullet on the list, which the stored document doesn't keep.
+	await page.keyboard.type("* Starred");
+	await page.keyboard.press("Enter");
+	await page.keyboard.press("Enter");
+	await page.keyboard.type("Between");
+	await page.keyboard.press("Enter");
+	await page.keyboard.type("+ Plus");
+
+	await page.locator('input[name="title"]').fill("Bullet shortcuts");
+	await page.getByLabel("Summary — English", { exact: true }).fill("Persisted bullets");
+	await documentSaveButton(page).click();
+	await expect(page).not.toHaveURL(/\/create$/);
+	await page.reload();
+	await expect(editor.locator("ul > li")).toHaveText(["Starred", "Plus"]);
+	expect(consoleErrors).toEqual([]);
+	expect(pageErrors).toEqual([]);
+});

@@ -9068,7 +9068,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.17.0\"",
+					"signature": "const FrameworkVersion = \"0.18.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -113394,6 +113394,49 @@
 					"overloads": []
 				},
 				{
+					"id": "ts:@riducms/sdk/richtext#convertLexicalToPlaintext",
+					"name": "convertLexicalToPlaintext",
+					"slug": "convert-lexical-to-plaintext",
+					"kind": "function",
+					"group": "Functions",
+					"summary": "A document's text without formatting, for previews, search, notifications or a language model. Blocks are separated by a blank line, list items are on their own lines, and a line break is a newline. Pure and synchronous, like `renderRichTextHTML`.",
+					"signature": "function convertLexicalToPlaintext<Payload extends { blockType: string; } = never>(value: RichTextDocument<Payload>, options?: RichTextPlaintextOptions<Payload>): string",
+					"parameters": [
+						{
+							"name": "value",
+							"type": "RichTextDocument<Payload>",
+							"description": "A stored rich-text document."
+						},
+						{
+							"name": "options",
+							"type": "RichTextPlaintextOptions<Payload>",
+							"description": "Text for custom blocks, uploads and relationships, which are left out without it."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "string",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"convertLexicalToPlaintext",
+						"@riducms/sdk/richtext.convertLexicalToPlaintext"
+					],
+					"source": {
+						"path": "packages/sdk/src/richtext/index.ts",
+						"line": 22
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": [
+						"function convertLexicalToPlaintext<Payload extends { blockType: string; } = never>(value: RichTextDocument<Payload>, options?: RichTextPlaintextOptions<Payload>): string"
+					]
+				},
+				{
 					"id": "ts:@riducms/sdk/richtext#documentRecoveryIssue",
 					"name": "documentRecoveryIssue",
 					"slug": "document-recovery-issue",
@@ -113428,7 +113471,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/richtext/index.ts",
-						"line": 22
+						"line": 23
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -113881,6 +113924,43 @@
 					"source": {
 						"path": "packages/sdk/src/richtext/index.ts",
 						"line": 11
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/sdk/richtext#RichTextPlaintextOptions",
+					"name": "RichTextPlaintextOptions",
+					"slug": "rich-text-plaintext-options",
+					"kind": "interface",
+					"group": "Interfaces",
+					"summary": "Text for the nodes `convertLexicalToPlaintext` can't read text from, such as custom blocks.",
+					"signature": "interface RichTextPlaintextOptions<Payload extends { blockType: string }> { ... }",
+					"parameters": [
+						{
+							"name": "blocks",
+							"type": "Partial<RichTextBlockRenderers<Payload, string>>",
+							"description": "Text for custom blocks, which have none of their own. Blocks without a converter are left out."
+						},
+						{
+							"name": "nodes",
+							"type": "Partial<Record<\"upload\" | \"relationship\", (node: Extract<RichTextNode<Payload>, { type: \"upload\" | \"relationship\"; }>) => string>>",
+							"description": "Text for uploads and relationships, such as a caption. Without a converter they're left out."
+						}
+					],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RichTextPlaintextOptions",
+						"@riducms/sdk/richtext.RichTextPlaintextOptions"
+					],
+					"source": {
+						"path": "packages/sdk/src/richtext/index.ts",
+						"line": 22
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115766,9 +115846,9 @@
 							"description": "Read the client provided by the root layout. Call it during component initialization."
 						},
 						{
-							"name": "__@definitionKey@1871",
+							"name": "__@definitionKey@1895",
 							"type": "RiduDefinition<Config, Slug>",
-							"description": "The __@definitionKey@1871 value."
+							"description": "The __@definitionKey@1895 value."
 						}
 					],
 					"parametersLabel": "",
@@ -127999,9 +128079,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@10903",
+							"name": "__@registration@10927",
 							"type": "true",
-							"description": "The __@registration@10903 value."
+							"description": "The __@registration@10927 value."
 						}
 					],
 					"parametersLabel": "",
@@ -129159,9 +129239,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@7991",
+							"name": "__@registration@8015",
 							"type": "true",
-							"description": "The __@registration@7991 value."
+							"description": "The __@registration@8015 value."
 						}
 					],
 					"parametersLabel": "",
@@ -130990,9 +131070,9 @@
 							"description": "The type value."
 						},
 						{
-							"name": "__@valueContract@6058",
+							"name": "__@valueContract@6082",
 							"type": "{ value: (value: Value) => Value; input: (value: Input) => Input; }",
-							"description": "The __@valueContract@6058 value."
+							"description": "The __@valueContract@6082 value."
 						},
 						{
 							"name": "fieldType",
@@ -131025,9 +131105,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@6037",
+							"name": "__@registration@6061",
 							"type": "true",
-							"description": "The __@registration@6037 value."
+							"description": "The __@registration@6061 value."
 						}
 					],
 					"parametersLabel": "",
@@ -131501,9 +131581,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@6037",
+							"name": "__@registration@6061",
 							"type": "true",
-							"description": "The __@registration@6037 value."
+							"description": "The __@registration@6061 value."
 						}
 					],
 					"parametersLabel": "",
@@ -133649,6 +133729,7 @@
 				"Types",
 				"Interfaces",
 				"Constants",
+				"Functions",
 				"Components"
 			],
 			"symbols": [
@@ -133847,7 +133928,7 @@
 					"slug": "rich-text-editor-feature",
 					"kind": "type",
 					"group": "Types",
-					"summary": "The features the core editor implements.",
+					"summary": "A feature the core editor implements.",
 					"signature": "type RichTextEditorFeature = \"links\" | \"lists\" | \"code\" | \"horizontal-rule\"",
 					"parameters": [],
 					"parametersLabel": "",
@@ -133940,6 +134021,81 @@
 					"source": {
 						"path": "packages/plugin-richtext/src/lib/editor/index.ts",
 						"line": 11
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/plugin-richtext/markdown#convertMarkdownToLexical",
+					"name": "convertMarkdownToLexical",
+					"slug": "convert-markdown-to-lexical",
+					"kind": "function",
+					"group": "Functions",
+					"summary": "A document from Markdown, such as a language model's answer or imported content, made the way the editor's Markdown shortcuts make it. It runs without a browser, so a server action or script can save it, and the editor can open it.",
+					"signature": "function convertMarkdownToLexical(markdown: string, options?: RichTextMarkdownOptions): RichTextDocument",
+					"parameters": [
+						{
+							"name": "markdown",
+							"type": "string",
+							"description": "The Markdown. Markdown for a feature the field doesn't have stays text."
+						},
+						{
+							"name": "options",
+							"type": "RichTextMarkdownOptions",
+							"description": "The Go field's features, which default to all of the editor's."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "RichTextDocument<never>",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"convertMarkdownToLexical",
+						"@riducms/plugin-richtext/markdown.convertMarkdownToLexical"
+					],
+					"source": {
+						"path": "packages/plugin-richtext/src/lib/markdown/index.ts",
+						"line": 52
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": [
+						"function convertMarkdownToLexical(markdown: string, options?: RichTextMarkdownOptions): RichTextDocument"
+					]
+				},
+				{
+					"id": "ts:@riducms/plugin-richtext/markdown#RichTextMarkdownOptions",
+					"name": "RichTextMarkdownOptions",
+					"slug": "rich-text-markdown-options",
+					"kind": "interface",
+					"group": "Interfaces",
+					"summary": "How `convertMarkdownToLexical` converts: which of the editor's features it may use.",
+					"signature": "interface RichTextMarkdownOptions { ... }",
+					"parameters": [
+						{
+							"name": "features",
+							"type": "readonly RichTextEditorFeature[] | undefined",
+							"description": "The Go field's features. Markdown for anything else stays text, as in the editor."
+						}
+					],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RichTextMarkdownOptions",
+						"@riducms/plugin-richtext/markdown.RichTextMarkdownOptions"
+					],
+					"source": {
+						"path": "packages/plugin-richtext/src/lib/markdown/index.ts",
+						"line": 31
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],

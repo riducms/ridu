@@ -1,3 +1,4 @@
+@use "sass:list";
 @use "@riducms/ui/layers.css";
 
 // Ridu's UI components (the editor's buttons, menus, tooltips and link dialog) read the admin
@@ -35,9 +36,8 @@ $ui-defaults: (
 	admin-gutter: 24px,
 );
 
-// The editor and the popups it opens.
-$surfaces: (
-	".ridu-richtext-editor",
+// The popups the editor opens, which render at the end of the page.
+$popups: (
 	".ridu-richtext-floating-toolbar",
 	".ridu-richtext-link-preview",
 	".ridu-popover-content",
@@ -47,6 +47,17 @@ $surfaces: (
 	".ridu-dialog-drawer",
 	".ridu-dialog-overlay"
 );
+// The editor and its popups.
+$surfaces: list.join(".ridu-richtext-editor", $popups, comma);
+
+// Each class twice, such as `.ridu-menu.ridu-menu`, which beats one class or attribute.
+@function doubled($selectors) {
+	$result: ();
+	@each $selector in $selectors {
+		$result: list.append($result, "#{$selector}#{$selector}", comma);
+	}
+	@return $result;
+}
 
 @layer ridu.theme {
 	:where(:root) {
@@ -101,4 +112,25 @@ $surfaces: (
 		outline: var(--ridu-richtext-focus);
 		outline-offset: var(--ridu-richtext-focus-offset);
 	}
+}
+
+// Unlayered on purpose. An app's unlayered CSS beats every cascade layer, so a reset or global
+// element rules outside a layer, which UnoCSS's preflight can be, would restyle the editor's text
+// and controls: lists would lose their bullets and focus would draw a second outline. Roll them
+// back inside the editor and on its popups, to the cascade layers, where the editor's own rules and
+// an app's `app` layer apply. The doubled classes beat an app reset's `[type="button"]` and other
+// single-class selectors; a more specific or `!important` rule still applies. The editor's root keeps the app's rules, so a class the app passes it
+// styles its frame. Custom properties and inline styles don't roll back.
+:is(#{doubled($surfaces)}) *,
+:is(#{doubled($surfaces)}) *::before,
+:is(#{doubled($surfaces)}) *::after,
+:is(#{doubled($popups)}),
+:is(#{doubled($popups)})::before,
+:is(#{doubled($popups)})::after {
+	all: revert-layer;
+}
+
+// Apart, so a browser without the pseudo-element still reads the rule above.
+:is(#{doubled($surfaces)}) *::placeholder {
+	all: revert-layer;
 }

@@ -1,13 +1,4 @@
 <script module lang="ts">
-	import type { RichTextEditorFeature } from "#lib/field/rich-text-config.js";
-
-	const defaultFeatures: readonly RichTextEditorFeature[] = [
-		"links",
-		"lists",
-		"code",
-		"horizontal-rule",
-	];
-
 	const theme = {
 		heading: {
 			h1: "ridu-richtext-heading ridu-richtext-h1",
@@ -97,7 +88,11 @@
 	import { registerSafeLinkTransform } from "#lib/link/safe-link-transform.js";
 	import { richTextMarkdownTransformers } from "#lib/field/rich-text-markdown.js";
 	import RichTextSlashMenu from "#lib/menu/rich-text-slash-menu.svelte";
-	import type { RichTextToolbar } from "#lib/field/rich-text-config.js";
+	import {
+		richTextEditorFeatures,
+		type RichTextEditorFeature,
+		type RichTextToolbar,
+	} from "#lib/field/rich-text-config.js";
 	import {
 		editorRecoveryIssue,
 		initialEditorState,
@@ -105,14 +100,14 @@
 		isEmptyDocument,
 	} from "#lib/field/rich-text-document.js";
 	import { BLOCK_FIELD_CHANGE_TAG } from "#lib/block/rich-text-block-history.js";
-	import { equalRichTextValues } from "#lib/field/rich-text-value.js";
+	import { equalRichTextValues, lexicalDocument } from "#lib/field/rich-text-value.js";
 	import type { RichTextEditorExtension } from "#lib/editor/rich-text-extension.js";
 	import RichText from "#lib/render/rich-text.svelte";
 
 	const generatedID = $props.id();
 	let {
 		value = $bindable(),
-		features = defaultFeatures,
+		features = richTextEditorFeatures,
 		toolbar = "floating",
 		hideGutter = false,
 		hideDraggableBlockElement = false,
@@ -162,7 +157,7 @@
 		id?: string;
 		label?: string | undefined;
 		/** Names the downloaded recovery file. */
-		name?: string;
+		name?: string | undefined;
 		/** Locates problems in recovery messages. */
 		path?: string;
 		required?: boolean;
@@ -264,11 +259,7 @@
 		// history, but carry an explicit tag because every keystroke must reach the host.
 		if (tags.has(HISTORY_MERGE_TAG) && !tags.has(BLOCK_FIELD_CHANGE_TAG)) return;
 
-		// Lexical can retain undefined optional properties after importing sparse server JSON.
-		// Validate its serialized wire value, where those properties are absent.
-		const next: unknown = JSON.parse(
-			JSON.stringify({ version: 1, root: editorState.toJSON().root })
-		);
+		const next = lexicalDocument(editorState);
 		const issue = documentRecoveryIssue(next);
 		// An edit the server would reject stays in the editor and is reported, not emitted.
 		onrejectedchange?.(issue);

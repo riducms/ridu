@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/plugin-richtext",
 	"description": "Svelte and Lexical admin integration for Ridu's official rich-text plugin.",
-	"version": "0.17.0",
+	"version": "0.18.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -31,6 +31,11 @@
 			"default": "./dist/editor/index.js"
 		},
 		"./editor.scss": "./dist/styles/editor.scss",
+		"./markdown": {
+			"types": "./dist/markdown/index.d.ts",
+			"svelte": "./dist/markdown/index.js",
+			"default": "./dist/markdown/index.js"
+		},
 		"./svelte": {
 			"types": "./dist/render/index.d.ts",
 			"svelte": "./dist/render/index.js",
@@ -63,6 +68,8 @@
 		"@hvniel/lexical-svelte": "^0.1.1",
 		"@lexical/clipboard": "0.49.0",
 		"@lexical/code": "0.49.0",
+		"@lexical/code-core": "0.49.0",
+		"@lexical/extension": "0.49.0",
 		"@lexical/history": "0.49.0",
 		"@lexical/link": "0.49.0",
 		"@lexical/list": "0.49.0",

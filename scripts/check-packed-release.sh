@@ -126,7 +126,12 @@ for package_directory in "$package_root"/*; do
 		fi
 		compiled_files=(package/dist/index.js package/dist/index.d.ts)
 		if [[ "$package_target" == "ridu-framework-plugin-richtext" ]]; then
-			compiled_files+=(package/dist/editor/index.js package/dist/editor/index.d.ts)
+			compiled_files+=(
+				package/dist/editor/index.js
+				package/dist/editor/index.d.ts
+				package/dist/markdown/index.js
+				package/dist/markdown/index.d.ts
+			)
 		fi
 		for compiled_file in "${compiled_files[@]}"; do
 			if ! grep -Fxq -- "$compiled_file" "$packed_members"; then
@@ -158,7 +163,7 @@ mkdir -p "$node_consumer"
 		import assert from "node:assert/strict";
 		import { PROTOCOL_VERSION } from "@riducms/protocol";
 		import { createClient, RiduError } from "@riducms/sdk";
-		import { renderRichTextHTML } from "@riducms/sdk/richtext";
+		import { convertLexicalToPlaintext, renderRichTextHTML } from "@riducms/sdk/richtext";
 		assert.equal(typeof PROTOCOL_VERSION, "number");
 		assert.equal(typeof createClient, "function");
 		assert.equal(typeof RiduError, "function");
@@ -167,11 +172,15 @@ mkdir -p "$node_consumer"
 			renderRichTextHTML({ version: 1, root: { type: "root", children: [{ type: "paragraph", children: [{ type: "text", text: "<Hi>" }] }] } }),
 			"<p>&lt;Hi&gt;</p>"
 		);
+		assert.equal(
+			convertLexicalToPlaintext({ version: 1, root: { type: "root", children: [{ type: "paragraph", children: [{ type: "text", text: "<Hi>" }] }] } }),
+			"<Hi>"
+		);
 	'
 	printf '%s\n' \
 		'import { PROTOCOL_VERSION } from "@riducms/protocol";' \
 		'import { createClient, type ClientOptions, type RequestOptions } from "@riducms/sdk";' \
-		'import { renderRichTextHTML, type RichTextDocument } from "@riducms/sdk/richtext";' \
+		'import { convertLexicalToPlaintext, renderRichTextHTML, type RichTextDocument } from "@riducms/sdk/richtext";' \
 		'const options: ClientOptions = {' \
 		'  baseURL: "https://example.test",' \
 		'  headers: { authorization: "Bearer test" },' \
@@ -181,7 +190,8 @@ mkdir -p "$node_consumer"
 		'void createClient(options).schema(requestOptions);' \
 		'void PROTOCOL_VERSION;' \
 		'const document: RichTextDocument = { version: 1, root: { type: "root", children: [] } };' \
-		'void renderRichTextHTML(document);' > consumer.ts
+		'void renderRichTextHTML(document);' \
+		'void convertLexicalToPlaintext(document);' > consumer.ts
 	printf '%s\n' \
 		'{' \
 		'  "compilerOptions": {' \
@@ -222,11 +232,13 @@ printf '%s\n' \
 	'import { formBuilderMessages } from "@riducms/plugin-form-builder/admin";' \
 	'import { graphqlMessages } from "@riducms/plugin-graphql";' \
 	'import { RichTextEditor } from "@riducms/plugin-richtext/editor";' \
+	'import { convertMarkdownToLexical } from "@riducms/plugin-richtext/markdown";' \
 	'void richTextMessages;' \
 	'void seoMessages;' \
 	'void formBuilderMessages;' \
 	'void graphqlMessages;' \
-	'void RichTextEditor;' > "$project_root/admin/src/framework-alias-contract.ts"
+	'void RichTextEditor;' \
+	'void convertMarkdownToLexical;' > "$project_root/admin/src/framework-alias-contract.ts"
 
 (
 	cd "$project_root"
@@ -240,6 +252,17 @@ printf '%s\n' \
 		exit 1
 	fi
 	npm install --no-audit --no-fund
+	# The Markdown converter runs on a server without a browser or bundler.
+	(
+		cd admin
+		node --input-type=module --eval '
+			import assert from "node:assert/strict";
+			import { convertMarkdownToLexical } from "@riducms/plugin-richtext/markdown";
+			const document = convertMarkdownToLexical("* Item");
+			assert.equal(document.root.children[0].type, "list");
+			assert.equal(JSON.stringify(document).includes("\"$\""), false);
+		'
+	)
 	RIDU_BINARY="$project_root/.ridu/bin/ridu" npm run ridu -- version
 	RIDU_BINARY="$project_root/.ridu/bin/ridu" npm run ridu -- generate --check
 	initial_migrations=(migrations/*.ridu.json)
@@ -323,4 +346,4 @@ if [[ -s "$npm_invocation_log" ]]; then
 	exit 1
 fi
 
-echo "clean Node import, create-ridu forwarding, project-local CLI recovery/execution, strict Node-only types, scaffold, install, check, build, and publication command policy verified from $package_count packed Ridu $version artifacts"
+echo "clean Node import, the Markdown converter in Node, create-ridu forwarding, project-local CLI recovery/execution, strict Node-only types, scaffold, install, check, build, and publication command policy verified from $package_count packed Ridu $version artifacts"

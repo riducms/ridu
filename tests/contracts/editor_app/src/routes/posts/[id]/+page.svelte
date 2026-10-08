@@ -15,8 +15,13 @@
 <main>
 	<h1>{data.post.title}</h1>
 	<form method="POST" use:enhance>
-		<RichTextEditor bind:value={body} label="Body" features={["links", "lists"]} toolbar="fixed" />
-		<input type="hidden" name="body" value={JSON.stringify(body)} />
+		<RichTextEditor
+			bind:value={body}
+			name="body"
+			label="Body"
+			features={["links", "lists"]}
+			toolbar="fixed"
+		/>
 		<button>Save</button>
 	</form>
 	{#each form?.issues ?? [] as issue}

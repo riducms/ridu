@@ -73,6 +73,116 @@ test("keeps the server copy's layout when the editor mounts", async ({ browser, 
 	await expect.poll(() => measureEditors(page)).toEqual(serverLayout);
 });
 
+test("keeps its own styles under the app's unlayered reset", async ({ browser, page }) => {
+	// tests/contracts/editor_app/src/app.css resets lists, headings, links, buttons and
+	// pseudo-elements and outlines focus outside any cascade layer, as UnoCSS's preflight does, and
+	// resets lists in a layer declared before Ridu's, as Tailwind 4 does. Its `app` layer recolors
+	// quotes.
+	const styles = (target: Page) =>
+		target
+			.locator(".ridu-richtext-editor")
+			.filter({ hasText: "A quote" })
+			.evaluate((editor) => {
+				const style = (selector: string, pseudoElement?: string) =>
+					getComputedStyle(editor.querySelector(selector)!, pseudoElement);
+				const checkbox =
+					".ridu-richtext-list-item-checked, .ridu-richtext-list-item-unchecked, ul[data-list-type='check'] > li";
+				return {
+					bullets: style("ul").listStyleType,
+					listIndent: style("li").marginInlineStart,
+					spacing: style("p").marginBottom,
+					heading: style("h2").fontSize,
+					checkbox: style(checkbox, "::before").borderTopWidth,
+					quote: style("blockquote").borderInlineStartColor,
+				};
+			});
+	const expected = {
+		bullets: "disc",
+		listIndent: "40px",
+		spacing: "8.8px",
+		heading: "25px",
+		checkbox: "1px",
+		quote: "rgb(180, 83, 9)",
+	};
+
+	const server = await browser.newContext({ javaScriptEnabled: false });
+	const serverPage = await server.newPage();
+	await serverPage.goto("/");
+	expect(await styles(serverPage)).toEqual(expected);
+	await server.close();
+
+	await page.goto("/");
+	const story = page.getByRole("textbox", { name: "Story" });
+	await expect(story).toHaveAttribute("contenteditable", "true");
+	expect(await styles(page)).toEqual(expected);
+	// The field draws no second outline inside the app's own focus style.
+	await story.click();
+	await expect(story).toHaveCSS("outline-style", "none");
+
+	// Popups render at the end of the page, outside the editor, and keep their own styles too.
+	await page.keyboard.press("ControlOrMeta+A");
+	await expect(page.locator(".ridu-richtext-floating-toolbar")).toHaveCSS("padding-top", "4px");
+	// A reset loaded after the editor's stylesheet wins ties on specificity, as `[type="submit"]`
+	// and one class are.
+	await page.addStyleTag({
+		content: `button, [type="button"], [type="submit"] {
+			background-color: transparent;
+			background-image: none;
+		}
+		::placeholder {
+			color: rgb(255, 0, 0);
+		}`,
+	});
+	await page.keyboard.press("ControlOrMeta+K");
+	const dialog = page.getByRole("dialog", { name: "Edit link" });
+	await expect(dialog.getByRole("button", { name: "Save changes" })).not.toHaveCSS(
+		"background-color",
+		"rgba(0, 0, 0, 0)"
+	);
+
+	await page.keyboard.press("Escape");
+	await story.locator("p").first().hover();
+	await page
+		.getByRole("toolbar", { name: "Block actions" })
+		.getByRole("button", { name: "Add block", exact: true })
+		.click();
+	const search = page
+		.getByRole("dialog", { name: "Insert block" })
+		.getByRole("combobox", { name: "Filter blocks" });
+	const placeholder = await search.evaluate(
+		(input) => getComputedStyle(input, "::placeholder").color
+	);
+	expect(placeholder).not.toBe("rgb(255, 0, 0)");
+});
+
+test("saves the lists Markdown shortcuts make", async ({ page }) => {
+	const problems = trackProblems(page);
+	await page.goto("/");
+	const story = page.getByRole("textbox", { name: "Story" });
+	await expect(story).toHaveAttribute("contenteditable", "true");
+	await story.click();
+	await page.keyboard.press("End");
+	// Lexical records a `*` or `+` bullet on the list, which the document doesn't store.
+	await page.keyboard.press("Enter");
+	await page.keyboard.type("* Starred");
+	await page.keyboard.press("Enter");
+	await page.keyboard.press("Enter");
+	await page.keyboard.type("Between");
+	await page.keyboard.press("Enter");
+	await page.keyboard.type("+ Plus");
+
+	const lists = async () => {
+		const document = JSON.parse((await page.getByTestId("story").textContent()) ?? "null") as {
+			root: { children: { type: string; children: { children: { text: string }[] }[] }[] };
+		};
+		return document.root.children
+			.filter((node) => node.type === "list")
+			.map((list) => list.children.map((item) => item.children[0]?.text));
+	};
+	await expect.poll(lists).toEqual([["Starred"], ["Plus"]]);
+	expect(problems).toEqual([]);
+});
+
 test("edits a document the app passes one-way", async ({ page }) => {
 	const problems = trackProblems(page);
 	await page.goto("/");

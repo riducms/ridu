@@ -1,4 +1,4 @@
-/** Framework-free rich-text documents and synchronous HTML rendering. */
+/** Framework-free rich-text documents, synchronous HTML rendering and plain-text conversion. */
 export type {
 	RichTextDocument,
 	RichTextDocumentInput,
@@ -19,4 +19,5 @@ export {
 	renderRichTextHTML,
 	type RichTextRenderOptions,
 } from "./render.js";
+export { convertLexicalToPlaintext, type RichTextPlaintextOptions } from "./plaintext.js";
 export { documentRecoveryIssue } from "./document-validation.js";

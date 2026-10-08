@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import type { RichTextBlockRenderers, RichTextDocument } from "../src/richtext/index";
-import { documentRecoveryIssue, renderRichTextHTML, safeRichTextURL } from "../src/richtext/index";
+import {
+	convertLexicalToPlaintext,
+	documentRecoveryIssue,
+	renderRichTextHTML,
+	safeRichTextURL,
+} from "../src/richtext/index";
 
 type Callout = { blockType: "callout"; _key: string; title?: string };
 type CTA = { blockType: "cta"; _key: string; label?: string; url?: string };
@@ -158,5 +163,67 @@ describe("portable rich-text document envelopes", () => {
 					root: { type: "root", children: [{ type: "link", url, children: [] }] },
 				})
 			).toBe("root.children.0.url");
+	});
+});
+
+describe("plain text from rich text", () => {
+	it("separates blocks with a blank line and puts list items on their own lines", () => {
+		const article: RichTextDocument = {
+			version: 1,
+			root: {
+				type: "root",
+				children: [
+					{ type: "heading", tag: "h2", children: [{ type: "text", text: "Drink water" }] },
+					{
+						type: "paragraph",
+						children: [
+							{ type: "text", text: "Every day", format: 1 },
+							{ type: "linebreak" },
+							{
+								type: "link",
+								url: "https://example.com",
+								children: [{ type: "text", text: "why" }],
+							},
+						],
+					},
+					{ type: "paragraph", children: [] },
+					{ type: "horizontalrule" },
+					{
+						type: "list",
+						listType: "bullet",
+						children: [
+							{ type: "listitem", children: [{ type: "text", text: "Before meals" }] },
+							{
+								type: "listitem",
+								children: [
+									{
+										type: "list",
+										listType: "number",
+										children: [{ type: "listitem", children: [{ type: "text", text: "Nested" }] }],
+									},
+								],
+							},
+						],
+					},
+					{ type: "quote", children: [{ type: "text", text: "Ask a doctor" }] },
+				],
+			},
+		};
+		expect(convertLexicalToPlaintext(article)).toBe(
+			"Drink water\n\nEvery day\nwhy\n\nBefore meals\nNested\n\nAsk a doctor"
+		);
+	});
+
+	it("leaves out blocks and references unless the app gives them text", () => {
+		expect(convertLexicalToPlaintext(value)).toBe("<Hello>&");
+		expect(
+			convertLexicalToPlaintext(value, { blocks: { callout: (block) => block.title ?? "" } })
+		).toBe("<Hello>&\n\nRead me");
+	});
+
+	it("rejects a document it can't read", () => {
+		expect(() => convertLexicalToPlaintext({ version: 2 } as never)).toThrow(
+			"Unsupported rich-text document"
+		);
 	});
 });

@@ -9,6 +9,7 @@ aliases:
     'RenderHTML',
     'RenderDocument',
     'renderRichTextHTML',
+    'convertLexicalToPlaintext',
     'RichText component',
     'portable text'
   ]
@@ -110,3 +111,31 @@ The TypeScript equivalent maps keys to functions that return HTML. Use
 `RichTextBlockRenderers` to check that every block has a function, or `RichTextBlockComponents`
 for Svelte components. Missing renderers cause an error unless you provide a visible fallback.
 Renderers do not fetch related data; load it before rendering.
+
+## Show rich text as plain text {#plaintext}
+
+`convertLexicalToPlaintext` returns a document's text without formatting, for previews, search,
+notifications or a language model. Blocks are separated by a blank line, each list item is on its
+own line, and a line break is a newline:
+
+```ts
+import { convertLexicalToPlaintext } from '@riducms/sdk/richtext';
+
+const preview = convertLexicalToPlaintext(article.content).slice(
+	0,
+	160
+);
+```
+
+Custom blocks, uploads and relationships have no text of their own, so they're left out. To include
+them, pass converters, as for `renderRichTextHTML`:
+
+```ts
+const text = convertLexicalToPlaintext(article.content, {
+	blocks: { callout: (block) => block.title ?? '' },
+	nodes: { upload: (node) => node.caption ?? '' }
+});
+```
+
+To go the other way, from Markdown to a document, use
+[`convertMarkdownToLexical`](/docs/rich-text/editor/#markdown).
