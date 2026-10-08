@@ -37,7 +37,8 @@ installing `@riducms/sdk` is sufficient and does not install Svelte or Lexical.
 Optional typed Svelte rendering is available from `@riducms/plugin-richtext/svelte`, which does not
 load the admin editor. Applications that let their users write rich text import `RichTextEditor`
 from `@riducms/plugin-richtext/editor`, and can configure its styles with
-`@riducms/plugin-richtext/editor.scss`; see
+`@riducms/plugin-richtext/editor.scss`. `convertMarkdownToLexical` from
+`@riducms/plugin-richtext/markdown` turns Markdown into a document without the editor; see
 [Use the editor in your app](https://riducms.com/docs/rich-text/editor/). See the rich-text guide for strict payloads, localization, typed renderers
 and experimental-content migration.
 

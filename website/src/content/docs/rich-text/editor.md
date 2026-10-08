@@ -9,6 +9,7 @@ aliases:
     'RichTextEditor',
     '@riducms/plugin-richtext/editor',
     'editor.scss',
+    'convertMarkdownToLexical',
     '--ridu-richtext',
     'rich-text editor in SvelteKit'
   ]
@@ -89,6 +90,71 @@ The editor opens text, headings, quotes, links, lists, code and dividers, within
 pass. A document holding anything else, such as uploads, relationships or blocks, which only the
 admin can edit, shows a message and an **Export document JSON** button instead of the editor.
 
+## Save it with a form {#form}
+
+Give the editor a `name` to submit its document with a form, like a native input: it adds a hidden
+field holding the document as JSON. Without JavaScript, the form submits the saved document.
+
+```svelte title="src/routes/posts/[id]/edit/+page.svelte"
+<form method="POST" use:enhance>
+	<RichTextEditor
+		bind:value={body}
+		name="body"
+		label="Body"
+		features={['links', 'lists']}
+	/>
+	<button>Save</button>
+</form>
+```
+
+```ts title="src/routes/posts/[id]/edit/+page.server.ts"
+import { fail } from '@sveltejs/kit';
+import { RiduError } from '@riducms/sdk';
+
+export const actions = {
+	default: async ({ locals, params, request }) => {
+		const field = String(
+			(await request.formData()).get('body') ?? ''
+		);
+		let body;
+		try {
+			// An editor with no document submits an empty field.
+			body = field === '' ? null : JSON.parse(field);
+		} catch {
+			return fail(400, { issues: ["The body isn't JSON."] });
+		}
+		try {
+			// Ridu checks the document against the field.
+			await locals.ridu.update('posts', params.id, { body });
+		} catch (error) {
+			if (!(error instanceof RiduError)) throw error;
+			return fail(error.status, {
+				issues: error.issues.map((issue) => issue.message)
+			});
+		}
+	}
+};
+```
+
+## Turn Markdown into a document {#markdown}
+
+`convertMarkdownToLexical` turns Markdown, such as a language model's answer or imported content,
+into the document the editor's Markdown shortcuts would make. It runs on the server or in the
+browser, without the editor:
+
+```ts
+import { convertMarkdownToLexical } from '@riducms/plugin-richtext/markdown';
+
+const body = convertMarkdownToLexical(answer, {
+	features: ['links', 'lists']
+});
+await locals.ridu.update('posts', id, { body });
+```
+
+Pass the Go field's `features`. Markdown for anything else, such as a code block in a field without
+code, stays text, and so does a link with an unsafe URL. To show the document in an open editor,
+remount the editor with a `{#key}` block, because it reads `value` when it mounts.
+
 ## Choose the toolbar {#toolbar}
 
 `toolbar` sets where formatting controls appear:
@@ -166,6 +232,25 @@ same name:
 
 Custom properties set on an element around the editor style its text and fixed toolbar, but not
 the floating toolbar, menus and dialogs, which render at the end of the page.
+
+Inside the editor and its popups, your app's resets and global rules outside a cascade layer,
+such as `ul { list-style: none }` or `[type='button'] { ... }`, are rolled back, so lists keep
+their bullets under a reset such as UnoCSS's. To change one of the editor's rules, write yours in
+Ridu's `app` layer, which comes after the editor's. Declare Ridu's layers after any stylesheet you
+import, such as Tailwind's, so they follow its reset's layer whichever stylesheet loads first:
+
+```css title="src/app.css"
+@import 'tailwindcss';
+@layer ridu, ridu-plugins, app;
+
+@layer app {
+	.post-form .ridu-richtext-editor blockquote {
+		border-inline-start-color: #b45309;
+	}
+}
+```
+
+A class you pass to the editor styles its frame from anywhere.
 
 ## Render on the server {#ssr}
 

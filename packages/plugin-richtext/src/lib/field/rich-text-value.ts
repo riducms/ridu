@@ -1,4 +1,26 @@
+import { isRecord } from "@riducms/protocol";
 import { documentRecoveryIssue, type RichTextDocument } from "@riducms/sdk/richtext";
+import type { EditorState } from "lexical";
+
+/**
+ * An editor state as the stored document, before validation. The JSON round trip drops undefined
+ * optional properties, which Lexical keeps after importing sparse JSON.
+ */
+export function lexicalDocument(editorState: EditorState): unknown {
+	const root: unknown = JSON.parse(JSON.stringify(editorState.toJSON().root));
+	return { version: 1, root: portableNode(root) };
+}
+
+// Lexical remembers the Markdown that made a node, such as a `*` list marker, as node state under
+// `$`, and writes a tab as a `tab` node. The document keeps neither: the state goes, and a tab is
+// text. Only nodes are walked, so block payloads keep their own keys.
+function portableNode(node: unknown): unknown {
+	if (!isRecord(node)) return node;
+	const portable = Object.fromEntries(Object.entries(node).filter(([key]) => key !== "$"));
+	if (portable.type === "tab") portable.type = "text";
+	if (Array.isArray(portable.children)) portable.children = portable.children.map(portableNode);
+	return portable;
+}
 
 /** Decode a stored field value; embedded payload semantics remain schema-owned. */
 export function decodeRichTextDocument(value: unknown): RichTextDocument<unknown> {

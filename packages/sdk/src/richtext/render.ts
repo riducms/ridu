@@ -74,6 +74,19 @@ export function richTextElementTag(node: RichTextElementNode<unknown>): string {
 	}
 }
 
+/**
+ * The handler registered for a block's type. TypeScript can't relate a handler looked up by the
+ * block's type to that block's payload, so the lookup asserts it once, here.
+ */
+export function richTextBlockHandler<Payload extends { blockType: string }, Result>(
+	handlers: Partial<RichTextBlockRenderers<Payload, Result>> | undefined,
+	block: Payload
+): ((block: Payload) => Result) | undefined {
+	if (handlers === undefined || !Object.hasOwn(handlers, block.blockType)) return undefined;
+	return handlers[block.blockType as Payload["blockType"]] as
+		((block: Payload) => Result) | undefined;
+}
+
 /** Pure synchronous rendering: no editor bundle, DOM, Svelte dependency or network requests. */
 export function renderRichTextHTML<Payload extends { blockType: string } = never>(
 	value: RichTextDocument<Payload>,
@@ -94,11 +107,7 @@ export function renderRichTextHTML<Payload extends { blockType: string } = never
 			switch (node.type) {
 				case "block": {
 					const payload = node.fields;
-					const renderer = (
-						options.blocks !== undefined && Object.hasOwn(options.blocks, payload.blockType)
-							? options.blocks[payload.blockType as Payload["blockType"]]
-							: undefined
-					) as ((block: Payload) => string) | undefined;
+					const renderer = richTextBlockHandler(options.blocks, payload);
 					if (renderer === undefined)
 						throw new Error(
 							`No renderer registered for rich-text block ${JSON.stringify(payload.blockType)}`
