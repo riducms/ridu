@@ -24,6 +24,13 @@ immutable migrations use the current `1.3.0` planner and physical layout. Older 
 and databases missing the live-head table are unsupported; readiness and development synchronization
 reject them instead of converting stored content.
 
+A collection or global that starts keeping versions does so in a migration of its own that records
+what its stored documents become. In the migration's transaction every stored document, trashed
+ones included, gets a first version and, for `published`, a live head; `require-empty` stops the
+migration while any document is stored. `migrate down` keeps each document's latest working content
+and removes its versions and live head. Development schema sync enables versions only on a resource
+that stores none.
+
 See the [SQLite guide](../../website/src/content/docs/sqlite.md) for new- and
 existing-project wiring, development sync, immutable migrations, backup/restore, startup
 verification, and known limits.

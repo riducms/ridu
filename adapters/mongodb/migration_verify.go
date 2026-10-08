@@ -37,6 +37,10 @@ type mongoDBArtifactReplayStep struct {
 	transform                       ridumigration.DataTransformDescriptor
 	resourceIDs                     []schema.StableID
 	requirements                    []requiredfield.Requirement
+	// enableResource is the after manifest's resource that starts keeping
+	// versions, and enableExisting what its stored documents become.
+	enableResource schema.Collection
+	enableExisting ridumigration.ExistingDocuments
 }
 
 type mongoDBArtifactReplayPhase struct {
@@ -198,6 +202,16 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 						return nil, fmt.Errorf("decode MongoDB migration retirement %s/%s in %s: %w", phase.ID, step.ID, file.Name, err)
 					}
 					compiled.resourceIDs = append([]schema.StableID(nil), payload.ResourceIDs...)
+				case ridumigration.StepEnableVersions:
+					var payload ridumigration.EnableVersionsPayload
+					if err := json.Unmarshal(step.Payload, &payload); err != nil {
+						return nil, fmt.Errorf("decode MongoDB migration enable-versions step %s/%s in %s: %w", phase.ID, step.ID, file.Name, err)
+					}
+					resource, found := mongoManifestResourceByID(after.Snapshot(), payload.ResourceID)
+					if !found {
+						return nil, fmt.Errorf("MongoDB migration step %s/%s in %s enables versions on absent resource %s", phase.ID, step.ID, file.Name, payload.ResourceID)
+					}
+					compiled.enableResource, compiled.enableExisting = resource, payload.Existing
 				case ridumigration.StepAuditRequiredValues:
 					var payload ridumigration.AuditRequiredValuesPayload
 					if err := json.Unmarshal(step.Payload, &payload); err != nil {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/internal/migrationartifact"
-	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -24,7 +23,8 @@ func validatePostgresCapabilityDecreaseHistory(files []migrationartifact.File) e
 }
 
 // validatePostgresCapabilityDecreasePreflight applies the capability-state
-// safety boundary directly to an artifact's embedded manifests.
+// safety boundary directly to an artifact's embedded manifests. Enabling
+// versions is a capability increase, admitted with its recorded choice.
 func validatePostgresCapabilityDecreasePreflight(artifact ridumigration.Artifact) error {
 	if artifact.Before == nil {
 		return nil
@@ -34,10 +34,10 @@ func validatePostgresCapabilityDecreasePreflight(artifact ridumigration.Artifact
 		return fmt.Errorf("capability-decrease collection identity: %w", err)
 	}
 
-	before, after := *artifact.Before, artifact.After
-	if err := schemadiff.RejectVersionsEnable(before, after, postgresCollectionRenameIDs(renames)); err != nil {
+	if err := validateRecordedVersionsEnable(artifact, renames); err != nil {
 		return err
 	}
+	before, after := *artifact.Before, artifact.After
 	risks := unsafeUploadCollectionRemovals(before, after, renames)
 	risks = append(risks, unsafeCapabilityDisables(before, after, renames)...)
 	if len(risks) == 0 {

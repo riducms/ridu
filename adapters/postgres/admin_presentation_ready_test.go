@@ -20,7 +20,7 @@ func TestPostgresReadinessIgnoresAdminPresentationWithHistory(t *testing.T) {
 	backend := migrationArtifactTestBackend(t)
 	committed := atlasTestManifest(atlasTextField("posts-title", "title"))
 	directory := t.TempDir()
-	artifact, err := BuildArtifact(ctx, "initial", nil, committed, nil, false)
+	artifact, err := BuildArtifact(ctx, "initial", nil, committed, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

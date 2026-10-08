@@ -13,7 +13,7 @@ func TestSQLiteReadyWithMigrationHistoryUsesAppliedLedger(t *testing.T) {
 	ctx := context.Background()
 	directory := t.TempDir()
 	manifest := sqliteMigrationManifest(t, false)
-	file, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), false)
+	file, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

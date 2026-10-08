@@ -86,7 +86,7 @@ func TestDevelopmentSkipsSchemaSyncForAMigrationsManagedSQLiteDatabase(t *testin
 	if _, err := synchronizeDevelopmentSchema(ctx, projectfile.DatabaseSQLite, "", databasePath, true, true, developmentPreparation{manifest: initial}, reporter); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", initial, time.Unix(1, 0), false); err != nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", initial, time.Unix(1, 0), sqlite.ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	backend, err := sqlite.Open(ctx, databasePath)

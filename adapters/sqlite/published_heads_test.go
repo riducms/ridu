@@ -362,7 +362,7 @@ func TestSQLiteRejectsUnsupportedPlannerHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := `_initial.ridu.json uses unsupported planner version "1.2.0"; this Ridu release supports only ridu-sqlite "` + sqlitePlannerVersion + `", so create a new migration history`
-	if _, err := CreateArtifact(ctx, directory, "next", manifest, time.Unix(2, 0), false); err == nil || !strings.Contains(err.Error(), want) {
+	if _, err := CreateArtifact(ctx, directory, "next", manifest, time.Unix(2, 0), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("new artifact over unsupported planner history = %v", err)
 	}
 	backend, err := Open(ctx, ":memory:")

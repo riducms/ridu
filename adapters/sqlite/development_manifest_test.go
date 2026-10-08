@@ -82,7 +82,7 @@ func TestDevelopmentBaselineAdoptionAllowsPresentationOnlyChanges(t *testing.T) 
 	snapshot.Collections[0].Fields[0].Admin.Label = "Editorial title"
 	after := schema.NewManifest(snapshot)
 	directory := t.TempDir()
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	backend := newSQLiteMigrationStore(t)

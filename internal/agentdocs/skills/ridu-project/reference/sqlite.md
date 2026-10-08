@@ -155,7 +155,14 @@ state, uploads, and a rehearsed cutover.
        if target == "" {
          target, err = url.PathUnescape(parsed.Opaque)
        }
-       if err != nil || !filepath.IsAbs(target) {
+       if parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost") {
+         // A Windows UNC share names its server as the host.
+         target = "//" + parsed.Host + target
+       } else if strings.HasPrefix(target, "/") && filepath.VolumeName(target[1:]) != "" {
+         // A Windows drive path is written /C:/….
+         target = target[1:]
+       }
+       if err != nil || !filepath.IsAbs(filepath.FromSlash(target)) {
          log.Fatal("RIDU_SQLITE_PATH file URI must contain an absolute path")
        }
      case !filepath.IsAbs(path):

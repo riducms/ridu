@@ -280,7 +280,7 @@ func TestPostgresDevelopmentSchemaUnknownCannotBeCertifiedByPhysicalEquality(t *
 		t.Fatalf("unknown schema sync accepted candidate: %v", err)
 	}
 	directory := t.TempDir()
-	artifact, err := BuildArtifact(ctx, "initial", nil, after, nil, false)
+	artifact, err := BuildArtifact(ctx, "initial", nil, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +327,7 @@ func TestPostgresDevelopmentSchemaRecordFollowsCompleteMigrationBoundaries(t *te
 		t.Fatalf("development sync accepted a database without a schema record: %v", err)
 	}
 	after := atlasTestManifest(atlasTextField("posts-title", "title"), atlasTextField("posts-summary", "summary"))
-	artifact, err := BuildArtifact(ctx, "summary", &before, after, nil, false)
+	artifact, err := BuildArtifact(ctx, "summary", &before, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +362,7 @@ func TestPostgresDevelopmentSchemaRecordAllowsAdminOnlyChangesInHistory(t *testi
 		t.Run(name, func(t *testing.T) {
 			backend := migrationArtifactTestBackend(t)
 			directory := t.TempDir()
-			artifact, err := BuildArtifact(ctx, "initial", nil, before, nil, false)
+			artifact, err := BuildArtifact(ctx, "initial", nil, before, ArtifactOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -390,7 +390,7 @@ func TestPostgresDevelopmentSchemaRecordAllowsAdminOnlyChangesInHistory(t *testi
 			after := schema.NewManifest(afterSnapshot)
 			// The artifact's source is the original committed manifest, whose
 			// presentation differs from the accepted development record.
-			additive, err := BuildArtifact(ctx, "summary", &before, after, nil, false)
+			additive, err := BuildArtifact(ctx, "summary", &before, after, ArtifactOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

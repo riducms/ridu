@@ -32,7 +32,7 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	migrations := t.TempDir()
-	if _, err := CreateArtifact(ctx, migrations, "initial", manifest, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, migrations, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	backend, err := Open(ctx, filepath.Join(t.TempDir(), "baseline.sqlite"))

@@ -143,10 +143,10 @@ func TestSQLiteRebaselineLeavesNewTransformPendingForMigrateUp(t *testing.T) {
 	ctx := t.Context()
 	manifest := sqliteMigrationManifest(t, false)
 	old, next := t.TempDir(), t.TempDir()
-	if _, err := CreateArtifact(ctx, old, "initial", manifest, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, old, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	squashed, err := CreateArtifact(ctx, next, "initial", manifest, time.Unix(2, 0), false)
+	squashed, err := CreateArtifact(ctx, next, "initial", manifest, time.Unix(2, 0), ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestSQLiteRebaselineLeavesNewTransformPendingForMigrateUp(t *testing.T) {
 	transform := migration.DataTransform{DataTransformDescriptor: descriptor,
 		Up:   func(context.Context, migration.DataTransaction) error { ran = true; return nil },
 		Down: func(context.Context, migration.DataTransaction) error { return nil }}
-	if _, err := CreateArtifact(ctx, next, "seed", manifest, time.Unix(3, 0), false, descriptor); err != nil {
+	if _, err := CreateArtifact(ctx, next, "seed", manifest, time.Unix(3, 0), ArtifactOptions{DataTransforms: []migration.DataTransformDescriptor{descriptor}}); err != nil {
 		t.Fatal(err)
 	}
 	backend := newSQLiteMigrationStore(t)

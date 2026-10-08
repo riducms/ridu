@@ -1079,6 +1079,19 @@ func prepareDevelopment(ctx context.Context, definition projectfile.File, versio
 		}
 	}
 	if syncSchema && renames != nil {
+		if versionsError := renames.resolveVersions(ctx, definition, resolved.Manifest, fresh); versionsError != nil {
+			if ctx.Err() != nil {
+				return developmentPreparation{}, ctx.Err()
+			}
+			if errors.Is(versionsError, errDevelopmentSourceChanged) {
+				return developmentPreparation{}, errDevelopmentSourceChanged
+			}
+			var held developmentRenameHeldError
+			if errors.As(versionsError, &held) {
+				return developmentPreparation{}, held.err
+			}
+			return developmentPreparation{}, fmt.Errorf("versions not enabled: %w", versionsError)
+		}
 		if _, renameError := renames.resolve(ctx, definition, resolved.Manifest, fresh); renameError != nil {
 			if ctx.Err() != nil {
 				return developmentPreparation{}, ctx.Err()
@@ -1488,6 +1501,7 @@ func frontendDependencyFingerprint(definition projectfile.File) (string, error) 
 type managedProcess struct {
 	cancel      context.CancelFunc
 	command     *exec.Cmd
+	tree        processTree
 	done        chan struct{}
 	err         error
 	mutex       sync.Mutex
@@ -1512,14 +1526,15 @@ func startManagedProcess(parent context.Context, label, directory string, enviro
 	stderrWriter := output.sourceWriter(output.stderr, label, output.stderrProfile)
 	command.Stdout = stdoutWriter
 	command.Stderr = stderrWriter
-	configureProcess(command)
-	if err := command.Start(); err != nil {
+	tree, err := startProcessTree(command)
+	if err != nil {
 		cancel()
 		return nil, err
 	}
 	process := &managedProcess{
 		cancel:      cancel,
 		command:     command,
+		tree:        tree,
 		done:        make(chan struct{}),
 		stopTimeout: managedProcessStopTimeout(label, environment),
 	}
@@ -1541,18 +1556,19 @@ func (process *managedProcess) stop() {
 	}
 	process.once.Do(func() {
 		process.stopping.Store(true)
-		terminateProcess(process.command, false)
+		defer process.tree.release()
+		process.tree.terminate(false)
 		timer := time.NewTimer(process.stopTimeout)
 		defer timer.Stop()
 		select {
 		case <-process.done:
 			// The group leader may finish its graceful drain while a descendant
-			// ignores the signal. On qualified Unix hosts the process group still
-			// exists, so remove any survivors before returning.
-			terminateProcess(process.command, true)
+			// ignores the signal. Its process group or Windows job still exists,
+			// so remove any survivors before returning.
+			process.tree.terminate(true)
 			process.cancel()
 		case <-timer.C:
-			terminateProcess(process.command, true)
+			process.tree.terminate(true)
 			process.cancel()
 			<-process.done
 		}

@@ -43,7 +43,7 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 		return m
 	}
 	initial := resolve()
-	if _, err := CreateArtifact(ctx, directory, "initial", initial, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", initial, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	backend, err := Open(ctx, filepath.Join(t.TempDir(), "content.sqlite"))
@@ -158,7 +158,7 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 	for _, change := range changes {
 		change.apply()
 		current := resolve()
-		if _, err := CreateArtifact(ctx, directory, change.name, current, time.Unix(2, 0), false); !errors.Is(err, migrationartifact.ErrOnlyPresentationChanges) {
+		if _, err := CreateArtifact(ctx, directory, change.name, current, time.Unix(2, 0), ArtifactOptions{}); !errors.Is(err, migrationartifact.ErrOnlyPresentationChanges) {
 			t.Fatalf("create %s = %v", change.name, err)
 		}
 		// The database already has everything this change describes.
@@ -201,7 +201,7 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 	}
 	config.Collections[1].Fields = append(config.Collections[1].Fields, field.Text("summary").Index().Unique())
 	additive := resolve()
-	_, err = CreateArtifact(ctx, directory, "add-summary", additive, time.Unix(int64(len(changes)+2), 0), false)
+	_, err = CreateArtifact(ctx, directory, "add-summary", additive, time.Unix(int64(len(changes)+2), 0), ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,10 +331,10 @@ func TestSQLitePresentationMigrationNestedAndEmbeddedMetadata(t *testing.T) {
 		t.Fatal("presentation comparison mutated input")
 	}
 	directory := t.TempDir()
-	if _, err := CreateArtifact(context.Background(), directory, "initial", manifest, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateArtifact(context.Background(), directory, "presentation", frozen, time.Unix(2, 0), false); !errors.Is(err, migrationartifact.ErrOnlyPresentationChanges) {
+	if _, err := CreateArtifact(context.Background(), directory, "presentation", frozen, time.Unix(2, 0), ArtifactOptions{}); !errors.Is(err, migrationartifact.ErrOnlyPresentationChanges) {
 		t.Fatalf("presentation migration = %v", err)
 	}
 }
@@ -501,7 +501,7 @@ func TestSQLitePresentationScalarEditorMetadata(t *testing.T) {
 	}
 	before := resolve(field.Number("amount"), field.Code("source"), field.Date("date"))
 	directory := t.TempDir()
-	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for i, fields := range []field.Fields{
@@ -510,7 +510,7 @@ func TestSQLitePresentationScalarEditorMetadata(t *testing.T) {
 		{field.Number("amount"), field.Code("source"), field.Date("date")},
 	} {
 		after := resolve(fields...)
-		if _, err := CreateArtifact(context.Background(), directory, fmt.Sprintf("editor-%d", i), after, time.Unix(int64(i+2), 0), false); !errors.Is(err, migrationartifact.ErrSchemaCurrent) {
+		if _, err := CreateArtifact(context.Background(), directory, fmt.Sprintf("editor-%d", i), after, time.Unix(int64(i+2), 0), ArtifactOptions{}); !errors.Is(err, migrationartifact.ErrSchemaCurrent) {
 			t.Fatalf("editor metadata migration = %v", err)
 		}
 		before = after
@@ -613,7 +613,7 @@ func TestSQLitePresentationWithUnversionedBackfill(t *testing.T) {
 				t.Fatal(err)
 			}
 			directory := t.TempDir()
-			if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+			if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 				t.Fatal(err)
 			}
 			backend := newSQLiteMigrationStore(t)
@@ -649,7 +649,7 @@ func TestSQLitePresentationWithUnversionedBackfill(t *testing.T) {
 			descriptor := migration.DataTransformDescriptor{Name: "backfill-notes", Checksum: migration.DataTransformChecksum([]byte("backfill-notes-v1"))}
 			// Requiring a field is additive: the artifact audits stored values
 			// after its transforms instead of asking for destructive approval.
-			if _, err := CreateArtifact(ctx, directory, "backfill", after, time.Unix(2, 0), false, descriptor); err != nil {
+			if _, err := CreateArtifact(ctx, directory, "backfill", after, time.Unix(2, 0), ArtifactOptions{DataTransforms: []migration.DataTransformDescriptor{descriptor}}); err != nil {
 				t.Fatal(err)
 			}
 			if kinds := sqliteLatestStepKinds(t, directory); len(kinds) != 3 || kinds[0] != migration.StepDataTransform || kinds[1] != migration.StepAuditRequiredValues {

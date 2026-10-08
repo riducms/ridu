@@ -17,9 +17,9 @@ a separate published snapshot. You can keep history without enabling draft creat
 
 ## Enable revision history {#enable-versions}
 
-Choose versioning when creating a collection or global. Enabling it later on an existing
-unversioned resource is unsupported: the existing documents have no publication state or live
-heads. Ridu rejects that schema transition rather than hiding those documents from public reads.
+Turn versioning on when you create a collection or global, or later. When an existing one already
+stores documents, you choose whether they stay published or become drafts, and a migration records
+the choice. See [Enabling versions](/docs/migrations/enable-versions/).
 
 ```go title="content/posts.go"
 package content

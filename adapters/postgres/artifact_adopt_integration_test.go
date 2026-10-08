@@ -29,7 +29,7 @@ func TestPostgresBaselineAdoptsADevelopmentSynchronizedDatabase(t *testing.T) {
 	}
 	create := func(name string, before *schema.Manifest, after schema.Manifest, at int64) migrationartifact.File {
 		t.Helper()
-		artifact, err := BuildArtifact(ctx, name, before, after, nil, false)
+		artifact, err := BuildArtifact(ctx, name, before, after, ArtifactOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -100,7 +100,7 @@ func TestPostgresBaselineLeavesARenameForMigrateUp(t *testing.T) {
 	before := atlasTestManifest(title)
 	after := atlasTestManifest(headline)
 	directory := t.TempDir()
-	initial, err := BuildArtifact(ctx, "initial", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,10 +108,10 @@ func TestPostgresBaselineLeavesARenameForMigrateUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rename, err := BuildArtifact(ctx, "rename-title", &before, after, []Rename{{
+	rename, err := BuildArtifact(ctx, "rename-title", &before, after, ArtifactOptions{Renames: []Rename{{
 		Kind: RenameField, BeforeCollection: before.Snapshot().Collections[0], AfterCollection: after.Snapshot().Collections[0],
 		BeforeField: &title, AfterField: &headline,
-	}}, false)
+	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestPostgresBaselineRefusesASchemaNoMigrationDescribes(t *testing.T) {
 	backend := migrationArtifactTestBackend(t)
 	title := atlasTextField("posts-title", "title")
 	directory := t.TempDir()
-	artifact, err := BuildArtifact(ctx, "initial", nil, atlasTestManifest(title), nil, false)
+	artifact, err := BuildArtifact(ctx, "initial", nil, atlasTestManifest(title), ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

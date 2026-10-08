@@ -10,6 +10,7 @@ import (
 
 	"github.com/riducms/ridu/internal/blockrename"
 	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/internal/enableversions"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/internal/requiredfield"
@@ -76,6 +77,9 @@ func buildMongoDBArtifact(
 	if before == nil && (len(options.Renames) != 0 || len(options.DataTransforms) != 0) {
 		return ridumigration.Artifact{}, fmt.Errorf("initial MongoDB migration cannot contain renames or data transforms")
 	}
+	if before == nil && len(options.ExistingDocuments) != 0 {
+		return ridumigration.Artifact{}, fmt.Errorf("initial MongoDB migration creates every resource with no stored documents, so it cannot record what existing documents become")
+	}
 	if before != nil {
 		fromDigest, err := ridumigration.DigestManifest(*before)
 		if err != nil {
@@ -100,13 +104,18 @@ func buildMongoDBArtifact(
 	var renamePlan mongoDBSemanticRenamePlan
 	var retired []schema.StableID
 	var normalizedBefore schema.Snapshot
+	var enabling []enableversions.Step
 	if before != nil {
 		renamePlan, err = compileMongoDBRenamePlan(*before, after, options.Renames)
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
-		if err := schemadiff.RejectVersionsEnable(before.Snapshot(), after.Snapshot(), renamePlan.collectionMapping); err != nil {
+		enabling, err = enableversions.Plan(before.Snapshot(), after.Snapshot(), renamePlan.collectionMapping, options.ExistingDocuments)
+		if err != nil {
 			return ridumigration.Artifact{}, err
+		}
+		if len(enabling) != 0 && (len(options.Renames) != 0 || len(options.DataTransforms) != 0) {
+			return ridumigration.Artifact{}, fmt.Errorf("enable versions in a MongoDB migration of its own; it cannot share one with renames or data transforms")
 		}
 		for _, pair := range renamePlan.fieldRenames {
 			if err := schemadiff.ValidateFieldRenameOnly(pair.Before, pair.After); err != nil {
@@ -177,6 +186,9 @@ func buildMongoDBArtifact(
 			Message: fmt.Sprintf("permanently retire framework-owned current, version, authentication, preference, task, lock, and reference state for removed resources %s", mongoStableIDList(retired)),
 		})
 	}
+	for _, enable := range enabling {
+		artifact.Risks = append(artifact.Risks, enable.Risk())
+	}
 	// The renamed before schema carries every confirmed rename, so a renamed
 	// field keeps the requiredness it already had.
 	var requirements []requiredfield.Requirement
@@ -189,7 +201,7 @@ func buildMongoDBArtifact(
 		return ridumigration.Artifact{}, err
 	}
 
-	artifact.Phases, err = mongoDBArtifactPhases(artifact.FromDigest, before, after, renamePlan, options.DataTransforms, retired, delta, requirements)
+	artifact.Phases, err = mongoDBArtifactPhases(artifact.FromDigest, before, after, renamePlan, options.DataTransforms, enabling, retired, delta, requirements)
 	if err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -256,6 +268,11 @@ func mongoDBArtifactSemanticOptions(artifact ridumigration.Artifact) (ArtifactOp
 			}
 		}
 	}
+	existing, err := enableversions.Recorded(artifact)
+	if err != nil {
+		return ArtifactOptions{}, err
+	}
+	options.ExistingDocuments = existing
 	return options, nil
 }
 
@@ -887,7 +904,7 @@ func mongoDBSemanticIndexDelta(before, after mongoPhysicalIndexPlanSet, mapping 
 	return delta, nil
 }
 
-func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after schema.Manifest, renames mongoDBSemanticRenamePlan, transforms []ridumigration.DataTransformDescriptor, retired []schema.StableID, delta mongoDBIndexDelta, requirements []requiredfield.Requirement) ([]ridumigration.Phase, error) {
+func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after schema.Manifest, renames mongoDBSemanticRenamePlan, transforms []ridumigration.DataTransformDescriptor, enabling []enableversions.Step, retired []schema.StableID, delta mongoDBIndexDelta, requirements []requiredfield.Requirement) ([]ridumigration.Phase, error) {
 	physical := ridumigration.PhysicalDigestSeed(fromDigest)
 	var phases []ridumigration.Phase
 	stepNumber := 0
@@ -947,6 +964,11 @@ func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after sch
 		}
 	}
 	var semantic []phaseValue
+	// Converting stored documents comes first: until it runs, they carry no
+	// version metadata, and decoding them under the after schema fails.
+	for _, enable := range enabling {
+		semantic = append(semantic, phaseValue{kind: ridumigration.StepEnableVersions, name: enable.Name(), data: enable.Payload()})
+	}
 	for _, intent := range renames.intents {
 		semantic = append(semantic, phaseValue{kind: ridumigration.StepRenameContent, name: mongoSemanticRenameName(intent), data: ridumigration.RenamePayload{Rename: intent}})
 	}
@@ -976,6 +998,9 @@ func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after sch
 		}
 	}
 	if before != nil {
+		// A resource with unique declarations that starts keeping versions
+		// gains the reservation index too, so this also reserves the values
+		// of the documents its enable-versions step converted.
 		versioned := make(map[schema.StableID]bool)
 		for _, resource := range append(append([]schema.Collection(nil), after.Snapshot().Collections...), after.Snapshot().Globals...) {
 			versioned[resource.ID] = resource.Versions != nil

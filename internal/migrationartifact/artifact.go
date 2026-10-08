@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	"github.com/riducms/ridu/internal/durable"
 	"github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -186,16 +187,8 @@ func publishArtifact(directory, path string, encoded []byte) error {
 		return fmt.Errorf("remove published migration artifact temporary file: %w", err)
 	}
 	temporaryPath = ""
-	directoryHandle, err := os.Open(directory)
-	if err != nil {
-		return fmt.Errorf("open migration artifact directory for sync: %w", err)
-	}
-	if err := directoryHandle.Sync(); err != nil {
-		_ = directoryHandle.Close()
+	if err := durable.SyncDirectory(directory); err != nil {
 		return fmt.Errorf("sync migration artifact directory: %w", err)
-	}
-	if err := directoryHandle.Close(); err != nil {
-		return fmt.Errorf("close migration artifact directory: %w", err)
 	}
 	return nil
 }

@@ -676,6 +676,16 @@ func executeTransactionStep(ctx context.Context, connection *sql.Conn, transacti
 			return err
 		}
 		return auditPostgresRequiredValues(ctx, transaction, locales, requirements, true, false)
+	case ridumigration.StepEnableVersions:
+		var payload ridumigration.EnableVersionsPayload
+		if err := json.Unmarshal(step.Payload, &payload); err != nil {
+			return err
+		}
+		after, err := file.Artifact.AfterManifest()
+		if err != nil {
+			return err
+		}
+		return enablePostgresVersions(ctx, transaction, after, payload)
 	case ridumigration.StepAssertSchema:
 		after, err := file.Artifact.AfterManifest()
 		if err != nil {

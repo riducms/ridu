@@ -151,7 +151,7 @@ VALUES ($1, $2, $3, $4, $5, 'complete', '{}'::jsonb, 1, now())`, file.Name, file
 func postgresBlockingStep(file migrationartifact.File) string {
 	for _, phase := range file.Artifact.Phases {
 		for _, step := range phase.Steps {
-			if migrationStepRequiresMaintenance(step.Kind) {
+			if migrationStepBlocksAdoption(step) {
 				return string(step.Kind)
 			}
 		}

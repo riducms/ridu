@@ -10,7 +10,6 @@ import (
 	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/requiredfield"
-	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -186,7 +185,9 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 		return err
 	}
 	if exists {
-		if err := schemadiff.RejectVersionsEnable(before.Snapshot(), manifest.Snapshot(), nil); err != nil {
+		// A resource that starts keeping versions while it stores no document
+		// needs only the plan's new columns and live table.
+		if err := requireEmptyForDevelopmentVersions(ctx, transaction, before, manifest); err != nil {
 			return err
 		}
 		changes := fieldchange.Detect(before.Snapshot(), manifest.Snapshot())

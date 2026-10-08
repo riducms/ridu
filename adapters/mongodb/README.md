@@ -9,7 +9,11 @@ current planner `5.0.0`; older planner artifacts and physical layouts are unsupp
 be handled outside Ridu before startup. Readiness rejects incomplete live-head coverage.
 Unique-index additions to versioned content use a maintenance-admitted,
 resumable reservation rebuild before the new indexes are built; typed field renames
-rebuild those reservations in their semantic transaction.
+rebuild those reservations in their semantic transaction. A collection or global that starts
+keeping versions does so in a migration of its own that records what its stored documents become.
+Its maintenance-admitted semantic transaction gives every stored document, trashed ones included,
+a first version and, for `published`, a live head; `require-empty` stops the migration while any
+document is stored. Development schema sync enables versions only on a resource that stores none.
 
 Document locks are fence writes, because MongoDB has no row locks. A reference takes a shared
 lock: it increments one of the target's fence records in `z_ridu_reference_fences`, one per open

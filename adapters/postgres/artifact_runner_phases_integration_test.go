@@ -259,7 +259,7 @@ func createInitialArtifact(t *testing.T, name string) (string, migrationartifact
 	t.Helper()
 	directory := t.TempDir()
 	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
-	artifact, err := BuildArtifact(context.Background(), name, nil, manifest, nil, false)
+	artifact, err := BuildArtifact(context.Background(), name, nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

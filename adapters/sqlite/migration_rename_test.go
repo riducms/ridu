@@ -87,7 +87,7 @@ func TestSQLiteFieldRenameMovesContentAndRollsBack(t *testing.T) {
 	beforeConfig := sqliteRenameConfig("title", "intro", "slug", "label", "caption")
 	afterConfig := sqliteRenameConfig("headline", "lede", "handle", "name", "credit")
 	before, after := sqliteRenameManifest(t, beforeConfig), sqliteRenameManifest(t, afterConfig)
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	backend := newSQLiteMigrationStore(t)
@@ -124,7 +124,7 @@ func TestSQLiteFieldRenameMovesContentAndRollsBack(t *testing.T) {
 	}
 
 	renames := sqliteRenameIntentFor(t, before, after, 5)
-	created, err := CreateArtifactWithRenames(ctx, directory, "rename", after, time.Unix(2, 0), renames)
+	created, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: renames})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestSQLiteFieldRenameRefusesUnreviewableIntent(t *testing.T) {
 		return ridu.Config{Name: "SQLite renames", Collections: []ridu.Collection{{Slug: "posts", Fields: fields}}}
 	}
 	before := sqliteRenameManifest(t, config(field.Text("title"), field.Number("views")))
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	title := migration.Rename{CollectionBefore: "posts", CollectionAfter: "posts", FieldBefore: "title", FieldAfter: "headline"}
@@ -305,7 +305,7 @@ func TestSQLiteFieldRenameRefusesUnreviewableIntent(t *testing.T) {
 			"cannot rename collection",
 		},
 	} {
-		if _, err := CreateArtifactWithRenames(ctx, directory, "rename", candidate.after, time.Unix(2, 0), candidate.renames); err == nil || !strings.Contains(err.Error(), candidate.want) {
+		if _, err := CreateArtifact(ctx, directory, "rename", candidate.after, time.Unix(2, 0), ArtifactOptions{Renames: candidate.renames}); err == nil || !strings.Contains(err.Error(), candidate.want) {
 			t.Errorf("%s = %v, want %q", name, err, candidate.want)
 		}
 	}
@@ -313,7 +313,7 @@ func TestSQLiteFieldRenameRefusesUnreviewableIntent(t *testing.T) {
 	if err != nil || len(files) != 1 {
 		t.Fatalf("refused renames wrote files: %d, %v", len(files), err)
 	}
-	if _, err := CreateArtifactWithRenames(ctx, t.TempDir(), "rename", before, time.Unix(2, 0), []migration.Rename{title}); err == nil || !strings.Contains(err.Error(), "initial SQLite migration") {
+	if _, err := CreateArtifact(ctx, t.TempDir(), "rename", before, time.Unix(2, 0), ArtifactOptions{Renames: []migration.Rename{title}}); err == nil || !strings.Contains(err.Error(), "initial SQLite migration") {
 		t.Fatalf("rename without history = %v", err)
 	}
 }
@@ -333,7 +333,7 @@ func TestSQLiteFieldRenameStopsBeforeOverwritingAValue(t *testing.T) {
 		}}
 	}
 	before, after := sqliteRenameManifest(t, config("title")), sqliteRenameManifest(t, config("headline"))
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	backend := newSQLiteMigrationStore(t)
@@ -385,7 +385,7 @@ func TestSQLiteFieldRenameStopsBeforeOverwritingAValue(t *testing.T) {
 	}
 
 	renames := sqliteRenameIntentFor(t, before, after, 2)
-	if _, err := CreateArtifactWithRenames(ctx, directory, "rename", after, time.Unix(2, 0), renames); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: renames}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err == nil || !strings.Contains(err.Error(), "already has a value") || !strings.Contains(err.Error(), documents["beta"]) {
@@ -464,7 +464,7 @@ func TestSQLiteFieldRenameRefusesAFieldThatAlsoChangesShape(t *testing.T) {
 	} {
 		before, after := sqliteRenameManifest(t, candidate.before), sqliteRenameManifest(t, candidate.after)
 		directory := t.TempDir()
-		if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+		if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 			t.Fatal(err)
 		}
 		var renames []migration.Rename
@@ -480,12 +480,12 @@ func TestSQLiteFieldRenameRefusesAFieldThatAlsoChangesShape(t *testing.T) {
 		}
 		if len(renames) == 0 {
 			// Nothing to confirm: the change is a removal, which is refused.
-			if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), false); err == nil {
+			if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{}); err == nil {
 				t.Errorf("%s: the change was planned without a rename", name)
 			}
 			continue
 		}
-		if _, err := CreateArtifactWithRenames(ctx, directory, "rename", after, time.Unix(2, 0), renames); err == nil || !strings.Contains(err.Error(), "more than its name changes") {
+		if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: renames}); err == nil || !strings.Contains(err.Error(), "more than its name changes") {
 			t.Errorf("%s = %v", name, err)
 		}
 	}
@@ -513,14 +513,14 @@ func TestSQLiteFieldRenameIsScopedToItsCollection(t *testing.T) {
 		t.Skipf("field IDs %q and %q no longer collide", nestedID, flatID)
 	}
 	directory := t.TempDir()
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	rename := []migration.Rename{{CollectionBefore: "posts", CollectionAfter: "posts", FieldBefore: "meta.title", FieldAfter: "meta.headline"}}
-	if _, err := CreateArtifactWithRenames(ctx, directory, "rename", sqliteRenameManifest(t, config("headline", true)), time.Unix(2, 0), rename); err == nil || !strings.Contains(err.Error(), "was removed") {
+	if _, err := CreateArtifact(ctx, directory, "rename", sqliteRenameManifest(t, config("headline", true)), time.Unix(2, 0), ArtifactOptions{Renames: rename}); err == nil || !strings.Contains(err.Error(), "was removed") {
 		t.Fatalf("a removal riding on another collection's rename = %v", err)
 	}
-	if _, err := CreateArtifactWithRenames(ctx, directory, "rename", sqliteRenameManifest(t, config("headline", false)), time.Unix(2, 0), rename); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "rename", sqliteRenameManifest(t, config("headline", false)), time.Unix(2, 0), ArtifactOptions{Renames: rename}); err != nil {
 		t.Fatalf("the rename on its own = %v", err)
 	}
 }
@@ -538,7 +538,7 @@ func TestSQLiteFieldRenameCarriesARichTextFieldWithBlocks(t *testing.T) {
 		}}}
 	}
 	before, after := sqliteRenameManifest(t, config("body")), sqliteRenameManifest(t, config("article"))
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	backend := newSQLiteMigrationStore(t)
@@ -551,7 +551,7 @@ func TestSQLiteFieldRenameCarriesARichTextFieldWithBlocks(t *testing.T) {
 VALUES ('posts', 'post-1', 1, 1, '', 0, json_object('body', json(?), 'views', 1))`, document); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateArtifactWithRenames(ctx, directory, "rename", after, time.Unix(2, 0), sqliteRenameIntentFor(t, before, after, 1)); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: sqliteRenameIntentFor(t, before, after, 1)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -617,7 +617,7 @@ func TestSQLiteDevelopmentRenameMovesContentOnlyWithoutMigrationHistory(t *testi
 
 	managed := newSQLiteMigrationStore(t)
 	directory := t.TempDir()
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := managed.ApplyArtifacts(ctx, directory); err != nil {
@@ -644,7 +644,7 @@ func TestSQLiteFieldRenameCarriesIndexesAndJoinsThatNameTheField(t *testing.T) {
 		}}
 	}
 	before, after := sqliteRenameManifest(t, config("author")), sqliteRenameManifest(t, config("writer"))
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	backend := newSQLiteMigrationStore(t)
@@ -663,7 +663,7 @@ func TestSQLiteFieldRenameCarriesIndexesAndJoinsThatNameTheField(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := CreateArtifactWithRenames(ctx, directory, "rename", after, time.Unix(2, 0), sqliteRenameIntentFor(t, before, after, 1)); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: sqliteRenameIntentFor(t, before, after, 1)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -695,10 +695,10 @@ func TestSQLiteFieldRenameCarriesIndexesAndJoinsThatNameTheField(t *testing.T) {
 	reshaped := config("writer")
 	reshaped.Collections[1].Indexes[0].Unique = false
 	unrenamed := t.TempDir()
-	if _, err := CreateArtifact(ctx, unrenamed, "initial", before, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, unrenamed, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateArtifactWithRenames(ctx, unrenamed, "reshaped", sqliteRenameManifest(t, reshaped), time.Unix(2, 0), sqliteRenameIntentFor(t, before, after, 1)); err == nil || !strings.Contains(err.Error(), "existing index") {
+	if _, err := CreateArtifact(ctx, unrenamed, "reshaped", sqliteRenameManifest(t, reshaped), time.Unix(2, 0), ArtifactOptions{Renames: sqliteRenameIntentFor(t, before, after, 1)}); err == nil || !strings.Contains(err.Error(), "existing index") {
 		t.Fatalf("rename with a reshaped index = %v", err)
 	}
 }

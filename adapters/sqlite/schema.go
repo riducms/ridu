@@ -11,11 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riducms/ridu/internal/enableversions"
 	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/internal/requiredfield"
-	"github.com/riducms/ridu/internal/schemadiff"
+	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -26,14 +27,15 @@ import (
 // artifacts once the SQLite artifact runner is configured.
 func (backend *Store) Migrate(ctx context.Context, manifest schema.Manifest) error {
 	return backend.withImmediate(ctx, func(connection *sql.Conn) error {
-		return backend.migrateDevelopmentSchema(ctx, connection, manifest)
+		return backend.migrateDevelopmentSchema(ctx, connection, manifest, nil)
 	})
 }
 
 // migrateDevelopmentSchema synchronizes a database without migration history
 // to manifest inside the caller's write transaction and records it as the
-// manifest the database has.
-func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *sql.Conn, manifest schema.Manifest) error {
+// manifest the database has. A resource that starts keeping versions must
+// store no documents unless existing says what they become.
+func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *sql.Conn, manifest schema.Manifest, existing enableversions.Choices) error {
 	immutable, err := sqliteArtifactLedgerExists(ctx, connection)
 	if err != nil {
 		return err
@@ -46,11 +48,28 @@ func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *
 		return err
 	}
 	if recorded {
-		if err := schemadiff.RejectVersionsEnable(previous.Snapshot(), manifest.Snapshot(), nil); err != nil {
-			return err
-		}
 		if err := assertSQLitePhysicalSchema(ctx, connection, previous, false); err != nil {
 			return fmt.Errorf("current SQLite development schema: %w", err)
+		}
+		chosen := 0
+		for _, resource := range ridumigration.VersionsEnabled(previous.Snapshot(), manifest.Snapshot(), nil) {
+			if choice, found := existing[resource.ID]; found {
+				if err := backend.enableSQLiteVersions(ctx, connection, resource, choice); err != nil {
+					return err
+				}
+				chosen++
+				continue
+			}
+			documents, err := countSQLiteDocuments(ctx, connection, resource.ID)
+			if err != nil {
+				return err
+			}
+			if documents != 0 {
+				return enableversions.StoredDocumentsError(resource, documents)
+			}
+		}
+		if chosen != len(existing) {
+			return fmt.Errorf("the SQLite development database no longer has the schema the choices about existing documents were made for; save again to review them")
 		}
 		changes := fieldchange.Detect(previous.Snapshot(), manifest.Snapshot())
 		reports := fieldchange.Reports(changes)
@@ -74,6 +93,9 @@ func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *
 		return fmt.Errorf("encode SQLite manifest: %w", err)
 	}
 	if !recorded {
+		if len(existing) != 0 {
+			return fmt.Errorf("the SQLite development database has no recorded schema, so no stored documents can start keeping versions")
+		}
 		if err := assertNoSQLiteManagedSchema(ctx, connection); err != nil {
 			return err
 		}

@@ -51,7 +51,7 @@ func TestSQLiteBlockNameTransitionPreservesContentAndHistory(t *testing.T) {
 			var initialFile CreatedArtifact
 			var initialBytes []byte
 			if immutable {
-				initialFile, err = CreateArtifact(ctx, directory, "initial", previous, time.Unix(1, 0), false)
+				initialFile, err = CreateArtifact(ctx, directory, "initial", previous, time.Unix(1, 0), ArtifactOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -125,7 +125,7 @@ func TestSQLiteBlockNameTransitionPreservesContentAndHistory(t *testing.T) {
 			}
 			headsBefore, versionsBefore := readContent(collection)
 			if immutable {
-				if _, err := CreateArtifact(ctx, directory, "add-block-name", current, time.Unix(2, 0), false); err != nil {
+				if _, err := CreateArtifact(ctx, directory, "add-block-name", current, time.Unix(2, 0), ArtifactOptions{}); err != nil {
 					t.Fatal(err)
 				}
 				if err := VerifyArtifacts(ctx, directory); err != nil {

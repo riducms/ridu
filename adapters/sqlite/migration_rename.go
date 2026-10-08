@@ -5,10 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/riducms/ridu/internal/blockrename"
-	"github.com/riducms/ridu/internal/migrationartifact"
+	"github.com/riducms/ridu/internal/enableversions"
 	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -71,7 +70,7 @@ func sqliteFieldRenames(before, after schema.Manifest, renames []ridumigration.R
 // changes are the reviewed field renames. It adds one content-rename step per
 // rename; the closing schema step then rebuilds indexes, references and
 // uniqueness from the renamed content.
-func buildSQLiteArtifactWithRenames(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []ridumigration.Rename) (ridumigration.Artifact, error) {
+func buildSQLiteArtifactWithRenames(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []ridumigration.Rename, existing enableversions.Choices) (ridumigration.Artifact, error) {
 	if before == nil {
 		return ridumigration.Artifact{}, fmt.Errorf("an initial SQLite migration cannot rename fields")
 	}
@@ -102,7 +101,7 @@ func buildSQLiteArtifactWithRenames(ctx context.Context, name string, before *sc
 	validate := func(before, after schema.Snapshot) error {
 		return rules.snapshot(sqliteStorageSchema(before), sqliteStorageSchema(after))
 	}
-	return buildSQLiteArtifactWithValidation(ctx, name, before, after, validate, ordered)
+	return buildSQLiteArtifactWithValidation(ctx, name, before, after, validate, ordered, existing)
 }
 
 // sqliteArtifactRenames returns the rename intent an artifact recorded.
@@ -140,38 +139,6 @@ func applySQLiteArtifactRenames(ctx context.Context, connection *sql.Conn, artif
 	return renameSQLiteContent(ctx, connection, *before, after, resolved, reverse)
 }
 
-// CreateArtifactWithRenames plans and atomically creates one immutable SQLite
-// migration that preserves content across reviewed field renames. Apart from
-// those renames the transition must be additive, as CreateArtifact requires.
-func CreateArtifactWithRenames(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, renames []ridumigration.Rename) (CreatedArtifact, error) {
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		return CreatedArtifact{}, err
-	}
-	if len(files) == 0 {
-		return CreatedArtifact{}, fmt.Errorf("an initial SQLite migration cannot rename fields")
-	}
-	if err := preflightSQLiteArtifacts(ctx, files); err != nil {
-		return CreatedArtifact{}, err
-	}
-	before, err := files[len(files)-1].Artifact.AfterManifest()
-	if err != nil {
-		return CreatedArtifact{}, err
-	}
-	artifact, err := buildSQLiteArtifactWithRenames(ctx, name, &before, after, renames)
-	if err != nil {
-		return CreatedArtifact{}, err
-	}
-	if err := requireSQLiteDestructiveApproval(artifact.Risks, false); err != nil {
-		return CreatedArtifact{}, err
-	}
-	file, err := migrationartifact.Create(directory, name, artifact, now)
-	if err != nil {
-		return CreatedArtifact{}, err
-	}
-	return CreatedArtifact{Path: file.Path, Name: file.Name, Checksum: file.Digest, Version: file.Artifact.Version}, nil
-}
-
 // RenameDevelopmentFields moves content across reviewed field renames in a
 // database that `ridu dev` synchronizes, using the executor migrations use,
 // and synchronizes the database to the resulting schema in the same
@@ -201,7 +168,7 @@ func (backend *Store) RenameDevelopmentFields(ctx context.Context, before, after
 				return err
 			}
 		}
-		return backend.migrateDevelopmentSchema(ctx, connection, after)
+		return backend.migrateDevelopmentSchema(ctx, connection, after, nil)
 	})
 }
 

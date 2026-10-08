@@ -15,6 +15,8 @@ test("public projection excludes maintainer research in every format and keeps p
 		"tests/performance/investigation.md",
 		"tests/performance/results.csv",
 		"tests/performance/README.md",
+		".claude/launch.json",
+		".claude/skills/ridu-project",
 	];
 	const process = Bun.spawn(["git", "check-attr", "export-ignore", "--", ...paths], {
 		cwd: repositoryRoot,

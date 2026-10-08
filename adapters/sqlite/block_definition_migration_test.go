@@ -23,7 +23,7 @@ func TestSQLiteBlockDefinitionMigrationsReachEveryPlacement(t *testing.T) {
 	step := int64(1)
 	blockreferences.RunDefinitionMigrations(t, blockreferences.MigrationHarness{
 		Begin: func(t *testing.T, before schema.Manifest) store.Store {
-			if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(step, 0), false); err != nil {
+			if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(step, 0), ArtifactOptions{}); err != nil {
 				t.Fatal(err)
 			}
 			backend = newSQLiteMigrationStore(t)
@@ -42,9 +42,9 @@ func TestSQLiteBlockDefinitionMigrationsReachEveryPlacement(t *testing.T) {
 				for index, candidate := range candidates {
 					renames[index] = ridumigration.Rename{Block: candidate.Block, FieldBefore: candidate.BeforeField.Path.String(), FieldAfter: candidate.AfterField.Path.String()}
 				}
-				created, err = CreateArtifactWithRenames(ctx, directory, name, after, time.Unix(step, 0), renames)
+				created, err = CreateArtifact(ctx, directory, name, after, time.Unix(step, 0), ArtifactOptions{Renames: renames})
 			} else {
-				created, err = CreateArtifact(ctx, directory, name, after, time.Unix(step, 0), false)
+				created, err = CreateArtifact(ctx, directory, name, after, time.Unix(step, 0), ArtifactOptions{})
 			}
 			if err != nil {
 				return err

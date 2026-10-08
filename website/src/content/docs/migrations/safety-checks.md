@@ -77,6 +77,18 @@ unsafe as written, not a check to work around.
     <dd>Stored documents have no value for a field that becomes required. Backfill them with a data transform, or keep the field optional. See <a href="/docs/migrations/required-fields/">Required fields</a>.</dd>
   </div>
   <div>
+    <dt><code>RIDU_VERSIONS_EXISTING_REQUIRED</code></dt>
+    <dd>A collection or global starts keeping versions, and the migration doesn't say what its stored documents become. Pass <code>--versions-existing=published</code>, <code>draft</code> or <code>require-empty</code>, or answer the question in a terminal. See <a href="/docs/migrations/enable-versions/">Enabling versions</a>.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_VERSIONS_ENABLE_NOT_EMPTY</code></dt>
+    <dd>A migration that enables versions with <code>require-empty</code> found stored documents. See <a href="/docs/migrations/enable-versions/#not-empty">When require-empty stops</a>.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_VERSIONS_EXISTING_DOCUMENTS</code></dt>
+    <dd><code>ridu dev</code> would enable versions on a collection that stores documents without a decision about them. Save again in a terminal to choose, or create the migration with <code>--versions-existing</code>.</dd>
+  </div>
+  <div>
     <dt><code>RIDU_REFERENCE_SHAPE_DECREASE_UNSAFE</code></dt>
     <dd>Narrowing a relationship's field, target or cardinality could leave dormant references in current values or version snapshots. Keep the shape, retire the whole owning resource, or write an application-owned cleanup first.</dd>
   </div>

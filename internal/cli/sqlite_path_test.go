@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/riducms/ridu/internal/fileuri"
 )
 
 func TestResolveSQLiteMigrationDatabasePathForSourceMatchesRuntimeContract(t *testing.T) {
@@ -46,5 +49,25 @@ func TestResolveSQLiteMigrationDatabasePathRejectsDuplicateModeParameters(t *tes
 		if resolved, err := resolveSQLiteMigrationDatabasePath(projectRoot, input); err == nil || !strings.Contains(err.Error(), `parameter "mode" must not be specified more than once`) {
 			t.Fatalf("resolve %q = %q, %v", input, resolved, err)
 		}
+	}
+}
+
+func TestResolveSQLiteMigrationDatabasePathRebasesProjectRelativeFileURIs(t *testing.T) {
+	projectRoot := filepath.Join(t.TempDir(), "my app")
+	resolved, err := resolveSQLiteMigrationDatabasePath(projectRoot, "file:.ridu/development.sqlite?mode=rwc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(resolved)
+	if err != nil {
+		t.Fatalf("parse rebased URI %q: %v", resolved, err)
+	}
+	target, err := fileuri.ToPath(parsed)
+	if err != nil || target != filepath.Join(projectRoot, ".ridu", "development.sqlite") || parsed.RawQuery != "mode=rwc" {
+		t.Fatalf("rebased URI %q names %q, %v", resolved, target, err)
+	}
+	again, err := resolveSQLiteMigrationDatabasePath(projectRoot, resolved)
+	if err != nil || again != resolved {
+		t.Fatalf("absolute rebased URI resolved again to %q, %v", again, err)
 	}
 }

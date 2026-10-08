@@ -20,7 +20,7 @@ func TestPostgresReadinessRequiresExactAppliedManifest(t *testing.T) {
 		t.Fatal("readiness succeeded without an immutable migration ledger")
 	}
 	directory := t.TempDir()
-	initial, err := postgres.BuildArtifact(ctx, "initial", nil, manifest, nil, false)
+	initial, err := postgres.BuildArtifact(ctx, "initial", nil, manifest, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestPostgresReadinessRequiresExactAppliedManifest(t *testing.T) {
 	if err := backend.Ready(ctx, ahead); err == nil {
 		t.Fatal("readiness accepted an executable manifest ahead of the database ledger")
 	}
-	second, err := postgres.BuildArtifact(ctx, "add-summary", &manifest, ahead, nil, false)
+	second, err := postgres.BuildArtifact(ctx, "add-summary", &manifest, ahead, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

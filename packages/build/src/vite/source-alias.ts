@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname, join, parse, resolve } from "node:path";
+import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 import type { Plugin } from "vite";
 
 // The admin ships as source and imports itself through @admin/. Ridu's Svelte packages ship
@@ -26,7 +26,7 @@ export function packageSourceAliasPlugin(): Plugin {
 
 			if (!source.startsWith(adminAlias) || importer === undefined) return;
 			// The admin's src, wherever the package that imports @admin/ is installed.
-			const sourceRoot = findPackageSourceRoot(cleanID(importer), sourceRoots);
+			const sourceRoot = findPackageSourceRoot(importer, sourceRoots);
 			if (sourceRoot === undefined) return;
 			return this.resolve(resolve(sourceRoot, source.slice(adminAlias.length)), importer, {
 				skipSelf: true,
@@ -35,14 +35,20 @@ export function packageSourceAliasPlugin(): Plugin {
 	};
 }
 
-function cleanID(id: string) {
-	return id.replace(/^\0/, "").split("?", 1)[0] ?? id;
+/**
+ * The file a Vite module ID names, without its \0 prefix or query, or undefined for a virtual
+ * module. Windows IDs start with a drive (C:/…) rather than /.
+ */
+export function moduleFilePath(id: string, isAbsolutePath = isAbsolute) {
+	const path = id.replace(/^\0/, "").split("?", 1)[0] ?? id;
+	return isAbsolutePath(path) ? path : undefined;
 }
 
-function findPackageSourceRoot(id: string, cache: Map<string, string>) {
-	if (!id.startsWith("/")) return;
+export function findPackageSourceRoot(id: string, cache: Map<string, string>) {
+	const path = moduleFilePath(id);
+	if (path === undefined) return;
 
-	let directory = dirname(id);
+	let directory = dirname(path);
 	const cached = cache.get(directory);
 	if (cached) return cached;
 

@@ -25,7 +25,7 @@ func TestPrimitiveListsPostgresMigrationAndIndexes(t *testing.T) {
 	}
 	before := resolve(field.Fields{field.Text("title")})
 	after := resolve(field.Fields{field.Text("title"), field.TextList("points").Default("oak", "oak"), field.NumberList("sizes").Default(0, 0)})
-	artifact, err := BuildArtifact(t.Context(), "add-lists", &before, after, nil, false)
+	artifact, err := BuildArtifact(t.Context(), "add-lists", &before, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,26 +35,26 @@ func TestPrimitiveListsPostgresMigrationAndIndexes(t *testing.T) {
 	scalar := resolve(field.Fields{field.Text("value")})
 	list := resolve(field.Fields{field.TextList("value")})
 	for _, allow := range []bool{false, true} {
-		if _, err := BuildArtifact(t.Context(), "scalar-to-list", &scalar, list, nil, allow); err == nil || !strings.Contains(err.Error(), "changes value shape") {
+		if _, err := BuildArtifact(t.Context(), "scalar-to-list", &scalar, list, ArtifactOptions{AllowDestructive: allow}); err == nil || !strings.Contains(err.Error(), "changes value shape") {
 			t.Fatalf("unreviewed conversion allow=%v err=%v", allow, err)
 		}
 	}
 	descriptor := ridumigration.DataTransformDescriptor{Name: "convert-list", Checksum: ridumigration.DataTransformChecksum([]byte("explicit-list-conversion"))}
-	if _, err := planArtifact(t.Context(), "convert", &list, resolve(field.Fields{field.NumberList("value")}), nil, false, descriptor); err != nil {
+	if _, err := planArtifact(t.Context(), "convert", &list, resolve(field.Fields{field.NumberList("value")}), ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}); err != nil {
 		t.Fatalf("explicit same-storage list transform rejected: %v", err)
 	}
 	for _, unique := range []bool{false, true} {
 		snapshot := after.Snapshot()
 		snapshot.Collections[0].Fields[1].Index = !unique
 		snapshot.Collections[0].Fields[1].Unique = unique
-		if _, err := BuildArtifact(t.Context(), "index-list", nil, schema.NewManifest(snapshot), nil, false); err == nil || !strings.Contains(err.Error(), "primitive list") {
+		if _, err := BuildArtifact(t.Context(), "index-list", nil, schema.NewManifest(snapshot), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "primitive list") {
 			t.Fatalf("list index accepted: %v", err)
 		}
 	}
 	snapshot := after.Snapshot()
 	path, _ := query.ParsePath("points")
 	snapshot.Collections[0].Indexes = []schema.CollectionIndex{{Fields: []query.Path{path}}}
-	if _, err := BuildArtifact(t.Context(), "compound-list", nil, schema.NewManifest(snapshot), nil, false); err == nil || !strings.Contains(err.Error(), "primitive list") {
+	if _, err := BuildArtifact(t.Context(), "compound-list", nil, schema.NewManifest(snapshot), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "primitive list") {
 		t.Fatalf("compound list index accepted: %v", err)
 	}
 }

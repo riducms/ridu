@@ -40,7 +40,7 @@ func writeMigrations(ctx context.Context, config ridu.Config, directory string) 
 	if err != nil {
 		return "", err
 	}
-	artifact, err := postgres.BuildArtifact(ctx, "blocks-initial", nil, manifest, nil, false)
+	artifact, err := postgres.BuildArtifact(ctx, "blocks-initial", nil, manifest, postgres.ArtifactOptions{})
 	if err != nil {
 		return "", err
 	}

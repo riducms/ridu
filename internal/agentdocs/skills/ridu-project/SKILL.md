@@ -54,9 +54,11 @@ the reference needed for the change:
 - Schema evolution, migration commands, and workflows: [reference/migrations.md](reference/migrations.md)
 - Development databases, `baseline`, and squashing history:
   [reference/migrations/development.md](reference/migrations/development.md)
-- Renames, required fields, and field kind changes: [renames](reference/migrations/renames.md),
-  [required fields](reference/migrations/required-fields.md), and
-  [field kind changes](reference/migrations/field-kinds.md)
+- Renames, required fields, field kind changes, and enabling versions:
+  [renames](reference/migrations/renames.md),
+  [required fields](reference/migrations/required-fields.md),
+  [field kind changes](reference/migrations/field-kinds.md), and
+  [enabling versions](reference/migrations/enable-versions.md)
 - Compiled data transforms: [reference/migrations/data-transforms.md](reference/migrations/data-transforms.md)
 - Approval flags, safety codes, and deployment order: [safety checks](reference/migrations/safety-checks.md)
   and [deploying migrations](reference/migrations/deploy.md)

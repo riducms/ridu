@@ -47,6 +47,9 @@ type ArtifactOptions struct {
 	AllowDestructive bool
 	Renames          []ridumigration.Rename
 	DataTransforms   []ridumigration.DataTransformDescriptor
+	// ExistingDocuments says, for each resource that starts keeping versions,
+	// what becomes of the documents it already stores.
+	ExistingDocuments map[schema.StableID]ridumigration.ExistingDocuments
 }
 
 // SafetyError reports a valid MongoDB transition that still requires explicit
@@ -285,7 +288,7 @@ func validateMongoDBAdditiveResources(kind string, before, after []schema.Collec
 		if !exists {
 			return fmt.Errorf("MongoDB artifact planner supports only additive transitions; %s %q was removed", kind, previous.ID)
 		}
-		comparison := current
+		comparison := withMongoDBPreviousVersions(previous, current)
 		comparison.Fields = previous.Fields
 		comparison.Indexes = previous.Indexes
 		if !reflect.DeepEqual(previous, comparison) {
@@ -299,6 +302,18 @@ func validateMongoDBAdditiveResources(kind string, before, after []schema.Collec
 		}
 	}
 	return nil
+}
+
+// withMongoDBPreviousVersions compares a resource that starts keeping versions
+// as if it had not. The planner records what its stored documents become in
+// an enable-versions step, and the index delta adds its version and published
+// namespaces.
+func withMongoDBPreviousVersions(previous, current schema.Collection) schema.Collection {
+	if previous.Versions == nil && !previous.Capabilities.Versions {
+		current.Versions = nil
+		current.Capabilities.Versions = false
+	}
+	return current
 }
 
 func mongoDBIndexesContain(current, previous []schema.CollectionIndex) bool {

@@ -64,7 +64,7 @@ func TestPostgresFieldRenameRefusesRenamedChildren(t *testing.T) {
 	_, afterBlocks := renameChildrenManifest(t, field.Blocks("sections", hero("credit")), field.Number("views"))
 	if renames := renameChildrenIntent(t, beforeBlocks, afterBlocks); len(renames) != 2 || renames[0].Kind != RenameBlockField || renames[0].Block != "hero" || renames[1].Kind != RenameField {
 		t.Fatalf("container and block field renames = %#v", renames)
-	} else if artifact, err := BuildArtifact(ctx, "rename", &beforeBlocks, afterBlocks, renames, false); err != nil {
+	} else if artifact, err := BuildArtifact(ctx, "rename", &beforeBlocks, afterBlocks, ArtifactOptions{Renames: renames}); err != nil {
 		t.Fatalf("container and block field renames were refused: %v", err)
 	} else if steps := artifact.Phases[0].Steps; steps[len(steps)-2].Kind != "rename_content" || !strings.Contains(steps[len(steps)-2].Name, "block field content hero.caption") {
 		// The block field rename finds its blocks under the renamed container.
@@ -112,7 +112,7 @@ func TestPostgresFieldRenameRefusesRenamedChildren(t *testing.T) {
 		}
 		// Destructive approval does not turn the change into a rename.
 		for _, destructive := range []bool{false, true} {
-			_, err := BuildArtifact(ctx, "rename", &before, after, renames, destructive)
+			_, err := BuildArtifact(ctx, "rename", &before, after, ArtifactOptions{Renames: renames, AllowDestructive: destructive})
 			if err == nil || !strings.Contains(err.Error(), "separate migration") || !strings.Contains(err.Error(), candidate.child) || !strings.Contains(err.Error(), candidate.change) {
 				t.Errorf("%s (destructive=%t) = %v", name, destructive, err)
 			}
@@ -125,7 +125,7 @@ func TestPostgresFieldRenameRuleAppliesToTheSharedPlanner(t *testing.T) {
 	ctx := context.Background()
 	_, before := renameChildrenManifest(t, field.Group("meta", field.Fields{field.Text("slug"), field.Number("rank")}), field.Number("views"))
 	_, after := renameChildrenManifest(t, field.Group("info", field.Fields{field.Text("handle"), field.Number("order")}), field.Number("views"))
-	_, err := planArtifact(ctx, "rename", &before, after, renameChildrenIntent(t, before, after), false)
+	_, err := planArtifact(ctx, "rename", &before, after, ArtifactOptions{Renames: renameChildrenIntent(t, before, after)})
 	if err == nil || !strings.Contains(err.Error(), "separate migration") {
 		t.Fatalf("planner accepted a rename with changed children: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestPostgresFieldRenameKeepsUnchangedChildren(t *testing.T) {
 	beforeConfig, before := renameChildrenManifest(t, fields("meta", "rows", "layout")...)
 	afterConfig, after := renameChildrenManifest(t, fields("info", "items", "sections")...)
 	directory := t.TempDir()
-	initial, err := BuildArtifact(ctx, "initial", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestPostgresFieldRenameKeepsUnchangedChildren(t *testing.T) {
 	if len(renames) != 3 {
 		t.Fatalf("rename candidates = %d, want the group, the array and the blocks field", len(renames))
 	}
-	rename, err := BuildArtifact(ctx, "rename", &before, after, renames, false)
+	rename, err := BuildArtifact(ctx, "rename", &before, after, ArtifactOptions{Renames: renames})
 	if err != nil {
 		t.Fatalf("a rename with unchanged children was refused: %v", err)
 	}

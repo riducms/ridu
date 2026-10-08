@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/riducms/ridu/internal/enableversions"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
@@ -44,7 +45,11 @@ func validatePostgresPlannedSQL(ctx context.Context, artifact ridumigration.Arti
 	if err != nil {
 		return migrationPlanMismatch("reconstruct compiled data transforms: %v", err)
 	}
-	expected, err := planArtifact(ctx, artifact.Name, before, after, renames, true, transforms...)
+	existing, err := enableversions.Recorded(artifact)
+	if err != nil {
+		return migrationPlanMismatch("reconstruct existing-document choices: %v", err)
+	}
+	expected, err := planArtifact(ctx, artifact.Name, before, after, ArtifactOptions{Renames: renames, AllowDestructive: true, DataTransforms: transforms, ExistingDocuments: existing})
 	if err != nil {
 		return migrationPlanMismatch("regenerate deterministic Atlas plan: %v", err)
 	}

@@ -95,7 +95,7 @@ func TestPostgresEmbeddedEvolutionRequiresTransform(t *testing.T) {
 			test.change(postgresEmbeddedTree(&snapshot), postgresEmbeddedBlock(t, &snapshot, "card"), &snapshot)
 			after := schema.NewManifest(snapshot)
 			for _, destructive := range []bool{false, true} {
-				if _, err := BuildArtifact(t.Context(), "embedded-change", &before, after, nil, destructive); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
+				if _, err := BuildArtifact(t.Context(), "embedded-change", &before, after, ArtifactOptions{AllowDestructive: destructive}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 					t.Fatalf("unsafe schema adopted (destructive=%v): %v", destructive, err)
 				}
 			}
@@ -128,7 +128,7 @@ func TestPostgresEmbeddedEvolutionAllowsAdditionsAndPresentation(t *testing.T) {
 	card.Fields[0].Default = &value
 	card.Fields = append(card.Fields, atlasTextField("block-card-caption", "caption"))
 	snapshot.Blocks = append(snapshot.Blocks, schema.BlockType{Slug: "new-card", TypeName: "NewCard", Fields: []schema.Field{atlasTextField("block-new-card-title", "title"), atlasBlockNameField("block-new-card-block-name", "blockName")}})
-	if _, err := BuildArtifact(t.Context(), "add-embedded", &before, schema.NewManifest(snapshot), nil, false); err != nil {
+	if _, err := BuildArtifact(t.Context(), "add-embedded", &before, schema.NewManifest(snapshot), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -144,11 +144,11 @@ func TestPostgresEmbeddedEvolutionAllowsRelaxedConstraints(t *testing.T) {
 	larger := 20
 	child.Required = false
 	child.Text.MinLength, child.Text.MaxLength = nil, &larger
-	if _, err := BuildArtifact(t.Context(), "relax-embedded", &before, schema.NewManifest(snapshot), nil, false); err != nil {
+	if _, err := BuildArtifact(t.Context(), "relax-embedded", &before, schema.NewManifest(snapshot), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	child.Text.MaxLength = &min
-	if _, err := BuildArtifact(t.Context(), "tighten-embedded", &before, schema.NewManifest(snapshot), nil, false); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
+	if _, err := BuildArtifact(t.Context(), "tighten-embedded", &before, schema.NewManifest(snapshot), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 		t.Fatalf("tightened constraint: %v", err)
 	}
 }
@@ -164,12 +164,12 @@ func TestPostgresEmbeddedEvolutionInspectsNestedChildren(t *testing.T) {
 	card.Fields = []schema.Field{group, card.Fields[1]}
 	before = schema.NewManifest(snapshot)
 	card.Fields[0].Nested.Fields[0].Required = true
-	if _, err := BuildArtifact(t.Context(), "require-nested", &before, schema.NewManifest(snapshot), nil, false); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
+	if _, err := BuildArtifact(t.Context(), "require-nested", &before, schema.NewManifest(snapshot), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 		t.Fatalf("nested schema adoption: %v", err)
 	}
 	card.Fields[0].Nested.Fields[0].Required = false
 	card.Fields[0].Nested.RowLabel = "title"
-	if _, err := BuildArtifact(t.Context(), "label-nested", &before, schema.NewManifest(snapshot), nil, false); err != nil {
+	if _, err := BuildArtifact(t.Context(), "label-nested", &before, schema.NewManifest(snapshot), ArtifactOptions{}); err != nil {
 		t.Fatalf("presentation change: %v", err)
 	}
 }
@@ -181,7 +181,7 @@ func TestPostgresEmbeddedEvolutionRejectsDateFormatChanges(t *testing.T) {
 	child.Type, child.Text, child.Date = schema.FieldTypeDate, nil, &schema.DateField{Format: schema.DateOnly}
 	before = schema.NewManifest(snapshot)
 	child.Date.Format = schema.TimeOnly
-	if _, err := BuildArtifact(t.Context(), "change-date-format", &before, schema.NewManifest(snapshot), nil, false); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
+	if _, err := BuildArtifact(t.Context(), "change-date-format", &before, schema.NewManifest(snapshot), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 		t.Fatalf("date wire format change: %v", err)
 	}
 }
@@ -210,11 +210,11 @@ func TestPostgresEmbeddedEvolutionRejectsInvalidGroupMaterialization(t *testing.
 			} else {
 				card.Fields[2].Nested.Fields[0].Default = &value
 			}
-			if _, err := BuildArtifact(t.Context(), "materialize-group", &before, schema.NewManifest(snapshot), nil, false); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
+			if _, err := BuildArtifact(t.Context(), "materialize-group", &before, schema.NewManifest(snapshot), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 				t.Fatalf("invalid materialization: %v", err)
 			}
 			card.Fields[2].Nested.Fields[1].Default = &value
-			if _, err := BuildArtifact(t.Context(), "valid-defaults", &before, schema.NewManifest(snapshot), nil, false); err != nil {
+			if _, err := BuildArtifact(t.Context(), "valid-defaults", &before, schema.NewManifest(snapshot), ArtifactOptions{}); err != nil {
 				t.Fatalf("complete defaults must be allowed: %v", err)
 			}
 		})

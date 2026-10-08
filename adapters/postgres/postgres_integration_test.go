@@ -31,7 +31,7 @@ func TestPostgresMigrationsAndStoreConformance(t *testing.T) {
 	backend, manifest := integrationBackend(t, ctx, integrationConfig())
 	directory := t.TempDir()
 
-	artifact, err := postgres.BuildArtifact(ctx, "initial-schema", nil, manifest, nil, false)
+	artifact, err := postgres.BuildArtifact(ctx, "initial-schema", nil, manifest, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1109,7 +1109,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	}}
 	backend, before := integrationBackend(t, ctx, beforeConfig)
 	directory := t.TempDir()
-	initial, err := postgres.BuildArtifact(ctx, "initial", nil, before, nil, false)
+	initial, err := postgres.BuildArtifact(ctx, "initial", nil, before, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1216,7 +1216,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if len(renames) != 3 {
 		t.Fatalf("rename candidates = %#v", candidates)
 	}
-	second, err := postgres.BuildArtifact(ctx, "preserve-renames", &before, after, renames, false)
+	second, err := postgres.BuildArtifact(ctx, "preserve-renames", &before, after, postgres.ArtifactOptions{Renames: renames})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1852,7 +1852,7 @@ func TestPostgresDestructiveArtifactRequiresApprovalAndAppliesInIsolation(t *tes
 	}}}
 	backend, before := integrationBackend(t, ctx, beforeConfig)
 	directory := t.TempDir()
-	initial, err := postgres.BuildArtifact(ctx, "initial", nil, before, nil, false)
+	initial, err := postgres.BuildArtifact(ctx, "initial", nil, before, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1876,10 +1876,10 @@ func TestPostgresDestructiveArtifactRequiresApprovalAndAppliesInIsolation(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := postgres.BuildArtifact(ctx, "drop-summary", &before, after, nil, false); err == nil {
+	if _, err := postgres.BuildArtifact(ctx, "drop-summary", &before, after, postgres.ArtifactOptions{}); err == nil {
 		t.Fatal("destructive PostgreSQL artifact was created without approval")
 	}
-	destructive, err := postgres.BuildArtifact(ctx, "drop-summary", &before, after, nil, true)
+	destructive, err := postgres.BuildArtifact(ctx, "drop-summary", &before, after, postgres.ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2158,7 +2158,7 @@ func richTextDocument(text string) store.Value {
 func applyInitialArtifact(t *testing.T, ctx context.Context, backend *postgres.Store, manifest schema.Manifest) string {
 	t.Helper()
 	directory := t.TempDir()
-	artifact, err := postgres.BuildArtifact(ctx, "initial", nil, manifest, nil, false)
+	artifact, err := postgres.BuildArtifact(ctx, "initial", nil, manifest, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

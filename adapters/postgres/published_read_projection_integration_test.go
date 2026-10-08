@@ -436,7 +436,7 @@ func publishedReadFixture(t *testing.T, fields field.Fields, localization ridu.L
 	}
 	backend := migrationArtifactTestBackend(t)
 	directory := t.TempDir()
-	if _, err := CreateArtifact(t.Context(), directory, "initial", manifest, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(t.Context(), directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(t.Context(), directory); err != nil {

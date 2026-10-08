@@ -28,7 +28,7 @@ func TestPostgresNewUniqueRejectsDuplicatePublishedHeads(t *testing.T) {
 			after := schema.NewManifest(afterSnapshot)
 			directory := t.TempDir()
 			if mode == "artifact" {
-				if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), nil, false); err != nil {
+				if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 					t.Fatal(err)
 				}
 				if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -56,7 +56,7 @@ func TestPostgresNewUniqueRejectsDuplicatePublishedHeads(t *testing.T) {
 				}
 			}
 			if mode == "artifact" {
-				artifact, err := BuildArtifact(ctx, "add-unique", &before, after, nil, false)
+				artifact, err := BuildArtifact(ctx, "add-unique", &before, after, ArtifactOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}

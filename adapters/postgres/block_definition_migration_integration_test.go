@@ -23,7 +23,7 @@ func TestPostgresBlockDefinitionMigrationsReachEveryPlacement(t *testing.T) {
 	blockreferences.RunDefinitionMigrations(t, blockreferences.MigrationHarness{
 		Begin: func(t *testing.T, before schema.Manifest) store.Store {
 			backend = migrationArtifactTestBackend(t)
-			if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(step, 0), nil, false); err != nil {
+			if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(step, 0), ArtifactOptions{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := backend.ApplyArtifactsWithOptions(ctx, directory, RunnerOptions{}); err != nil {
@@ -37,7 +37,7 @@ func TestPostgresBlockDefinitionMigrationsReachEveryPlacement(t *testing.T) {
 			for index, candidate := range candidates {
 				renames[index] = Rename{Kind: RenameKind(candidate.Kind), Block: candidate.Block, BeforeField: candidate.BeforeField, AfterField: candidate.AfterField}
 			}
-			created, err := CreateArtifact(ctx, directory, fmt.Sprintf("change-%d", step), after, time.Unix(step, 0), renames, false)
+			created, err := CreateArtifact(ctx, directory, fmt.Sprintf("change-%d", step), after, time.Unix(step, 0), ArtifactOptions{Renames: renames})
 			if err != nil {
 				return err
 			}

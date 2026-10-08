@@ -353,7 +353,7 @@ func TestMongoDBArtifactPublicationRejectsAHeadInsertedAfterExactValidation(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	intervening.Phases, err = mongoDBArtifactPhases(intervening.FromDigest, &manifest, manifest, mongoDBSemanticRenamePlan{}, nil, nil, mongoDBIndexDelta{}, nil)
+	intervening.Phases, err = mongoDBArtifactPhases(intervening.FromDigest, &manifest, manifest, mongoDBSemanticRenamePlan{}, nil, nil, nil, mongoDBIndexDelta{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

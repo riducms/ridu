@@ -807,15 +807,15 @@ func TestSQLiteSameDigestDataTransformsCannotBeReordered(t *testing.T) {
 	ctx := context.Background()
 	directory := t.TempDir()
 	manifest := sqliteMigrationManifest(t, false)
-	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	firstDescriptor := migration.DataTransformDescriptor{Name: "first-transform", Checksum: migration.DataTransformChecksum([]byte("first-transform-v1"))}
-	if _, err := CreateArtifact(ctx, directory, "first-transform", manifest, time.Unix(2, 0), false, firstDescriptor); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "first-transform", manifest, time.Unix(2, 0), ArtifactOptions{DataTransforms: []migration.DataTransformDescriptor{firstDescriptor}}); err != nil {
 		t.Fatal(err)
 	}
 	secondDescriptor := migration.DataTransformDescriptor{Name: "second-transform", Checksum: migration.DataTransformChecksum([]byte("second-transform-v1"))}
-	if _, err := CreateArtifact(ctx, directory, "second-transform", manifest, time.Unix(3, 0), false, secondDescriptor); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "second-transform", manifest, time.Unix(3, 0), ArtifactOptions{DataTransforms: []migration.DataTransformDescriptor{secondDescriptor}}); err != nil {
 		t.Fatal(err)
 	}
 	files, err := migrationartifact.ReadAll(directory)
@@ -863,7 +863,7 @@ func TestSQLiteDataOnlyExpectedArtifactHeadControlsReadiness(t *testing.T) {
 	ctx := context.Background()
 	directory := t.TempDir()
 	manifest := sqliteMigrationManifest(t, false)
-	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	backend := newSQLiteMigrationStore(t)
@@ -872,7 +872,7 @@ func TestSQLiteDataOnlyExpectedArtifactHeadControlsReadiness(t *testing.T) {
 	}
 
 	descriptor := migration.DataTransformDescriptor{Name: "data-only", Checksum: migration.DataTransformChecksum([]byte("data-only-head-v1"))}
-	if _, err := CreateArtifact(ctx, directory, "data-only", manifest, time.Unix(2, 0), false, descriptor); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "data-only", manifest, time.Unix(2, 0), ArtifactOptions{DataTransforms: []migration.DataTransformDescriptor{descriptor}}); err != nil {
 		t.Fatal(err)
 	}
 	statuses, err := backend.ArtifactStatus(ctx, directory, manifest)
@@ -1305,15 +1305,15 @@ func TestSQLiteDataTransformNameIsChecksumBoundAcrossHistory(t *testing.T) {
 	directory := t.TempDir()
 	manifest := sqliteMigrationManifest(t, false)
 	initialDescriptor := migration.DataTransformDescriptor{Name: "normalize-posts", Checksum: migration.DataTransformChecksum([]byte("normalize-posts-initial"))}
-	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), false, initialDescriptor); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{DataTransforms: []migration.DataTransformDescriptor{initialDescriptor}}); err != nil {
 		t.Fatal(err)
 	}
 	changedDescriptor := migration.DataTransformDescriptor{Name: initialDescriptor.Name, Checksum: migration.DataTransformChecksum([]byte("normalize-posts-changed"))}
-	if _, err := CreateArtifact(ctx, directory, "changed-callback", manifest, time.Unix(2, 0), false, changedDescriptor); err == nil || !strings.Contains(err.Error(), "use a new transform name") {
+	if _, err := CreateArtifact(ctx, directory, "changed-callback", manifest, time.Unix(2, 0), ArtifactOptions{DataTransforms: []migration.DataTransformDescriptor{changedDescriptor}}); err == nil || !strings.Contains(err.Error(), "use a new transform name") {
 		t.Fatalf("changed transform identity error = %v", err)
 	}
 	replacement := migration.DataTransformDescriptor{Name: "normalize-posts-replacement", Checksum: changedDescriptor.Checksum}
-	if _, err := CreateArtifact(ctx, directory, "new-callback", manifest, time.Unix(2, 0), false, replacement); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "new-callback", manifest, time.Unix(2, 0), ArtifactOptions{DataTransforms: []migration.DataTransformDescriptor{replacement}}); err != nil {
 		t.Fatalf("new transform identity: %v", err)
 	}
 	noop := func(context.Context, migration.DataTransaction) error { return nil }

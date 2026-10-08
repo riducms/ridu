@@ -9068,7 +9068,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.18.0\"",
+					"signature": "const FrameworkVersion = \"0.19.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -79570,7 +79570,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 266
+						"line": 272
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79820,7 +79820,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 297
+						"line": 303
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79864,7 +79864,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 205
+						"line": 209
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79906,7 +79906,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 193
+						"line": 197
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79955,6 +79955,11 @@
 							"name": "StepAuditRequiredValues",
 							"type": "\"audit_required_values\"",
 							"description": "Refuse the migration while a stored document has no value for a field it makes required."
+						},
+						{
+							"name": "StepEnableVersions",
+							"type": "\"enable_versions\"",
+							"description": "Turn a resource's stored documents into versioned documents as its recorded choice says."
 						},
 						{
 							"name": "StepConcurrentIndex",
@@ -80062,7 +80067,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 216
+						"line": 220
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -80099,7 +80104,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 236
+						"line": 240
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -80112,7 +80117,7 @@
 					"kind": "type",
 					"group": "Review model",
 					"summary": "One physical or semantic planner operation before checkpointed phases are built.",
-					"signature": "type Operation struct {\n\t// Kind selects the runner behavior.\n\tKind StepKind `json:\"kind\"`\n\t// Name is a stable, review-friendly operation label.\n\tName string `json:\"name\"`\n\t// SQL is present only for StepSQL.\n\tSQL string `json:\"sql,omitempty\"`\n\t// Rename is present only for StepRenameContent.\n\tRename *Rename `json:\"rename,omitempty\"`\n\t// ResourceIDs is present only while planning a StepRetireResources step.\n\tResourceIDs []schema.StableID `json:\"resourceIds,omitempty\"`\n\t// PurgeVersionOwnerIDs identifies surviving resources whose complete\n\t// historical version rows could otherwise restore references to a retired\n\t// resource. It is present only while planning StepRetireResources.\n\tPurgeVersionOwnerIDs []schema.StableID `json:\"purgeVersionOwnerIds,omitempty\"`\n\t// RequiredFields is present only for StepAuditRequiredValues.\n\tRequiredFields []RequiredFieldAddress `json:\"requiredFields,omitempty\"`\n}",
+					"signature": "type Operation struct {\n\t// Kind selects the runner behavior.\n\tKind StepKind `json:\"kind\"`\n\t// Name is a stable, review-friendly operation label.\n\tName string `json:\"name\"`\n\t// SQL is present only for StepSQL.\n\tSQL string `json:\"sql,omitempty\"`\n\t// Rename is present only for StepRenameContent.\n\tRename *Rename `json:\"rename,omitempty\"`\n\t// ResourceIDs is present only while planning a StepRetireResources step.\n\tResourceIDs []schema.StableID `json:\"resourceIds,omitempty\"`\n\t// PurgeVersionOwnerIDs identifies surviving resources whose complete\n\t// historical version rows could otherwise restore references to a retired\n\t// resource. It is present only while planning StepRetireResources.\n\tPurgeVersionOwnerIDs []schema.StableID `json:\"purgeVersionOwnerIds,omitempty\"`\n\t// RequiredFields is present only for StepAuditRequiredValues.\n\tRequiredFields []RequiredFieldAddress `json:\"requiredFields,omitempty\"`\n\t// EnableVersions is present only for StepEnableVersions.\n\tEnableVersions *EnableVersionsPayload `json:\"enableVersions,omitempty\"`\n}",
 					"parameters": [
 						{
 							"name": "Kind",
@@ -80148,6 +80153,11 @@
 							"name": "RequiredFields",
 							"type": "[]RequiredFieldAddress",
 							"description": "RequiredFields is present only for StepAuditRequiredValues."
+						},
+						{
+							"name": "EnableVersions",
+							"type": "*EnableVersionsPayload",
+							"description": "EnableVersions is present only for StepEnableVersions."
 						}
 					],
 					"parametersLabel": "",
@@ -80167,7 +80177,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 245
+						"line": 249
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -80204,7 +80214,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 113
+						"line": 117
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -80279,7 +80289,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 124
+						"line": 128
 					},
 					"relatedDocs": [
 						"/docs/migrations/data-transforms/"
@@ -80309,7 +80319,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 152
+						"line": 156
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -80354,7 +80364,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 156
+						"line": 160
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -80390,7 +80400,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 165
+						"line": 169
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81010,7 +81020,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 145
+						"line": 177
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81047,7 +81057,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 158
+						"line": 190
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81111,7 +81121,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 168
+						"line": 200
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81150,7 +81160,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 180
+						"line": 212
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81199,7 +81209,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 187
+						"line": 219
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81238,7 +81248,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 195
+						"line": 227
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81272,7 +81282,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 202
+						"line": 234
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81362,7 +81372,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 209
+						"line": 241
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81398,7 +81408,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 219
+						"line": 251
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81444,7 +81454,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 227
+						"line": 259
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81534,7 +81544,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 373
+						"line": 379
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81630,7 +81640,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 385
+						"line": 391
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81656,7 +81666,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 161
+						"line": 193
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81682,7 +81692,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 162
+						"line": 194
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81712,7 +81722,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 171
+						"line": 175
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -81742,7 +81752,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 182
+						"line": 186
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -82058,7 +82068,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 201
+						"line": 205
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -82084,7 +82094,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 197
+						"line": 201
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -82110,7 +82120,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 199
+						"line": 203
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -82545,6 +82555,43 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/migration#EnableVersionsPayload",
+					"name": "EnableVersionsPayload",
+					"slug": "enable-versions-payload",
+					"kind": "type",
+					"group": "Types",
+					"summary": "EnableVersionsPayload names one resource that starts keeping versions and what becomes of the documents it already stores.",
+					"signature": "type EnableVersionsPayload struct {\n\tResourceID schema.StableID   `json:\"resourceId\"`\n\tExisting   ExistingDocuments `json:\"existing\"`\n}",
+					"parameters": [
+						{
+							"name": "ResourceID",
+							"type": "schema.StableID",
+							"description": "The ResourceID value."
+						},
+						{
+							"name": "Existing",
+							"type": "ExistingDocuments",
+							"description": "The Existing value."
+						}
+					],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"migration.EnableVersionsPayload",
+						"EnableVersionsPayload"
+					],
+					"source": {
+						"path": "migration/phases.go",
+						"line": 162
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/migration#ErrReplacementNeedsConfirmation",
 					"name": "ErrReplacementNeedsConfirmation",
 					"slug": "err-replacement-needs-confirmation",
@@ -82571,6 +82618,146 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/migration#ExistingDocuments",
+					"name": "ExistingDocuments",
+					"slug": "existing-documents",
+					"kind": "type",
+					"group": "Types",
+					"summary": "ExistingDocuments is what becomes of the documents a collection or global already stores when it starts keeping versions.",
+					"signature": "type ExistingDocuments string",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"migration.ExistingDocuments",
+						"ExistingDocuments"
+					],
+					"source": {
+						"path": "migration/phases.go",
+						"line": 137
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/migration#ExistingDraft",
+					"name": "ExistingDraft",
+					"slug": "existing-draft",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "ExistingDraft keeps each document as an unpublished draft, which no public reader sees until it is published. It needs drafts.",
+					"signature": "const ExistingDraft ExistingDocuments = \"draft\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"migration.ExistingDraft",
+						"ExistingDraft"
+					],
+					"source": {
+						"path": "migration/phases.go",
+						"line": 145
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/migration#ExistingPublished",
+					"name": "ExistingPublished",
+					"slug": "existing-published",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "ExistingPublished publishes each document with a matching draft, so every reader keeps seeing what they saw before.",
+					"signature": "const ExistingPublished ExistingDocuments = \"published\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"migration.ExistingPublished",
+						"ExistingPublished"
+					],
+					"source": {
+						"path": "migration/phases.go",
+						"line": 142
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/migration#ExistingRequireEmpty",
+					"name": "ExistingRequireEmpty",
+					"slug": "existing-require-empty",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "ExistingRequireEmpty stops the migration while the resource stores a document, trashed documents included.",
+					"signature": "const ExistingRequireEmpty ExistingDocuments = \"require-empty\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"migration.ExistingRequireEmpty",
+						"ExistingRequireEmpty"
+					],
+					"source": {
+						"path": "migration/phases.go",
+						"line": 148
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/migration#ParseExistingDocuments",
+					"name": "ParseExistingDocuments",
+					"slug": "parse-existing-documents",
+					"kind": "function",
+					"group": "Functions",
+					"summary": "ParseExistingDocuments reads one ExistingDocuments choice.",
+					"signature": "func ParseExistingDocuments(value string) (ExistingDocuments, error)",
+					"parameters": [
+						{
+							"name": "value",
+							"type": "string",
+							"description": "The value value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(ExistingDocuments, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"migration.ParseExistingDocuments",
+						"ParseExistingDocuments"
+					],
+					"source": {
+						"path": "migration/phases.go",
+						"line": 152
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/migration#RequiredScopeLocalized",
 					"name": "RequiredScopeLocalized",
 					"slug": "required-scope-localized",
@@ -82590,7 +82777,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 153
+						"line": 185
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -82616,7 +82803,7 @@
 					],
 					"source": {
 						"path": "migration/phases.go",
-						"line": 154
+						"line": 186
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -82640,6 +82827,32 @@
 						"migration.Runner contracts",
 						"Runner contracts"
 					],
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/migration#StepEnableVersions",
+					"name": "StepEnableVersions",
+					"slug": "step-enable-versions",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "StepEnableVersions turns the documents a resource already stores into versioned documents when it starts keeping versions, as its payload's ExistingDocuments choice says.",
+					"signature": "const StepEnableVersions StepKind = \"enable_versions\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"migration.StepEnableVersions",
+						"StepEnableVersions"
+					],
+					"source": {
+						"path": "migration/migration.go",
+						"line": 111
+					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": []
@@ -82721,7 +82934,53 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 145
+						"line": 149
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/migration#VersionsEnabled",
+					"name": "VersionsEnabled",
+					"slug": "versions-enabled",
+					"kind": "function",
+					"group": "Functions",
+					"summary": "VersionsEnabled returns the resources of after, collections then globals, that keep versions while the same resource in before does not. renames maps a renamed collection's before stable ID to its after one. Any other resource new in after starts versioned with nothing stored.",
+					"signature": "func VersionsEnabled(before, after schema.Snapshot, renames map[schema.StableID]schema.StableID) []schema.Collection",
+					"parameters": [
+						{
+							"name": "before",
+							"type": "schema.Snapshot",
+							"description": "The before value."
+						},
+						{
+							"name": "after",
+							"type": "schema.Snapshot",
+							"description": "The after value."
+						},
+						{
+							"name": "renames",
+							"type": "map[schema.StableID]schema.StableID",
+							"description": "The renames value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "[]schema.Collection",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"migration.VersionsEnabled",
+						"VersionsEnabled"
+					],
+					"source": {
+						"path": "migration/phases.go",
+						"line": 488
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88275,7 +88534,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 101
+						"line": 100
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88288,7 +88547,7 @@
 					"kind": "function",
 					"group": "Production migrations",
 					"summary": "Use embedded Atlas planning plus confirmed semantic rename intent to build an immutable migration artifact.",
-					"signature": "func BuildArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error)",
+					"signature": "func BuildArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, options ArtifactOptions) (ridumigration.Artifact, error)",
 					"parameters": [
 						{
 							"name": "ctx",
@@ -88311,19 +88570,9 @@
 							"description": "The after value."
 						},
 						{
-							"name": "renames",
-							"type": "[]Rename",
-							"description": "The renames value."
-						},
-						{
-							"name": "allowDestructive",
-							"type": "bool",
-							"description": "The allowDestructive value."
-						},
-						{
-							"name": "transforms",
-							"type": "[]migration.DataTransformDescriptor",
-							"description": "Compiled data transforms the migration runs; required for a field-kind change that has stored values."
+							"name": "options",
+							"type": "ArtifactOptions",
+							"description": "The options value."
 						}
 					],
 					"parametersLabel": "",
@@ -88346,7 +88595,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 46
+						"line": 60
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88408,7 +88657,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 49
+						"line": 48
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88445,7 +88694,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 41
+						"line": 40
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88492,7 +88741,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 89
+						"line": 88
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88534,7 +88783,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 28
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88614,7 +88863,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 87
+						"line": 88
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88667,7 +88916,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 95
+						"line": 96
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88708,7 +88957,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 207
+						"line": 208
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88756,7 +89005,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 213
+						"line": 214
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88799,7 +89048,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 1859
+						"line": 1880
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88840,7 +89089,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 1972
+						"line": 1993
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88853,7 +89102,7 @@
 					"kind": "type",
 					"group": "Production migrations",
 					"summary": "Explicit operational admissions, bounded timeouts, and resumable boundaries.",
-					"signature": "type RunnerOptions struct {\n\t// AllowInsecureDatabase explicitly permits a PostgreSQL connection that can\n\t// fall back to plaintext. It is intended only for local migration drills.\n\tAllowInsecureDatabase bool\n\t// AllowMaintenance admits traffic-sensitive semantic steps such as content\n\t// rewrites, compiled data transforms, resource retirement, and\n\t// reference-index rebuilds. Every old writer must be stopped while they run.\n\t// It does not relax artifact validation.\n\tAllowMaintenance bool\n\t// AllowUnbounded permits a zero operational timeout. Without this explicit\n\t// admission, zero selects the runner's bounded production default.\n\tAllowUnbounded bool\n\t// AdvisoryLockWait bounds how long this runner waits for another migrator.\n\tAdvisoryLockWait time.Duration\n\t// LockTimeout bounds PostgreSQL lock acquisition inside a phase.\n\tLockTimeout time.Duration\n\t// StatementTimeout bounds one transactional SQL statement.\n\tStatementTimeout time.Duration\n\t// BatchTimeout bounds the complete execution of one checkpoint batch.\n\tBatchTimeout time.Duration\n\t// ConcurrentIndexTimeout bounds one CREATE/DROP INDEX CONCURRENTLY command.\n\tConcurrentIndexTimeout time.Duration\n\t// IdleInTransactionTimeout protects a paused transactional phase.\n\tIdleInTransactionTimeout time.Duration\n\t// StopAfterPhase and StopAfterStep are explicit, successfully committed\n\t// rollout boundaries. A transaction phase can stop only at its final step.\n\tStopAfterPhase string\n\tStopAfterStep  string\n\t// contains filtered or unexported fields\n}",
+					"signature": "type RunnerOptions struct {\n\t// AllowInsecureDatabase explicitly permits a PostgreSQL connection that can\n\t// fall back to plaintext. It is intended only for local migration drills.\n\tAllowInsecureDatabase bool\n\t// AllowMaintenance admits traffic-sensitive semantic steps such as content\n\t// rewrites, compiled data transforms, conversion of stored documents to\n\t// versioned documents, resource retirement, and reference-index rebuilds.\n\t// Every old writer must be stopped while they run.\n\t// It does not relax artifact validation.\n\tAllowMaintenance bool\n\t// AllowUnbounded permits a zero operational timeout. Without this explicit\n\t// admission, zero selects the runner's bounded production default.\n\tAllowUnbounded bool\n\t// AdvisoryLockWait bounds how long this runner waits for another migrator.\n\tAdvisoryLockWait time.Duration\n\t// LockTimeout bounds PostgreSQL lock acquisition inside a phase.\n\tLockTimeout time.Duration\n\t// StatementTimeout bounds one transactional SQL statement.\n\tStatementTimeout time.Duration\n\t// BatchTimeout bounds the complete execution of one checkpoint batch.\n\tBatchTimeout time.Duration\n\t// ConcurrentIndexTimeout bounds one CREATE/DROP INDEX CONCURRENTLY command.\n\tConcurrentIndexTimeout time.Duration\n\t// IdleInTransactionTimeout protects a paused transactional phase.\n\tIdleInTransactionTimeout time.Duration\n\t// StopAfterPhase and StopAfterStep are explicit, successfully committed\n\t// rollout boundaries. A transaction phase can stop only at its final step.\n\tStopAfterPhase string\n\tStopAfterStep  string\n\t// contains filtered or unexported fields\n}",
 					"parameters": [
 						{
 							"name": "AllowInsecureDatabase",
@@ -88976,7 +89225,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 67
+						"line": 66
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89023,7 +89272,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 81
+						"line": 80
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89055,7 +89304,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 72
+						"line": 73
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89107,7 +89356,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner_planner_binding.go",
-						"line": 68
+						"line": 73
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89133,7 +89382,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 68
+						"line": 69
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89163,7 +89412,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 76
+						"line": 77
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89199,7 +89448,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 80
+						"line": 81
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89261,7 +89510,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 32
+						"line": 31
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89287,7 +89536,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 34
+						"line": 33
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91407,13 +91656,60 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/adapters/postgres#ArtifactOptions",
+					"name": "ArtifactOptions",
+					"slug": "artifact-options",
+					"kind": "type",
+					"group": "Types",
+					"summary": "ArtifactOptions are the reviewed decisions a PostgreSQL migration records beyond its before and after manifests.",
+					"signature": "type ArtifactOptions struct {\n\t// AllowDestructive accepts planned changes that remove stored data.\n\tAllowDestructive bool\n\t// Renames are the confirmed renames whose content the migration keeps.\n\tRenames []Rename\n\t// DataTransforms are the compiled callbacks the migration runs.\n\tDataTransforms []ridumigration.DataTransformDescriptor\n\t// ExistingDocuments says, for each resource that starts keeping versions,\n\t// what becomes of the documents it already stores.\n\tExistingDocuments map[schema.StableID]ridumigration.ExistingDocuments\n}",
+					"parameters": [
+						{
+							"name": "AllowDestructive",
+							"type": "bool",
+							"description": "AllowDestructive accepts planned changes that remove stored data."
+						},
+						{
+							"name": "Renames",
+							"type": "[]Rename",
+							"description": "Renames are the confirmed renames whose content the migration keeps."
+						},
+						{
+							"name": "DataTransforms",
+							"type": "[]migration.DataTransformDescriptor",
+							"description": "DataTransforms are the compiled callbacks the migration runs."
+						},
+						{
+							"name": "ExistingDocuments",
+							"type": "map[schema.StableID]migration.ExistingDocuments",
+							"description": "ExistingDocuments says, for each resource that starts keeping versions,\nwhat becomes of the documents it already stores."
+						}
+					],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"postgres.ArtifactOptions",
+						"ArtifactOptions"
+					],
+					"source": {
+						"path": "adapters/postgres/atlas_migration.go",
+						"line": 45
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/adapters/postgres#CreateArtifact",
 					"name": "CreateArtifact",
 					"slug": "create-artifact",
 					"kind": "function",
 					"group": "Functions",
 					"summary": "CreateArtifact derives the predecessor from committed history and writes a deterministic artifact for the current PostgreSQL planner.",
-					"signature": "func CreateArtifact(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (CreatedArtifact, error)",
+					"signature": "func CreateArtifact(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, options ArtifactOptions) (CreatedArtifact, error)",
 					"parameters": [
 						{
 							"name": "ctx",
@@ -91441,19 +91737,9 @@
 							"description": "The now value."
 						},
 						{
-							"name": "renames",
-							"type": "[]Rename",
-							"description": "The renames value."
-						},
-						{
-							"name": "allowDestructive",
-							"type": "bool",
-							"description": "The allowDestructive value."
-						},
-						{
-							"name": "transforms",
-							"type": "[]migration.DataTransformDescriptor",
-							"description": "The transforms value."
+							"name": "options",
+							"type": "ArtifactOptions",
+							"description": "The options value."
 						}
 					],
 					"parametersLabel": "",
@@ -91471,7 +91757,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 133
+						"line": 147
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91518,7 +91804,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 124
+						"line": 138
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91566,7 +91852,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/migrate.go",
-						"line": 37
+						"line": 36
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91694,7 +91980,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/development_schema.go",
-						"line": 31
+						"line": 30
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91875,6 +92161,52 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/adapters/postgres#Store.ReviewDevelopmentVersions",
+					"name": "Store.ReviewDevelopmentVersions",
+					"slug": "store-review-development-versions-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "ReviewDevelopmentVersions counts the documents, trashed ones included, that each resource starting to keep versions between before and after already stores in this database. A resource without a table stores none. It changes nothing.",
+					"signature": "func (backend *Store) ReviewDevelopmentVersions(ctx context.Context, before, after schema.Manifest) ([]enableversions.Report, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "before",
+							"type": "schema.Manifest",
+							"description": "The before value."
+						},
+						{
+							"name": "after",
+							"type": "schema.Manifest",
+							"description": "The after value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "([]enableversions.Report, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"postgres.Store.ReviewDevelopmentVersions",
+						"Store.ReviewDevelopmentVersions"
+					],
+					"source": {
+						"path": "adapters/postgres/versions_enable.go",
+						"line": 26
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/adapters/postgres#Store.SyncDevelopmentSchema",
 					"name": "Store.SyncDevelopmentSchema",
 					"slug": "store-sync-development-schema-method",
@@ -91909,7 +92241,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/development_schema.go",
-						"line": 160
+						"line": 159
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -91969,7 +92301,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 66
+						"line": 67
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92013,7 +92345,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 72
+						"line": 73
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92062,7 +92394,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 35
+						"line": 36
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92177,7 +92509,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 53
+						"line": 54
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92207,7 +92539,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 296
+						"line": 301
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92243,7 +92575,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 310
+						"line": 315
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92284,7 +92616,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 326
+						"line": 331
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92332,7 +92664,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 335
+						"line": 340
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92368,7 +92700,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 346
+						"line": 351
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92404,7 +92736,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/sqlite.go",
-						"line": 360
+						"line": 365
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92445,7 +92777,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/schema.go",
-						"line": 27
+						"line": 28
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92458,7 +92790,7 @@
 					"kind": "function",
 					"group": "Migrations",
 					"summary": "Plan and atomically write one immutable SQLite migration artifact.",
-					"signature": "func CreateArtifact(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (CreatedArtifact, error)",
+					"signature": "func CreateArtifact(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, options ArtifactOptions) (CreatedArtifact, error)",
 					"parameters": [
 						{
 							"name": "ctx",
@@ -92486,14 +92818,9 @@
 							"description": "The now value."
 						},
 						{
-							"name": "allowDestructive",
-							"type": "bool",
-							"description": "The allowDestructive value."
-						},
-						{
-							"name": "transforms",
-							"type": "[]migration.DataTransformDescriptor",
-							"description": "The transforms value."
+							"name": "options",
+							"type": "ArtifactOptions",
+							"description": "The options value."
 						}
 					],
 					"parametersLabel": "",
@@ -92513,7 +92840,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 97
+						"line": 113
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92569,7 +92896,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 1101
+						"line": 1172
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92615,7 +92942,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 1246
+						"line": 1317
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92651,7 +92978,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migration_transform.go",
-						"line": 348
+						"line": 352
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92917,7 +93244,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 617
+						"line": 672
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92963,7 +93290,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 1240
+						"line": 1311
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93009,7 +93336,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 1090
+						"line": 1161
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93055,7 +93382,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migration_lifecycle.go",
-						"line": 23
+						"line": 24
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93101,7 +93428,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migration_lifecycle.go",
-						"line": 48
+						"line": 49
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93147,7 +93474,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migration_lifecycle.go",
-						"line": 77
+						"line": 78
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93193,7 +93520,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migration_lifecycle.go",
-						"line": 108
+						"line": 109
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -95313,61 +95640,47 @@
 					"overloads": []
 				},
 				{
-					"id": "go:github.com/riducms/ridu/adapters/sqlite#CreateArtifactWithRenames",
-					"name": "CreateArtifactWithRenames",
-					"slug": "create-artifact-with-renames",
-					"kind": "function",
-					"group": "Functions",
-					"summary": "CreateArtifactWithRenames plans and atomically creates one immutable SQLite migration that preserves content across reviewed field renames. Apart from those renames the transition must be additive, as CreateArtifact requires.",
-					"signature": "func CreateArtifactWithRenames(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, renames []ridumigration.Rename) (CreatedArtifact, error)",
+					"id": "go:github.com/riducms/ridu/adapters/sqlite#ArtifactOptions",
+					"name": "ArtifactOptions",
+					"slug": "artifact-options",
+					"kind": "type",
+					"group": "Types",
+					"summary": "ArtifactOptions are the reviewed decisions a SQLite migration records beyond its before and after manifests.",
+					"signature": "type ArtifactOptions struct {\n\t// AllowDestructive accepts planned changes that remove stored data.\n\tAllowDestructive bool\n\t// Renames are the confirmed field renames whose content the migration\n\t// keeps. Apart from them the transition must be additive.\n\tRenames []ridumigration.Rename\n\t// DataTransforms are the compiled callbacks the migration runs. They\n\t// cannot share a migration with renames.\n\tDataTransforms []ridumigration.DataTransformDescriptor\n\t// ExistingDocuments says, for each resource that starts keeping versions,\n\t// what becomes of the documents it already stores.\n\tExistingDocuments map[schema.StableID]ridumigration.ExistingDocuments\n}",
 					"parameters": [
 						{
-							"name": "ctx",
-							"type": "context.Context",
-							"description": "The ctx value."
+							"name": "AllowDestructive",
+							"type": "bool",
+							"description": "AllowDestructive accepts planned changes that remove stored data."
 						},
 						{
-							"name": "directory",
-							"type": "string",
-							"description": "The directory value."
-						},
-						{
-							"name": "name",
-							"type": "string",
-							"description": "The name value."
-						},
-						{
-							"name": "after",
-							"type": "schema.Manifest",
-							"description": "The after value."
-						},
-						{
-							"name": "now",
-							"type": "time.Time",
-							"description": "The now value."
-						},
-						{
-							"name": "renames",
+							"name": "Renames",
 							"type": "[]migration.Rename",
-							"description": "The renames value."
+							"description": "Renames are the confirmed field renames whose content the migration\nkeeps. Apart from them the transition must be additive."
+						},
+						{
+							"name": "DataTransforms",
+							"type": "[]migration.DataTransformDescriptor",
+							"description": "DataTransforms are the compiled callbacks the migration runs. They\ncannot share a migration with renames."
+						},
+						{
+							"name": "ExistingDocuments",
+							"type": "map[schema.StableID]migration.ExistingDocuments",
+							"description": "ExistingDocuments says, for each resource that starts keeping versions,\nwhat becomes of the documents it already stores."
 						}
 					],
 					"parametersLabel": "",
-					"returns": {
-						"type": "(CreatedArtifact, error)",
-						"description": "The declared result."
-					},
 					"details": [],
 					"example": "",
 					"language": "go",
 					"typeLinks": {},
 					"aliases": [
-						"sqlite.CreateArtifactWithRenames",
-						"CreateArtifactWithRenames"
+						"sqlite.ArtifactOptions",
+						"ArtifactOptions"
 					],
 					"source": {
-						"path": "adapters/sqlite/migration_rename.go",
-						"line": 146
+						"path": "adapters/sqlite/migrations.go",
+						"line": 94
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -95408,7 +95721,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/artifact_adopt.go",
-						"line": 15
+						"line": 16
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -95502,6 +95815,57 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/adapters/sqlite#Store.EnableDevelopmentVersions",
+					"name": "Store.EnableDevelopmentVersions",
+					"slug": "store-enable-development-versions-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "EnableDevelopmentVersions turns the stored documents of each resource that starts keeping versions into versioned documents as existing says, and synchronizes the database to after in the same transaction, using the executor migrations use. It refuses a database with migration history, which only ridu migrate may change.",
+					"signature": "func (backend *Store) EnableDevelopmentVersions(ctx context.Context, before, after schema.Manifest, existing map[schema.StableID]ridumigration.ExistingDocuments) error",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "before",
+							"type": "schema.Manifest",
+							"description": "The before value."
+						},
+						{
+							"name": "after",
+							"type": "schema.Manifest",
+							"description": "The after value."
+						},
+						{
+							"name": "existing",
+							"type": "map[schema.StableID]migration.ExistingDocuments",
+							"description": "The existing value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "error",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"sqlite.Store.EnableDevelopmentVersions",
+						"Store.EnableDevelopmentVersions"
+					],
+					"source": {
+						"path": "adapters/sqlite/versions_enable.go",
+						"line": 36
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/adapters/sqlite#Store.FindSessionByID",
 					"name": "Store.FindSessionByID",
 					"slug": "store-find-session-by-id-method",
@@ -95577,7 +95941,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/artifact_adopt.go",
-						"line": 118
+						"line": 119
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -95628,7 +95992,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migration_rename.go",
-						"line": 181
+						"line": 148
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -95721,6 +96085,52 @@
 					"source": {
 						"path": "adapters/sqlite/development_field_kind.go",
 						"line": 42
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/adapters/sqlite#Store.ReviewDevelopmentVersions",
+					"name": "Store.ReviewDevelopmentVersions",
+					"slug": "store-review-development-versions-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "ReviewDevelopmentVersions counts the documents, trashed ones included, that each resource starting to keep versions between before and after already stores in this database. It changes nothing.",
+					"signature": "func (backend *Store) ReviewDevelopmentVersions(ctx context.Context, before, after schema.Manifest) ([]enableversions.Report, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "before",
+							"type": "schema.Manifest",
+							"description": "The before value."
+						},
+						{
+							"name": "after",
+							"type": "schema.Manifest",
+							"description": "The after value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "([]enableversions.Report, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"sqlite.Store.ReviewDevelopmentVersions",
+						"Store.ReviewDevelopmentVersions"
+					],
+					"source": {
+						"path": "adapters/sqlite/versions_enable.go",
+						"line": 18
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96121,7 +96531,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 643
+						"line": 646
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96169,7 +96579,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 650
+						"line": 653
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96350,7 +96760,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migrations.go",
-						"line": 70
+						"line": 73
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96406,7 +96816,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 492
+						"line": 495
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96461,7 +96871,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 574
+						"line": 577
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96520,7 +96930,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 580
+						"line": 583
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96573,7 +96983,7 @@
 					"kind": "type",
 					"group": "Migrations",
 					"summary": "Reviewed semantic intent frozen into a planner 5.0.0 artifact.",
-					"signature": "type ArtifactOptions struct {\n\tAllowDestructive bool\n\tRenames          []ridumigration.Rename\n\tDataTransforms   []ridumigration.DataTransformDescriptor\n}",
+					"signature": "type ArtifactOptions struct {\n\tAllowDestructive bool\n\tRenames          []ridumigration.Rename\n\tDataTransforms   []ridumigration.DataTransformDescriptor\n\t// ExistingDocuments says, for each resource that starts keeping versions,\n\t// what becomes of the documents it already stores.\n\tExistingDocuments map[schema.StableID]ridumigration.ExistingDocuments\n}",
 					"parameters": [
 						{
 							"name": "AllowDestructive",
@@ -96589,6 +96999,11 @@
 							"name": "DataTransforms",
 							"type": "[]migration.DataTransformDescriptor",
 							"description": "Checksum-bound compiled callback identities."
+						},
+						{
+							"name": "ExistingDocuments",
+							"type": "map[schema.StableID]migration.ExistingDocuments",
+							"description": "ExistingDocuments says, for each resource that starts keeping versions,\nwhat becomes of the documents it already stores."
 						}
 					],
 					"parametersLabel": "Fields",
@@ -96876,7 +97291,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migrations.go",
-						"line": 54
+						"line": 57
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -97022,7 +97437,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 468
+						"line": 471
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -97065,7 +97480,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 485
+						"line": 488
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -97095,7 +97510,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migrations.go",
-						"line": 58
+						"line": 61
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -99306,7 +99721,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/development_schema.go",
-						"line": 32
+						"line": 31
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -99434,7 +99849,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_rebaseline.go",
-						"line": 17
+						"line": 18
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -99487,6 +99902,52 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/adapters/mongodb#Store.ReviewDevelopmentVersions",
+					"name": "Store.ReviewDevelopmentVersions",
+					"slug": "store-review-development-versions-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "ReviewDevelopmentVersions counts the documents, trashed ones included, that each resource starting to keep versions between before and after already stores in this database. It changes nothing.",
+					"signature": "func (backend *Store) ReviewDevelopmentVersions(ctx context.Context, before, after schema.Manifest) ([]enableversions.Report, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "before",
+							"type": "schema.Manifest",
+							"description": "The before value."
+						},
+						{
+							"name": "after",
+							"type": "schema.Manifest",
+							"description": "The after value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "([]enableversions.Report, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"mongodb.Store.ReviewDevelopmentVersions",
+						"Store.ReviewDevelopmentVersions"
+					],
+					"source": {
+						"path": "adapters/mongodb/versions_enable.go",
+						"line": 18
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/adapters/mongodb#Store.SyncDevelopmentSchema",
 					"name": "Store.SyncDevelopmentSchema",
 					"slug": "store-sync-development-schema-method",
@@ -99521,7 +99982,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/development_schema.go",
-						"line": 200
+						"line": 199
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -103426,7 +103887,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/local/local.go",
-						"line": 51
+						"line": 46
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -103454,7 +103915,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/local/local.go",
-						"line": 29
+						"line": 30
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -103490,7 +103951,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/local/local.go",
-						"line": 65
+						"line": 60
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -103548,7 +104009,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/local/local.go",
-						"line": 139
+						"line": 134
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -103589,7 +104050,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/local/local.go",
-						"line": 205
+						"line": 200
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -103630,7 +104091,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/local/local.go",
-						"line": 235
+						"line": 230
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -103671,7 +104132,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/local/local.go",
-						"line": 257
+						"line": 252
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -139967,7 +140428,7 @@
 					],
 					"source": {
 						"path": "packages/cli/src/run.js",
-						"line": 11
+						"line": 12
 					},
 					"relatedDocs": [
 						"/docs/cli/"
@@ -140278,7 +140739,7 @@
 					"kind": "command",
 					"group": "Migrations",
 					"summary": "Plan and write one reviewable immutable migration artifact without connecting to a database.",
-					"signature": "ridu migrate create (<kebab-name> | --name <kebab-name>) [--accept-renames | --transform <name>] [--allow-destructive]",
+					"signature": "ridu migrate create (<kebab-name> | --name <kebab-name>) [--accept-renames | --transform <name>] [--versions-existing <published|draft|require-empty>] [--allow-destructive]",
 					"parameters": [
 						{
 							"name": "--name",
@@ -140296,6 +140757,11 @@
 							"description": "SQLite or MongoDB: bind a named compiled data transform to the immutable artifact."
 						},
 						{
+							"name": "--versions-existing",
+							"type": "string",
+							"description": "What the stored documents of every collection or global that starts keeping versions become: published, draft (needs drafts) or require-empty. Without it, create asks in a terminal and otherwise fails."
+						},
+						{
 							"name": "--allow-destructive",
 							"type": "boolean",
 							"description": "Record destructive changes confirmed by the selected adapter planner after explicit review."
@@ -140303,6 +140769,7 @@
 					],
 					"parametersLabel": "",
 					"details": [
+						"A collection or global that starts keeping versions needs a recorded choice about its stored documents, from --versions-existing or a prompt; enable versions in a migration without renames or transforms.",
 						"Rename candidates require confirmation or --accept-renames. SQLite confirms field renames this way and uses --transform for any other rewrite of stored canonical JSON; one SQLite migration takes either renames or a transform. MongoDB transforms run through the compiled project migration driver. Destructive approval does not bypass semantic transitions Ridu cannot safely automate."
 					],
 					"example": "ridu migrate create --name rename-post-title\ngit diff -- migrations/",

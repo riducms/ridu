@@ -15,6 +15,7 @@ import (
 	"github.com/riducms/ridu/adapters/mongodb"
 	"github.com/riducms/ridu/adapters/postgres"
 	"github.com/riducms/ridu/adapters/sqlite"
+	"github.com/riducms/ridu/internal/enableversions"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/projectfile"
 	"github.com/riducms/ridu/internal/schemadiff"
@@ -209,7 +210,7 @@ func (renames *developmentRenames) resolve(ctx context.Context, definition proje
 		}
 		return false, fmt.Errorf("some renames were declined, so their old values would be dropped in the same migration; review that with ridu migrate create --allow-destructive")
 	}
-	if err := renames.migrate(ctx, definition, previous, current, accepted, name); err != nil {
+	if err := renames.migrate(ctx, definition, previous, current, developmentSettlement{renames: accepted}, name); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -286,17 +287,35 @@ func (renames *developmentRenames) ask(ctx context.Context, question string) (st
 	}
 }
 
-// migrate writes the rename as a migration and applies it to the development
-// database, so development and production take the same path and the decision
-// is made once. A database that ridu dev brought ahead of the committed
-// history first gets a migration for those earlier changes, which it already
-// has and baseline therefore records.
+// developmentSettlement is the decision a development migration records:
+// accepted renames, or what the stored documents of resources that start
+// keeping versions become. One migration never records both.
+type developmentSettlement struct {
+	renames  []schemadiff.RenameCandidate
+	existing enableversions.Choices
+}
+
+// subject names the change in progress messages.
+func (settlement developmentSettlement) subject() string {
+	if len(settlement.existing) != 0 {
+		return "versions"
+	}
+	return "rename"
+}
+
+// migrate writes the settled change as a migration and applies it to the
+// development database, so development and production take the same path and
+// the decision is made once. A database that ridu dev brought ahead of the
+// committed history first gets a migration for those earlier changes, which
+// it already has and baseline therefore records.
 //
-// Everything that can refuse the rename without touching stored content runs
+// Everything that can refuse the change without touching stored content runs
 // before the development server is stopped.
-func (renames *developmentRenames) migrate(ctx context.Context, definition projectfile.File, previous, current schema.Manifest, accepted []schemadiff.RenameCandidate, name string) error {
+func (renames *developmentRenames) migrate(ctx context.Context, definition projectfile.File, previous, current schema.Manifest, settlement developmentSettlement, name string) error {
 	directory := definition.Absolute(definition.Migrations)
+	accepted := settlement.renames
 	detected := accepted
+	subject := settlement.subject()
 	var created []string
 	// recorded says why the new files must stay once the database's ledger
 	// refers to them.
@@ -317,11 +336,11 @@ func (renames *developmentRenames) migrate(ctx context.Context, definition proje
 	if target.runner && mongoDBHistoryRequiresProjectDriver(history) {
 		// Only the project binary holds the compiled transforms the runner
 		// replays, so this process could write the migration but never apply it.
-		return fail("plan rename", errors.New("this project's migrations run compiled data transforms, which ridu dev cannot replay; create the rename with ridu migrate create and apply it with ridu migrate up"))
+		return fail("plan "+subject, fmt.Errorf("this project's migrations run compiled data transforms, which ridu dev cannot replay; create the %s migration with ridu migrate create and apply it with ridu migrate up", subject))
 	}
 
-	create := func(name string, before *schema.Manifest, after schema.Manifest, candidates []schemadiff.RenameCandidate) error {
-		path, err := renames.createMigration(ctx, definition.Database, directory, name, before, after, candidates)
+	create := func(name string, before *schema.Manifest, after schema.Manifest, settled developmentSettlement) error {
+		path, err := renames.createMigration(ctx, definition.Database, directory, name, before, after, settled)
 		if err != nil {
 			return err
 		}
@@ -344,27 +363,33 @@ func (renames *developmentRenames) migrate(ctx context.Context, definition proje
 		// remains. A migration that reaches this config some other way, such as
 		// a reviewed removal, would not move the data the developer just asked
 		// to keep.
-		if err := developmentRenameRecorded(history[len(history)-1], accepted); err != nil {
-			return fail("continue the earlier rename", err)
+		err := developmentRenameRecorded(history[len(history)-1], accepted)
+		if err == nil {
+			err = developmentVersionsRecorded(history[len(history)-1], settlement.existing)
+		}
+		if err != nil {
+			return fail("continue the earlier "+subject, err)
 		}
 	case !headExists || !head.Equal(previous):
-		err := create("changes-before-"+name, base, previous, nil)
+		err := create("changes-before-"+name, base, previous, developmentSettlement{existing: syncedVersions(base, previous)})
 		switch {
 		case err == nil:
 			base = &previous
 		case headExists && errors.Is(err, migrationartifact.ErrSchemaCurrent):
 			// Only presentation differs; the rename continues the head.
-			accepted = matchingRenameCandidates(schemadiff.RenameCandidates(head, current), accepted)
-			if len(accepted) == 0 {
-				return fail("plan rename", errors.New("the rename no longer matches the committed migration history"))
+			if len(accepted) != 0 {
+				accepted = matchingRenameCandidates(schemadiff.RenameCandidates(head, current), accepted)
+				if len(accepted) == 0 {
+					return fail("plan rename", errors.New("the rename no longer matches the committed migration history"))
+				}
 			}
 		default:
 			return fail("plan a migration for the development changes no migration covers yet", err)
 		}
 		fallthrough
 	default:
-		if err := create(name, base, current, accepted); err != nil {
-			return fail("plan rename migration", err)
+		if err := create(name, base, current, developmentSettlement{renames: accepted, existing: settlement.existing}); err != nil {
+			return fail("plan "+subject+" migration", err)
 		}
 	}
 
@@ -377,24 +402,28 @@ func (renames *developmentRenames) migrate(ctx context.Context, definition proje
 			recorded = "the database now records " + strings.Join(adopted, " and ")
 		}
 		if err := target.refuseDestructivePending(ctx, directory, current); err != nil {
-			return fail("apply rename migration", err)
+			return fail("apply "+subject+" migration", err)
 		}
 	}
 	renames.stopRunningServer()
-	// The rename moves stored content, so the old server must stay stopped.
+	// The change rewrites stored content, so the old server must stay stopped.
 	renames.fieldKindDrained = false
-	if err := target.apply(ctx, directory, previous, current, contentRenames(detected)); err != nil {
+	if err := target.apply(ctx, directory, previous, current, contentRenames(detected), settlement.existing); err != nil {
 		if target.mongodb != nil {
 			// MongoDB records each finished step, so a failed run can leave the
-			// ledger part way through the rename.
-			recorded = "MongoDB may have recorded part of the rename"
+			// ledger part way through the migration.
+			recorded = "MongoDB may have recorded part of the " + subject + " migration"
 		}
-		return fail("apply rename", err)
+		return fail("apply "+subject, err)
+	}
+	message := "Applied rename and preserved existing data"
+	if subject == "versions" {
+		message = "Enabled versions and kept existing documents"
 	}
 	if len(created) == 0 {
-		renames.output.Info("Applied rename and preserved existing data")
+		renames.output.Info(message)
 	} else {
-		renames.output.Info("Applied rename and preserved existing data", "migrations", strings.Join(created, ", "))
+		renames.output.Info(message, "migrations", strings.Join(created, ", "))
 	}
 	return nil
 }
@@ -413,21 +442,17 @@ func developmentRenameFailure(adapter projectfile.DatabaseAdapter, step string, 
 }
 
 // createMigration writes one migration continuing the directory's history and
-// returns its path. candidates are the renames it preserves, if any.
-func (renames *developmentRenames) createMigration(ctx context.Context, adapter projectfile.DatabaseAdapter, directory, name string, before *schema.Manifest, after schema.Manifest, candidates []schemadiff.RenameCandidate) (string, error) {
+// returns its path. settlement is the decision it records, if any.
+func (renames *developmentRenames) createMigration(ctx context.Context, adapter projectfile.DatabaseAdapter, directory, name string, before *schema.Manifest, after schema.Manifest, settlement developmentSettlement) (string, error) {
 	switch adapter {
 	case projectfile.DatabaseSQLite:
-		if len(candidates) == 0 {
-			created, err := sqlite.CreateArtifact(ctx, directory, name, after, renames.now(), false)
-			return created.Path, err
-		}
-		created, err := sqlite.CreateArtifactWithRenames(ctx, directory, name, after, renames.now(), contentRenames(candidates))
+		created, err := sqlite.CreateArtifact(ctx, directory, name, after, renames.now(), sqlite.ArtifactOptions{Renames: contentRenames(settlement.renames), ExistingDocuments: settlement.existing})
 		return created.Path, err
 	case projectfile.DatabaseMongoDB:
-		created, err := mongodb.CreateArtifact(ctx, directory, name, after, renames.now(), mongodb.ArtifactOptions{Renames: contentRenames(candidates)})
+		created, err := mongodb.CreateArtifact(ctx, directory, name, after, renames.now(), mongodb.ArtifactOptions{Renames: contentRenames(settlement.renames), ExistingDocuments: settlement.existing})
 		return created.Path, err
 	}
-	artifact, err := postgres.BuildArtifact(ctx, name, before, after, postgresRenames(candidates), false)
+	artifact, err := postgres.BuildArtifact(ctx, name, before, after, postgres.ArtifactOptions{Renames: postgresRenames(settlement.renames), ExistingDocuments: settlement.existing})
 	if err != nil {
 		return "", err
 	}
@@ -620,10 +645,13 @@ func (target *developmentRenameTarget) refuseDestructivePending(ctx context.Cont
 	return nil
 }
 
-// apply moves the development database's content to the new names. renames
-// are the ones between the schema the database has and the new config.
-func (target *developmentRenameTarget) apply(ctx context.Context, directory string, previous, current schema.Manifest, renames []migration.Rename) error {
+// apply brings the development database to the new config: it moves content
+// to the new names, or turns stored documents into versioned ones as existing
+// says. Both describe the change from the schema the database has.
+func (target *developmentRenameTarget) apply(ctx context.Context, directory string, previous, current schema.Manifest, renames []migration.Rename, existing enableversions.Choices) error {
 	switch {
+	case target.sqlite != nil && !target.runner && len(existing) != 0:
+		return target.sqlite.EnableDevelopmentVersions(ctx, previous, current, existing)
 	case target.sqlite != nil && !target.runner:
 		return target.sqlite.RenameDevelopmentFields(ctx, previous, current, renames)
 	case target.sqlite != nil:

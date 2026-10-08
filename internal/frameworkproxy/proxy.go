@@ -10,10 +10,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/riducms/ridu/internal/fileuri"
 )
 
 const modulePath = "github.com/riducms/ridu"
@@ -55,7 +56,7 @@ func publishFiles(files []moduleFile, proxyRoot, version string) (string, error)
 	if err := writeArchive(files, filepath.Join(versionRoot, version+".zip"), version); err != nil {
 		return "", err
 	}
-	return (&url.URL{Scheme: "file", Path: proxyRoot}).String(), nil
+	return fileuri.FromPath(proxyRoot).String(), nil
 }
 
 func writeArchive(files []moduleFile, archivePath, version string) (resultError error) {
@@ -161,7 +162,7 @@ func PublishSnapshot(frameworkRoot, cacheRoot string) (proxyURL, version string,
 		return "", "", err
 	}
 	destination := filepath.Join(cacheRoot, version)
-	proxyURL = (&url.URL{Scheme: "file", Path: destination}).String()
+	proxyURL = fileuri.FromPath(destination).String()
 	if info, err := os.Stat(destination); err == nil && info.IsDir() {
 		if err := verifySnapshot(destination, version); err != nil {
 			return "", "", err

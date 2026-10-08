@@ -183,7 +183,7 @@
 			"id": "cli:ridu#ridu migrate create",
 			"name": "ridu migrate create",
 			"kind": "command",
-			"signature": "ridu migrate create (<kebab-name> | --name <kebab-name>) [--accept-renames | --transform <name>] [--allow-destructive]",
+			"signature": "ridu migrate create (<kebab-name> | --name <kebab-name>) [--accept-renames | --transform <name>] [--versions-existing <published|draft|require-empty>] [--allow-destructive]",
 			"members": [],
 			"parameters": [
 				{
@@ -200,6 +200,11 @@
 					"name": "--transform",
 					"type": "string",
 					"description": "SQLite or MongoDB: bind a named compiled data transform to the immutable artifact."
+				},
+				{
+					"name": "--versions-existing",
+					"type": "string",
+					"description": "What the stored documents of every collection or global that starts keeping versions become: published, draft (needs drafts) or require-empty. Without it, create asks in a terminal and otherwise fails."
 				},
 				{
 					"name": "--allow-destructive",

@@ -233,7 +233,7 @@ func TestPostgresUploadReferencesIncludeLiveRows(t *testing.T) {
 	backend := migrationArtifactTestBackend(t)
 	manifest := atlasUploadReferenceManifest()
 	directory := t.TempDir()
-	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -291,7 +291,7 @@ func TestPostgresRetiringVersionedCollectionDropsBothTables(t *testing.T) {
 	}
 	before, after := manifest("people", "posts"), manifest("posts")
 	directory := t.TempDir()
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -308,7 +308,7 @@ func TestPostgresRetiringVersionedCollectionDropsBothTables(t *testing.T) {
 	if err := write.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateArtifact(ctx, directory, "retire-people", after, time.Unix(2, 0), nil, true); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "retire-people", after, time.Unix(2, 0), ArtifactOptions{AllowDestructive: true}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifactsWithOptions(ctx, directory, RunnerOptions{AllowMaintenance: true}); err != nil {

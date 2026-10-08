@@ -72,7 +72,7 @@ func TestPostgresCompiledDataTransformApplyResumeInspectAndVerify(t *testing.T) 
 	directory := t.TempDir()
 	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
 
-	initial, err := BuildArtifact(ctx, "initial-transform-base", nil, manifest, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-transform-base", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestPostgresCompiledDataTransformVerifyIsolatesSchemaDataAndLedger(t *testi
 	databaseURL := backend.pool.Config().ConnConfig.ConnString()
 	directory := t.TempDir()
 	before := atlasTestManifest(atlasTextField("posts-title", "title"))
-	initial, err := BuildArtifact(ctx, "initial-transform-verify-isolation", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-transform-verify-isolation", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestPostgresCompiledDataTransformRuntimeRejectsVersionedResourceMutation(t 
 	manifestSnapshot.Collections[0].Capabilities.Versions = true
 	manifestSnapshot.Collections[0].Versions = &schema.VersionSettings{Drafts: true, MaxPerDocument: 10}
 	manifest := schema.NewManifest(manifestSnapshot)
-	initial, err := BuildArtifact(ctx, "initial-versioned-transform-runtime", nil, manifest, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-versioned-transform-runtime", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +385,7 @@ func TestPostgresCompiledDataTransformFailureInvalidatesEscapedTransactionAndRol
 	databaseURL := backend.pool.Config().ConnConfig.ConnString()
 	directory := t.TempDir()
 	before := atlasTestManifest(atlasTextField("posts-title", "title"))
-	initial, err := BuildArtifact(ctx, "initial-transform-rollback", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-transform-rollback", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -496,7 +496,7 @@ func TestPostgresCompiledDataTransformCancellationRollsBackSchemaDataStepsAndLed
 	backend := migrationArtifactTestBackend(t)
 	directory := t.TempDir()
 	before := atlasTestManifest(atlasTextField("posts-title", "title"))
-	initial, err := BuildArtifact(ctx, "initial-transform-cancellation", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-transform-cancellation", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -599,7 +599,7 @@ func TestPostgresCompiledDataTransformCancellationCannotRollbackDuringCallback(t
 	backend := migrationArtifactTestBackend(t)
 	directory := t.TempDir()
 	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
-	artifact, err := BuildArtifact(ctx, "initial-transform-cancellation-exclusion", nil, manifest, nil, false)
+	artifact, err := BuildArtifact(ctx, "initial-transform-cancellation-exclusion", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -706,7 +706,7 @@ func TestPostgresCompiledDataTransformRefusesCallbackAfterCancellationRollback(t
 	backend := migrationArtifactTestBackend(t)
 	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
 	directory := t.TempDir()
-	initial, err := BuildArtifact(ctx, "initial-transform-pre-raw-cancellation", nil, manifest, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-transform-pre-raw-cancellation", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

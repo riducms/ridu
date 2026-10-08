@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/riducms/ridu/internal/durable"
 	"github.com/riducms/ridu/storage"
 )
 
@@ -33,18 +34,12 @@ type Backend struct {
 
 func defaultFilesystemOperations() filesystemOperations {
 	return filesystemOperations{
-		stat:       os.Stat,
-		mkdir:      os.Mkdir,
-		createTemp: os.CreateTemp,
-		rename:     os.Rename,
-		remove:     os.Remove,
-		syncDirectory: func(path string) error {
-			directory, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			return errors.Join(directory.Sync(), directory.Close())
-		},
+		stat:          os.Stat,
+		mkdir:         os.Mkdir,
+		createTemp:    os.CreateTemp,
+		rename:        os.Rename,
+		remove:        os.Remove,
+		syncDirectory: durable.SyncDirectory,
 	}
 }
 

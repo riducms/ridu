@@ -62,6 +62,10 @@ func (backend *Store) applyMongoMigrationTransactionPhase(
 	rebuildReferences := mongoDBMigrationPhaseNeedsReferenceRebuild(phase)
 	for _, step := range phase.steps {
 		switch step.kind {
+		case ridumigration.StepEnableVersions:
+			if err := backend.enableMongoVersions(ctx, transaction, step.enableResource, step.enableExisting); err != nil {
+				return fmt.Errorf("apply MongoDB migration %s step %s/%s: %w", file.Name, step.phaseID, step.stepID, err)
+			}
 		case ridumigration.StepRenameContent:
 			if err := backend.executeMongoMigrationRename(ctx, transaction, plan, step.rename); err != nil {
 				return fmt.Errorf("apply MongoDB migration %s step %s/%s: %w", file.Name, step.phaseID, step.stepID, err)

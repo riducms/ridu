@@ -148,9 +148,12 @@ func mongoDBMaintenanceStep(kind ridumigration.StepKind) bool {
 
 // mongoDBRunnerOnlyStep reports a maintenance step that development schema
 // synchronization never performs, so baseline adoption and replacement cannot
-// record it as applied. Synchronization runs the same required-value audit.
-func mongoDBRunnerOnlyStep(kind ridumigration.StepKind) bool {
-	return mongoDBMaintenanceStep(kind) && kind != ridumigration.StepAuditRequiredValues
+// record it as applied. Synchronization runs the same required-value audit,
+// and enables versions on a resource that stores nothing, which is all a
+// require-empty step does. existing is an enable-versions step's choice.
+func mongoDBRunnerOnlyStep(kind ridumigration.StepKind, existing ridumigration.ExistingDocuments) bool {
+	return mongoDBMaintenanceStep(kind) && kind != ridumigration.StepAuditRequiredValues &&
+		(kind != ridumigration.StepEnableVersions || existing != ridumigration.ExistingRequireEmpty)
 }
 
 func (lease *mongoMigrationLease) heartbeat(ctx context.Context, cancel context.CancelFunc, result chan<- error) {

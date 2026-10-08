@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/riducms/ridu/internal/migrationartifact"
@@ -119,13 +120,26 @@ func (backend *Store) HasMigrationHistory(ctx context.Context) (bool, error) {
 	return sqliteArtifactLedgerExists(ctx, backend.db)
 }
 
+// requiresEmptyResource reports whether step enables versions only on a
+// resource that stores no documents.
+func requiresEmptyResource(step ridumigration.Step) bool {
+	if step.Kind != ridumigration.StepEnableVersions {
+		return false
+	}
+	var payload ridumigration.EnableVersionsPayload
+	return json.Unmarshal(step.Payload, &payload) == nil && payload.Existing == ridumigration.ExistingRequireEmpty
+}
+
 // sqliteBlockingStep names the first step only a migration runner performs.
 func sqliteBlockingStep(file migrationartifact.File) string {
 	for _, phase := range file.Artifact.Phases {
 		for _, step := range phase.Steps {
 			// Schema sync runs the same required-value audit, so the audit does
 			// not block adopting history that sync already brought forward.
-			if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepAuditRequiredValues && step.Kind != ridumigration.StepAssertSchema {
+			// Enabling versions on a resource that must be empty converts
+			// nothing, which is all schema sync does too.
+			if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepAuditRequiredValues && step.Kind != ridumigration.StepAssertSchema &&
+				!requiresEmptyResource(step) {
 				return string(step.Kind)
 			}
 		}

@@ -417,6 +417,34 @@ func TestSQLiteRejectsControlCharactersBeforeURIClassification(t *testing.T) {
 	}
 }
 
+func TestSQLiteOpensPlainPathsThroughAParsableFileURI(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	directory := filepath.Join(t.TempDir(), "my app #1?")
+	if err := os.Mkdir(directory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "development.sqlite")
+	dsn, filePath, memory, err := sqliteDSN(path)
+	if err != nil || memory || filePath != path {
+		t.Fatalf("sqliteDSN(%q) = %q, %q, %t, %v", path, dsn, filePath, memory, err)
+	}
+	backend, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = backend.Close() })
+	if err := backend.Ping(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("SQLite did not create the named file: %v", err)
+	}
+	if backend.filePath == "" || filepath.Base(backend.filePath) != "development.sqlite" {
+		t.Fatalf("SQLite lock identity = %q", backend.filePath)
+	}
+}
+
 func TestSQLiteRejectsEmptyFileURI(t *testing.T) {
 	t.Parallel()
 	for _, uri := range []string{"file:", "file:?mode=rwc"} {
