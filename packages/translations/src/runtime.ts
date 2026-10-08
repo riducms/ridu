@@ -1,4 +1,4 @@
-import { en } from "./languages/en";
+import { en } from "./languages/en.js";
 import type {
 	AdminI18n,
 	AdminTranslationKey,
@@ -7,7 +7,7 @@ import type {
 	TranslationLanguage,
 	TranslationMessage,
 	TranslationVariables,
-} from "./types";
+} from "./types.js";
 
 export interface CreateAdminI18nOptions {
 	languages?: readonly TranslationLanguage[];

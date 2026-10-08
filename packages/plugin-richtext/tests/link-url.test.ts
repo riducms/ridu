@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { $createLinkNode, LinkNode } from "@lexical/link";
 import { $createParagraphNode, $createTextNode, $getRoot, createEditor } from "lexical";
 
-import { normalizeLinkURL } from "../src/link/link-url";
-import { registerSafeLinkTransform } from "../src/link/safe-link-transform";
+import { normalizeLinkURL } from "../src/lib/link/link-url";
+import { registerSafeLinkTransform } from "../src/lib/link/safe-link-transform";
 
 function transformedLink(url: string) {
 	const editor = createEditor({

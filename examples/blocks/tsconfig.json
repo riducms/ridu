@@ -7,8 +7,6 @@
 		"allowArbitraryExtensions": true,
 		"types": ["svelte", "bun", "vite/client"],
 		"paths": {
-			"@plugin-richtext/*": ["../../packages/plugin-richtext/src/*"],
-			"@ui/*": ["../../packages/ui/src/*"],
 			"@riducms/sdk": ["../../packages/sdk/src/index.ts"],
 			"@riducms/sdk/richtext": ["../../packages/sdk/src/richtext/index.ts"],
 			"@riducms/protocol": ["../../packages/protocol/src/index.ts"]

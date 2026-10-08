@@ -2,8 +2,11 @@ import { existsSync } from "node:fs";
 import { dirname, join, parse, resolve } from "node:path";
 import type { Plugin } from "vite";
 
-export const frameworkAliases = ["@admin/", "@ui/", "@plugin-richtext/", "@plugin-seo/"] as const;
+// The admin ships as source and imports itself through @admin/. Ridu's Svelte packages ship
+// svelte-package output with relative imports, so they need no aliases.
+export const adminAlias = "@admin/";
 
+/** Resolve the application's @/ and the admin's @admin/ to their own src directories. */
 export function packageSourceAliasPlugin(): Plugin {
 	const sourceRoots = new Map<string, string>();
 	let applicationSourceRoot = "";
@@ -21,11 +24,11 @@ export function packageSourceAliasPlugin(): Plugin {
 				});
 			}
 
-			const alias = frameworkAliases.find((candidate) => source.startsWith(candidate));
-			if (alias === undefined || importer === undefined) return;
+			if (!source.startsWith(adminAlias) || importer === undefined) return;
+			// The admin's src, wherever the package that imports @admin/ is installed.
 			const sourceRoot = findPackageSourceRoot(cleanID(importer), sourceRoots);
 			if (sourceRoot === undefined) return;
-			return this.resolve(resolve(sourceRoot, source.slice(alias.length)), importer, {
+			return this.resolve(resolve(sourceRoot, source.slice(adminAlias.length)), importer, {
 				skipSelf: true,
 			});
 		},

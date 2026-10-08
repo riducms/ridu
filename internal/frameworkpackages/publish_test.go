@@ -1,6 +1,7 @@
 package frameworkpackages
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -95,6 +96,23 @@ func TestPublishVendorsUnpublishedPackagesAsOneLocalWorkspaceGraph(t *testing.T)
 			!strings.Contains(string(manifest), `"types": "./dist/index.d.ts"`) ||
 			!strings.Contains(string(manifest), `"import": "./dist/index.js"`) {
 			t.Errorf("published package %s does not expose compiled output:\n%s", target, manifest)
+		}
+	}
+	// Svelte packages publish svelte-package output, not their source.
+	for _, target := range []string{"ridu-framework-ui", "ridu-framework-plugin", "ridu-framework-plugin-richtext", "ridu-framework-plugin-seo", "ridu-framework-plugin-graphql", "ridu-framework-plugin-form-builder", "ridu-framework-sveltekit"} {
+		packageRoot := filepath.Join(projectRoot, ".ridu", "packages", target)
+		for _, compiledFile := range []string{"dist/index.js", "dist/index.d.ts"} {
+			if _, err := os.Stat(filepath.Join(packageRoot, filepath.FromSlash(compiledFile))); err != nil {
+				t.Errorf("published package %s omits %s: %v", target, compiledFile, err)
+			}
+		}
+		manifest, err := readManifest(filepath.Join(packageRoot, "package.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		exports, _ := json.Marshal(manifest["exports"])
+		if strings.Contains(string(exports), "./src/") || manifest["svelte"] != "./dist/index.js" || manifest["devDependencies"] != nil {
+			t.Errorf("published package %s does not expose packaged output alone: exports %s, svelte %v, devDependencies %v", target, exports, manifest["svelte"], manifest["devDependencies"])
 		}
 	}
 	buildPackageRoot := filepath.Join(projectRoot, ".ridu", "packages", "ridu-framework-build")

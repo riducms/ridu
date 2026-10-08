@@ -18,6 +18,14 @@ test("SEO plugin renders, generates from the unsaved draft, previews, and switch
 	const seoTab = page.getByRole("tab", { name: "SEO", exact: true });
 	await seoTab.click();
 	await expect(seoTab).toHaveAttribute("aria-selected", "true");
+	// Content and SEO share one tab bar, so choosing SEO hides the content fields.
+	await expect(
+		page
+			.getByRole("tablist")
+			.filter({ has: seoTab })
+			.getByRole("tab", { name: "Page", exact: true })
+	).toBeVisible();
+	await expect(page.getByLabel("Title", { exact: true })).toBeHidden();
 
 	const overview = page.locator("[data-seo-overview]");
 	await expect(overview).toContainText("0/3 checks are passing");

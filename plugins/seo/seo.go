@@ -223,20 +223,27 @@ func (plugin *Plugin) inject(existing field.Fields, contentLabel string, fields 
 	seoTab := field.UnnamedTab("SEO", field.Fields{
 		meta,
 	})
-	if len(existing) != 0 && existing[0].Kind() == field.KindTabs {
-		result := field.Fields{
-			existing[0],
-			seoTab,
-		}
-		return append(result, existing[1:]...).Snapshot(), nil
+	// The admin shows one tab bar per tabs definition, so SEO joins the same Tabs container as
+	// the content rather than standing beside it.
+	if len(existing) != 0 && isTabsContainer(existing[0]) {
+		boundary := field.Snapshot(existing[0]).Boundary()
+		return existing.Edit(func(draft *field.ChildrenDraft) error {
+			return draft.EditBranchAt(0, field.BranchSelector{Boundary: boundary}, func(tabs *field.ChildrenDraft) error {
+				return tabs.Insert(len(tabs.Fields()), seoTab)
+			})
+		})
 	}
 	leading, content, tabs := field.Fields{}, field.Fields{}, field.Fields{}
 	for _, node := range existing {
-		if auth && node.Name() == "email" {
+		switch view := field.Snapshot(node); {
+		case auth && node.Name() == "email":
 			leading = append(leading, node)
-		} else if node.Kind() == field.KindTabs || field.Snapshot(node).IsNamedTab() {
+		case isTabsContainer(node):
+			// A Tabs container can't hold another, so its tabs join the new one directly.
+			tabs = append(tabs, view.Fields()...)
+		case node.Kind() == field.KindTabs || view.IsNamedTab():
 			tabs = append(tabs, node)
-		} else {
+		default:
 			content = append(content, node)
 		}
 	}
@@ -244,11 +251,17 @@ func (plugin *Plugin) inject(existing field.Fields, contentLabel string, fields 
 	if contentLabel == "" {
 		contentLabel = "Content"
 	}
+	grouped := field.Fields{}
 	if len(content) > 0 {
-		leading = append(leading, field.UnnamedTab(contentLabel, content))
+		grouped = append(grouped, field.UnnamedTab(contentLabel, content))
 	}
-	leading = append(leading, tabs...)
-	return append(leading, seoTab).Snapshot(), nil
+	grouped = append(append(grouped, tabs...), seoTab)
+	return append(leading, field.Tabs(grouped)).Snapshot(), nil
+}
+
+// isTabsContainer reports whether node is a field.Tabs definition rather than one standalone tab.
+func isTabsContainer(node field.Node) bool {
+	return node.Kind() == field.KindTabs && !field.Snapshot(node).IsUnnamedTab()
 }
 
 func (plugin *Plugin) validateTargets(config ridu.Config) []schema.Issue {

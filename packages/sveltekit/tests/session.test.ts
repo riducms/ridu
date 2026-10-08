@@ -2,11 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { createClient, type RiduConfigShape } from "@riducms/sdk";
 import type { Cookies } from "@sveltejs/kit";
 
-import { BrowserSessionStore } from "../src/browser-session";
-import { readCookie, tokenCookie } from "../src/cookie";
-import { createDefinition, definitionKey } from "../src/definition";
-import { RequestSessionStore } from "../src/request-session";
-import { createServerClient } from "../src/server";
+import { BrowserSessionStore } from "../src/lib/browser-session";
+import { readCookie, tokenCookie } from "../src/lib/cookie";
+import { createDefinition, definitionKey } from "../src/lib/definition";
+import { RequestSessionStore } from "../src/lib/request-session";
+import { createServerClient } from "../src/lib/server";
 
 interface Account {
 	id: string;

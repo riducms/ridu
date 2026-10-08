@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { createEmptyHistoryState, registerHistory } from "@lexical/history";
 import { $getRoot, REDO_COMMAND, UNDO_COMMAND, createEditor, type EditorState } from "lexical";
-import { BlockNode, createBlockNode, updateBlockName } from "../src/block/rich-text-block-node";
-import { BlockFieldHistorySession } from "../src/block/rich-text-block-history";
+import { BlockNode, createBlockNode, updateBlockName } from "../src/lib/block/rich-text-block-node";
+import { BlockFieldHistorySession } from "../src/lib/block/rich-text-block-history";
 
 function fields(editorState: EditorState) {
 	return editorState.read(() =>

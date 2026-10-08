@@ -13,8 +13,7 @@
 		"checkJs": true,
 		"moduleDetection": "force",
 		"paths": {
-			"@admin/*": ["./src/*"],
-			"@ui/*": ["../packages/ui/src/*"]
+			"@admin/*": ["./src/*"]
 		}
 	},
 	"include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte"]

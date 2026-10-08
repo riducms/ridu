@@ -3,9 +3,7 @@
 	"compilerOptions": {
 		"types": ["bun", "svelte", "vite/client"],
 		"paths": {
-			"@admin/*": ["./src/*"],
-			"@ui/*": ["../packages/ui/src/*"],
-			"@plugin-richtext/*": ["../packages/plugin-richtext/src/*"]
+			"@admin/*": ["./src/*"]
 		}
 	},
 	"include": ["src/*.d.ts", "tests/**/*.ts"]

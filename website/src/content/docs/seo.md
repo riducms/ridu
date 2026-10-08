@@ -168,10 +168,10 @@ the chosen image ID.
 
 ## Place metadata in tabs {#tabs}
 
-Set `TabbedUI: true` to place metadata in a separate tab. Ridu preserves an existing leading tab group
-and appends an SEO tab. If fields are not already tabbed, it groups ordinary content under the
-resource label, preserves authored tabs, and adds SEO last. An auth collection's email field stays
-outside the tabs so authentication semantics do not change.
+Set `TabbedUI: true` to place metadata in a separate tab. Ridu appends an SEO tab to an existing
+leading tab group. If fields are not already tabbed, it builds one tab group: ordinary content under
+the resource label, then any authored tabs, then SEO. An auth collection's email field stays outside
+the tabs so authentication semantics do not change.
 
 Without `TabbedUI`, the `meta` group is appended to the selected resource's existing fields.
 

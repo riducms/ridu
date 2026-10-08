@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { equalRichTextValues } from "../src/field/rich-text-value";
+import { equalRichTextValues } from "../src/lib/field/rich-text-value";
 
 describe("rich-text wire value equality", () => {
 	it("accepts recursively reordered server properties and absent optional values", () => {

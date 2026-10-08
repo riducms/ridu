@@ -5,6 +5,7 @@ import ts from "typescript";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const sourceExtensions = new Set([".ts", ".svelte"]);
+const packagedExtensions = new Set([".js", ".ts", ".svelte"]);
 
 describe("frontend package boundaries", () => {
 	it("distinguishes module imports from generated application source", () => {
@@ -61,7 +62,7 @@ const lazy = () => import('@riducms/ui');
 		// The integration binds an application's generated client; it never reaches into admin,
 		// plugin, protocol, or build internals, and it adds no second transport.
 		const allowed = (specifier: string) =>
-			specifier.startsWith(".") ||
+			specifier.startsWith("#lib/") ||
 			specifier === "@riducms/sdk" ||
 			specifier === "svelte" ||
 			specifier.startsWith("svelte/") ||
@@ -177,23 +178,23 @@ const lazy = () => import('@riducms/ui');
 		expect(violations).toEqual([]);
 	});
 
-	it("uses collision-free package-root aliases inside framework source", async () => {
+	it("imports framework source through each package's own root", async () => {
+		// The admin ships as source and imports itself through @admin/. The Svelte packages follow
+		// the sv library template: #lib/ imports, which svelte-package turns into relative paths.
 		const roots = {
 			"admin/src": "@admin/",
-			"packages/ui/src": "@ui/",
-			"packages/plugin-richtext/src": "@plugin-richtext/",
-			"packages/plugin-seo/src": "@plugin-seo/",
+			...Object.fromEntries(sveltePackages.map((name) => [`packages/${name}/src/lib`, "#lib/"])),
 		};
 		const violations = (
 			await Promise.all(
-				Object.entries(roots).map(([root, ownedAlias]) =>
+				Object.entries(roots).map(([root, ownedPrefix]) =>
 					forbiddenImports(
 						root,
 						(specifier) =>
 							specifier.startsWith("./") ||
 							specifier.startsWith("../") ||
 							specifier.startsWith("@/") ||
-							(frameworkAlias(specifier) && !specifier.startsWith(ownedAlias))
+							(frameworkAlias(specifier) && !specifier.startsWith(ownedPrefix))
 					)
 				)
 			)
@@ -206,17 +207,54 @@ const lazy = () => import('@riducms/ui');
 				"utf8"
 			)
 		) as { compilerOptions: { paths: Record<string, string[]> } };
-		for (const [alias, packageName] of [
-			["@admin/*", "admin"],
-			["@ui/*", "ui"],
-			["@plugin-richtext/*", "plugin-richtext"],
-			["@plugin-seo/*", "plugin-seo"],
-		] as const) {
-			expect(generatedConfig.compilerOptions.paths[alias]).toEqual([
-				`./node_modules/@riducms/${packageName}/src/*`,
-				`../node_modules/@riducms/${packageName}/src/*`,
-			]);
+		expect(generatedConfig.compilerOptions.paths["@admin/*"]).toEqual([
+			"./node_modules/@riducms/admin/src/*",
+			"../node_modules/@riducms/admin/src/*",
+		]);
+		for (const retired of ["@ui/*", "@plugin-richtext/*", "@plugin-seo/*"]) {
+			expect(Object.keys(generatedConfig.compilerOptions.paths)).not.toContain(retired);
 		}
+	});
+
+	it("publishes the Svelte packages as svelte-package output", async () => {
+		for (const name of sveltePackages) {
+			const manifest = JSON.parse(
+				await readFile(join(repositoryRoot, `packages/${name}/package.json`), "utf8")
+			) as {
+				imports?: unknown;
+				exports: Record<string, unknown>;
+				files: string[];
+				scripts: Record<string, string>;
+			};
+			expect(manifest.imports).toEqual({ "#lib": "./src/lib/index.js", "#lib/*": "./src/lib/*" });
+			expect(JSON.stringify(manifest.exports)).not.toContain("./src/");
+			expect(manifest.files).toContain("dist");
+			expect(manifest.scripts.package).toStartWith("svelte-kit sync && svelte-package");
+			expect(manifest.scripts.package).toEndWith("&& publint");
+		}
+	});
+
+	it("leaves no source-only imports in packaged output", async () => {
+		// build:runtime-packages packages these before the workspace tests run.
+		// A stylesheet import would make every application install Sass.
+		const sourceOnly = (specifier: string) =>
+			specifier.startsWith("#") ||
+			specifier.startsWith("~icons/") ||
+			specifier.endsWith(".scss") ||
+			frameworkAlias(specifier);
+		const violations: string[] = [];
+		for (const name of sveltePackages) {
+			const dist = join(repositoryRoot, "packages", name, "dist");
+			for (const file of await sourceFiles(dist, packagedExtensions)) {
+				for (const specifier of importSpecifiers(await readFile(file, "utf8"))) {
+					if (sourceOnly(specifier)) {
+						violations.push(`${relative(repositoryRoot, file)} imports ${specifier}`);
+					}
+				}
+			}
+		}
+
+		expect(violations).toEqual([]);
 	});
 
 	it("keeps browser modal APIs out of production frontend workflows", async () => {
@@ -318,14 +356,17 @@ async function forbiddenImports(
 	return violations.sort();
 }
 
-async function sourceFiles(directory: string): Promise<string[]> {
+async function sourceFiles(
+	directory: string,
+	extensions: ReadonlySet<string> = sourceExtensions
+): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true });
 	const files = await Promise.all(
 		entries.map((entry) => {
 			const path = join(directory, entry.name);
 			return entry.isDirectory()
-				? sourceFiles(path)
-				: Promise.resolve(sourceExtensions.has(extname(entry.name)) ? [path] : []);
+				? sourceFiles(path, extensions)
+				: Promise.resolve(extensions.has(extname(entry.name)) ? [path] : []);
 		})
 	);
 	return files.flat();
@@ -335,8 +376,18 @@ function importSpecifiers(source: string) {
 	return ts.preProcessFile(source, true, true).importedFiles.map((file) => file.fileName);
 }
 
+const sveltePackages = [
+	"ui",
+	"plugin",
+	"plugin-richtext",
+	"plugin-seo",
+	"plugin-graphql",
+	"plugin-form-builder",
+	"sveltekit",
+] as const;
+
 function frameworkAlias(specifier: string) {
-	return ["@admin/", "@ui/", "@plugin-richtext/", "@plugin-seo/"].some((alias) =>
+	return ["@admin/", "@ui/", "@plugin-richtext/", "@plugin-seo/", "#"].some((alias) =>
 		specifier.startsWith(alias)
 	);
 }

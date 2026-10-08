@@ -86,7 +86,7 @@ const references: ReferenceDefinition[] = [
 	{ source: "docs/sveltekit.md", target: "ridu-project/reference/sveltekit.md" },
 	{ source: "docs/plugins.md", target: "ridu-project/reference/plugins.md" },
 	{ source: "docs/rich-text.md", target: "ridu-project/reference/rich-text.md" },
-	...["features", "toolbar-and-layout", "blocks", "display"].map((name) => ({
+	...["features", "toolbar-and-layout", "blocks", "display", "editor"].map((name) => ({
 		source: `docs/rich-text/${name}.md` as const,
 		target: `ridu-project/reference/rich-text/${name}.md` as const,
 	})),

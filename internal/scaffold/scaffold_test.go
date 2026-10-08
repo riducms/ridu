@@ -145,10 +145,13 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 	}
 	if !strings.Contains(string(adminVite), `from "@riducms/build/vite"`) ||
 		!strings.Contains(string(adminVite), `createAdminApplicationConfig({`) ||
-		!strings.Contains(string(adminVite), `svelte: { preprocess: [lexicalPreprocess()] }`) ||
 		!strings.Contains(string(adminVite), `schemaReloadSignal:`) ||
 		!strings.Contains(string(adminVite), `cacheDir: resolve(adminRoot, "../.ridu/vite")`) {
 		t.Fatalf("generated admin cannot consume the framework package source:\n%s", adminVite)
+	}
+	// The rich-text plugin ships with Lexical's imports already preprocessed.
+	if strings.Contains(string(adminVite), "lexical-svelte/preprocess") {
+		t.Fatalf("generated admin preprocesses Lexical imports the rich-text plugin already ships rewritten:\n%s", adminVite)
 	}
 	rootPackage, err := os.ReadFile(filepath.Join(target, "package.json"))
 	if err != nil {
@@ -216,11 +219,11 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(adminPackage), `"@hvniel/lexical-svelte": "^0.1.1"`) {
-		t.Fatalf("generated admin does not use the rich-text plugin's Lexical bridge line:\n%s", adminPackage)
+	if strings.Contains(string(adminPackage), `"@hvniel/lexical-svelte"`) {
+		t.Fatalf("generated admin still installs lexical-svelte only to preprocess the rich-text plugin:\n%s", adminPackage)
 	}
 	if !strings.Contains(string(adminPackage), `"@riducms/ui": "1.2.3-beta.1"`) {
-		t.Fatalf("generated admin does not declare the source package used by its TypeScript aliases:\n%s", adminPackage)
+		t.Fatalf("generated admin does not declare the UI package it imports:\n%s", adminPackage)
 	}
 	if !strings.Contains(string(adminPackage), `"@riducms/plugin-richtext": "1.2.3-beta.1"`) {
 		t.Fatalf("generated admin does not own the rich-text editor imported by its plugin registry:\n%s", adminPackage)
@@ -281,15 +284,14 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 		!strings.Contains(string(adminTypeScript), `"../generated/**/*.ts"`) {
 		t.Fatalf("generated admin does not use its source-root import alias:\n%s", adminTypeScript)
 	}
-	for alias, sources := range map[string][]string{
-		"@admin/*":           {"./node_modules/@riducms/admin/src/*", "../node_modules/@riducms/admin/src/*"},
-		"@ui/*":              {"./node_modules/@riducms/ui/src/*", "../node_modules/@riducms/ui/src/*"},
-		"@plugin-richtext/*": {"./node_modules/@riducms/plugin-richtext/src/*", "../node_modules/@riducms/plugin-richtext/src/*"},
-		"@plugin-seo/*":      {"./node_modules/@riducms/plugin-seo/src/*", "../node_modules/@riducms/plugin-seo/src/*"},
-	} {
-		expected := fmt.Sprintf(`%q: [%q, %q]`, alias, sources[0], sources[1])
-		if !strings.Contains(string(adminTypeScript), expected) {
-			t.Fatalf("generated admin is missing collision-free aliases for %s:\n%s", alias, adminTypeScript)
+	expected := fmt.Sprintf(`%q: [%q, %q]`, "@admin/*", "./node_modules/@riducms/admin/src/*", "../node_modules/@riducms/admin/src/*")
+	if !strings.Contains(string(adminTypeScript), expected) {
+		t.Fatalf("generated admin is missing the admin source alias:\n%s", adminTypeScript)
+	}
+	// Ridu's Svelte packages ship packaged output with relative imports, so they need no aliases.
+	for _, retired := range []string{`"@ui/*"`, `"@plugin-richtext/*"`, `"@plugin-seo/*"`} {
+		if strings.Contains(string(adminTypeScript), retired) {
+			t.Fatalf("generated admin maps %s, which its package no longer needs:\n%s", retired, adminTypeScript)
 		}
 	}
 	projectDefinition, err := os.ReadFile(filepath.Join(target, "ridu.toml"))

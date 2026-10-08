@@ -20,7 +20,8 @@ navigation:
 ---
 
 A rich-text field saves JSON. Your frontend decides how it looks: render it with Go on the server,
-or with JavaScript or Svelte in your application.
+or with JavaScript or Svelte in your application. To let your app's users write it too, see
+[Use the editor in your app](/docs/rich-text/editor/).
 
 ## Understand the saved JSON {#document}
 

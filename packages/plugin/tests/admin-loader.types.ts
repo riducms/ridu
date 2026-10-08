@@ -6,8 +6,8 @@ import type {
 	AdminExtensionProps,
 	AdminLoaderProps,
 	AdminRoute,
-} from "../src/plugin";
-import { withAdminLoader } from "../src/plugin";
+} from "../src/lib/plugin";
+import { withAdminLoader } from "../src/lib/plugin";
 import type { AdminLoader } from "@riducms/sdk";
 
 declare const loader: AdminLoader<{ q?: string }, { count: number }>;

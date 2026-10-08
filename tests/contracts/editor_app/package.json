@@ -1,0 +1,25 @@
+{
+	"name": "@riducms/editor-app-fixture",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#lib/*": "./src/lib/*"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+	},
+	"devDependencies": {
+		"@riducms/plugin-richtext": "workspace:*",
+		"@riducms/sdk": "workspace:*",
+		"@sveltejs/kit": "^3.0.1",
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"sass-embedded": "^1.104.1",
+		"svelte": "^5.57.0",
+		"svelte-check": "^4.7.3",
+		"typescript": "~6.0.2",
+		"vite": "^8.2.0"
+	}
+}

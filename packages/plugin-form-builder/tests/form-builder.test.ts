@@ -6,7 +6,7 @@ import {
 	getPaymentTotal,
 	validateFormValues,
 	type FormDefinition,
-} from "../src";
+} from "../src/lib";
 
 const form: FormDefinition = {
 	id: "form-1",

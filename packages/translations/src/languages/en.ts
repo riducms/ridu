@@ -1,4 +1,4 @@
-import type { TranslationMessage } from "../types";
+import type { TranslationMessage } from "../types.js";
 
 export const enMessages = {
 	"apiReference:title": "API reference",

@@ -1,4 +1,4 @@
-import type { CoreTranslationCatalog, TranslationLanguage } from "../types";
+import type { CoreTranslationCatalog, TranslationLanguage } from "../types.js";
 
 export const arMessages = {
 	"apiReference:title": "مرجع API",

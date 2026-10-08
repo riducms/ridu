@@ -22,13 +22,18 @@ Run `make sqlite-test` for changes to SQLite or shared database behavior. Use
 `bun run dev:admin-fixture` to exercise the complete contract admin, and use
 `make documentation-check` to verify the public documentation site.
 
-For frontend hot reload, start the API fixture and the admin in separate terminals:
+For frontend hot reload, start the API fixture, the Svelte packages and the admin in separate
+terminals. The admin consumes the packages' `svelte-package` output, like any application, so the
+second terminal rebuilds a package when its source changes:
 
 ```sh
 # Terminal one
 RIDU_BROWSER_ADDRESS=127.0.0.1:8080 go run ./tests/contracts/admin_server
 
 # Terminal two
+bun run dev:packages
+
+# Terminal three
 bun run --cwd admin dev --host 127.0.0.1
 ```
 
@@ -49,6 +54,29 @@ cd /tmp/ridu-dogfood-content
 This uses the development-only `ridu new --release-version` override and provisions ignored local
 frontend workspaces plus the matching CLI. It does not add a local `replace` directive or weaken
 the project-command compatibility handshake.
+
+A dogfood project links the frontend packages as workspaces, so Vite compiles them as source. To
+see a change the way a published project does, with packages installed in `node_modules` and
+pre-bundled by Vite, stage the working tree as a local release and create a project from it:
+
+```sh
+# Terminal one
+make local-release
+make local-release-serve
+
+# Terminal two
+source .ridu/local-release/env.sh
+cd /tmp
+npm create ridu@"$LOCAL_RIDU_VERSION" my-app
+cd my-app
+npm run dev
+```
+
+`make local-release` writes the CLI archive, a Go module proxy and the npm packages under
+`.ridu/local-release`, with a unique `-local` version. `make local-release-serve` serves them on
+`127.0.0.1:4873` and proxies other packages to npm. `env.sh` points npm, pnpm, Bun, Go and the Ridu
+CLI at it and keeps their caches under `.ridu/local-release/cache`. Source it in any terminal that
+runs the project. Staging again replaces the previous version.
 
 ## Find the right home for a change
 

@@ -54275,68 +54275,6 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/build#createAdminLibraryConfig": {
-			"summary": "Create an ES-only Vite library config for a Svelte admin plugin package.",
-			"group": "Functions",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "options",
-					"type": "AdminLibraryConfigOptions",
-					"description": "The options value."
-				}
-			],
-			"returns": {
-				"type": "UserConfig",
-				"description": "The declared result."
-			},
-			"details": [
-				"Externalizes bare dependencies, keeps Uno virtual CSS inside the bundle, enables runes and stable CSS hashes, and injects uno.css unless uno is false."
-			],
-			"example": "",
-			"keywords": ["createAdminLibraryConfig", "@riducms/build.createAdminLibraryConfig"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
-		"ts:@riducms/build#AdminLibraryConfigOptions": {
-			"summary": "Entry, dedupe, pre-Svelte plugin, compiler, and UnoCSS options for a plugin library.",
-			"group": "Interfaces",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "dedupe",
-					"type": "readonly string[]",
-					"description": "The dedupe value."
-				},
-				{
-					"name": "entry",
-					"type": "string",
-					"description": "The entry value."
-				},
-				{
-					"name": "pluginsBeforeSvelte",
-					"type": "readonly PluginOption[]",
-					"description": "The pluginsBeforeSvelte value."
-				},
-				{
-					"name": "svelte",
-					"type": "Partial<Options>",
-					"description": "The svelte value."
-				},
-				{
-					"name": "uno",
-					"type": "boolean",
-					"description": "The uno value."
-				}
-			],
-			"details": [],
-			"example": "",
-			"keywords": ["AdminLibraryConfigOptions", "@riducms/build.AdminLibraryConfigOptions"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
 		"ts:@riducms/build#createAdminUnoConfig": {
 			"summary": "Create the shared semantic Ridu UnoCSS configuration.",
 			"group": "Functions",
@@ -54404,7 +54342,7 @@
 			"typeLinkIDs": {}
 		},
 		"ts:@riducms/build/vite#packageSourceAliasPlugin": {
-			"summary": "Resolve the application @/ alias and each framework-owned source alias to its unambiguous src directory.",
+			"summary": "Resolve the application @/ alias and the admin's @admin/ source alias to their src directories.",
 			"group": "Functions",
 			"parametersLabel": "",
 			"parameters": [],
@@ -54413,7 +54351,7 @@
 				"description": "The declared result."
 			},
 			"details": [
-				"Exported from @riducms/build/vite. Generated applications own @/, while @admin/, @ui/, @plugin-richtext/, and @plugin-seo/ resolve from the importing framework package. The same distinct aliases are emitted in the generated TypeScript configuration."
+				"Exported from @riducms/build/vite. Generated applications own @/, while @admin/ resolves from the admin package that imports it. Ridu's Svelte packages ship svelte-package output with relative imports, so they need no alias. The same aliases are emitted in the generated TypeScript configuration."
 			],
 			"example": "",
 			"keywords": [

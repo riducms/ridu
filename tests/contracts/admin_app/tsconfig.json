@@ -8,10 +8,7 @@
 		"checkJs": true,
 		"types": ["svelte", "vite/client"],
 		"paths": {
-			"@admin/*": ["../../../admin/src/*"],
-			"@ui/*": ["../../../packages/ui/src/*"],
-			"@plugin-richtext/*": ["../../../packages/plugin-richtext/src/*"],
-			"@plugin-seo/*": ["../../../packages/plugin-seo/src/*"]
+			"@admin/*": ["../../../admin/src/*"]
 		}
 	},
 	"include": ["*.ts", "*.svelte", "../../../admin/src/vite-env.d.ts"]

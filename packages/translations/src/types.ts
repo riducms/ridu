@@ -1,4 +1,4 @@
-import type { enMessages } from "./languages/en";
+import type { enMessages } from "./languages/en.js";
 
 export type PluralCategory = Intl.LDMLPluralRule;
 export type PluralMessage = Readonly<Partial<Record<PluralCategory, string>> & { other: string }>;

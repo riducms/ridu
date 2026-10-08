@@ -18,6 +18,7 @@ part of your frontend.
 | [Toolbar and layout](./rich-text/toolbar-and-layout.md) | Pin a toolbar above the editor, hide the gutter, or hide block controls.  |
 | [Custom blocks](./rich-text/blocks.md)                  | Add structured content such as callouts, and change it safely later.      |
 | [Display rich text](./rich-text/display.md)             | Understand the saved JSON and render it with Go, JavaScript, or Svelte.   |
+| [Use the editor in your app](./rich-text/editor.md)     | Let your app's users write rich text, save it to a field, and restyle it. |
 
 ## Configuration {#configuration}
 

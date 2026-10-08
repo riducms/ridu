@@ -1,0 +1,1 @@
+import{Sr as e,_r as t,gr as n,nr as r}from"./ridu-ui-MA5OmaHl.js";var i=class{#e=t();get document(){return r(this.#e)}set document(e){n(this.#e,e)}},[a,o,s]=e();function c(){return o(new i)}function l(){return s()?a():void 0}export{c as n,l as t};

@@ -1,8 +1,9 @@
 {
-	"extends": "../../tsconfig.svelte.json",
+	"extends": "$app/tsconfig",
 	"compilerOptions": {
-		"paths": { "@ui/*": ["./src/*"] },
-		"exactOptionalPropertyTypes": true
+		"strict": true,
+		"exactOptionalPropertyTypes": true,
+		"types": ["$app/types"]
 	},
-	"include": ["src/**/*.ts", "src/**/*.svelte"]
+	"include": ["src", "vite.config.ts"]
 }
