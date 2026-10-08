@@ -23,7 +23,7 @@ func TestPostgresCompiledDataTransformDeleteRemovesDocumentState(t *testing.T) {
 	databaseURL := backend.pool.Config().ConnConfig.ConnString()
 	directory := t.TempDir()
 	manifest := postgresAuthIdentityManifest()
-	initial, err := BuildArtifact(ctx, "initial", nil, manifest, nil, false)
+	initial, err := BuildArtifact(ctx, "initial", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

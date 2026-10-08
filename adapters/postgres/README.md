@@ -30,6 +30,13 @@ references the working row and is deleted with it. Publishing copies the saved w
 live table with one `INSERT … SELECT`; saving a draft leaves the live row unchanged. The live row is
 independent of version-history pruning, which keeps JSON snapshots in `ridu_versions`.
 
+A resource that starts keeping versions does so in a maintenance-admitted migration of its own
+that records what its stored documents become. A `require-empty` check runs before any DDL, so a
+refusal commits nothing. `published` and `draft` run after the DDL that adds the versioned columns
+and live table: every stored row, trashed ones included, gets an explicit status and a first
+version, and a `published` row a live row and live reference rows. Development schema sync enables
+versions only on a resource that stores none.
+
 Published reads use the live table through the ordinary typed predicate compiler, scanner,
 planner statistics, and indexes, so filters, sorts, counts, and pagination behave and scale like
 working reads. Trash and restore mirror deletion state into the live row atomically. Locked

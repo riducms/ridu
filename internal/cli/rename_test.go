@@ -48,7 +48,7 @@ func TestBuildPostgresArtifactWithDataTransformsRejectsVersionedFieldChanges(t *
 	descriptor := ridumigration.DataTransformDescriptor{
 		Name: "backfill-summary", Checksum: ridumigration.DataTransformChecksum([]byte("backfill-summary-v1")),
 	}
-	_, err := postgres.BuildArtifact(context.Background(), descriptor.Name, &before, after, nil, false, descriptor)
+	_, err := postgres.BuildArtifact(context.Background(), descriptor.Name, &before, after, postgres.ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}})
 	if err == nil || !strings.Contains(err.Error(), "retained snapshots") {
 		t.Fatalf("versioned CLI transform planning error = %v", err)
 	}

@@ -188,7 +188,7 @@ func TestSQLiteRequiredValueAuditRefusesMissingValues(t *testing.T) {
 				after := sqliteRequiredAuditManifest(t, test.after)
 				directory := t.TempDir()
 				if mode == "artifact" {
-					if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+					if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 						t.Fatal(err)
 					}
 					if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -217,7 +217,7 @@ func TestSQLiteRequiredValueAuditRefusesMissingValues(t *testing.T) {
 					}
 					return
 				}
-				if _, err := CreateArtifact(ctx, directory, "require", after, time.Unix(2, 0), false); err != nil {
+				if _, err := CreateArtifact(ctx, directory, "require", after, time.Unix(2, 0), ArtifactOptions{}); err != nil {
 					t.Fatal(err)
 				}
 				if kinds := sqliteLatestStepKinds(t, directory); len(kinds) != 2 || kinds[0] != ridumigration.StepAuditRequiredValues {
@@ -243,7 +243,7 @@ func TestSQLiteRequiredValueAuditFollowsTransformsAndRollback(t *testing.T) {
 	optional := sqliteRequiredAuditManifest(t, core.Collection{Slug: "notes", Fields: field.Fields{field.Group("meta", field.Fields{field.Text("body")})}})
 	required := sqliteRequiredAuditManifest(t, core.Collection{Slug: "notes", Fields: field.Fields{field.Group("meta", field.Fields{field.Text("body").Required()})}})
 	relaxedAgain := sqliteRequiredAuditManifest(t, core.Collection{Slug: "notes", Fields: field.Fields{field.Group("meta", field.Fields{field.Text("body")}), field.Text("tag")}})
-	if _, err := CreateArtifact(ctx, directory, "initial", optional, time.Unix(1, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", optional, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -255,7 +255,7 @@ func TestSQLiteRequiredValueAuditFollowsTransformsAndRollback(t *testing.T) {
 		return err
 	})
 	descriptor := ridumigration.DataTransformDescriptor{Name: "backfill-bodies", Checksum: ridumigration.DataTransformChecksum([]byte("backfill-bodies-v1"))}
-	if _, err := CreateArtifact(ctx, directory, "require-body", required, time.Unix(2, 0), false, descriptor); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "require-body", required, time.Unix(2, 0), ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}); err != nil {
 		t.Fatal(err)
 	}
 	backfill := ridumigration.DataTransform{DataTransformDescriptor: descriptor,
@@ -271,7 +271,7 @@ func TestSQLiteRequiredValueAuditFollowsTransformsAndRollback(t *testing.T) {
 	if err := backend.ApplyArtifacts(ctx, directory, backfill); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateArtifact(ctx, directory, "relax-body", relaxedAgain, time.Unix(3, 0), false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "relax-body", relaxedAgain, time.Unix(3, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if kinds := sqliteLatestStepKinds(t, directory); len(kinds) != 1 || kinds[0] != ridumigration.StepAssertSchema {

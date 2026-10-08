@@ -34,7 +34,7 @@ func postgresRichTextBlocksFactory(t *testing.T, config ridu.Config) (store.Stor
 func postgresRichTextBlocksBackend(t testing.TB, config ridu.Config) (store.Store, *ridu.App) {
 	t.Helper()
 	backend, manifest := integrationBackend(t, t.Context(), config)
-	artifact, err := postgres.BuildArtifact(t.Context(), "richtext-blocks", nil, manifest, nil, false)
+	artifact, err := postgres.BuildArtifact(t.Context(), "richtext-blocks", nil, manifest, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,7 +17,8 @@ committed migrations. This page covers where the two meet.
 On every database, `ridu dev` stops and asks before a save could lose data: a possible
 [rename](./renames.md#in-dev), a [field kind change](./field-kinds.md)
 with stored values, or a field that [becomes required](./required-fields.md) while
-documents lack it.
+documents lack it. It also asks what stored documents become when a collection
+[starts keeping versions](./enable-versions.md#in-dev).
 
 Once a SQLite development database has migration history, `ridu dev` still serves it but stops
 changing its schema. From then on a config change needs `ridu migrate create` and `ridu migrate up`:

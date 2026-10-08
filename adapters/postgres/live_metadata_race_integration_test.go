@@ -169,7 +169,7 @@ func lockWaitDraftCollection(t *testing.T, ctx context.Context, backend *Store) 
 		}},
 	})
 	directory := t.TempDir()
-	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {

@@ -342,9 +342,9 @@ func TestCreateRefusesAnAdminOnlyChange(t *testing.T) {
 		t.Fatalf("an admin change with a step of its own was refused: %v", err)
 	}
 
-	snapshot.Collections[0].Capabilities.Versions = true
-	versioned := schema.NewManifest(snapshot)
-	if _, err := migrationartifact.Create(directory, "version-posts", testArtifact(t, "version-posts", &hidden, versioned), time.Unix(4, 0)); err != nil {
+	snapshot.Collections[0].Capabilities.Trash = true
+	trashed := schema.NewManifest(snapshot)
+	if _, err := migrationartifact.Create(directory, "trash-posts", testArtifact(t, "trash-posts", &hidden, trashed), time.Unix(4, 0)); err != nil {
 		t.Fatalf("a schema change beside an admin change was refused: %v", err)
 	}
 }

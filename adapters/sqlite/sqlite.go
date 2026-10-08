@@ -19,6 +19,7 @@ import (
 	"unicode"
 
 	"github.com/gofrs/flock"
+	"github.com/riducms/ridu/internal/fileuri"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 	modernsqlite "modernc.org/sqlite"
@@ -226,47 +227,51 @@ func sqliteDSN(input string) (dsn, filePath string, memory bool, err error) {
 		}
 		return "file:" + name + "?mode=memory&cache=shared", "", true, nil
 	}
-	if strings.HasPrefix(input, "file:") {
-		parsed, parseError := url.Parse(input)
-		if parseError != nil {
-			return "", "", false, fmt.Errorf("parse SQLite URI: %w", parseError)
+	if !strings.HasPrefix(input, "file:") {
+		absolute, pathError := filepath.Abs(input)
+		if pathError != nil {
+			return "", "", false, fmt.Errorf("resolve SQLite path: %w", pathError)
 		}
-		target := parsed.Path
-		if target == "" {
-			target, parseError = url.PathUnescape(parsed.Opaque)
-			if parseError != nil {
-				return "", "", false, fmt.Errorf("decode SQLite file URI path: %w", parseError)
-			}
-		}
-		if target == "" {
-			target = strings.TrimPrefix(strings.SplitN(input, "?", 2)[0], "file:")
-		}
-		if target == "" {
-			return "", "", false, fmt.Errorf("SQLite file URI path is required")
-		}
-		if err := validateSQLiteURIText("SQLite file URI path", target); err != nil {
-			return "", "", false, err
-		}
-		parameters := parsed.Query()
-		if err := validateSQLiteURIParameters(parameters); err != nil {
-			return "", "", false, err
-		}
-		mode, modeError := singleSQLiteURIParameter(parameters, "mode")
-		if modeError != nil {
-			return "", "", false, modeError
-		}
-		memory = mode == "memory" || target == ":memory:" || strings.EqualFold(parameters.Get("vfs"), "memdb")
-		if memory {
-			return "", "", false, fmt.Errorf("shared SQLite memory URIs are unsupported; use :memory: for a private pooled store")
-		}
-		filePath = target
-		return input, filePath, memory, nil
+		input = fileuri.FromPath(absolute).String()
 	}
-	absolute, pathError := filepath.Abs(input)
-	if pathError != nil {
-		return "", "", false, fmt.Errorf("resolve SQLite path: %w", pathError)
+	parsed, parseError := url.Parse(input)
+	if parseError != nil {
+		return "", "", false, fmt.Errorf("parse SQLite URI: %w", parseError)
 	}
-	return (&url.URL{Scheme: "file", Path: absolute}).String(), absolute, false, nil
+	target, parseError := fileuri.ToPath(parsed)
+	if parseError != nil {
+		return "", "", false, fmt.Errorf("decode SQLite file URI path: %w", parseError)
+	}
+	if target == "" {
+		target = strings.TrimPrefix(strings.SplitN(input, "?", 2)[0], "file:")
+	}
+	if target == "" {
+		return "", "", false, fmt.Errorf("SQLite file URI path is required")
+	}
+	if err := validateSQLiteURIText("SQLite file URI path", target); err != nil {
+		return "", "", false, err
+	}
+	parameters := parsed.Query()
+	if err := validateSQLiteURIParameters(parameters); err != nil {
+		return "", "", false, err
+	}
+	mode, modeError := singleSQLiteURIParameter(parameters, "mode")
+	if modeError != nil {
+		return "", "", false, modeError
+	}
+	memory = mode == "memory" || target == ":memory:" || strings.EqualFold(parameters.Get("vfs"), "memdb")
+	if memory {
+		return "", "", false, fmt.Errorf("shared SQLite memory URIs are unsupported; use :memory: for a private pooled store")
+	}
+	if parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost") {
+		// SQLite accepts only an empty URI authority, so a Windows UNC server
+		// moves into the path: file:////server/share/….
+		parsed.Path = "//" + parsed.Host + parsed.Path
+		parsed.Host = ""
+		parsed.RawPath = ""
+		input = parsed.String()
+	}
+	return input, target, false, nil
 }
 
 func validateSQLiteURIParameters(parameters url.Values) error {

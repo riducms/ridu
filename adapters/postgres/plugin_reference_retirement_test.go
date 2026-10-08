@@ -29,7 +29,7 @@ func TestPluginReferenceKeysBlockTargetRetirementForEverySurvivingOwnerShape(t *
 			afterSnapshot.Collections = afterSnapshot.Collections[1:]
 			after := schema.NewManifest(afterSnapshot)
 			for _, allowDestructive := range []bool{false, true} {
-				_, err := BuildArtifact(context.Background(), "retire-plugin-target", &before, after, nil, allowDestructive)
+				_, err := BuildArtifact(context.Background(), "retire-plugin-target", &before, after, ArtifactOptions{AllowDestructive: allowDestructive})
 				var safety *SafetyError
 				if !errors.As(err, &safety) || !hasRiskCode(safety.Risks, "RIDU_RESOURCE_REMOVAL_REFERENCE_ROOT_UNSAFE") {
 					t.Fatalf("allowDestructive=%t plugin target retirement error = %#v, %v", allowDestructive, safety, err)
@@ -73,7 +73,7 @@ func TestPluginReferenceKeyNarrowingFailsClosedBeforeDormantValuesCanReattach(t 
 			}
 			after := schema.NewManifest(afterSnapshot)
 			for _, allowDestructive := range []bool{false, true} {
-				_, err := BuildArtifact(context.Background(), "narrow-plugin-reference", &before, after, nil, allowDestructive)
+				_, err := BuildArtifact(context.Background(), "narrow-plugin-reference", &before, after, ArtifactOptions{AllowDestructive: allowDestructive})
 				var safety *SafetyError
 				if !errors.As(err, &safety) || !hasRiskCode(safety.Risks, "RIDU_REFERENCE_SHAPE_DECREASE_UNSAFE") ||
 					!strings.Contains(err.Error(), "current values or version snapshots") {
@@ -112,7 +112,7 @@ func TestPluginReferenceTargetRetirementDropsRootsAndPurgesAllVersionedOwners(t 
 	afterSnapshot.Globals[0].Fields = nil
 	after := schema.NewManifest(afterSnapshot)
 
-	artifact, err := BuildArtifact(context.Background(), "retire-plugin-reference-roots", &before, after, nil, true)
+	artifact, err := BuildArtifact(context.Background(), "retire-plugin-reference-roots", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestPluginReferenceTargetAdditionAndConfirmedCollectionRenameRemainPlannabl
 			ID: "topics", Slug: "topics", Fields: []schema.Field{},
 		})
 		after := schema.NewManifest(afterSnapshot)
-		if _, err := BuildArtifact(context.Background(), "add-plugin-reference-target", &before, after, nil, false); err != nil {
+		if _, err := BuildArtifact(context.Background(), "add-plugin-reference-target", &before, after, ArtifactOptions{}); err != nil {
 			t.Fatalf("additive plugin target transition: %v", err)
 		}
 	})
@@ -161,7 +161,7 @@ func TestPluginReferenceTargetAdditionAndConfirmedCollectionRenameRemainPlannabl
 		afterSnapshot := before.Snapshot()
 		afterSnapshot.Globals = nil
 		after := schema.NewManifest(afterSnapshot)
-		artifact, err := BuildArtifact(context.Background(), "retire-unrelated-global", &before, after, nil, true)
+		artifact, err := BuildArtifact(context.Background(), "retire-unrelated-global", &before, after, ArtifactOptions{AllowDestructive: true})
 		if err != nil {
 			t.Fatalf("global retirement with surviving plugin reference: %v", err)
 		}
@@ -178,7 +178,7 @@ func TestPluginReferenceTargetAdditionAndConfirmedCollectionRenameRemainPlannabl
 		afterTarget := afterSnapshot.Collections[0]
 		after := schema.NewManifest(afterSnapshot)
 		rename := Rename{Kind: RenameCollection, BeforeCollection: beforeTarget, AfterCollection: afterTarget}
-		artifact, err := BuildArtifact(context.Background(), "rename-plugin-reference-target", &before, after, []Rename{rename}, false)
+		artifact, err := BuildArtifact(context.Background(), "rename-plugin-reference-target", &before, after, ArtifactOptions{Renames: []Rename{rename}})
 		if err != nil {
 			t.Fatalf("confirmed plugin target rename: %v", err)
 		}

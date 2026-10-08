@@ -57,7 +57,7 @@ func writeFixtureMigration(ctx context.Context, config ridu.Config, directory st
 	if err != nil {
 		return err
 	}
-	artifact, err := postgres.BuildArtifact(ctx, fixtureMigrationName, nil, manifest, nil, false)
+	artifact, err := postgres.BuildArtifact(ctx, fixtureMigrationName, nil, manifest, postgres.ArtifactOptions{})
 	if err != nil {
 		return err
 	}

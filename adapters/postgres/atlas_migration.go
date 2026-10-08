@@ -40,11 +40,25 @@ func (err *SafetyError) Error() string {
 	return "migration requires explicit safety resolution: " + strings.Join(messages, "; ")
 }
 
+// ArtifactOptions are the reviewed decisions a PostgreSQL migration records
+// beyond its before and after manifests.
+type ArtifactOptions struct {
+	// AllowDestructive accepts planned changes that remove stored data.
+	AllowDestructive bool
+	// Renames are the confirmed renames whose content the migration keeps.
+	Renames []Rename
+	// DataTransforms are the compiled callbacks the migration runs.
+	DataTransforms []ridumigration.DataTransformDescriptor
+	// ExistingDocuments says, for each resource that starts keeping versions,
+	// what becomes of the documents it already stores.
+	ExistingDocuments map[schema.StableID]ridumigration.ExistingDocuments
+}
+
 // BuildArtifact uses Atlas to plan all physical PostgreSQL changes and adds
 // ordered Ridu semantic steps for explicitly confirmed rename intent. It binds
 // compiled data transforms exactly as the runner regenerates them.
-func BuildArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
-	return planArtifact(ctx, name, before, after, renames, allowDestructive, transforms...)
+func BuildArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, options ArtifactOptions) (ridumigration.Artifact, error) {
+	return planArtifact(ctx, name, before, after, options)
 }
 
 // validateTransformColumnCasts refuses a transform-backed
@@ -130,7 +144,7 @@ type CreatedArtifact struct {
 
 // CreateArtifact derives the predecessor from committed history and writes a
 // deterministic artifact for the current PostgreSQL planner.
-func CreateArtifact(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (CreatedArtifact, error) {
+func CreateArtifact(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, options ArtifactOptions) (CreatedArtifact, error) {
 	files, err := migrationartifact.ReadAll(directory)
 	if err != nil {
 		return CreatedArtifact{}, err
@@ -141,7 +155,7 @@ func CreateArtifact(ctx context.Context, directory, name string, after schema.Ma
 	if err := validatePendingArtifactInspection(ctx, files); err != nil {
 		return CreatedArtifact{}, err
 	}
-	if err := validatePostgresDataTransformIdentities(files, transforms); err != nil {
+	if err := validatePostgresDataTransformIdentities(files, options.DataTransforms); err != nil {
 		return CreatedArtifact{}, err
 	}
 	var before *schema.Manifest
@@ -152,7 +166,7 @@ func CreateArtifact(ctx context.Context, directory, name string, after schema.Ma
 		}
 		before = &latest
 	}
-	artifact, err := BuildArtifact(ctx, name, before, after, renames, allowDestructive, transforms...)
+	artifact, err := BuildArtifact(ctx, name, before, after, options)
 	if err != nil {
 		return CreatedArtifact{}, err
 	}
@@ -165,7 +179,8 @@ func CreateArtifact(ctx context.Context, directory, name string, after schema.Ma
 
 // planArtifact is the deterministic planner shared by artifact creation and
 // the runner's exact regeneration of committed artifacts.
-func planArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
+func planArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, options ArtifactOptions) (ridumigration.Artifact, error) {
+	renames, allowDestructive, transforms := options.Renames, options.AllowDestructive, options.DataTransforms
 	if err := validateFieldRenamesOnlyRename(renames); err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -187,9 +202,6 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
-		if err := schemadiff.RejectVersionsEnable(before.Snapshot(), after.Snapshot(), postgresCollectionRenameIDs(renames)); err != nil {
-			return ridumigration.Artifact{}, err
-		}
 		if len(transforms) == 0 {
 			if err := primitivefield.ValidateEvolution(before.Snapshot(), after.Snapshot()); err != nil {
 				return ridumigration.Artifact{}, err
@@ -198,6 +210,10 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 		if err := postgresmigration.ValidateVersionedTransition(before.Snapshot(), after.Snapshot(), transforms); err != nil {
 			return ridumigration.Artifact{}, err
 		}
+	}
+	enabling, err := planVersionsEnable(before, after, renames, transforms, options.ExistingDocuments)
+	if err != nil {
+		return ridumigration.Artifact{}, err
 	}
 	artifact, err := ridumigration.NewArtifact(name, atlasPlanner(), before, after)
 	if err != nil {
@@ -321,6 +337,22 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 		artifact.Risks = append(artifact.Risks, physicalChangeRisks(changes)...)
 		artifact.Risks = append(artifact.Risks, risks...)
 	}
+	// A require-empty check reads only the working table, so it runs before
+	// any DDL and a refused migration commits nothing. A conversion writes the
+	// versioned columns and live table, so it runs after the DDL that adds
+	// them and before the reference rebuild, which reads both heads.
+	var checks, conversions []ridumigration.Operation
+	for _, step := range enabling {
+		payload := step.Payload()
+		operation := ridumigration.Operation{Kind: ridumigration.StepEnableVersions, Name: step.Name(), EnableVersions: &payload}
+		if step.Existing == ridumigration.ExistingRequireEmpty {
+			checks = append(checks, operation)
+		} else {
+			conversions = append(conversions, operation)
+		}
+		artifact.Risks = append(artifact.Risks, step.Risk())
+	}
+	operations = append(append(checks, operations...), conversions...)
 	afterSnapshot := after.Snapshot()
 	if before != nil && referenceIndexTopologyChanged(before.Snapshot(), afterSnapshot) {
 		operations = append(operations, ridumigration.Operation{
@@ -716,6 +748,11 @@ func payloadFromOperation(step ridumigration.Operation) (json.RawMessage, error)
 		})
 	case ridumigration.StepAuditRequiredValues:
 		return ridumigration.MarshalStepPayload(ridumigration.AuditRequiredValuesPayload{Fields: step.RequiredFields})
+	case ridumigration.StepEnableVersions:
+		if step.EnableVersions == nil {
+			return nil, fmt.Errorf("enable-versions step %q has no payload", step.Name)
+		}
+		return ridumigration.MarshalStepPayload(*step.EnableVersions)
 	case ridumigration.StepAssertSchema:
 		return ridumigration.MarshalStepPayload(ridumigration.AssertSchemaPayload{})
 	default:

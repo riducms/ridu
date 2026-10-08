@@ -29,7 +29,7 @@ func TestPostgresPlanningFollowsDefinitions(t *testing.T) {
 			}
 			renames := planningRenames(before, after)
 			costs[change.Name] = testing.AllocsPerRun(2, func() {
-				if _, err := BuildArtifact(ctx, change.Name, &before, after, renames, false); err != nil {
+				if _, err := BuildArtifact(ctx, change.Name, &before, after, ArtifactOptions{Renames: renames}); err != nil {
 					t.Fatalf("%s: %v", change.Name, err)
 				}
 			})

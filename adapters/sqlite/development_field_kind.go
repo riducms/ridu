@@ -76,7 +76,7 @@ func (backend *Store) ClearDevelopmentFieldKinds(ctx context.Context, before, af
 		if err := scanSQLiteFieldKinds(ctx, connection, changes, reports, true); err != nil {
 			return err
 		}
-		return backend.migrateDevelopmentSchema(ctx, connection, after)
+		return backend.migrateDevelopmentSchema(ctx, connection, after, nil)
 	})
 }
 

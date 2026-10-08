@@ -38,10 +38,10 @@ func TestPluginCollectionContributionsPlanAcrossPostgresAndSQLite(t *testing.T) 
 	if len(snapshot.Collections) != 2 || snapshot.Collections[1].Slug != "plugin-records" || len(snapshot.Collections[0].Fields) != 2 {
 		t.Fatalf("resolved plugin collections = %#v", snapshot.Collections)
 	}
-	if _, err := postgres.BuildArtifact(context.Background(), "portable-plugin", nil, manifest, nil, false); err != nil {
+	if _, err := postgres.BuildArtifact(context.Background(), "portable-plugin", nil, manifest, postgres.ArtifactOptions{}); err != nil {
 		t.Fatalf("PostgreSQL rejected collection-based plugin storage: %v", err)
 	}
-	if _, err := sqlite.CreateArtifact(context.Background(), t.TempDir(), "portable-plugin", manifest, time.Unix(1, 0), false); err != nil {
+	if _, err := sqlite.CreateArtifact(context.Background(), t.TempDir(), "portable-plugin", manifest, time.Unix(1, 0), sqlite.ArtifactOptions{}); err != nil {
 		t.Fatalf("SQLite rejected collection-based plugin storage: %v", err)
 	}
 }

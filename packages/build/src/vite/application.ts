@@ -19,7 +19,7 @@ import { createAdminUnoConfig } from "../uno/index.js";
 import { ADMIN_PREPARED_ROUTE_STATE_VERSION } from "./admin-route-state-version.generated.js";
 import { contentCSSHash } from "./compiler-options.js";
 import { riduSchemaReloadPlugin } from "./schema-reload.js";
-import { packageSourceAliasPlugin } from "./source-alias.js";
+import { moduleFilePath, packageSourceAliasPlugin } from "./source-alias.js";
 import { sharedDependencies } from "./shared-dependencies.js";
 import { adminPackage, adminSourceScanPlugin } from "./source-scan.js";
 import { riduAdminCheckPlugins } from "../admin-check.js";
@@ -678,9 +678,9 @@ parentPort.postMessage(evaluated.default);
 const packageNames = new Map<string, string | undefined>();
 
 /** The name in the nearest package.json above a module, so a check works wherever the package is installed. */
-function modulePackageName(id: string) {
-	const path = id.replace(/^\0/, "").split("?", 1)[0] ?? id;
-	if (!path.startsWith("/")) return undefined;
+export function modulePackageName(id: string) {
+	const path = moduleFilePath(id);
+	if (path === undefined) return undefined;
 	const visited: string[] = [];
 	let directory = dirname(path);
 	while (directory !== dirname(directory)) {

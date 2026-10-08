@@ -22,7 +22,7 @@ func TestPostgresCollectionRenamePreflightRejectsValueOnlyCTEDataTampering(t *te
 	afterCollection := renameBindingManifestCollection("posts", "posts")
 	before := renameBindingManifest(beforeCollection)
 	after := renameBindingManifest(afterCollection)
-	initial, err := BuildArtifact(ctx, "initial-rename-guard", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-rename-guard", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,9 +36,9 @@ func TestPostgresCollectionRenamePreflightRejectsValueOnlyCTEDataTampering(t *te
 		t.Fatal(err)
 	}
 
-	rename, err := BuildArtifact(ctx, "rename-guarded-collection", &before, after, []Rename{{
+	rename, err := BuildArtifact(ctx, "rename-guarded-collection", &before, after, ArtifactOptions{Renames: []Rename{{
 		Kind: RenameCollection, BeforeCollection: beforeCollection, AfterCollection: afterCollection,
-	}}, false)
+	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestPostgresCollectionAndNestedReferenceRenameRewritesCurrentAndOldOwnerVer
 	beforeCollection, afterCollection, fieldPairs := nestedReferenceIdentityRenameCollections(t)
 	before := renameBindingManifest(beforeCollection)
 	after := renameBindingManifest(afterCollection)
-	initial, err := BuildArtifact(ctx, "initial-nested-reference-rename", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-nested-reference-rename", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,9 +119,9 @@ func TestPostgresCollectionAndNestedReferenceRenameRewritesCurrentAndOldOwnerVer
 		t.Fatal(err)
 	}
 
-	rename, err := BuildArtifact(ctx, "rename-nested-reference-owner", &before, after, []Rename{{
+	rename, err := BuildArtifact(ctx, "rename-nested-reference-owner", &before, after, ArtifactOptions{Renames: []Rename{{
 		Kind: RenameCollection, BeforeCollection: beforeCollection, AfterCollection: afterCollection, Fields: fieldPairs,
-	}}, false)
+	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestPostgresEarlierTargetRenameRewritesLaterRenamedOwnerCurrentAndVersions(
 	beforeTarget, afterTarget, beforeOwner, afterOwner, ownerFields := crossOwnerReferenceRenameCollections(t)
 	before := renameBindingManifest(beforeTarget, beforeOwner)
 	after := renameBindingManifest(afterTarget, afterOwner)
-	initial, err := BuildArtifact(ctx, "initial-cross-owner-reference-rename", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-cross-owner-reference-rename", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,10 +200,10 @@ func TestPostgresEarlierTargetRenameRewritesLaterRenamedOwnerCurrentAndVersions(
 		t.Fatal(err)
 	}
 
-	rename, err := BuildArtifact(ctx, "rename-target-before-referring-owner", &before, after, []Rename{
+	rename, err := BuildArtifact(ctx, "rename-target-before-referring-owner", &before, after, ArtifactOptions{Renames: []Rename{
 		{Kind: RenameCollection, BeforeCollection: beforeTarget, AfterCollection: afterTarget},
 		{Kind: RenameCollection, BeforeCollection: beforeOwner, AfterCollection: afterOwner, Fields: ownerFields},
-	}, false)
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}

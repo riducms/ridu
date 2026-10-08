@@ -20,7 +20,7 @@ import (
 
 func TestAtlasArtifactPlansInitialSchemaAndBlocksFieldDeletion(t *testing.T) {
 	before := atlasTestManifest(atlasTextField("posts-title", "title"), atlasTextField("posts-summary", "summary"))
-	initial, err := BuildArtifact(context.Background(), "initial", nil, before, nil, false)
+	initial, err := BuildArtifact(context.Background(), "initial", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,12 +29,12 @@ func TestAtlasArtifactPlansInitialSchemaAndBlocksFieldDeletion(t *testing.T) {
 	}
 
 	after := atlasTestManifest(atlasTextField("posts-title", "title"))
-	_, err = BuildArtifact(context.Background(), "remove-summary", &before, after, nil, false)
+	_, err = BuildArtifact(context.Background(), "remove-summary", &before, after, ArtifactOptions{})
 	var safety *SafetyError
 	if !errors.As(err, &safety) || !hasRiskCode(safety.Risks, "RIDU_DROP_COLUMN") {
 		t.Fatalf("destructive error = %#v, %v", safety, err)
 	}
-	allowed, err := BuildArtifact(context.Background(), "remove-summary", &before, after, nil, true)
+	allowed, err := BuildArtifact(context.Background(), "remove-summary", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil || !artifactContainsSQL(t, allowed, "DROP COLUMN") || !hasRiskCode(allowed.Risks, "RIDU_DROP_COLUMN") {
 		t.Fatalf("allowed artifact = %#v, %v", allowed, err)
 	}
@@ -47,7 +47,7 @@ func TestUploadCollectionRenamesRemainPlannableWithSlugIndependentObjectOwnershi
 		afterSnapshot := before.Snapshot()
 		afterSnapshot.Collections[0].Slug = "assets"
 		after := schema.NewManifest(afterSnapshot)
-		if _, err := BuildArtifact(context.Background(), "rename-upload-slug", &before, after, nil, false); err != nil {
+		if _, err := BuildArtifact(context.Background(), "rename-upload-slug", &before, after, ArtifactOptions{}); err != nil {
 			t.Fatalf("stable-ID upload slug rename: %v", err)
 		}
 	})
@@ -61,7 +61,7 @@ func TestUploadCollectionRenamesRemainPlannableWithSlugIndependentObjectOwnershi
 			Kind: RenameCollection, BeforeCollection: before.Snapshot().Collections[0],
 			AfterCollection: after.Snapshot().Collections[0],
 		}
-		artifact, err := BuildArtifact(context.Background(), "rename-upload-collection", &before, after, []Rename{rename}, false)
+		artifact, err := BuildArtifact(context.Background(), "rename-upload-collection", &before, after, ArtifactOptions{Renames: []Rename{rename}})
 		if err != nil {
 			t.Fatalf("confirmed upload collection rename: %v", err)
 		}
@@ -90,7 +90,7 @@ func TestUploadCollectionRemovalFailsClosedEvenWithDestructiveApproval(t *testin
 	for name, after := range tests {
 		t.Run(name, func(t *testing.T) {
 			for _, allowDestructive := range []bool{false, true} {
-				_, err := BuildArtifact(context.Background(), "remove-upload", &before, after, nil, allowDestructive)
+				_, err := BuildArtifact(context.Background(), "remove-upload", &before, after, ArtifactOptions{AllowDestructive: allowDestructive})
 				var safety *SafetyError
 				if !errors.As(err, &safety) || !hasRiskCode(safety.Risks, "RIDU_UPLOAD_COLLECTION_REMOVAL_UNSAFE") ||
 					!strings.Contains(err.Error(), "external objects") {
@@ -159,7 +159,7 @@ func TestCapabilityDisablesFailClosedBeforeDormantSharedStateCanReactivate(t *te
 			afterSnapshot := before.Snapshot()
 			test.mutate(&afterSnapshot)
 			after := schema.NewManifest(afterSnapshot)
-			_, err := BuildArtifact(context.Background(), "disable-"+strings.ReplaceAll(name, " ", "-"), &before, after, nil, true)
+			_, err := BuildArtifact(context.Background(), "disable-"+strings.ReplaceAll(name, " ", "-"), &before, after, ArtifactOptions{AllowDestructive: true})
 			var safety *SafetyError
 			if !errors.As(err, &safety) || !hasRiskCode(safety.Risks, test.code) {
 				t.Fatalf("capability disable risk = %#v, %v", safety, err)
@@ -193,7 +193,7 @@ func TestLaterReferenceTopologyAdditionsPlanAnOrderedIndexRebuild(t *testing.T) 
 		},
 	})
 	after := schema.NewManifest(afterSnapshot)
-	artifact, err := BuildArtifact(context.Background(), "add-reference", &before, after, nil, false)
+	artifact, err := BuildArtifact(context.Background(), "add-reference", &before, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +281,7 @@ func TestRemovingTheFinalResourceKeepsAndClearsReferenceStorage(t *testing.T) {
 	afterSnapshot := before.Snapshot()
 	afterSnapshot.Collections = []schema.Collection{}
 	after := schema.NewManifest(afterSnapshot)
-	artifact, err := BuildArtifact(context.Background(), "remove-final-resource", &before, after, nil, true)
+	artifact, err := BuildArtifact(context.Background(), "remove-final-resource", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestRemovingCollectionsAndGlobalsPlansTypedStateRetirementBeforePhysicalDro
 	afterSnapshot.Collections = afterSnapshot.Collections[:1]
 	afterSnapshot.Globals = afterSnapshot.Globals[:1]
 	after := schema.NewManifest(afterSnapshot)
-	artifact, err := BuildArtifact(context.Background(), "retire-resources", &before, after, nil, true)
+	artifact, err := BuildArtifact(context.Background(), "retire-resources", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +409,7 @@ func TestResourceRemovalFailsClosedWhenAnyReferenceBearingPhysicalRootSurvives(t
 			afterSnapshot.Collections[1].Fields = []schema.Field{afterRoot}
 			afterSnapshot.Blocks = referenceBlockDefinitions(afterRoot)
 			after := schema.NewManifest(afterSnapshot)
-			_, err := BuildArtifact(context.Background(), "unsafe-reference-root-"+shape, &before, after, nil, true)
+			_, err := BuildArtifact(context.Background(), "unsafe-reference-root-"+shape, &before, after, ArtifactOptions{AllowDestructive: true})
 			var safety *SafetyError
 			if !errors.As(err, &safety) || !hasRiskCode(safety.Risks, "RIDU_RESOURCE_REMOVAL_REFERENCE_ROOT_UNSAFE") {
 				t.Fatalf("surviving %s root removal error = %#v, %v", shape, safety, err)
@@ -424,7 +424,7 @@ func TestResourceRemovalDropsReferenceRootAndPurgesDependentVersionHistory(t *te
 	afterSnapshot.Collections = afterSnapshot.Collections[1:]
 	afterSnapshot.Collections[1].Fields = []schema.Field{}
 	after := schema.NewManifest(afterSnapshot)
-	artifact, err := BuildArtifact(context.Background(), "retire-reference-root", &before, after, nil, true)
+	artifact, err := BuildArtifact(context.Background(), "retire-reference-root", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +495,7 @@ func TestStoredReferenceShapeDecreasesFailClosedBeforeDormantValuesCanReattach(t
 			}
 			after := schema.NewManifest(afterSnapshot)
 			for _, allowDestructive := range []bool{false, true} {
-				_, err := BuildArtifact(context.Background(), "decrease-reference-shape", &before, after, nil, allowDestructive)
+				_, err := BuildArtifact(context.Background(), "decrease-reference-shape", &before, after, ArtifactOptions{AllowDestructive: allowDestructive})
 				var safety *SafetyError
 				if !errors.As(err, &safety) || !hasRiskCode(safety.Risks, "RIDU_REFERENCE_SHAPE_DECREASE_UNSAFE") ||
 					!strings.Contains(err.Error(), "current values or version snapshots") {
@@ -600,7 +600,7 @@ func TestAmbiguousNestedReferenceRenameMappingsFailClosed(t *testing.T) {
 		{Kind: RenameField, BeforeCollection: ownerBefore, AfterCollection: ownerAfter, BeforeField: &beforeReference, AfterField: &decoy},
 	}
 	for _, allowDestructive := range []bool{false, true} {
-		if _, err := BuildArtifact(context.Background(), "ambiguous-nested-reference-renames", &before, after, renames, allowDestructive); err == nil ||
+		if _, err := BuildArtifact(context.Background(), "ambiguous-nested-reference-renames", &before, after, ArtifactOptions{Renames: renames, AllowDestructive: allowDestructive}); err == nil ||
 			!strings.Contains(err.Error(), "RIDU_REFERENCE_RENAME_MAPPING_AMBIGUOUS") {
 			t.Fatalf("allowDestructive=%t ambiguous planner mapping = %v", allowDestructive, err)
 		}
@@ -644,7 +644,7 @@ func TestReferenceLocaleRemovalFailsClosedBeforeLocalizedValuesCanReattach(t *te
 	afterSnapshot.Application.Localization.Locales = afterSnapshot.Application.Localization.Locales[:1]
 	after := schema.NewManifest(afterSnapshot)
 	for _, allowDestructive := range []bool{false, true} {
-		_, err := BuildArtifact(context.Background(), "remove-reference-locale", &before, after, nil, allowDestructive)
+		_, err := BuildArtifact(context.Background(), "remove-reference-locale", &before, after, ArtifactOptions{AllowDestructive: allowDestructive})
 		var safety *SafetyError
 		if !errors.As(err, &safety) || !hasRiskCode(safety.Risks, "RIDU_REFERENCE_SHAPE_DECREASE_UNSAFE") ||
 			!strings.Contains(err.Error(), "remove application locale fr") {
@@ -677,7 +677,7 @@ func TestStoredReferenceShapeTargetAdditionAndConfirmedRenameRemainPlannable(t *
 		afterSnapshot := before.Snapshot()
 		afterSnapshot.Collections[len(afterSnapshot.Collections)-1].Fields = []schema.Field{retirementReferenceRoot(t, "polymorphic", true)}
 		after := schema.NewManifest(afterSnapshot)
-		if _, err := BuildArtifact(context.Background(), "add-reference-target", &before, after, nil, false); err != nil {
+		if _, err := BuildArtifact(context.Background(), "add-reference-target", &before, after, ArtifactOptions{}); err != nil {
 			t.Fatalf("additive target transition: %v", err)
 		}
 	})
@@ -697,7 +697,7 @@ func TestStoredReferenceShapeTargetAdditionAndConfirmedRenameRemainPlannable(t *
 			Kind: RenameField, BeforeCollection: ownerBefore, AfterCollection: ownerAfter,
 			BeforeField: &beforeRoot, AfterField: &afterRoot,
 		}
-		artifact, err := BuildArtifact(context.Background(), "rename-reference-field", &before, after, []Rename{rename}, false)
+		artifact, err := BuildArtifact(context.Background(), "rename-reference-field", &before, after, ArtifactOptions{Renames: []Rename{rename}})
 		if err != nil {
 			t.Fatalf("confirmed reference rename: %v", err)
 		}
@@ -724,7 +724,7 @@ func TestStoredReferenceShapeTargetAdditionAndConfirmedRenameRemainPlannable(t *
 			Kind: RenameField, BeforeCollection: ownerBefore, AfterCollection: ownerAfter,
 			BeforeField: &beforeRoot, AfterField: &afterRoot,
 		}
-		artifact, err := BuildArtifact(context.Background(), "rename-reference-root", &before, after, []Rename{rename}, false)
+		artifact, err := BuildArtifact(context.Background(), "rename-reference-root", &before, after, ArtifactOptions{Renames: []Rename{rename}})
 		if err != nil {
 			t.Fatalf("confirmed nested reference-root rename: %v", err)
 		}
@@ -761,7 +761,7 @@ func TestStoredReferenceShapeTargetAdditionAndConfirmedRenameRemainPlannable(t *
 			Kind: RenameCollection, BeforeCollection: beforeCollection, AfterCollection: afterCollection,
 			Fields: []FieldRename{{Before: beforeManager, After: afterManager}},
 		}
-		artifact, err := BuildArtifact(context.Background(), "rename-same-path-reference", &before, after, []Rename{rename}, false)
+		artifact, err := BuildArtifact(context.Background(), "rename-same-path-reference", &before, after, ArtifactOptions{Renames: []Rename{rename}})
 		if err != nil {
 			t.Fatalf("confirmed same-path collection rename: %v", err)
 		}
@@ -783,7 +783,7 @@ func TestResourceRetirementArtifactsFailClosedOnPayloadAndDropTampering(t *testi
 	afterSnapshot := before.Snapshot()
 	afterSnapshot.Collections = afterSnapshot.Collections[:1]
 	after := schema.NewManifest(afterSnapshot)
-	original, err := BuildArtifact(context.Background(), "retirement-tampering", &before, after, nil, true)
+	original, err := BuildArtifact(context.Background(), "retirement-tampering", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1090,7 +1090,7 @@ func TestReferencePolicyOnlyChangeDoesNotRebuildDerivedEntries(t *testing.T) {
 	afterSnapshot := before.Snapshot()
 	afterSnapshot.Collections[1].Fields[0].Relationship.OnDelete = schema.ReferenceDeleteRestrict
 	after := schema.NewManifest(afterSnapshot)
-	artifact, err := BuildArtifact(context.Background(), "change-reference-policy", &before, after, nil, false)
+	artifact, err := BuildArtifact(context.Background(), "change-reference-policy", &before, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1323,7 +1323,7 @@ func TestIndexMigrationRisksCoverBuildAndIntegrityRemoval(t *testing.T) {
 	summaryPath, _ := query.ParsePath("summary")
 	afterSnapshot.Collections[0].Indexes = []schema.CollectionIndex{{Fields: []query.Path{titlePath, summaryPath}, Unique: true}}
 	after := schema.NewManifest(afterSnapshot)
-	added, err := BuildArtifact(context.Background(), "add-indexes", &before, after, nil, false)
+	added, err := BuildArtifact(context.Background(), "add-indexes", &before, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1332,12 +1332,12 @@ func TestIndexMigrationRisksCoverBuildAndIntegrityRemoval(t *testing.T) {
 			t.Errorf("add risks = %#v, want warning %s", added.Risks, code)
 		}
 	}
-	_, err = BuildArtifact(context.Background(), "drop-indexes", &after, before, nil, false)
+	_, err = BuildArtifact(context.Background(), "drop-indexes", &after, before, ArtifactOptions{})
 	var safety *SafetyError
 	if !errors.As(err, &safety) || !hasRiskLevel(safety.Risks, "RIDU_DROP_UNIQUE_INDEX", ridumigration.RiskDestructive) {
 		t.Fatalf("drop unique safety = %#v %v", safety, err)
 	}
-	dropped, err := BuildArtifact(context.Background(), "drop-indexes", &after, before, nil, true)
+	dropped, err := BuildArtifact(context.Background(), "drop-indexes", &after, before, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1352,7 +1352,7 @@ func TestVersionFourIndexesUseOnlyStructuredNoTransactionExecutors(t *testing.T)
 	afterSnapshot := before.Snapshot()
 	afterSnapshot.Collections[0].Fields[0].Index = true
 	after := schema.NewManifest(afterSnapshot)
-	artifact, err := BuildArtifact(context.Background(), "structured-index", &before, after, nil, false)
+	artifact, err := BuildArtifact(context.Background(), "structured-index", &before, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1422,7 +1422,7 @@ func TestFieldRenameWithSimultaneousIndexAdditionMatchesDefinitions(t *testing.T
 	afterSummary.Index = true
 	after := atlasTestManifest(afterTitle, afterSummary)
 	rename := Rename{Kind: RenameField, BeforeCollection: before.Snapshot().Collections[0], AfterCollection: after.Snapshot().Collections[0], BeforeField: &beforeTitle, AfterField: &afterTitle}
-	artifact, err := BuildArtifact(context.Background(), "rename-and-index", &before, after, []Rename{rename}, false)
+	artifact, err := BuildArtifact(context.Background(), "rename-and-index", &before, after, ArtifactOptions{Renames: []Rename{rename}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1472,7 +1472,7 @@ func TestAtlasArtifactUsesExplicitRenameInsteadOfDropAndAdd(t *testing.T) {
 		Kind: RenameField, BeforeCollection: before.Snapshot().Collections[0], AfterCollection: after.Snapshot().Collections[0],
 		BeforeField: &beforeField, AfterField: &afterField,
 	}
-	artifact, err := BuildArtifact(context.Background(), "rename-title", &before, after, []Rename{rename}, false)
+	artifact, err := BuildArtifact(context.Background(), "rename-title", &before, after, ArtifactOptions{Renames: []Rename{rename}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1509,7 +1509,7 @@ func TestAtlasArtifactRenamesLocalizedUniqueColumnsAndIndexesPerLocale(t *testin
 		BeforeField: &beforeField, AfterField: &afterField,
 	}
 
-	artifact, err := BuildArtifact(context.Background(), "rename-localized-title", &before, after, []Rename{rename}, false)
+	artifact, err := BuildArtifact(context.Background(), "rename-localized-title", &before, after, ArtifactOptions{Renames: []Rename{rename}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1546,7 +1546,7 @@ func TestAtlasArtifactFailsClosedForIncompatibleTypeChange(t *testing.T) {
 	before := atlasTestManifest(atlasTextField("posts-value", "value"))
 	path, _ := query.NewPath("value")
 	after := atlasTestManifest(schema.Field{ID: "posts-value", Name: "value", Path: path, Type: schema.FieldTypeNumber, Category: schema.FieldCategoryScalar, Admin: schema.FieldAdmin{Label: "value"}})
-	_, err := BuildArtifact(context.Background(), "change-value-type", &before, after, nil, false)
+	_, err := BuildArtifact(context.Background(), "change-value-type", &before, after, ArtifactOptions{})
 	var safety *SafetyError
 	if !errors.As(err, &safety) {
 		t.Fatalf("expected incompatible type change to fail closed, got %v", err)
@@ -1558,12 +1558,12 @@ func TestAtlasArtifactRecordsManifestOnlyTransitions(t *testing.T) {
 	afterSnapshot := before.Snapshot()
 	afterSnapshot.Application.Name = "Renamed application"
 	after := schema.NewManifest(afterSnapshot)
-	artifact, err := BuildArtifact(context.Background(), "rename-application", &before, after, nil, false)
+	artifact, err := BuildArtifact(context.Background(), "rename-application", &before, after, ArtifactOptions{})
 	steps := artifactTestSteps(t, artifact)
 	if err != nil || artifact.MinimumRunnerContract != ridumigration.RunnerContractVersion || len(steps) != 1 || steps[0].Kind != ridumigration.StepAssertSchema {
 		t.Fatalf("manifest-only artifact = %#v, %v", artifact, err)
 	}
-	if _, err := BuildArtifact(context.Background(), "no-op", &after, after, nil, false); err == nil {
+	if _, err := BuildArtifact(context.Background(), "no-op", &after, after, ArtifactOptions{}); err == nil {
 		t.Fatal("expected an unchanged manifest to reject migration creation")
 	}
 }

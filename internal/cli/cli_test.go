@@ -1277,6 +1277,125 @@ func TestSQLiteMigrateCreatePreservesAConfirmedFieldRename(t *testing.T) {
 	}
 }
 
+// Enabling versions on the starter's posts records what the stored posts
+// become, which the migration then applies, replays and rolls back.
+func TestSQLiteMigrateCreateEnablesVersionsOnStoredPosts(t *testing.T) {
+	ctx := context.Background()
+	frameworkRoot := moduleRoot(t)
+	target := newProjectTarget(t, "sqlite-versions")
+	setFrameworkProxy(t, frameworkRoot)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
+	run := func(arguments ...string) int {
+		stdout.Reset()
+		stderr.Reset()
+		return cli.Run(ctx, arguments, &stdout, &stderr, options)
+	}
+	if exitCode := run("new", "--database", "sqlite", "--module", "example.com/sqlite/versions", target); exitCode != 0 {
+		t.Fatalf("ridu new: %s", stderr.String())
+	}
+	if exitCode := run("generate"); exitCode != 0 {
+		t.Fatalf("ridu generate: %s", stderr.String())
+	}
+	databasePath := filepath.Join(target, ".ridu", "versions.sqlite")
+	if err := os.MkdirAll(filepath.Dir(databasePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if exitCode := run("migrate", "up", "--database-path", databasePath); exitCode != 0 {
+		t.Fatalf("apply the initial migration: %s", stderr.String())
+	}
+	// The config below names only the field under test; the collection and
+	// field IDs match the project's.
+	postsConfig := func(versions bool) ridu.Config {
+		return ridu.Config{Name: "SQLite versions", Collections: []ridu.Collection{{Slug: "posts", Versions: versions, Fields: field.Fields{field.Text("title")}}}}
+	}
+	published := false
+	read := func(versions bool) (store.Document, error) {
+		t.Helper()
+		backend, err := sqlite.Open(ctx, databasePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer backend.Close()
+		application, err := ridu.New(postsConfig(versions), backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		listOptions := ridu.ListOptions{System: true}
+		if versions {
+			listOptions.Draft = &published
+		}
+		page, err := application.Local().List(ctx, "posts", listOptions)
+		if err != nil || len(page.Documents) != 1 {
+			return store.Document{}, fmt.Errorf("stored posts = %#v, %v", page, err)
+		}
+		return page.Documents[0], nil
+	}
+	func() {
+		backend, err := sqlite.Open(ctx, databasePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer backend.Close()
+		application, err := ridu.New(postsConfig(false), backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Hello")}, ridu.MutationOptions{System: true}); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	postsPath := filepath.Join(target, "content", "posts.go")
+	posts, err := os.ReadFile(postsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	versioned := strings.Replace(string(posts), `Slug: "posts",`, `Slug: "posts", Versions: true,`, 1)
+	if versioned == string(posts) {
+		t.Fatal("generated posts slug was not found")
+	}
+	if err := os.WriteFile(postsPath, []byte(versioned), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if exitCode := run("generate"); exitCode != 0 {
+		t.Fatalf("ridu generate changed manifest: %s", stderr.String())
+	}
+	if exitCode := run("migrate", "create", "--name", "enable-versions"); exitCode != 1 || !strings.Contains(stderr.String(), "RIDU_VERSIONS_EXISTING_REQUIRED") || !strings.Contains(stderr.String(), "--versions-existing") {
+		t.Fatalf("migration without a choice = exit %d, stderr %q", exitCode, stderr.String())
+	}
+	if exitCode := run("migrate", "create", "--name", "enable-versions", "--versions-existing", "draft"); exitCode != 1 || !strings.Contains(stderr.String(), "does not enable drafts") {
+		t.Fatalf("draft choice without drafts = exit %d, stderr %q", exitCode, stderr.String())
+	}
+	if exitCode := run("migrate", "status", "--database-path", databasePath, "--versions-existing", "published"); exitCode != 2 || !strings.Contains(stderr.String(), "create-only") {
+		t.Fatalf("choice outside create = exit %d, stderr %q", exitCode, stderr.String())
+	}
+	if exitCode := run("migrate", "create", "--name", "enable-versions", "--versions-existing=published"); exitCode != 0 {
+		t.Fatalf("published choice: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "warning\tRIDU_VERSIONS_ENABLE") {
+		t.Fatalf("published choice output = %q", stdout.String())
+	}
+	for _, step := range []struct {
+		invocation []string
+		versions   bool
+	}{
+		{[]string{"migrate", "verify"}, false},
+		{[]string{"migrate", "up", "--database-path", databasePath}, true},
+		{[]string{"migrate", "down", "--database-path", databasePath, "--allow-destructive"}, false},
+		{[]string{"migrate", "up", "--database-path", databasePath}, true},
+	} {
+		if exitCode := run(step.invocation...); exitCode != 0 {
+			t.Fatalf("ridu %v: %s", step.invocation, stderr.String())
+		}
+		post, err := read(step.versions)
+		if title, _ := post.Values["title"].StringValue(); err != nil || title != "Hello" || step.versions && post.Status != store.StatusPublished {
+			t.Fatalf("after ridu %v the published post = %#v, %v", step.invocation, post, err)
+		}
+	}
+}
+
 func TestMigrateMaintenanceAdmissionIsLimitedToUpAndVerify(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 	root := t.TempDir()

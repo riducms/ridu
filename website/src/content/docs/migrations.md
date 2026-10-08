@@ -271,13 +271,14 @@ The adapter guides cover the rest: [SQLite](/docs/sqlite/#migrations),
 Adding a collection or an optional field is a plain `create` and `up`. These changes need a
 decision from you first:
 
-| When you…                     | Ridu…                                                     | Read                                                 |
-| ----------------------------- | --------------------------------------------------------- | ---------------------------------------------------- |
-| rename a field or collection  | asks whether it is a rename, then moves the stored values | [Renames](/docs/migrations/renames/)                 |
-| make a field required         | checks stored documents and stops if any lack a value     | [Required fields](/docs/migrations/required-fields/) |
-| change a field's kind         | pauses if stored values would not fit the new kind        | [Field kind changes](/docs/migrations/field-kinds/)  |
-| need to rewrite stored values | runs your compiled data transform inside the migration    | [Data transforms](/docs/migrations/data-transforms/) |
-| remove a field or collection  | refuses until you review the loss and approve it          | [Safety checks](/docs/migrations/safety-checks/)     |
+| When you…                     | Ridu…                                                         | Read                                                   |
+| ----------------------------- | ------------------------------------------------------------- | ------------------------------------------------------ |
+| rename a field or collection  | asks whether it is a rename, then moves the stored values     | [Renames](/docs/migrations/renames/)                   |
+| make a field required         | checks stored documents and stops if any lack a value         | [Required fields](/docs/migrations/required-fields/)   |
+| change a field's kind         | pauses if stored values would not fit the new kind            | [Field kind changes](/docs/migrations/field-kinds/)    |
+| turn on versions or drafts    | asks whether stored documents stay published or become drafts | [Enabling versions](/docs/migrations/enable-versions/) |
+| need to rewrite stored values | runs your compiled data transform inside the migration        | [Data transforms](/docs/migrations/data-transforms/)   |
+| remove a field or collection  | refuses until you review the loss and approve it              | [Safety checks](/docs/migrations/safety-checks/)       |
 
 ### Changes that need no migration {#presentation-changes}
 

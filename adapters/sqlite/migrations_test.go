@@ -542,7 +542,7 @@ func TestSQLiteArtifactStatusRejectsEditedHistoryAndLedgerLineage(t *testing.T) 
 		if _, err := backend.ArtifactStatus(ctx, directory, manifest); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
 			t.Fatalf("edited artifact status error = %v", err)
 		}
-		if _, err := CreateArtifact(ctx, directory, "after-edited", manifest, time.Unix(2, 0), false); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
+		if _, err := CreateArtifact(ctx, directory, "after-edited", manifest, time.Unix(2, 0), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
 			t.Fatalf("creation over edited history error = %v", err)
 		}
 	})

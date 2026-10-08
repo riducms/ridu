@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/internal/enableversions"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/referenceindex"
 	ridumigration "github.com/riducms/ridu/migration"
@@ -233,6 +234,19 @@ func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sq
 	// stored under a name the earlier schema does not have.
 	if err := applySQLiteArtifactRenames(ctx, connection, file.Artifact, &target, current, true); err != nil {
 		return fmt.Errorf("roll back SQLite migration %s renames: %w", file.Name, err)
+	}
+	enabled, err := enableversions.Recorded(file.Artifact)
+	if err != nil {
+		return err
+	}
+	for id := range enabled {
+		resource, found := sqliteManifestResource(target, id)
+		if !found {
+			return fmt.Errorf("roll back SQLite migration %s: versions were enabled on absent resource %s", file.Name, id)
+		}
+		if err := disableSQLiteVersions(ctx, connection, resource); err != nil {
+			return fmt.Errorf("roll back SQLite migration %s versions: %w", file.Name, err)
+		}
 	}
 	if err := backend.scrubSQLiteRollbackFields(ctx, connection, current, target); err != nil {
 		return fmt.Errorf("roll back SQLite migration %s fields: %w", file.Name, err)

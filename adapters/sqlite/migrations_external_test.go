@@ -35,7 +35,7 @@ func TestSQLiteCreateArtifactIsUsableOutsideTheAdapterPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	created, err := sqlite.CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), false)
+	created, err := sqlite.CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), sqlite.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,14 +47,14 @@ func TestSQLiteCreateArtifactIsUsableOutsideTheAdapterPackage(t *testing.T) {
 	if _, err := os.Stat(created.Path); err != nil {
 		t.Fatal(err)
 	}
-	second, err := sqlite.CreateArtifact(ctx, directory, "add-summary", additive, time.Unix(2, 0), false)
+	second, err := sqlite.CreateArtifact(ctx, directory, "add-summary", additive, time.Unix(2, 0), sqlite.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(second.Name, "_add-summary.ridu.json") || second.Name <= created.Name {
 		t.Fatalf("second artifact = %#v after %#v", second, created)
 	}
-	if _, err := sqlite.CreateArtifact(ctx, directory, "duplicate", additive, time.Unix(3, 0), false); err == nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "duplicate", additive, time.Unix(3, 0), sqlite.ArtifactOptions{}); err == nil {
 		t.Fatal("CreateArtifact accepted a migration when history was already current")
 	}
 

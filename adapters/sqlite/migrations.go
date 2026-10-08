@@ -15,10 +15,10 @@ import (
 
 	"github.com/riducms/ridu/internal/blockgraph"
 	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/internal/enableversions"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/requiredfield"
-	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -89,12 +89,31 @@ type CreatedArtifact struct {
 	Version  uint32 `json:"version"`
 }
 
+// ArtifactOptions are the reviewed decisions a SQLite migration records
+// beyond its before and after manifests.
+type ArtifactOptions struct {
+	// AllowDestructive accepts planned changes that remove stored data.
+	AllowDestructive bool
+	// Renames are the confirmed field renames whose content the migration
+	// keeps. Apart from them the transition must be additive.
+	Renames []ridumigration.Rename
+	// DataTransforms are the compiled callbacks the migration runs. They
+	// cannot share a migration with renames.
+	DataTransforms []ridumigration.DataTransformDescriptor
+	// ExistingDocuments says, for each resource that starts keeping versions,
+	// what becomes of the documents it already stores.
+	ExistingDocuments map[schema.StableID]ridumigration.ExistingDocuments
+}
+
 // CreateArtifact plans and atomically creates one immutable SQLite migration
 // file. Existing files are never overwritten and the new artifact must
 // continue the latest committed manifest in directory. The before manifest is
 // derived from that history so applications never need to decode private
 // artifact files themselves.
-func CreateArtifact(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (CreatedArtifact, error) {
+func CreateArtifact(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, options ArtifactOptions) (CreatedArtifact, error) {
+	if len(options.Renames) != 0 && len(options.DataTransforms) != 0 {
+		return CreatedArtifact{}, fmt.Errorf("content renames and data transforms cannot share one SQLite migration")
+	}
 	files, err := migrationartifact.ReadAll(directory)
 	if err != nil {
 		return CreatedArtifact{}, err
@@ -102,7 +121,7 @@ func CreateArtifact(ctx context.Context, directory, name string, after schema.Ma
 	if err := preflightSQLiteArtifacts(ctx, files); err != nil {
 		return CreatedArtifact{}, err
 	}
-	if err := validateSQLiteDataTransformIdentities(files, transforms); err != nil {
+	if err := validateSQLiteDataTransformIdentities(files, options.DataTransforms); err != nil {
 		return CreatedArtifact{}, err
 	}
 	var before *schema.Manifest
@@ -113,11 +132,16 @@ func CreateArtifact(ctx context.Context, directory, name string, after schema.Ma
 		}
 		before = &latest
 	}
-	artifact, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, transforms, len(transforms) != 0)
+	var artifact ridumigration.Artifact
+	if len(options.Renames) != 0 {
+		artifact, err = buildSQLiteArtifactWithRenames(ctx, name, before, after, options.Renames, options.ExistingDocuments)
+	} else {
+		artifact, err = buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, options.DataTransforms, len(options.DataTransforms) != 0, options.ExistingDocuments)
+	}
 	if err != nil {
 		return CreatedArtifact{}, err
 	}
-	if err := requireSQLiteDestructiveApproval(artifact.Risks, allowDestructive); err != nil {
+	if err := requireSQLiteDestructiveApproval(artifact.Risks, options.AllowDestructive); err != nil {
 		return CreatedArtifact{}, err
 	}
 	file, err := migrationartifact.Create(directory, name, artifact, now)
@@ -137,7 +161,7 @@ func CreateArtifact(ctx context.Context, directory, name string, after schema.Ma
 // is the author-facing API: it derives adapter history and binds the plan to
 // the exact predecessor before publishing it.
 func planArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
-	artifact, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, transforms, len(transforms) != 0)
+	artifact, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, transforms, len(transforms) != 0, nil)
 	if err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -163,14 +187,22 @@ func requireSQLiteDestructiveApproval(risks []ridumigration.Risk, allowDestructi
 	return nil
 }
 
-func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, validateTransition func(schema.Snapshot, schema.Snapshot) error, renames []ridumigration.Rename) (ridumigration.Artifact, error) {
+func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, validateTransition func(schema.Snapshot, schema.Snapshot) error, renames []ridumigration.Rename, existing enableversions.Choices) (ridumigration.Artifact, error) {
 	if err := ctx.Err(); err != nil {
 		return ridumigration.Artifact{}, err
 	}
+	var previous schema.Snapshot
 	if before != nil {
-		if err := schemadiff.RejectVersionsEnable(before.Snapshot(), after.Snapshot(), nil); err != nil {
-			return ridumigration.Artifact{}, err
-		}
+		previous = before.Snapshot()
+	}
+	enabling, err := enableversions.Plan(previous, after.Snapshot(), nil, existing)
+	if err != nil {
+		return ridumigration.Artifact{}, err
+	}
+	if len(enabling) != 0 && len(renames) != 0 {
+		return ridumigration.Artifact{}, fmt.Errorf("enable versions in a SQLite migration of its own; it cannot share one with content renames")
+	}
+	if before != nil {
 		fromDigest, err := ridumigration.DigestManifest(*before)
 		if err != nil {
 			return ridumigration.Artifact{}, err
@@ -227,6 +259,17 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 			Code: "RIDU_SQLITE_FIELD_RENAME", Level: ridumigration.RiskWarning,
 			Message: fmt.Sprintf("move stored %s.%s content to %s%s in current documents and retained versions; stop application writers while the migration runs", owner, rename.FieldBefore, rename.FieldAfter, scope),
 		})
+	}
+	for _, enable := range enabling {
+		payload, err := ridumigration.MarshalStepPayload(enable.Payload())
+		if err != nil {
+			return ridumigration.Artifact{}, err
+		}
+		steps = append(steps, ridumigration.Step{
+			ID: fmt.Sprintf("step-%04d", len(steps)+1), Kind: ridumigration.StepEnableVersions,
+			ExecutorVersion: 1, Name: enable.Name(), Payload: payload,
+		})
+		artifact.Risks = append(artifact.Risks, enable.Risk())
 	}
 	if before != nil {
 		requirements, err := sqliteRequirements(*before, after, renames)
@@ -420,7 +463,7 @@ func (rules sqliteAdditiveRules) collections(before, after []schema.Collection) 
 		if !exists {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; collection %q was removed", previous.ID)
 		}
-		currentWithoutFieldsAndIndexes := current
+		currentWithoutFieldsAndIndexes := withSQLitePreviousVersions(previous, current)
 		currentWithoutFieldsAndIndexes.Fields = previous.Fields
 		currentWithoutFieldsAndIndexes.Indexes = previous.Indexes
 		if !reflect.DeepEqual(previous, currentWithoutFieldsAndIndexes) {
@@ -447,6 +490,18 @@ func (rules sqliteAdditiveRules) collections(before, after []schema.Collection) 
 	return nil
 }
 
+// withSQLitePreviousVersions compares a resource that starts keeping versions
+// as if it had not. The planner records what its stored documents become in
+// an enable-versions step, which the generic document tables need no other
+// change for.
+func withSQLitePreviousVersions(previous, current schema.Collection) schema.Collection {
+	if previous.Versions == nil && !previous.Capabilities.Versions {
+		current.Versions = nil
+		current.Capabilities.Versions = false
+	}
+	return current
+}
+
 func (rules sqliteAdditiveRules) resources(kind string, before, after []schema.Collection) error {
 	afterByID := make(map[schema.StableID]schema.Collection, len(after))
 	for _, resource := range after {
@@ -457,7 +512,7 @@ func (rules sqliteAdditiveRules) resources(kind string, before, after []schema.C
 		if !exists {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; %s %q was removed", kind, previous.ID)
 		}
-		currentWithoutFields := current
+		currentWithoutFields := withSQLitePreviousVersions(previous, current)
 		currentWithoutFields.Fields = previous.Fields
 		if !reflect.DeepEqual(previous, currentWithoutFields) {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; %s %q changed outside its fields", kind, previous.ID)
@@ -727,7 +782,7 @@ func preflightSQLiteArtifacts(ctx context.Context, files []migrationartifact.Fil
 			}
 			for _, step := range phase.Steps {
 				if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepDataTransform && step.Kind != ridumigration.StepRenameContent &&
-					step.Kind != ridumigration.StepAuditRequiredValues && step.Kind != ridumigration.StepAssertSchema {
+					step.Kind != ridumigration.StepEnableVersions && step.Kind != ridumigration.StepAuditRequiredValues && step.Kind != ridumigration.StepAssertSchema {
 					return fmt.Errorf("SQLite migration %s uses unsupported step kind %q", file.Name, step.Kind)
 				}
 			}
@@ -752,14 +807,18 @@ func preflightSQLiteArtifacts(ctx context.Context, files []migrationartifact.Fil
 		if err != nil {
 			return err
 		}
+		existing, err := enableversions.Recorded(file.Artifact)
+		if err != nil {
+			return err
+		}
 		var expected ridumigration.Artifact
 		switch {
 		case len(renames) != 0 && len(descriptors) != 0:
 			err = fmt.Errorf("content renames and data transforms cannot share one SQLite migration")
 		case len(renames) != 0:
-			expected, err = buildSQLiteArtifactWithRenames(ctx, file.Artifact.Name, before, after, renames)
+			expected, err = buildSQLiteArtifactWithRenames(ctx, file.Artifact.Name, before, after, renames, existing)
 		default:
-			expected, err = buildSQLiteArtifactWithDataTransformDescriptors(ctx, file.Artifact.Name, before, after, descriptors, sqliteArtifactAllowsTransformedSchema(file.Artifact))
+			expected, err = buildSQLiteArtifactWithDataTransformDescriptors(ctx, file.Artifact.Name, before, after, descriptors, sqliteArtifactAllowsTransformedSchema(file.Artifact), existing)
 		}
 		if err != nil {
 			return fmt.Errorf("validate SQLite migration %s against planner: %w", file.Name, err)
@@ -817,6 +876,18 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 					return fmt.Errorf("decode SQLite migration %s step %s: %w", file.Name, step.ID, err)
 				}
 				if err := backend.executeSQLiteDataTransform(ctx, connection, file, payload.Transform, transforms, false); err != nil {
+					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
+				}
+			case ridumigration.StepEnableVersions:
+				var payload ridumigration.EnableVersionsPayload
+				if err := json.Unmarshal(step.Payload, &payload); err != nil {
+					return fmt.Errorf("decode SQLite migration %s step %s: %w", file.Name, step.ID, err)
+				}
+				resource, found := sqliteManifestResource(after, payload.ResourceID)
+				if !found {
+					return fmt.Errorf("SQLite migration %s step %s names absent resource %s", file.Name, step.ID, payload.ResourceID)
+				}
+				if err := backend.enableSQLiteVersions(ctx, connection, resource, payload.Existing); err != nil {
 					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
 				}
 			case ridumigration.StepAuditRequiredValues:

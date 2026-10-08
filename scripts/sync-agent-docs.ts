@@ -66,6 +66,7 @@ const references: ReferenceDefinition[] = [
 		"renames",
 		"required-fields",
 		"field-kinds",
+		"enable-versions",
 		"data-transforms",
 		"safety-checks",
 		"deploy",

@@ -11,7 +11,6 @@ import (
 
 	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/requiredfield"
-	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -209,17 +208,20 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 		}
 		var changes []fieldchange.Change
 		var requirements []requiredfield.Requirement
+		var enabling []schema.Collection
 		if exists {
-			if err := schemadiff.RejectVersionsEnable(before.Snapshot(), manifest.Snapshot(), nil); err != nil {
-				return err
-			}
+			enabling = ridumigration.VersionsEnabled(before.Snapshot(), manifest.Snapshot(), nil)
 			changes = fieldchange.Detect(before.Snapshot(), manifest.Snapshot())
 			requirements = requiredfield.Detect(before.Snapshot(), manifest.Snapshot(), requiredfield.Renames{})
 		}
-		// Stored values must fit a changed field kind and fill a field that
+		// A resource that starts keeping versions must store no documents, and
+		// stored values must fit a changed field kind and fill a field that
 		// becomes required, both before index work and again when the schema
 		// record is published.
 		requireEmpty := func(sessionContext context.Context) error {
+			if err := backend.requireMongoDevelopmentVersionsEmpty(sessionContext, enabling); err != nil {
+				return err
+			}
 			if len(changes) != 0 {
 				reports := fieldchange.Reports(changes)
 				if err := backend.scanMongoFieldKinds(sessionContext, &documentTransaction{store: backend}, changes, reports, false, mongoManifestLocales(before)); err != nil {
@@ -231,7 +233,7 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 			}
 			return backend.auditMongoRequiredValues(sessionContext, requirements, true)
 		}
-		if len(changes) != 0 || len(requirements) != 0 {
+		if len(enabling) != 0 || len(changes) != 0 || len(requirements) != 0 {
 			if err := lease.transaction(runContext, requireEmpty); err != nil {
 				return err
 			}

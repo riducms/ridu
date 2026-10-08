@@ -17,7 +17,7 @@ func TestCollectionRenameArtifactsBindManifestIdentityAndPhysicalTopology(t *tes
 		afterSnapshot := before.Snapshot()
 		afterSnapshot.Collections[0].Slug = "posts"
 		after := schema.NewManifest(afterSnapshot)
-		artifact, err := BuildArtifact(context.Background(), "rename-stable-slug", &before, after, nil, false)
+		artifact, err := BuildArtifact(context.Background(), "rename-stable-slug", &before, after, ArtifactOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -41,9 +41,9 @@ func TestCollectionRenameArtifactsBindManifestIdentityAndPhysicalTopology(t *tes
 		afterCollection := schema.Collection{ID: "posts", Slug: "posts", Fields: []schema.Field{}}
 		before := renameBindingManifest(beforeCollection)
 		after := renameBindingManifest(afterCollection)
-		artifact, err := BuildArtifact(context.Background(), "rename-derived-identity", &before, after, []Rename{{
+		artifact, err := BuildArtifact(context.Background(), "rename-derived-identity", &before, after, ArtifactOptions{Renames: []Rename{{
 			Kind: RenameCollection, BeforeCollection: beforeCollection, AfterCollection: afterCollection,
-		}}, false)
+		}}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,9 +91,9 @@ func TestCollectionRenameOrdinarySQLIsBoundToDeterministicAtlasPlan(t *testing.T
 	afterCollection := schema.Collection{ID: "posts", Slug: "posts", Fields: []schema.Field{}}
 	before := renameBindingManifest(beforeCollection)
 	after := renameBindingManifest(afterCollection)
-	original, err := BuildArtifact(context.Background(), "rename-sql-binding", &before, after, []Rename{{
+	original, err := BuildArtifact(context.Background(), "rename-sql-binding", &before, after, ArtifactOptions{Renames: []Rename{{
 		Kind: RenameCollection, BeforeCollection: beforeCollection, AfterCollection: afterCollection,
-	}}, false)
+	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestCollectionRenameOrdinarySQLIsBoundToDeterministicAtlasPlan(t *testing.T
 
 func TestInitialArtifactOrdinarySQLIsBoundToCompleteDeterministicAtlasPlan(t *testing.T) {
 	manifest := renameBindingManifest(schema.Collection{ID: "articles", Slug: "articles", Fields: []schema.Field{}})
-	original, err := BuildArtifact(context.Background(), "initial-sql-binding", nil, manifest, nil, false)
+	original, err := BuildArtifact(context.Background(), "initial-sql-binding", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestInitialArtifactOrdinarySQLIsBoundToCompleteDeterministicAtlasPlan(t *te
 // recorded execution contract would otherwise match.
 func TestArtifactFromAnotherPlannerVersionIsRejected(t *testing.T) {
 	manifest := renameBindingManifest(schema.Collection{ID: "articles", Slug: "articles", Fields: []schema.Field{}})
-	artifact, err := BuildArtifact(context.Background(), "other-planner", nil, manifest, nil, false)
+	artifact, err := BuildArtifact(context.Background(), "other-planner", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestStructuredConcurrentIndexPlanIsExactlyBound(t *testing.T) {
 		Key: "guard", GoPackage: "example.com/guard", APIVersion: schema.CurrentPluginAPIVersion,
 	}}
 	manifest := schema.NewManifest(manifestSnapshot)
-	original, err := BuildArtifact(context.Background(), "initial-concurrent-binding", nil, manifest, nil, false)
+	original, err := BuildArtifact(context.Background(), "initial-concurrent-binding", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestPlannerRisksCannotBeRemovedOrDowngraded(t *testing.T) {
 	afterField := atlasTextField("posts-title", "title")
 	before := atlasTestManifest(beforeField)
 	after := atlasTestManifest(afterField)
-	original, err := BuildArtifact(context.Background(), "drop-unique-risk-binding", &before, after, nil, true)
+	original, err := BuildArtifact(context.Background(), "drop-unique-risk-binding", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +332,7 @@ func TestCollectionRenameTamperingCannotDisguiseResourceRetirement(t *testing.T)
 		schema.Collection{ID: "retired-a", Slug: "retired-a", Fields: []schema.Field{}},
 	)
 	after := renameBindingManifest(schema.Collection{ID: "keepers", Slug: "keepers", Fields: []schema.Field{}})
-	original, err := BuildArtifact(context.Background(), "rename-retirement-tamper", &before, after, nil, true)
+	original, err := BuildArtifact(context.Background(), "rename-retirement-tamper", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,10 +375,10 @@ func TestCollectionRenameBindingsAreOneToOne(t *testing.T) {
 	afterD := schema.Collection{ID: "delta", Slug: "delta", Fields: []schema.Field{}}
 	before := renameBindingManifest(beforeA, beforeC)
 	after := renameBindingManifest(afterB, afterD)
-	original, err := BuildArtifact(context.Background(), "two-collection-renames", &before, after, []Rename{
+	original, err := BuildArtifact(context.Background(), "two-collection-renames", &before, after, ArtifactOptions{Renames: []Rename{
 		{Kind: RenameCollection, BeforeCollection: beforeA, AfterCollection: afterB},
 		{Kind: RenameCollection, BeforeCollection: beforeC, AfterCollection: afterD},
-	}, false)
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,10 +423,10 @@ func TestPlannerTargetNormalizationDoesNotAuthorizeMismatchedRename(t *testing.T
 	afterTarget.Fields = []schema.Field{atlasTextField("posts-title", "title")}
 	before := renameBindingManifest(beforeTarget, beforeOwner)
 	after := renameBindingManifest(afterTarget, afterOwner)
-	artifact, err := BuildArtifact(context.Background(), "mapped-target-shape-mismatch", &before, after, []Rename{
+	artifact, err := BuildArtifact(context.Background(), "mapped-target-shape-mismatch", &before, after, ArtifactOptions{Renames: []Rename{
 		{Kind: RenameCollection, BeforeCollection: beforeTarget, AfterCollection: afterTarget},
 		{Kind: RenameCollection, BeforeCollection: beforeOwner, AfterCollection: afterOwner, Fields: ownerFields},
-	}, false)
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}

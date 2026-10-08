@@ -35,7 +35,7 @@ func TestPostgresRebaselineAdoptsSquashedHistoryAfterDevelopmentSync(t *testing.
 	old, same, next := t.TempDir(), t.TempDir(), t.TempDir()
 	create := func(directory string, manifest schema.Manifest, at int64) migrationartifact.File {
 		t.Helper()
-		artifact, err := BuildArtifact(ctx, "initial", nil, manifest, nil, false)
+		artifact, err := BuildArtifact(ctx, "initial", nil, manifest, ArtifactOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,24 +127,24 @@ func TestPostgresRebaselineRefusesDiscardingRecordedSemanticStep(t *testing.T) {
 	headline := atlasTextField("posts-headline", "headline")
 	before, after := atlasTestManifest(title), atlasTestManifest(headline)
 	old, next := t.TempDir(), t.TempDir()
-	initial, err := BuildArtifact(ctx, "initial", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := migrationartifact.Create(old, "initial", initial, time.Unix(1, 0)); err != nil {
 		t.Fatal(err)
 	}
-	rename, err := BuildArtifact(ctx, "rename-title", &before, after, []Rename{{
+	rename, err := BuildArtifact(ctx, "rename-title", &before, after, ArtifactOptions{Renames: []Rename{{
 		Kind: RenameField, BeforeCollection: before.Snapshot().Collections[0], AfterCollection: after.Snapshot().Collections[0],
 		BeforeField: &title, AfterField: &headline,
-	}}, false)
+	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := migrationartifact.Create(old, "rename-title", rename, time.Unix(2, 0)); err != nil {
 		t.Fatal(err)
 	}
-	squashed, err := BuildArtifact(ctx, "initial", nil, after, nil, false)
+	squashed, err := BuildArtifact(ctx, "initial", nil, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

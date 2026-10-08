@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -171,7 +172,14 @@ func (backend *Store) ReplaceBaseline(ctx context.Context, directory string, opt
 func mongoDBBlockingStep(file migrationartifact.File) string {
 	for _, phase := range file.Artifact.Phases {
 		for _, step := range phase.Steps {
-			if mongoDBRunnerOnlyStep(step.Kind) {
+			var existing migration.ExistingDocuments
+			if step.Kind == migration.StepEnableVersions {
+				var payload migration.EnableVersionsPayload
+				if json.Unmarshal(step.Payload, &payload) == nil {
+					existing = payload.Existing
+				}
+			}
+			if mongoDBRunnerOnlyStep(step.Kind, existing) {
 				return string(step.Kind)
 			}
 		}

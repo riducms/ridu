@@ -126,6 +126,10 @@ Use the migration command that answers the question you have:
   PostgreSQL advisory lock, one atomic SQLite writer transaction, or MongoDB's fenced expiring
   lease and durable step ledger.
 
+If creation stops with `RIDU_VERSIONS_EXISTING_REQUIRED`, a collection or global starts keeping
+versions and the migration needs to know what its stored documents become. See
+[Enabling versions](./migrations/enable-versions.md).
+
 If creation finds a destructive change, review the machine-readable finding and pass
 `--allow-destructive` only when data loss is intentional and rehearsed. Every adapter can confirm
 an unambiguous detected rename to preserve its data. SQLite does this for fields; renaming a

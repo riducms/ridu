@@ -141,11 +141,11 @@ func fieldKindCommitBaseline(t *testing.T, definition projectfile.File, before s
 	var err error
 	switch definition.Database {
 	case projectfile.DatabaseSQLite:
-		_, err = sqlite.CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false)
+		_, err = sqlite.CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), sqlite.ArtifactOptions{})
 	case projectfile.DatabaseMongoDB:
 		_, err = mongodb.CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), mongodb.ArtifactOptions{})
 	case projectfile.DatabasePostgres:
-		artifact, buildErr := postgres.BuildArtifact(ctx, "initial", nil, before, nil, false)
+		artifact, buildErr := postgres.BuildArtifact(ctx, "initial", nil, before, postgres.ArtifactOptions{})
 		if buildErr != nil {
 			t.Fatal(buildErr)
 		}
@@ -483,7 +483,7 @@ func TestDevelopmentFieldKindsAcceptCompatibleStoredValues(t *testing.T) {
 		return fieldKindManifest(t, core.Config{Name: "Compatible", Collections: []core.Collection{{Slug: "posts", Fields: field.Fields{node}}}})
 	}
 	previous := unversioned(field.Text("body"))
-	if _, err := postgres.BuildArtifact(ctx, "textarea", &previous, unversioned(field.Textarea("body")), nil, false); err != nil {
+	if _, err := postgres.BuildArtifact(ctx, "textarea", &previous, unversioned(field.Textarea("body")), postgres.ArtifactOptions{}); err != nil {
 		t.Fatalf("PostgreSQL migration creation refused text → textarea: %v", err)
 	}
 }
@@ -700,11 +700,11 @@ func TestFieldKindMigrationCreationRequiresRecoveryAcrossAdapters(t *testing.T) 
 				var err error
 				switch adapter {
 				case projectfile.DatabaseSQLite:
-					_, err = sqlite.CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false)
+					_, err = sqlite.CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), sqlite.ArtifactOptions{})
 					if err != nil {
 						t.Fatal(err)
 					}
-					_, err = sqlite.CreateArtifact(ctx, directory, "change-kind", after, time.Unix(2, 0), true)
+					_, err = sqlite.CreateArtifact(ctx, directory, "change-kind", after, time.Unix(2, 0), sqlite.ArtifactOptions{AllowDestructive: true})
 				case projectfile.DatabaseMongoDB:
 					_, err = mongodb.CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), mongodb.ArtifactOptions{})
 					if err != nil {
@@ -712,7 +712,7 @@ func TestFieldKindMigrationCreationRequiresRecoveryAcrossAdapters(t *testing.T) 
 					}
 					_, err = mongodb.CreateArtifact(ctx, directory, "change-kind", after, time.Unix(2, 0), mongodb.ArtifactOptions{AllowDestructive: true})
 				case projectfile.DatabasePostgres:
-					_, err = postgres.BuildArtifact(ctx, "change-kind", &before, after, nil, true)
+					_, err = postgres.BuildArtifact(ctx, "change-kind", &before, after, postgres.ArtifactOptions{AllowDestructive: true})
 				}
 				if err == nil || !strings.Contains(err.Error(), expected[adapter][test.name]) {
 					t.Fatalf("schema-only incompatible field migration = %v", err)
@@ -735,10 +735,10 @@ func TestFieldKindMigrationCreationAdmitsTransforms(t *testing.T) {
 		directory := t.TempDir()
 		switch adapter {
 		case projectfile.DatabaseSQLite:
-			if _, err := sqlite.CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), false); err != nil {
+			if _, err := sqlite.CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), sqlite.ArtifactOptions{}); err != nil {
 				t.Fatal(err)
 			}
-			_, err := sqlite.CreateArtifact(ctx, directory, "convert", after, time.Unix(2, 0), true, descriptor)
+			_, err := sqlite.CreateArtifact(ctx, directory, "convert", after, time.Unix(2, 0), sqlite.ArtifactOptions{AllowDestructive: true, DataTransforms: []migration.DataTransformDescriptor{descriptor}})
 			return err
 		case projectfile.DatabaseMongoDB:
 			if _, err := mongodb.CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), mongodb.ArtifactOptions{}); err != nil {
@@ -747,7 +747,7 @@ func TestFieldKindMigrationCreationAdmitsTransforms(t *testing.T) {
 			_, err := mongodb.CreateArtifact(ctx, directory, "convert", after, time.Unix(2, 0), mongodb.ArtifactOptions{AllowDestructive: true, DataTransforms: []migration.DataTransformDescriptor{descriptor}})
 			return err
 		default:
-			artifact, err := postgres.BuildArtifact(ctx, "convert", &before, after, nil, true, descriptor)
+			artifact, err := postgres.BuildArtifact(ctx, "convert", &before, after, postgres.ArtifactOptions{AllowDestructive: true, DataTransforms: []migration.DataTransformDescriptor{descriptor}})
 			if err != nil {
 				return err
 			}

@@ -63,7 +63,7 @@ func (backend *Store) adoptMongoMigrationReplay(ctx context.Context, lease *mong
 	}
 	blockingStep := func(file migrationartifact.File) string {
 		for _, step := range replay[positions[file.Name]].steps {
-			if mongoDBRunnerOnlyStep(step.kind) {
+			if mongoDBRunnerOnlyStep(step.kind, step.enableExisting) {
 				return string(step.kind)
 			}
 		}

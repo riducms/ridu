@@ -58,7 +58,7 @@ func TestPostgresEmbeddedRetainedJSONRequiresTransform(t *testing.T) {
 			}
 			after := schema.NewManifest(snapshot)
 			for _, destructive := range []bool{false, true} {
-				if _, err := BuildArtifact(t.Context(), "retained-json-change", &before, after, nil, destructive); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
+				if _, err := BuildArtifact(t.Context(), "retained-json-change", &before, after, ArtifactOptions{AllowDestructive: destructive}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 					t.Errorf("planner admitted a surviving JSON value (destructive=%v): %v", destructive, err)
 				}
 			}
@@ -113,7 +113,7 @@ func TestPostgresEmbeddedRemovalDefersOnlyToPhysicalRootRemoval(t *testing.T) {
 			case "global":
 				snapshot.Globals = nil
 			}
-			artifact, err := BuildArtifact(t.Context(), "remove-physical-root", &before, schema.NewManifest(snapshot), nil, true)
+			artifact, err := BuildArtifact(t.Context(), "remove-physical-root", &before, schema.NewManifest(snapshot), ArtifactOptions{AllowDestructive: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -139,7 +139,7 @@ func TestPostgresEmbeddedRetainedJSONFollowsConfirmedRootRename(t *testing.T) {
 	snapshot.Collections[0].Fields[0] = afterRoot
 	after := schema.NewManifest(snapshot)
 	renames := []Rename{{Kind: RenameField, BeforeCollection: before.Snapshot().Collections[0], AfterCollection: snapshot.Collections[0], BeforeField: &beforeRoot, AfterField: &afterRoot}}
-	if _, err := BuildArtifact(t.Context(), "rename-retained-root", &before, after, renames, true); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
+	if _, err := BuildArtifact(t.Context(), "rename-retained-root", &before, after, ArtifactOptions{Renames: renames, AllowDestructive: true}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 		t.Fatalf("renamed JSON root was mistaken for removed storage: %v", err)
 	}
 }
@@ -164,7 +164,7 @@ func TestPostgresEmbeddedOwnContractAllowsConfirmedFieldRename(t *testing.T) {
 	afterOwner := after.Snapshot().Collections[0]
 	afterField = afterOwner.Fields[0]
 	renames := []Rename{{Kind: RenameField, BeforeCollection: before.Snapshot().Collections[0], AfterCollection: afterOwner, BeforeField: &beforeField, AfterField: &afterField}}
-	artifact, err := BuildArtifact(t.Context(), "rename-embedded-field", &before, after, renames, false)
+	artifact, err := BuildArtifact(t.Context(), "rename-embedded-field", &before, after, ArtifactOptions{Renames: renames})
 	if err != nil {
 		t.Fatalf("confirmed field rename: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestPostgresEmbeddedPayloadRenameStillRequiresTransform(t *testing.T) {
 	// A collection rename also maps descendant identities. That mapping cannot
 	// authorize a payload-key rewrite the ordinary content rewriter cannot do.
 	renames := []Rename{postgresRenameFromCandidate(candidates[0])}
-	if _, err := BuildArtifact(t.Context(), "rename-embedded-payload", &before, after, renames, false); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
+	if _, err := BuildArtifact(t.Context(), "rename-embedded-payload", &before, after, ArtifactOptions{Renames: renames}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 		t.Fatalf("planner admitted an embedded payload rename: %v", err)
 	}
 }

@@ -263,7 +263,7 @@ func publishedUniqueAdmissionFixture(t *testing.T, config ridu.Config) (*Store, 
 	}
 	backend := migrationArtifactTestBackend(t)
 	directory := t.TempDir()
-	if _, err := CreateArtifact(t.Context(), directory, "initial", manifest, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(t.Context(), directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(t.Context(), directory); err != nil {

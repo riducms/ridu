@@ -25,7 +25,7 @@ func TestPostgresPrimitiveListArtifactPhysicalSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := BuildArtifact(t.Context(), "initial", nil, manifest, nil, false)
+	artifact, err := BuildArtifact(t.Context(), "initial", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

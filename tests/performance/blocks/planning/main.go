@@ -267,10 +267,10 @@ func createInitial(ctx context.Context, adapter, directory string, manifest sche
 	now := time.Unix(1, 0)
 	switch adapter {
 	case "postgres":
-		_, err := postgres.CreateArtifact(ctx, directory, "initial", manifest, now, nil, false)
+		_, err := postgres.CreateArtifact(ctx, directory, "initial", manifest, now, postgres.ArtifactOptions{})
 		return err
 	case "sqlite":
-		_, err := sqlite.CreateArtifact(ctx, directory, "initial", manifest, now, false)
+		_, err := sqlite.CreateArtifact(ctx, directory, "initial", manifest, now, sqlite.ArtifactOptions{})
 		return err
 	case "mongodb":
 		_, err := mongodb.CreateArtifact(ctx, directory, "initial", manifest, now, mongodb.ArtifactOptions{})
@@ -472,7 +472,7 @@ func createChange(ctx context.Context, item job, after schema.Manifest) (int, er
 	now := time.Unix(2, 0)
 	switch item.Adapter {
 	case "postgres":
-		_, err = postgres.CreateArtifact(ctx, item.Migrations, "change", after, now, postgresRenames(candidates), false)
+		_, err = postgres.CreateArtifact(ctx, item.Migrations, "change", after, now, postgres.ArtifactOptions{Renames: postgresRenames(candidates)})
 	case "sqlite":
 		var fields []schemadiff.RenameCandidate
 		for _, candidate := range candidates {
@@ -482,9 +482,9 @@ func createChange(ctx context.Context, item job, after schema.Manifest) (int, er
 		}
 		candidates = fields
 		if len(candidates) != 0 {
-			_, err = sqlite.CreateArtifactWithRenames(ctx, item.Migrations, "change", after, now, contentRenames(candidates))
+			_, err = sqlite.CreateArtifact(ctx, item.Migrations, "change", after, now, sqlite.ArtifactOptions{Renames: contentRenames(candidates)})
 		} else {
-			_, err = sqlite.CreateArtifact(ctx, item.Migrations, "change", after, now, false)
+			_, err = sqlite.CreateArtifact(ctx, item.Migrations, "change", after, now, sqlite.ArtifactOptions{})
 		}
 	case "mongodb":
 		_, err = mongodb.CreateArtifact(ctx, item.Migrations, "change", after, now, mongodb.ArtifactOptions{Renames: contentRenames(candidates)})
@@ -610,7 +610,7 @@ func createDevelopmentRename(ctx context.Context, item job, previous, after sche
 			_, err := mongodb.CreateArtifact(ctx, item.Migrations, name, target, now, mongodb.ArtifactOptions{Renames: contentRenames(candidates)})
 			return err
 		default:
-			artifact, err := postgres.BuildArtifact(ctx, name, before, target, postgresRenames(candidates), false)
+			artifact, err := postgres.BuildArtifact(ctx, name, before, target, postgres.ArtifactOptions{Renames: postgresRenames(candidates)})
 			if err != nil {
 				return err
 			}

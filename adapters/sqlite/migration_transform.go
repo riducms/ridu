@@ -8,12 +8,16 @@ import (
 	"reflect"
 
 	"github.com/riducms/ridu/internal/datatransform"
+	"github.com/riducms/ridu/internal/enableversions"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
 
-func buildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, transforms []ridumigration.DataTransformDescriptor, allowTransformedSchema bool) (ridumigration.Artifact, error) {
+func buildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, transforms []ridumigration.DataTransformDescriptor, allowTransformedSchema bool, existing enableversions.Choices) (ridumigration.Artifact, error) {
+	if len(transforms) != 0 && len(existing) != 0 {
+		return ridumigration.Artifact{}, fmt.Errorf("enable versions in a SQLite migration of its own; it cannot share one with data transforms")
+	}
 	if len(transforms) != 0 && before != nil {
 		fromDigest, err := ridumigration.DigestManifest(*before)
 		if err != nil {
@@ -31,12 +35,12 @@ func buildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name s
 			return bindSQLiteDataTransforms(artifact, transforms)
 		}
 	}
-	artifact, err := buildSQLiteArtifactWithValidation(ctx, name, before, after, validateSQLiteAdditiveTransition, nil)
+	artifact, err := buildSQLiteArtifactWithValidation(ctx, name, before, after, validateSQLiteAdditiveTransition, nil, existing)
 	if err != nil {
 		if len(transforms) == 0 || !allowTransformedSchema {
 			return ridumigration.Artifact{}, err
 		}
-		artifact, err = buildSQLiteArtifactWithValidation(ctx, name, before, after, validateSQLiteTransformedTransition, nil)
+		artifact, err = buildSQLiteArtifactWithValidation(ctx, name, before, after, validateSQLiteTransformedTransition, nil, existing)
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}

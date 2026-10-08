@@ -34,7 +34,7 @@ func TestSQLitePlanningFollowsDefinitions(t *testing.T) {
 			costs[change.Name] = testing.AllocsPerRun(2, func() {
 				var err error
 				if len(renames) != 0 {
-					_, err = buildSQLiteArtifactWithRenames(ctx, change.Name, &before, after, renames)
+					_, err = buildSQLiteArtifactWithRenames(ctx, change.Name, &before, after, renames, nil)
 				} else {
 					_, err = planArtifact(ctx, change.Name, &before, after, false)
 				}

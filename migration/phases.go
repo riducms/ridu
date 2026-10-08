@@ -132,6 +132,38 @@ type AuditRequiredValuesPayload struct {
 	Fields []RequiredFieldAddress `json:"fields"`
 }
 
+// ExistingDocuments is what becomes of the documents a collection or global
+// already stores when it starts keeping versions.
+type ExistingDocuments string
+
+const (
+	// ExistingPublished publishes each document with a matching draft, so every
+	// reader keeps seeing what they saw before.
+	ExistingPublished ExistingDocuments = "published"
+	// ExistingDraft keeps each document as an unpublished draft, which no
+	// public reader sees until it is published. It needs drafts.
+	ExistingDraft ExistingDocuments = "draft"
+	// ExistingRequireEmpty stops the migration while the resource stores a
+	// document, trashed documents included.
+	ExistingRequireEmpty ExistingDocuments = "require-empty"
+)
+
+// ParseExistingDocuments reads one ExistingDocuments choice.
+func ParseExistingDocuments(value string) (ExistingDocuments, error) {
+	switch existing := ExistingDocuments(value); existing {
+	case ExistingPublished, ExistingDraft, ExistingRequireEmpty:
+		return existing, nil
+	}
+	return "", fmt.Errorf("existing documents must be published, draft or require-empty, not %q", value)
+}
+
+// EnableVersionsPayload names one resource that starts keeping versions and
+// what becomes of the documents it already stores.
+type EnableVersionsPayload struct {
+	ResourceID schema.StableID   `json:"resourceId"`
+	Existing   ExistingDocuments `json:"existing"`
+}
+
 // RequiredFieldAddress identifies a field of the artifact's after manifest.
 // With a resource stable ID, Path is its canonical path in that resource: a
 // path through a blocks field names the block type, as in layout.hero.heading.
@@ -256,6 +288,8 @@ func (artifact Artifact) validate() error {
 	var retiredResourceIDs []schema.StableID
 	var mongoDBDroppedResourceIDs []schema.StableID
 	var mongoDBResourceRenames []MongoDBRenameResourcePayload
+	enabledVersions := make(map[schema.StableID]ExistingDocuments)
+	rewritesContent := false
 	retirementPhaseIndex, retirementStepIndex := -1, -1
 	mongoDBDropPhaseIndex := -1
 	lastStepKind := StepKind("")
@@ -328,6 +362,19 @@ func (artifact Artifact) validate() error {
 				}
 				mongoDBDroppedResourceIDs = append(mongoDBDroppedResourceIDs, payload.ResourceIDs...)
 			}
+			if step.Kind == StepEnableVersions {
+				var payload EnableVersionsPayload
+				if err := json.Unmarshal(step.Payload, &payload); err != nil {
+					return fmt.Errorf("migration %s step %s has malformed enable-versions payload", artifact.Name, step.ID)
+				}
+				if _, duplicate := enabledVersions[payload.ResourceID]; duplicate {
+					return fmt.Errorf("migration %s enables versions on %s more than once", artifact.Name, payload.ResourceID)
+				}
+				enabledVersions[payload.ResourceID] = payload.Existing
+			}
+			if step.Kind == StepRenameContent || step.Kind == StepDataTransform {
+				rewritesContent = true
+			}
 			if step.Kind == StepMongoDBRenameResource {
 				var payload MongoDBRenameResourcePayload
 				if err := json.Unmarshal(step.Payload, &payload); err != nil {
@@ -371,6 +418,9 @@ func (artifact Artifact) validate() error {
 	} else if mongoDBSteps != 0 {
 		return fmt.Errorf("migration %s uses MongoDB physical steps with planner %q", artifact.Name, artifact.Planner.Name)
 	}
+	if err := artifact.validateEnabledVersions(enabledVersions, collectionRenames, rewritesContent); err != nil {
+		return fmt.Errorf("migration %s %w", artifact.Name, err)
+	}
 	expectedRetiredResourceIDs := artifact.removedResourceIDs(collectionRenames)
 	if retirementSteps > 1 || !sameStableIDs(retiredResourceIDs, expectedRetiredResourceIDs) {
 		return fmt.Errorf("migration %s resource retirement does not exactly match removed resources: got %v, want %v", artifact.Name, retiredResourceIDs, expectedRetiredResourceIDs)
@@ -400,6 +450,61 @@ func (artifact Artifact) validate() error {
 		}
 	}
 	return nil
+}
+
+// validateEnabledVersions requires one recorded choice for each resource that
+// starts keeping versions, and nothing else that rewrites stored content.
+func (artifact Artifact) validateEnabledVersions(recorded map[schema.StableID]ExistingDocuments, collectionRenames map[schema.StableID]schema.StableID, rewritesContent bool) error {
+	starting := make(map[schema.StableID]schema.Collection)
+	if artifact.Before != nil {
+		for _, resource := range VersionsEnabled(*artifact.Before, artifact.After, collectionRenames) {
+			starting[resource.ID] = resource
+		}
+	}
+	for id, existing := range recorded {
+		resource, found := starting[id]
+		if !found {
+			return fmt.Errorf("records existing documents for %s, which does not start keeping versions", id)
+		}
+		if existing == ExistingDraft && (resource.Versions == nil || !resource.Versions.Drafts) {
+			return fmt.Errorf("keeps existing documents of %s as drafts, but it does not enable drafts", resource.Slug)
+		}
+	}
+	for id, resource := range starting {
+		if _, found := recorded[id]; !found {
+			return fmt.Errorf("enables versions on %s without recording what its existing documents become", resource.Slug)
+		}
+	}
+	if len(recorded) != 0 && rewritesContent {
+		return fmt.Errorf("enables versions alongside content renames or data transforms; enable versions in a migration of its own")
+	}
+	return nil
+}
+
+// VersionsEnabled returns the resources of after, collections then globals,
+// that keep versions while the same resource in before does not. renames maps
+// a renamed collection's before stable ID to its after one. Any other
+// resource new in after starts versioned with nothing stored.
+func VersionsEnabled(before, after schema.Snapshot, renames map[schema.StableID]schema.StableID) []schema.Collection {
+	var enabled []schema.Collection
+	collect := func(previous, current []schema.Collection) {
+		unversioned := make(map[schema.StableID]bool, len(previous))
+		for _, resource := range previous {
+			id := resource.ID
+			if renamed := renames[id]; renamed != "" {
+				id = renamed
+			}
+			unversioned[id] = resource.Versions == nil && !resource.Capabilities.Versions
+		}
+		for _, resource := range current {
+			if unversioned[resource.ID] && (resource.Versions != nil || resource.Capabilities.Versions) {
+				enabled = append(enabled, resource)
+			}
+		}
+	}
+	collect(before.Collections, after.Collections)
+	collect(before.Globals, after.Globals)
+	return enabled
 }
 
 func sameMongoDBResourceRenameBindings(actual []MongoDBRenameResourcePayload, expected map[schema.StableID]schema.StableID) bool {
@@ -635,6 +740,17 @@ func validateStepPayload(mode PhaseMode, step Step) error {
 		var payload AuditRequiredValuesPayload
 		if err := decodeStrictJSON(step.Payload, &payload); err != nil || validateRequiredFieldAddresses(payload.Fields) != nil {
 			return fmt.Errorf("malformed required-value audit payload")
+		}
+	case StepEnableVersions:
+		if mode != PhaseTransaction {
+			return fmt.Errorf("enabling versions is allowed only in a transaction phase")
+		}
+		var payload EnableVersionsPayload
+		if err := decodeStrictJSON(step.Payload, &payload); err != nil || !schema.IsValidStableID(string(payload.ResourceID)) {
+			return fmt.Errorf("malformed enable-versions payload")
+		}
+		if _, err := ParseExistingDocuments(string(payload.Existing)); err != nil {
+			return fmt.Errorf("malformed enable-versions payload: %w", err)
 		}
 	case StepConcurrentIndex:
 		if mode != PhaseNoTransaction {

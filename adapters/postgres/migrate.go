@@ -10,7 +10,6 @@ import (
 	atlasschema "ariga.io/atlas/sql/schema"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/riducms/ridu/internal/primitivefield"
-	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -113,16 +112,15 @@ func (backend *Store) VerifySchema(ctx context.Context, manifest schema.Manifest
 }
 
 // planPostgresDevelopmentSchema returns the safe Atlas changes that bring the
-// physical schema to manifest. It refuses destructive changes.
+// physical schema to manifest. It refuses destructive changes. Its caller has
+// already refused to start keeping versions on a resource that stores
+// documents, so a newly versioned resource gets its live table here.
 func planPostgresDevelopmentSchema(ctx context.Context, transaction *sql.Tx, manifest schema.Manifest) ([]developmentStatement, error) {
 	previous, err := readPostgresDevelopmentManifest(ctx, transaction)
 	if err != nil {
 		return nil, err
 	}
 	if previous != nil {
-		if err := schemadiff.RejectVersionsEnable(previous.Snapshot(), manifest.Snapshot(), nil); err != nil {
-			return nil, err
-		}
 		referencesCurrent, err := transactionColumnExists(ctx, transaction, "ridu_document_references", "published_head")
 		if err != nil {
 			return nil, err

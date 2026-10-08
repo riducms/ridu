@@ -105,6 +105,10 @@ const (
 	// no value for a field the artifact makes required. It runs after every
 	// data transform in its transaction, so a transform can backfill values.
 	StepAuditRequiredValues StepKind = "audit_required_values"
+	// StepEnableVersions turns the documents a resource already stores into
+	// versioned documents when it starts keeping versions, as its payload's
+	// ExistingDocuments choice says.
+	StepEnableVersions StepKind = "enable_versions"
 )
 
 // DataTransformDescriptor is the immutable artifact identity of one compiled
@@ -259,6 +263,8 @@ type Operation struct {
 	PurgeVersionOwnerIDs []schema.StableID `json:"purgeVersionOwnerIds,omitempty"`
 	// RequiredFields is present only for StepAuditRequiredValues.
 	RequiredFields []RequiredFieldAddress `json:"requiredFields,omitempty"`
+	// EnableVersions is present only for StepEnableVersions.
+	EnableVersions *EnableVersionsPayload `json:"enableVersions,omitempty"`
 }
 
 // Artifact is the immutable source of truth for one migration. It embeds both

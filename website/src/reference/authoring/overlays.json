@@ -23582,6 +23582,11 @@
 					"description": "Refuse the migration while a stored document has no value for a field it makes required."
 				},
 				{
+					"name": "StepEnableVersions",
+					"type": "\"enable_versions\"",
+					"description": "Turn a resource's stored documents into versioned documents as its recorded choice says."
+				},
+				{
 					"name": "StepConcurrentIndex",
 					"type": "\"concurrent_index\"",
 					"description": "Create or drop one index outside a transaction."
@@ -63570,12 +63575,18 @@
 					"description": "SQLite or MongoDB: bind a named compiled data transform to the immutable artifact."
 				},
 				{
+					"name": "--versions-existing",
+					"type": "string",
+					"description": "What the stored documents of every collection or global that starts keeping versions become: published, draft (needs drafts) or require-empty. Without it, create asks in a terminal and otherwise fails."
+				},
+				{
 					"name": "--allow-destructive",
 					"type": "boolean",
 					"description": "Record destructive changes confirmed by the selected adapter planner after explicit review."
 				}
 			],
 			"details": [
+				"A collection or global that starts keeping versions needs a recorded choice about its stored documents, from --versions-existing or a prompt; enable versions in a migration without renames or transforms.",
 				"Rename candidates require confirmation or --accept-renames. SQLite confirms field renames this way and uses --transform for any other rewrite of stored canonical JSON; one SQLite migration takes either renames or a transform. MongoDB transforms run through the compiled project migration driver. Destructive approval does not bypass semantic transitions Ridu cannot safely automate."
 			],
 			"example": "ridu migrate create --name rename-post-title\ngit diff -- migrations/",

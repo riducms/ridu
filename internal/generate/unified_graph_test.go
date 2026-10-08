@@ -79,11 +79,11 @@ func TestUnifiedGraphGenerationExpectedContractAndDeterminism(t *testing.T) {
 	}
 	runGeneratedGoConsumer(t, generated, unifiedGeneratedGoConsumer)
 	t.Run("PostgreSQL schema plan", func(t *testing.T) {
-		a, err := postgres.BuildArtifact(t.Context(), "initial", nil, repeated, nil, false)
+		a, err := postgres.BuildArtifact(t.Context(), "initial", nil, repeated, postgres.ArtifactOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		b, err := postgres.BuildArtifact(t.Context(), "initial", nil, graph, nil, false)
+		b, err := postgres.BuildArtifact(t.Context(), "initial", nil, graph, postgres.ArtifactOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func TestUnifiedGraphGenerationExpectedContractAndDeterminism(t *testing.T) {
 			create := func(manifest schema.Manifest) []byte {
 				var path string
 				if adapter == "SQLite" {
-					artifact, err := sqlite.CreateArtifact(t.Context(), t.TempDir(), "initial", manifest, time.Unix(1, 0), false)
+					artifact, err := sqlite.CreateArtifact(t.Context(), t.TempDir(), "initial", manifest, time.Unix(1, 0), sqlite.ArtifactOptions{})
 					if err != nil {
 						t.Fatal(err)
 					}

@@ -33,8 +33,9 @@ type RunnerOptions struct {
 	// fall back to plaintext. It is intended only for local migration drills.
 	AllowInsecureDatabase bool
 	// AllowMaintenance admits traffic-sensitive semantic steps such as content
-	// rewrites, compiled data transforms, resource retirement, and
-	// reference-index rebuilds. Every old writer must be stopped while they run.
+	// rewrites, compiled data transforms, conversion of stored documents to
+	// versioned documents, resource retirement, and reference-index rebuilds.
+	// Every old writer must be stopped while they run.
 	// It does not relax artifact validation.
 	AllowMaintenance bool
 	// AllowUnbounded permits a zero operational timeout. Without this explicit
@@ -74,7 +75,7 @@ type MaintenanceRequiredError struct {
 }
 
 func (err *MaintenanceRequiredError) Error() string {
-	return fmt.Sprintf("%v for a traffic-sensitive content rewrite, compiled data transform, resource retirement, or reference-index rebuild in %s; stop every application process, writer, and worker through completion and every retry, then retry with explicit maintenance admission", ErrMaintenanceRequired, strings.Join(err.Artifacts, ", "))
+	return fmt.Sprintf("%v for a traffic-sensitive content rewrite, compiled data transform, conversion of stored documents to versions, resource retirement, or reference-index rebuild in %s; stop every application process, writer, and worker through completion and every retry, then retry with explicit maintenance admission", ErrMaintenanceRequired, strings.Join(err.Artifacts, ", "))
 }
 
 func (err *MaintenanceRequiredError) Is(target error) bool {
@@ -724,7 +725,7 @@ func sameStableIDList(left, right []schema.StableID) bool {
 func artifactRequiresMaintenance(artifact ridumigration.Artifact) bool {
 	for _, phase := range artifact.Phases {
 		for _, step := range phase.Steps {
-			if migrationStepRequiresMaintenance(step.Kind) {
+			if migrationStepRequiresMaintenance(step) {
 				return true
 			}
 		}
@@ -741,8 +742,28 @@ func snapshotHasAuthCollections(snapshot schema.Snapshot) bool {
 	return false
 }
 
-func migrationStepRequiresMaintenance(kind ridumigration.StepKind) bool {
-	return kind == ridumigration.StepRenameContent || kind == ridumigration.StepBackfillReferences || kind == ridumigration.StepRetireResources || kind == ridumigration.StepDataTransform
+// migrationStepRequiresMaintenance reports whether every old writer must be
+// stopped while a step runs. Most such steps rewrite stored content. A
+// require-empty check rewrites nothing, but an old writer could store an
+// unversioned document after it and before the versioned columns exist.
+func migrationStepRequiresMaintenance(step ridumigration.Step) bool {
+	switch step.Kind {
+	case ridumigration.StepRenameContent, ridumigration.StepBackfillReferences, ridumigration.StepRetireResources,
+		ridumigration.StepDataTransform, ridumigration.StepEnableVersions:
+		return true
+	}
+	return false
+}
+
+// migrationStepBlocksAdoption reports a maintenance step schema sync never
+// performs, so baseline adoption cannot record it as applied. Schema sync
+// enables versions only on a resource that stores nothing, which is all a
+// require-empty step checks.
+func migrationStepBlocksAdoption(step ridumigration.Step) bool {
+	if step.Kind == ridumigration.StepEnableVersions {
+		return enableVersionsRewritesDocuments(step)
+	}
+	return migrationStepRequiresMaintenance(step)
 }
 
 type artifactLedgerRow struct {

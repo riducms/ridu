@@ -23,7 +23,7 @@ func TestPostgresPublishedHeadAndDraftLifecycle(t *testing.T) {
 	})
 	collection := manifest.Snapshot().Collections[0]
 	directory := t.TempDir()
-	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -147,7 +147,7 @@ func TestPostgresPublishedCompoundUniqueAcrossHeads(t *testing.T) {
 	})
 	collection := manifest.Snapshot().Collections[0]
 	directory := t.TempDir()
-	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -231,7 +231,7 @@ func TestPostgresPublishedHeadTrashMetadata(t *testing.T) {
 	})
 	collection := manifest.Snapshot().Collections[0]
 	directory := t.TempDir()
-	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -303,7 +303,7 @@ func TestPostgresPublishedReferencesRespectNullifyAndCascade(t *testing.T) {
 				collections[collection.ID] = collection
 			}
 			directory := t.TempDir()
-			if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), nil, false); err != nil {
+			if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := backend.ApplyArtifacts(ctx, directory); err != nil {

@@ -57,7 +57,7 @@ func TestPostgresReadinessRechecksAfterDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	artifact, err := postgres.BuildArtifact(ctx, "initial", nil, manifest, nil, false)
+	artifact, err := postgres.BuildArtifact(ctx, "initial", nil, manifest, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -27,7 +27,7 @@ func TestSQLiteBaselineReplacementRefusesStaleExecutableHeadWithoutChangingHisto
 	}
 	oldDirectory, replacementDirectory := filepath.Join(root, "previous"), filepath.Join(root, "migrations")
 	for index, directory := range []string{oldDirectory, replacementDirectory} {
-		if _, err := sqlite.CreateArtifact(ctx, directory, "initial", oldManifest, time.Unix(int64(index+1), 0), false); err != nil {
+		if _, err := sqlite.CreateArtifact(ctx, directory, "initial", oldManifest, time.Unix(int64(index+1), 0), sqlite.ArtifactOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -70,7 +70,7 @@ func TestSQLiteBaselineReplacementAsksBeforeRewritingHistoryAtTheRecordedHead(t 
 	}
 	oldDirectory, replacementDirectory := filepath.Join(root, "previous"), filepath.Join(root, "migrations")
 	for index, directory := range []string{oldDirectory, replacementDirectory} {
-		if _, err := sqlite.CreateArtifact(ctx, directory, "initial", manifest, time.Unix(int64(index+1), 0), false); err != nil {
+		if _, err := sqlite.CreateArtifact(ctx, directory, "initial", manifest, time.Unix(int64(index+1), 0), sqlite.ArtifactOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}

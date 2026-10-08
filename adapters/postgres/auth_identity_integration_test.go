@@ -18,7 +18,7 @@ func TestPostgresAuthIdentityCanonicalizationAtDirectStoreBoundary(t *testing.T)
 	backend := migrationArtifactTestBackend(t)
 	manifest := postgresAuthIdentityManifest()
 	directory := t.TempDir()
-	initial, err := BuildArtifact(ctx, "canonical-auth", nil, manifest, nil, false)
+	initial, err := BuildArtifact(ctx, "canonical-auth", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,7 +20,7 @@ func TestSQLiteCLICommandsExecuteFinalValidatedHistorySnapshot(t *testing.T) {
 	ctx := context.Background()
 	directory := t.TempDir()
 	manifest := resolveSQLiteCLITestManifest(t, false)
-	created, err := sqlite.CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), false)
+	created, err := sqlite.CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), sqlite.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestSQLiteCLICommandsExecuteFinalValidatedHistorySnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	replacementManifest := resolveSQLiteCLITestManifest(t, true)
-	if _, err := sqlite.CreateArtifact(ctx, directory, "replacement", replacementManifest, time.Unix(2, 0), false); err != nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "replacement", replacementManifest, time.Unix(2, 0), sqlite.ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 

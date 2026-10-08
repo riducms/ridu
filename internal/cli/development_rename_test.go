@@ -291,10 +291,10 @@ func TestDevelopmentRenameRetryRequiresTheRecordedRenames(t *testing.T) {
 		t.Fatalf("rename candidates = %#v", accepted)
 	}
 	directory := t.TempDir()
-	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", previous, time.Unix(1, 0), false); err != nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", previous, time.Unix(1, 0), sqlite.ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sqlite.CreateArtifactWithRenames(ctx, directory, "rename", current, time.Unix(2, 0), contentRenames(accepted)); err != nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "rename", current, time.Unix(2, 0), sqlite.ArtifactOptions{Renames: contentRenames(accepted)}); err != nil {
 		t.Fatal(err)
 	}
 	files, err := migrationartifact.ReadAll(directory)
@@ -405,7 +405,7 @@ func TestDevelopmentRenameAcceptedMigratesTheDevelopmentDatabase(t *testing.T) {
 	definition := devRenameProject(t, previous)
 	directory := definition.Absolute(definition.Migrations)
 
-	initial, err := postgres.BuildArtifact(ctx, "initial", nil, committed, nil, false)
+	initial, err := postgres.BuildArtifact(ctx, "initial", nil, committed, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,7 +488,7 @@ func TestDevelopmentRenameLeavesADriftedDatabaseToSchemaSync(t *testing.T) {
 	current := devRenameManifest(t, devRenameConfig(field.Text("headline")))
 	definition := devRenameProject(t, previous)
 	directory := definition.Absolute(definition.Migrations)
-	initial, err := postgres.BuildArtifact(ctx, "initial", nil, previous, nil, false)
+	initial, err := postgres.BuildArtifact(ctx, "initial", nil, previous, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,14 +552,14 @@ func TestDevelopmentRenameRefusesAPendingRemovalThatReachesTheSameConfig(t *test
 	current := devRenameManifest(t, devRenameConfig(field.Text("headline"), field.Number("views")))
 	definition := devRenameProject(t, previous)
 	directory := definition.Absolute(definition.Migrations)
-	initial, err := postgres.BuildArtifact(ctx, "initial", nil, previous, nil, false)
+	initial, err := postgres.BuildArtifact(ctx, "initial", nil, previous, postgres.ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := migrationartifact.Create(directory, "initial", initial, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	removal, err := postgres.BuildArtifact(ctx, "replace-title", &previous, current, nil, true)
+	removal, err := postgres.BuildArtifact(ctx, "replace-title", &previous, current, postgres.ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -658,7 +658,7 @@ func TestDevelopmentRenameAcceptedMovesSQLiteDevelopmentContent(t *testing.T) {
 	previous, current := devRenameManifest(t, synced), devRenameManifest(t, renamed)
 	definition := devRenameProjectOn(t, projectfile.DatabaseSQLite, previous)
 	directory := definition.Absolute(definition.Migrations)
-	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", committed, time.Now(), false); err != nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", committed, time.Now(), sqlite.ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	databasePath := devRenameSQLite(t, definition, previous)
@@ -737,7 +737,7 @@ func TestDevelopmentRenameAcceptedMigratesAManagedSQLiteDatabase(t *testing.T) {
 	previous, current := devRenameManifest(t, original), devRenameManifest(t, renamed)
 	definition := devRenameProjectOn(t, projectfile.DatabaseSQLite, previous)
 	directory := definition.Absolute(definition.Migrations)
-	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", previous, time.Now(), false); err != nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", previous, time.Now(), sqlite.ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	databasePath := filepath.Join(definition.Root, "development.sqlite")
@@ -933,7 +933,7 @@ func TestDevelopmentRenameSQLiteConflictChangesNothingAndRetries(t *testing.T) {
 	previous, current := devRenameManifest(t, original), devRenameManifest(t, renamed)
 	definition := devRenameProjectOn(t, projectfile.DatabaseSQLite, previous)
 	directory := definition.Absolute(definition.Migrations)
-	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", previous, time.Now(), false); err != nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", previous, time.Now(), sqlite.ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	databasePath := devRenameSQLite(t, definition, previous)
@@ -1000,11 +1000,11 @@ func TestDevelopmentRenameLeavesTransformHistoriesToTheProjectBinary(t *testing.
 	current := devRenameManifest(t, devRenameConfig(field.Text("headline")))
 	definition := devRenameProjectOn(t, projectfile.DatabaseSQLite, previous)
 	directory := definition.Absolute(definition.Migrations)
-	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", previous, time.Unix(1, 0), false); err != nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", previous, time.Unix(1, 0), sqlite.ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	descriptor := migration.DataTransformDescriptor{Name: "backfill", Checksum: migration.DataTransformChecksum([]byte("backfill-v1"))}
-	if _, err := sqlite.CreateArtifact(ctx, directory, "backfill", previous, time.Unix(2, 0), false, descriptor); err != nil {
+	if _, err := sqlite.CreateArtifact(ctx, directory, "backfill", previous, time.Unix(2, 0), sqlite.ArtifactOptions{DataTransforms: []migration.DataTransformDescriptor{descriptor}}); err != nil {
 		t.Fatal(err)
 	}
 	databasePath := filepath.Join(definition.Root, "development.sqlite")
@@ -1063,7 +1063,7 @@ func TestDevelopmentRenameWithoutATerminalHoldsUntilResolved(t *testing.T) {
 		"sqlite": func(t *testing.T, root string) devRenameHeldDatabase {
 			databasePath := filepath.Join(root, "development.sqlite")
 			return devRenameHeldDatabase{adapter: projectfile.DatabaseSQLite, databasePath: databasePath, migrate: func(t *testing.T, directory string, previous, current schema.Manifest) {
-				if _, err := sqlite.CreateArtifactWithRenames(ctx, directory, "rename-title", current, time.Now(), contentRenames(accepted)); err != nil {
+				if _, err := sqlite.CreateArtifact(ctx, directory, "rename-title", current, time.Now(), sqlite.ArtifactOptions{Renames: contentRenames(accepted)}); err != nil {
 					t.Fatal(err)
 				}
 				backend := devRenameSQLiteStore(t, databasePath)
@@ -1078,7 +1078,7 @@ func TestDevelopmentRenameWithoutATerminalHoldsUntilResolved(t *testing.T) {
 		"postgres": func(t *testing.T, root string) devRenameHeldDatabase {
 			databaseURL, backend := devRenameDatabase(t)
 			return devRenameHeldDatabase{adapter: projectfile.DatabasePostgres, databaseURL: databaseURL, migrate: func(t *testing.T, directory string, previous, current schema.Manifest) {
-				artifact, err := postgres.BuildArtifact(ctx, "rename-title", &previous, current, postgresRenames(accepted), false)
+				artifact, err := postgres.BuildArtifact(ctx, "rename-title", &previous, current, postgres.ArtifactOptions{Renames: postgresRenames(accepted)})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1123,7 +1123,7 @@ func TestDevelopmentRenameWithoutATerminalHoldsUntilResolved(t *testing.T) {
 			// The committed history and the development database both have the
 			// old schema, and ridu dev recorded that after its last sync.
 			initial, _ := devRenameWithoutTerminal(database.databaseURL, database.databasePath)
-			if _, err := initial.createMigration(ctx, database.adapter, directory, "initial", nil, previous, nil); err != nil {
+			if _, err := initial.createMigration(ctx, database.adapter, directory, "initial", nil, previous, developmentSettlement{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := synchronize(previous); err != nil {

@@ -23,6 +23,7 @@ import (
 	"github.com/riducms/ridu/adapters/postgres"
 	"github.com/riducms/ridu/adapters/sqlite"
 	"github.com/riducms/ridu/internal/agentdocs"
+	"github.com/riducms/ridu/internal/fileuri"
 	"github.com/riducms/ridu/internal/generate"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/pluginregistry"
@@ -673,6 +674,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 	name := flags.String("name", "", "lowercase kebab-case migration name")
 	transformName := flags.String("transform", "", "compiled data-transform name to bind to the immutable migration artifact")
 	acceptRenames := flags.Bool("accept-renames", false, "accept every unambiguous detected rename without prompting")
+	versionsExisting := flags.String("versions-existing", "", "what the stored documents of a collection or global that starts keeping versions become: published, draft or require-empty")
 	allowDestructive := flags.Bool("allow-destructive", false, "approve reviewed destructive planning or lifecycle work")
 	allowMaintenance := flags.Bool("allow-maintenance", false, "admit traffic-sensitive steps after stopping every application process and worker through completion and retries (up only; verify's private shadow needs none)")
 	jsonOutput := flags.Bool("json", false, "emit machine-readable JSON for plan or status")
@@ -725,7 +727,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 		fmt.Fprintln(stderr, "--previous-history and --allow-production require ridu migrate baseline --replace")
 		return 2
 	}
-	if command != "create" && (*name != "" || *transformName != "" || *acceptRenames) || command != "create" && !lifecycleCommand && *allowDestructive {
+	if command != "create" && (*name != "" || *transformName != "" || *acceptRenames || *versionsExisting != "") || command != "create" && !lifecycleCommand && *allowDestructive {
 		fmt.Fprintf(stderr, "ridu migrate %s does not accept create-only migration options\n", command)
 		return 2
 	}
@@ -844,7 +846,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 			fmt.Fprintln(stderr, "ridu migrate create for MongoDB is offline and does not accept --database-url or --database-path")
 			return 2
 		}
-		return runMongoDBMigrateCreate(ctx, *name, *transformName, *acceptRenames, *allowDestructive, directory, definition, stdout, stderr, options)
+		return runMongoDBMigrateCreate(ctx, *name, *transformName, *acceptRenames, *versionsExisting, *allowDestructive, directory, definition, stdout, stderr, options)
 	}
 	var executableManifest schema.Manifest
 	var sqliteDataTransforms []migration.DataTransformDescriptor
@@ -914,7 +916,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 			command: command, databasePath: *databasePath, name: *name, transformName: *transformName,
 			replaceBaseline: *replaceBaseline, replacementOptions: replacementOptions,
 			databasePathFlag: databasePathFlag,
-			acceptRenames:    *acceptRenames, allowDestructive: *allowDestructive, jsonOutput: *jsonOutput,
+			acceptRenames:    *acceptRenames, versionsExisting: *versionsExisting, allowDestructive: *allowDestructive, jsonOutput: *jsonOutput,
 			directory: directory, definition: definition, dataTransforms: sqliteDataTransforms, executableManifest: executableManifest,
 		}, stdout, stderr, options)
 	}
@@ -977,12 +979,18 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 		if previousExists {
 			candidates = schemadiff.RenameCandidates(previous, manifest)
 		}
-		accepted, err := confirmRenameCandidates(candidates, options.Stdin, stdout, *acceptRenames)
+		input := migrateCreateInput(options)
+		accepted, err := confirmRenameCandidates(candidates, input, stdout, *acceptRenames)
 		if err != nil {
 			output.Error("confirm schema renames", err)
 			return 1
 		}
-		created, err := postgres.CreateArtifact(ctx, directory, *name, manifest, time.Now(), postgresRenames(accepted), *allowDestructive, transforms...)
+		existing, err := chooseExistingDocuments(previous, previousExists, manifest, *versionsExisting, input, stdout)
+		if err != nil {
+			output.Error("choose what existing documents become", err)
+			return 1
+		}
+		created, err := postgres.CreateArtifact(ctx, directory, *name, manifest, time.Now(), postgres.ArtifactOptions{Renames: postgresRenames(accepted), AllowDestructive: *allowDestructive, DataTransforms: transforms, ExistingDocuments: existing})
 		if err != nil {
 			return reportMigrateCreateError(stdout, output, "create migration", err)
 		}
@@ -1134,6 +1142,7 @@ func runMongoDBMigrateCreate(
 	name string,
 	transformName string,
 	acceptRenames bool,
+	versionsExisting string,
 	allowDestructive bool,
 	directory string,
 	definition projectfile.File,
@@ -1160,9 +1169,15 @@ func runMongoDBMigrateCreate(
 	if previousExists {
 		candidates = schemadiff.RenameCandidates(previous, resolved.Manifest)
 	}
-	accepted, err := confirmRenameCandidates(candidates, options.Stdin, stdout, acceptRenames)
+	input := migrateCreateInput(options)
+	accepted, err := confirmRenameCandidates(candidates, input, stdout, acceptRenames)
 	if err != nil {
 		output.Error("confirm schema renames", err)
+		return 1
+	}
+	existing, err := chooseExistingDocuments(previous, previousExists, resolved.Manifest, versionsExisting, input, stdout)
+	if err != nil {
+		output.Error("choose what existing documents become", err)
 		return 1
 	}
 	var transforms []migration.DataTransformDescriptor
@@ -1179,9 +1194,10 @@ func runMongoDBMigrateCreate(
 		}
 	}
 	created, err := mongodb.CreateArtifact(ctx, directory, name, resolved.Manifest, time.Now(), mongodb.ArtifactOptions{
-		AllowDestructive: allowDestructive,
-		Renames:          contentRenames(accepted),
-		DataTransforms:   transforms,
+		AllowDestructive:  allowDestructive,
+		Renames:           contentRenames(accepted),
+		DataTransforms:    transforms,
+		ExistingDocuments: existing,
 	})
 	if err != nil {
 		return reportMigrateCreateError(stdout, output, "plan migration", err)
@@ -1341,6 +1357,7 @@ type sqliteMigrationCLIOptions struct {
 	name               string
 	transformName      string
 	acceptRenames      bool
+	versionsExisting   string
 	allowDestructive   bool
 	jsonOutput         bool
 	directory          string
@@ -1365,25 +1382,34 @@ func runSQLiteMigrate(ctx context.Context, request sqliteMigrationCLIOptions, st
 			output.Error("resolve project schema", err)
 			return 1
 		}
+		previous, previousExists, err := migrationRenameBase(request.directory)
+		if err != nil {
+			output.Error("read migration artifact history", err)
+			return 1
+		}
+		input := migrateCreateInput(options)
+		var accepted []schemadiff.RenameCandidate
 		if request.transformName == "" {
 			// A bound transform moves the content itself, so only a migration
 			// without one asks whether a removed and an added field are a rename.
-			previous, previousExists, err := migrationRenameBase(request.directory)
-			if err != nil {
-				output.Error("read migration artifact history", err)
-				return 1
-			}
 			var candidates []schemadiff.RenameCandidate
 			if previousExists {
 				candidates = sqliteRenameCandidates(previous, resolved.Manifest)
 			}
-			accepted, err := confirmRenameCandidates(candidates, options.Stdin, stdout, request.acceptRenames)
+			accepted, err = confirmRenameCandidates(candidates, input, stdout, request.acceptRenames)
 			if err != nil {
 				output.Error("confirm schema renames", err)
 				return 1
 			}
+		}
+		existing, err := chooseExistingDocuments(previous, previousExists, resolved.Manifest, request.versionsExisting, input, stdout)
+		if err != nil {
+			output.Error("choose what existing documents become", err)
+			return 1
+		}
+		if request.transformName == "" {
 			if len(accepted) != 0 {
-				created, err := sqlite.CreateArtifactWithRenames(ctx, request.directory, request.name, resolved.Manifest, time.Now(), contentRenames(accepted))
+				created, err := sqlite.CreateArtifact(ctx, request.directory, request.name, resolved.Manifest, time.Now(), sqlite.ArtifactOptions{Renames: contentRenames(accepted), ExistingDocuments: existing})
 				if err != nil {
 					return reportMigrateCreateError(stdout, output, "plan migration", err)
 				}
@@ -1404,7 +1430,7 @@ func runSQLiteMigrate(ctx context.Context, request sqliteMigrationCLIOptions, st
 				return 1
 			}
 		}
-		created, err := sqlite.CreateArtifact(ctx, request.directory, request.name, resolved.Manifest, time.Now(), request.allowDestructive, descriptors...)
+		created, err := sqlite.CreateArtifact(ctx, request.directory, request.name, resolved.Manifest, time.Now(), sqlite.ArtifactOptions{AllowDestructive: request.allowDestructive, DataTransforms: descriptors, ExistingDocuments: existing})
 		if err != nil {
 			return reportMigrateCreateError(stdout, output, "plan migration", err)
 		}
@@ -1563,12 +1589,9 @@ func resolveSQLiteMigrationDatabasePath(projectRoot, input string) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("parse file URI: %w", err)
 	}
-	target := parsed.Path
-	if target == "" {
-		target, err = url.PathUnescape(parsed.Opaque)
-		if err != nil {
-			return "", fmt.Errorf("decode file URI path: %w", err)
-		}
+	target, err := fileuri.ToPath(parsed)
+	if err != nil {
+		return "", fmt.Errorf("decode file URI path: %w", err)
 	}
 	if target == "" {
 		return "", fmt.Errorf("file URI path is required")
@@ -1588,9 +1611,10 @@ func resolveSQLiteMigrationDatabasePath(projectRoot, input string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	parsed.Host = ""
+	rebased := fileuri.FromPath(absolute)
+	parsed.Host = rebased.Host
 	parsed.Opaque = ""
-	parsed.Path = absolute
+	parsed.Path = rebased.Path
 	parsed.RawPath = ""
 	return parsed.String(), nil
 }

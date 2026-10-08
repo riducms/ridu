@@ -151,7 +151,7 @@ func TestPostgresRequiredValueAuditRefusesMissingValues(t *testing.T) {
 				after := requiredAuditManifest(t, test.after)
 				directory := t.TempDir()
 				if mode == "artifact" {
-					if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), nil, false); err != nil {
+					if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 						t.Fatal(err)
 					}
 					if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -177,7 +177,7 @@ func TestPostgresRequiredValueAuditRefusesMissingValues(t *testing.T) {
 					}
 					return
 				}
-				created, err := CreateArtifact(ctx, directory, "require", after, time.Unix(2, 0), nil, false)
+				created, err := CreateArtifact(ctx, directory, "require", after, time.Unix(2, 0), ArtifactOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -262,14 +262,14 @@ func TestPostgresRequiredValueAuditExemptsDraftsButNotPublishedRows(t *testing.T
 		t.Run(test.name, func(t *testing.T) {
 			backend := migrationArtifactTestBackend(t)
 			directory := t.TempDir()
-			if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), nil, false); err != nil {
+			if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := backend.ApplyArtifacts(ctx, directory); err != nil {
 				t.Fatal(err)
 			}
 			requiredAuditWrite(t, ctx, backend, test.prepare)
-			if _, err := CreateArtifact(ctx, directory, "require", after, time.Unix(2, 0), nil, false); err != nil {
+			if _, err := CreateArtifact(ctx, directory, "require", after, time.Unix(2, 0), ArtifactOptions{}); err != nil {
 				t.Fatal(err)
 			}
 			err := backend.ApplyArtifacts(ctx, directory)
@@ -293,7 +293,7 @@ func TestPostgresRequiredValueAuditAdmitsBackfillingTransform(t *testing.T) {
 	directory := t.TempDir()
 	before := requiredAuditManifest(t, core.Collection{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Group("seo", field.Fields{field.Text("title")})}})
 	after := requiredAuditManifest(t, core.Collection{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Group("seo", field.Fields{field.Text("title").Required()})}})
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -309,7 +309,7 @@ func TestPostgresRequiredValueAuditAdmitsBackfillingTransform(t *testing.T) {
 		return nil
 	})
 	descriptor := ridumigration.DataTransformDescriptor{Name: "backfill-titles", Checksum: ridumigration.DataTransformChecksum([]byte("backfill-titles-v1"))}
-	created, err := CreateArtifact(ctx, directory, "require-titles", after, time.Unix(2, 0), nil, false, descriptor)
+	created, err := CreateArtifact(ctx, directory, "require-titles", after, time.Unix(2, 0), ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +362,7 @@ func TestPostgresRequiredValueAuditPrecedesEarlierPhases(t *testing.T) {
 	directory := t.TempDir()
 	before := requiredAuditManifest(t, core.Collection{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Text("summary")}})
 	after := requiredAuditManifest(t, core.Collection{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Text("summary").Required().Index()}})
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -372,7 +372,7 @@ func TestPostgresRequiredValueAuditPrecedesEarlierPhases(t *testing.T) {
 		_, err := transaction.Create(ctx, store.CreateRequest{Collection: before.Snapshot().Collections[0], ID: "post", Values: store.Values{"title": store.String("Title")}})
 		return err
 	})
-	created, err := CreateArtifact(ctx, directory, "require-indexed-summary", after, time.Unix(2, 0), nil, false)
+	created, err := CreateArtifact(ctx, directory, "require-indexed-summary", after, time.Unix(2, 0), ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +399,7 @@ func TestPostgresRequiredValueAuditAcceptsColumnDefault(t *testing.T) {
 	directory := t.TempDir()
 	before := requiredAuditManifest(t, core.Collection{Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title")}})
 	after := requiredAuditManifest(t, core.Collection{Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title"), field.Text("state").Required().Default("draft")}})
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -410,7 +410,7 @@ func TestPostgresRequiredValueAuditAcceptsColumnDefault(t *testing.T) {
 		_, err := transaction.Create(ctx, store.CreateRequest{Collection: collection, ID: "one", Status: store.StatusPublished, Values: store.Values{"title": store.String("Live")}})
 		return err
 	})
-	if _, err := CreateArtifact(ctx, directory, "add-state", after, time.Unix(2, 0), nil, false); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "add-state", after, time.Unix(2, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {

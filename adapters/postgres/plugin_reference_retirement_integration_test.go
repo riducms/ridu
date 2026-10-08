@@ -34,7 +34,7 @@ func TestPostgresPluginReferenceRetirementPreventsCurrentAndVersionResurrectionA
 	if err != nil {
 		t.Fatal(err)
 	}
-	initial, err := BuildArtifact(ctx, "initial-plugin-reference-state", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-plugin-reference-state", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ FROM `+quote(publishedCollectionTable(resource))+` AS live WHERE id = $1`,
 	if err != nil {
 		t.Fatal(err)
 	}
-	retirement, err := BuildArtifact(ctx, "retire-plugin-reference-state", &before, after, nil, true)
+	retirement, err := BuildArtifact(ctx, "retire-plugin-reference-state", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ FROM `+quote(publishedCollectionTable(resource))+` AS live WHERE id = $1`,
 	if err != nil {
 		t.Fatal(err)
 	}
-	readdition, err := BuildArtifact(ctx, "readd-plugin-reference-state", &after, readded, nil, false)
+	readdition, err := BuildArtifact(ctx, "readd-plugin-reference-state", &after, readded, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +267,7 @@ func TestPostgresStableSlugRewriteCoversPluginGlobalPolymorphicAndVersionsBefore
 	directory := t.TempDir()
 
 	before := pluginSlugRewriteManifest("people", false)
-	initial, err := BuildArtifact(ctx, "initial-plugin-slug-state", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-plugin-slug-state", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,7 @@ func TestPostgresStableSlugRewriteCoversPluginGlobalPolymorphicAndVersionsBefore
 	}
 
 	after := pluginSlugRewriteManifest("members", false)
-	rename, err := BuildArtifact(ctx, "rewrite-stable-plugin-slug", &before, after, nil, false)
+	rename, err := BuildArtifact(ctx, "rewrite-stable-plugin-slug", &before, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +343,7 @@ func TestPostgresStableSlugRewriteCoversPluginGlobalPolymorphicAndVersionsBefore
 	}
 
 	reused := pluginSlugRewriteManifest("members", true)
-	reuseArtifact, err := BuildArtifact(ctx, "reuse-old-plugin-slug", &after, reused, nil, false)
+	reuseArtifact, err := BuildArtifact(ctx, "reuse-old-plugin-slug", &after, reused, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestPostgresOverlappingSlugRewriteFailsBeforeCurrentVersionOrLedgerMutation
 	directory := t.TempDir()
 
 	before := overlappingSlugLiveManifest("people", "members")
-	initial, err := BuildArtifact(ctx, "initial-overlapping-slug-state", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-overlapping-slug-state", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -66,7 +66,7 @@ func TestPostgresPhysicalVerifierRejectsFirstMigrationDriftBeforeLedgerMutation(
 	backend := migrationArtifactTestBackend(t)
 	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
 	directory := t.TempDir()
-	artifact, err := BuildArtifact(ctx, "initial", nil, manifest, nil, false)
+	artifact, err := BuildArtifact(ctx, "initial", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestPostgresPhysicalVerifierAllowsAndPreservesClusteredOrdinaryLookupIndex(
 	title := atlasTextField("posts-title", "title")
 	title.Unique = true
 	ahead := atlasTestManifest(title, atlasTextField("posts-summary", "summary"))
-	artifact, err := BuildArtifact(ctx, "add-summary", &manifest, ahead, nil, false)
+	artifact, err := BuildArtifact(ctx, "add-summary", &manifest, ahead, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestPostgresPhysicalVerifierRejectsPendingArtifactBeforeSchemaOrLedgerMutat
 	title := atlasTextField("posts-title", "title")
 	title.Unique = true
 	ahead := atlasTestManifest(title, atlasTextField("posts-summary", "summary"))
-	artifact, err := BuildArtifact(ctx, "add-summary", &manifest, ahead, nil, false)
+	artifact, err := BuildArtifact(ctx, "add-summary", &manifest, ahead, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func postgresPhysicalVerifierFixture(t *testing.T, ctx context.Context) (*Store,
 	title.Unique = true
 	manifest := atlasTestManifest(title)
 	directory := t.TempDir()
-	artifact, err := BuildArtifact(ctx, "initial", nil, manifest, nil, false)
+	artifact, err := BuildArtifact(ctx, "initial", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestPostgresMigrationsExplainADevelopmentSyncedDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	artifact, err := BuildArtifact(ctx, "initial", nil, manifest, nil, false)
+	artifact, err := BuildArtifact(ctx, "initial", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

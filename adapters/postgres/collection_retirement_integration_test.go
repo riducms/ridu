@@ -41,7 +41,7 @@ func TestPostgresRemovedResourceStateCannotReattachAfterStableIDAndDocumentIDReu
 	if err != nil {
 		t.Fatal(err)
 	}
-	initial, err := BuildArtifact(ctx, "initial-resource-state", nil, before, nil, false)
+	initial, err := BuildArtifact(ctx, "initial-resource-state", nil, before, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestPostgresRemovedResourceStateCannotReattachAfterStableIDAndDocumentIDReu
 		hiddenSnapshot.Collections[collectionIndex].Fields = fields[:len(fields)-1]
 	}
 	hiddenReference := schema.NewManifest(hiddenSnapshot)
-	_, hiddenReferenceError := BuildArtifact(ctx, "hide-reference-before-retirement", &before, hiddenReference, nil, true)
+	_, hiddenReferenceError := BuildArtifact(ctx, "hide-reference-before-retirement", &before, hiddenReference, ArtifactOptions{AllowDestructive: true})
 	var hiddenReferenceSafety *SafetyError
 	if !errors.As(hiddenReferenceError, &hiddenReferenceSafety) ||
 		!hasRiskCode(hiddenReferenceSafety.Risks, "RIDU_REFERENCE_SHAPE_DECREASE_UNSAFE") {
@@ -232,7 +232,7 @@ WHERE (owner_collection_id = $1 AND owner_document_id = $2 AND target_collection
 	if err != nil {
 		t.Fatal(err)
 	}
-	removal, err := BuildArtifact(ctx, "remove-resources", &before, after, nil, true)
+	removal, err := BuildArtifact(ctx, "remove-resources", &before, after, ArtifactOptions{AllowDestructive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ WHERE (owner_collection_id = $1 AND owner_document_id = $2 AND target_collection
 	if err != nil {
 		t.Fatal(err)
 	}
-	readdition, err := BuildArtifact(ctx, "readd-resources", &after, readded, nil, false)
+	readdition, err := BuildArtifact(ctx, "readd-resources", &after, readded, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

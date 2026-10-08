@@ -161,7 +161,7 @@ func TestPostgresDataTransformRegistrationsFailBeforeDatabaseAccess(t *testing.T
 }
 
 func buildPostgresTransformTestArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
-	return planArtifact(ctx, name, before, after, nil, false, transforms...)
+	return planArtifact(ctx, name, before, after, ArtifactOptions{DataTransforms: transforms})
 }
 
 // Creation binds a registered transform through the same planner the runner
@@ -184,10 +184,10 @@ func TestPostgresTransformCreationMatchesRunnerRegeneration(t *testing.T) {
 		"cast to text":            {resolve(field.Number("body")), resolve(field.Text("body"))},
 	} {
 		before, after := change[0], change[1]
-		if _, err := BuildArtifact(ctx, "convert", &before, after, nil, true); err == nil {
+		if _, err := BuildArtifact(ctx, "convert", &before, after, ArtifactOptions{AllowDestructive: true}); err == nil {
 			t.Fatalf("%s planned without a transform", name)
 		}
-		artifact, err := BuildArtifact(ctx, "convert", &before, after, nil, true, descriptor)
+		artifact, err := BuildArtifact(ctx, "convert", &before, after, ArtifactOptions{AllowDestructive: true, DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}})
 		if err != nil {
 			t.Fatalf("%s with a transform = %v", name, err)
 		}
@@ -196,10 +196,10 @@ func TestPostgresTransformCreationMatchesRunnerRegeneration(t *testing.T) {
 		}
 	}
 	before, after := resolve(field.Text("body")), resolve(field.Number("body"))
-	if _, err := BuildArtifact(ctx, "convert", &before, after, nil, true, descriptor); err == nil || !strings.Contains(err.Error(), "cannot convert posts.body from text to double precision in place") {
+	if _, err := BuildArtifact(ctx, "convert", &before, after, ArtifactOptions{AllowDestructive: true, DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}); err == nil || !strings.Contains(err.Error(), "cannot convert posts.body from text to double precision in place") {
 		t.Fatalf("uncastable column change with a transform = %v", err)
 	}
-	if _, err := planArtifact(ctx, "convert", &before, after, nil, true, descriptor); err == nil || !strings.Contains(err.Error(), "cannot convert posts.body from text to double precision in place") {
+	if _, err := planArtifact(ctx, "convert", &before, after, ArtifactOptions{AllowDestructive: true, DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}); err == nil || !strings.Contains(err.Error(), "cannot convert posts.body from text to double precision in place") {
 		t.Fatalf("uncastable column change during replay = %v", err)
 	}
 }
