@@ -1,6 +1,6 @@
-import { defineAdmin } from "../src/admin";
+import { defineAdmin } from "../src/lib/admin";
 import type { Component } from "svelte";
-import { defineFieldEditor, type FieldEditorProps, type FieldEditorType } from "../src/editor";
+import { defineFieldEditor, type FieldEditorProps, type FieldEditorType } from "../src/lib/editor";
 
 declare const Text: Component<FieldEditorProps<"text">>;
 declare const TextList: Component<FieldEditorProps<"text-list">>;

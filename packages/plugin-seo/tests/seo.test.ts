@@ -8,9 +8,9 @@ for (const file of [
 	"meta-description-field",
 	"meta-image-field",
 ])
-	mock.module(`../src/${file}.svelte`, () => ({ default: () => ({}) }));
+	mock.module(`../src/lib/${file}.svelte`, () => ({ default: () => ({}) }));
 const { generationScopeToken, generationSnapshotToken, lengthState, seoMessages } =
-	await import("../src");
+	await import("../src/lib");
 
 describe("SEO admin contract", () => {
 	it("matches the inclusive Payload length guidance boundaries", () => {

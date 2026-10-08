@@ -1,4 +1,4 @@
-import type { CoreTranslationCatalog } from "../types";
+import type { CoreTranslationCatalog } from "../types.js";
 
 export const frMessages = {
 	"apiReference:title": "Référence API",

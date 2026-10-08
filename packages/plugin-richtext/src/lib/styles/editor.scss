@@ -1,0 +1,95 @@
+// The rich-text editor's design tokens. Every rule of the editor and its menus reads these.
+//
+// Each token defaults to the host theme: the Ridu admin's token first, then the name an app's
+// theme may define (shadcn's, such as --foreground and --border), then the admin's light theme.
+// So the editor matches the admin, follows an app that uses those names, and looks complete in
+// an app with no theme. The editor loads these defaults itself.
+//
+// Restyle the editor by setting the custom properties on :root in unlayered CSS, which its menus
+// inherit too, or configure the defaults when compiling your own Sass:
+//
+//     @use "@riducms/plugin-richtext/editor.scss" with ($text: navy, $radius: 8px);
+//
+// The text, heading and menu fonts have no fallback of their own: unset, they inherit the page's
+// font.
+
+// Text
+$text: var(--foreground, #2f2f2f) !default;
+$text-muted: var(--foreground-muted, var(--muted-foreground, #656565)) !default;
+$placeholder: var(--ink-placeholder, var(--muted-foreground, #9a9a9a)) !default;
+$link: var(--status-success-foreground, var(--primary, #12425a)) !default;
+$code: var(--richtext-code-color, #b63636) !default;
+$danger: var(--destructive, #da4b48) !default;
+
+// Surfaces, lines and shapes
+$background: var(--background, #fff) !default;
+$surface: var(--control-surface, var(--popover, #fff)) !default;
+$surface-hover: var(--control-surface-hover, var(--accent, #f5f5f5)) !default;
+$surface-active: var(--background-layer, var(--accent, #ebebeb)) !default;
+$border: var(--control-border, var(--border, #ddd)) !default;
+$invalid: var(--control-invalid-border, var(--destructive, #da4b48)) !default;
+// Marks where a dragged block will land.
+$accent: var(--success, var(--primary, oklch(0.52 0.14 145))) !default;
+$radius: var(--control-radius, var(--radius, 3px)) !default;
+$shadow: var(
+	--richtext-popup-shadow,
+	0 1px 2px 1px rgb(0 0 0 / 5%),
+	0 4px 8px rgb(0 0 0 / 10%)
+) !default;
+$focus: var(--focus-outline, 2px solid var(--ring, #2f2f2f)) !default;
+$focus-offset: var(--focus-outline-offset, 2px) !default;
+
+// Type
+$font: var(--font-richtext-body) !default;
+$heading-font: var(--font-sans) !default;
+// Menus, toolbars and the link preview.
+$ui-font: var(--font-sans) !default;
+$mono-font: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace) !default;
+$font-size: 16px !default;
+$line-height: 1.5 !default;
+$ui-font-size: var(--font-size-body, 13px) !default;
+$ui-line-height: var(--line-height-body, 20px) !default;
+
+// Layout
+// The space beside the text that holds each block's handle.
+$gutter: 39px !default;
+// The size of toolbar buttons and menu options, larger where the pointer is a finger.
+$target: 30px !default;
+$touch-target: 44px !default;
+// How far below the top of the page the fixed toolbar sticks, such as an app header's height.
+$sticky-offset: 0px !default;
+
+:where(:root) {
+	--ridu-richtext-text: #{$text};
+	--ridu-richtext-text-muted: #{$text-muted};
+	--ridu-richtext-placeholder: #{$placeholder};
+	--ridu-richtext-link: #{$link};
+	--ridu-richtext-code: #{$code};
+	--ridu-richtext-danger: #{$danger};
+	--ridu-richtext-background: #{$background};
+	--ridu-richtext-surface: #{$surface};
+	--ridu-richtext-surface-hover: #{$surface-hover};
+	--ridu-richtext-surface-active: #{$surface-active};
+	--ridu-richtext-border: #{$border};
+	--ridu-richtext-invalid: #{$invalid};
+	--ridu-richtext-accent: #{$accent};
+	--ridu-richtext-radius: #{$radius};
+	--ridu-richtext-shadow: #{$shadow};
+	--ridu-richtext-focus: #{$focus};
+	--ridu-richtext-focus-offset: #{$focus-offset};
+	--ridu-richtext-font: #{$font};
+	--ridu-richtext-heading-font: #{$heading-font};
+	--ridu-richtext-ui-font: #{$ui-font};
+	--ridu-richtext-mono-font: #{$mono-font};
+	--ridu-richtext-font-size: #{$font-size};
+	--ridu-richtext-line-height: #{$line-height};
+	--ridu-richtext-ui-font-size: #{$ui-font-size};
+	--ridu-richtext-ui-line-height: #{$ui-line-height};
+	--ridu-richtext-gutter: #{$gutter};
+	--ridu-richtext-target: #{$target};
+	--ridu-richtext-sticky-offset: #{$sticky-offset};
+
+	@media (pointer: coarse) {
+		--ridu-richtext-target: #{$touch-target};
+	}
+}

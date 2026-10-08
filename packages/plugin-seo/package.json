@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/plugin-seo",
 	"description": "Search metadata authoring for Ridu's official SEO plugin.",
-	"version": "0.16.2",
+	"version": "0.17.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -17,24 +17,50 @@
 		"provenance": true
 	},
 	"type": "module",
+	"svelte": "./dist/index.js",
+	"types": "./dist/index.d.ts",
 	"exports": {
-		".": "./src/index.ts"
+		".": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
 	},
 	"files": [
-		"src"
+		"dist",
+		"!dist/**/*.test.*",
+		"!dist/**/*.spec.*"
+	],
+	"sideEffects": [
+		"**/*.css",
+		"**/*.scss"
 	],
 	"scripts": {
-		"check": "svelte-check --tsconfig ./tsconfig.json",
-		"test": "bun test",
-		"build": "vite build"
+		"build": "bun run package",
+		"package": "svelte-kit sync && svelte-package && bun ../../scripts/finish-svelte-package.ts && publint",
+		"dev": "svelte-kit sync && bun run --parallel dev:package dev:finish",
+		"dev:package": "svelte-package --watch",
+		"dev:finish": "bun ../../scripts/finish-svelte-package.ts --watch",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"test": "svelte-kit sync && bun test"
 	},
 	"dependencies": {
 		"@riducms/plugin": "workspace:*",
 		"@riducms/ui": "workspace:*",
-		"@riducms/protocol": "workspace:*",
+		"@riducms/protocol": "workspace:*"
+	},
+	"peerDependencies": {
 		"svelte": "^5.56.8"
 	},
 	"devDependencies": {
-		"@riducms/build": "workspace:*"
+		"@iconify/json": "^2.2.509",
+		"@sveltejs/kit": "^3.0.1",
+		"@sveltejs/package": "^3.0.0",
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"publint": "^0.3.25"
 	}
 }

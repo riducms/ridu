@@ -1,0 +1,106 @@
+@use "@riducms/ui/layers.css";
+
+@layer ridu.components {
+	.ridu-richtext-floating-toolbar {
+		position: fixed;
+		z-index: 80;
+		box-sizing: border-box;
+		max-inline-size: calc(100vw - 24px);
+		flex-wrap: wrap;
+		gap: 2px;
+		padding: 4px;
+		border: 0;
+		border-radius: var(--ridu-richtext-radius);
+		background: var(--ridu-richtext-surface);
+		box-shadow: var(--ridu-richtext-shadow);
+		color: var(--ridu-richtext-text-muted);
+	}
+
+	/*
+	 * Pinned above the editor and kept in view while its content scrolls. The slot keeps the
+	 * toolbar's height before it mounts, so the server's copy doesn't move. With an on-screen
+	 * keyboard open, a phone can scroll the visible area below the page's top, past any header the
+	 * sticky offset clears, so the slot sticks to whichever is lower.
+	 */
+	.ridu-richtext-fixed-toolbar-slot {
+		position: sticky;
+		top: max(var(--ridu-richtext-sticky-offset), var(--_ridu-richtext-viewport-offset, 0px));
+		z-index: 3;
+		min-block-size: calc(var(--ridu-richtext-target) + 10px);
+		margin-block-end: 12px;
+	}
+
+	.ridu-richtext-fixed-toolbar {
+		box-sizing: border-box;
+		flex-wrap: wrap;
+		gap: 2px;
+		padding: 4px;
+		border: 1px solid var(--ridu-richtext-border);
+		border-radius: var(--ridu-richtext-radius);
+		background: var(--ridu-richtext-background);
+		color: var(--ridu-richtext-text-muted);
+	}
+
+	.ridu-richtext-toolbar-button {
+		flex-shrink: 0;
+		inline-size: var(--ridu-richtext-target);
+		block-size: var(--ridu-richtext-target);
+		padding: 0;
+		border-radius: 3px;
+		color: inherit;
+		&:hover {
+			background: var(--ridu-richtext-surface-hover);
+		}
+		&[data-active] {
+			background: var(--ridu-richtext-surface-active);
+			color: var(--ridu-richtext-text);
+		}
+		&:disabled {
+			opacity: 0.2;
+		}
+	}
+
+	.ridu-richtext-toolbar-menu {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+		inline-size: 47px;
+	}
+
+	.ridu-richtext-toolbar-separator {
+		flex-shrink: 0;
+		inline-size: 1px;
+		block-size: 15px;
+		margin-inline: 4.25px;
+		background: var(--ridu-richtext-border);
+	}
+
+	.ridu-richtext-format-menu.ridu-menu {
+		min-inline-size: 132.5px;
+		max-inline-size: 200px;
+		padding: 0;
+		border: 0;
+		border-radius: var(--ridu-richtext-radius);
+		background: var(--ridu-richtext-background);
+		box-shadow: var(--ridu-richtext-shadow);
+	}
+
+	.ridu-richtext-format-menu .ridu-richtext-format-option {
+		min-block-size: var(--ridu-richtext-target);
+		padding: 0 6.25px;
+		gap: 6.25px;
+		color: var(--ridu-richtext-text);
+		font-family: var(--ridu-richtext-ui-font);
+		font-size: var(--ridu-richtext-ui-font-size);
+		line-height: var(--ridu-richtext-ui-line-height);
+		white-space: nowrap;
+		&[data-active] {
+			background: var(--ridu-richtext-surface-hover);
+		}
+		svg {
+			flex-shrink: 0;
+			color: var(--ridu-richtext-text-muted);
+		}
+	}
+}

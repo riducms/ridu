@@ -22,21 +22,23 @@ type packageDefinition struct {
 	omitSourceTSConfig bool
 }
 
+// Builds run in this order. The Svelte packages ship svelte-package output, so each builds
+// after the packages whose types it imports.
 var packages = []packageDefinition{
 	{name: "@riducms/cli", source: "packages/cli", target: "ridu-framework-cli"},
 	{name: "create-ridu", source: "packages/create-ridu", target: "ridu-create"},
 	{name: "@riducms/protocol", source: "packages/protocol", target: "ridu-framework-protocol", build: true},
-	{name: "@riducms/translations", source: "packages/translations", target: "ridu-framework-translations"},
+	{name: "@riducms/translations", source: "packages/translations", target: "ridu-framework-translations", build: true},
 	{name: "@riducms/sdk", source: "packages/sdk", target: "ridu-framework-sdk", build: true},
-	{name: "@riducms/sveltekit", source: "packages/sveltekit", target: "ridu-framework-sveltekit"},
 	{name: "@riducms/build", source: "packages/build", target: "ridu-framework-build", build: true},
-	{name: "@riducms/plugin", source: "packages/plugin", target: "ridu-framework-plugin"},
-	{name: "@riducms/ui", source: "packages/ui", target: "ridu-framework-ui"},
+	{name: "@riducms/sveltekit", source: "packages/sveltekit", target: "ridu-framework-sveltekit", build: true},
+	{name: "@riducms/ui", source: "packages/ui", target: "ridu-framework-ui", build: true},
+	{name: "@riducms/plugin", source: "packages/plugin", target: "ridu-framework-plugin", build: true},
 	{name: "@riducms/admin", source: "admin", target: "ridu-framework-admin", notices: "admin/THIRD_PARTY_NOTICES.md", omitSourceTSConfig: true},
-	{name: "@riducms/plugin-richtext", source: "packages/plugin-richtext", target: "ridu-framework-plugin-richtext"},
-	{name: "@riducms/plugin-seo", source: "packages/plugin-seo", target: "ridu-framework-plugin-seo"},
-	{name: "@riducms/plugin-form-builder", source: "packages/plugin-form-builder", target: "ridu-framework-plugin-form-builder"},
-	{name: "@riducms/plugin-graphql", source: "packages/plugin-graphql", target: "ridu-framework-plugin-graphql"},
+	{name: "@riducms/plugin-richtext", source: "packages/plugin-richtext", target: "ridu-framework-plugin-richtext", build: true},
+	{name: "@riducms/plugin-seo", source: "packages/plugin-seo", target: "ridu-framework-plugin-seo", build: true},
+	{name: "@riducms/plugin-form-builder", source: "packages/plugin-form-builder", target: "ridu-framework-plugin-form-builder", build: true},
+	{name: "@riducms/plugin-graphql", source: "packages/plugin-graphql", target: "ridu-framework-plugin-graphql", build: true},
 }
 
 // Publish copies source packages into ignored directories covered by the
@@ -224,6 +226,9 @@ func rewritePackageManifest(path, version string, includeNotices bool) error {
 	}
 	manifest["version"] = version
 	delete(manifest, "private")
+	// Consumers never install a dependency's development tooling, but copies in a generated
+	// project's .ridu/packages are workspace members, which would.
+	delete(manifest, "devDependencies")
 	files, _ := manifest["files"].([]any)
 	requiredFiles := []string{"LICENSE"}
 	if includeNotices {

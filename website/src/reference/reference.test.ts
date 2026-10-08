@@ -147,16 +147,16 @@ const repositoryRoot = path.resolve(import.meta.dir, '../../..');
 const typescriptEntrypoints: Readonly<Record<string, readonly string[]>> = {
 	sdk: ['packages/sdk/src/index.ts', 'packages/sdk/src/richtext/index.ts'],
 	protocol: ['packages/protocol/src/index.ts'],
-	plugin: ['packages/plugin/src/index.ts'],
+	plugin: ['packages/plugin/src/lib/index.ts'],
 	build: ['packages/build/src/index.ts', 'packages/build/src/vite/index.ts'],
-	ui: ['packages/ui/src/index.ts'],
-	'plugin-richtext': ['packages/plugin-richtext/src/index.ts'],
-	'plugin-seo': ['packages/plugin-seo/src/index.ts'],
+	ui: ['packages/ui/src/lib/index.ts'],
+	'plugin-richtext': ['packages/plugin-richtext/src/lib/index.ts'],
+	'plugin-seo': ['packages/plugin-seo/src/lib/index.ts'],
 	'plugin-form-builder': [
-		'packages/plugin-form-builder/src/index.ts',
-		'packages/plugin-form-builder/src/admin.ts'
+		'packages/plugin-form-builder/src/lib/index.ts',
+		'packages/plugin-form-builder/src/lib/admin.ts'
 	],
-	'plugin-graphql': ['packages/plugin-graphql/src/index.ts']
+	'plugin-graphql': ['packages/plugin-graphql/src/lib/index.ts']
 };
 
 const goPackageDirectories: Readonly<Record<string, string>> = {

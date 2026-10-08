@@ -1,0 +1,1 @@
+import{Er as e,Gn as t,Mr as n,Nn as r,Tr as i,Wn as a,fr as o,mn as s,on as c,z as l}from"./ridu-ui-MA5OmaHl.js";function u(u,d){e(d,!0);let f=s(d,`tooltip`,3,!1);l.create({id:c(()=>d.id),virtualEl:c(()=>d.virtualEl),ref:d.ref},f());var p=t(),m=o(p);r(m,()=>d.children??n),a(u,p),i()}export{u as t};

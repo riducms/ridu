@@ -1,4 +1,4 @@
-import { resolveAdminConfig, validateAdminManifest } from "../src/admin";
+import { resolveAdminConfig, validateAdminManifest } from "../src/lib/admin";
 import { describe, expect, it } from "bun:test";
 
 import {
@@ -8,9 +8,13 @@ import {
 	resolveAdminExtensions,
 	assertAdminPluginPairs,
 	type AdminPluginPair,
-} from "../src";
-import { defineAdminPlugin, definePluginField, defineFieldComponent } from "../src/authoring/v1";
-import { resolvePluginFields } from "../src/plugin-registry";
+} from "../src/lib";
+import {
+	defineAdminPlugin,
+	definePluginField,
+	defineFieldComponent,
+} from "../src/lib/authoring/v1";
+import { resolvePluginFields } from "../src/lib/plugin-registry";
 import type { Component } from "svelte";
 
 function checkedConfig(pairs: readonly AdminPluginPair[]) {

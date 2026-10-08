@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { createEditor } from "lexical";
 
-import { initialEditorState } from "../src/field/rich-text-document";
-import { decodeRichTextDocument } from "../src/field/rich-text-value";
+import { initialEditorState } from "../src/lib/field/rich-text-document";
+import { decodeRichTextDocument } from "../src/lib/field/rich-text-value";
 
 describe("rich-text document hydration", () => {
 	it("supplies Lexical defaults without mutating stored documents", () => {

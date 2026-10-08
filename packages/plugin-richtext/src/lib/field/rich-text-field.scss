@@ -1,0 +1,9 @@
+@use "@riducms/ui/layers.css";
+
+@layer ridu.components {
+	.ridu-richtext-field {
+		min-inline-size: 0;
+		// The document view's header sets how far below the top the fixed toolbar sticks.
+		--ridu-richtext-sticky-offset: var(--admin-sticky-offset, 0px);
+	}
+}

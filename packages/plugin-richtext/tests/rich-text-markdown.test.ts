@@ -6,9 +6,13 @@ import { $convertFromMarkdownString } from "@lexical/markdown";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { createEditor } from "lexical";
 
-import { richTextMarkdownTransformers } from "../src/field/rich-text-markdown";
-import { decodeRichTextConfig, type RichTextFeature } from "../src/field/rich-text-config";
-import { decodeRichTextDocument } from "../src/field/rich-text-value";
+import { richTextMarkdownTransformers } from "../src/lib/field/rich-text-markdown";
+import {
+	decodeRichTextConfig,
+	isRichTextEditorFeature,
+	type RichTextFeature,
+} from "../src/lib/field/rich-text-config";
+import { decodeRichTextDocument } from "../src/lib/field/rich-text-value";
 
 function convert(markdown: string, features: RichTextFeature[] = []) {
 	const editor = createEditor({
@@ -22,7 +26,9 @@ function convert(markdown: string, features: RichTextFeature[] = []) {
 		() => {
 			$convertFromMarkdownString(
 				markdown,
-				richTextMarkdownTransformers(decodeRichTextConfig({ features }))
+				richTextMarkdownTransformers(
+					decodeRichTextConfig({ features }).features.filter(isRichTextEditorFeature)
+				)
 			);
 		},
 		{ discrete: true }

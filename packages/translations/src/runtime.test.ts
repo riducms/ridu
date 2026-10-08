@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { ar } from "./languages/ar";
-import { en } from "./languages/en";
-import { fr } from "./languages/fr";
+import { ar } from "./languages/ar.js";
+import { en } from "./languages/en.js";
+import { fr } from "./languages/fr.js";
 import {
 	createAdminI18n,
 	extendTranslationLanguage,
@@ -10,7 +10,7 @@ import {
 	resolvePreferredLanguage,
 	validateLanguageCatalogs,
 	validatePluginMessageCatalog,
-} from "./runtime";
+} from "./runtime.js";
 
 describe("admin translations", () => {
 	test("interpolates, uses Intl plurals, and formats in one language and timezone", () => {

@@ -1,7 +1,11 @@
 {
-	"extends": "../../tsconfig.base.json",
+	"extends": "$app/tsconfig",
 	"compilerOptions": {
-		"types": ["bun", "node", "@sveltejs/kit"]
+		"strict": true,
+		"exactOptionalPropertyTypes": true,
+		"noUncheckedIndexedAccess": true,
+		"noFallthroughCasesInSwitch": true,
+		"types": ["$app/types", "bun", "node", "@sveltejs/kit"]
 	},
-	"include": ["src/**/*.ts", "tests/**/*.ts"]
+	"include": ["src", "vite.config.ts", "tests"]
 }

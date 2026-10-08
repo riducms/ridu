@@ -18,6 +18,7 @@ export default defineConfig({
 		"**/admin/generated-mongodb.spec.ts",
 		"**/admin/generated-mongodb-production.spec.ts",
 		"**/admin/sqlite-smoke.spec.ts",
+		"**/editor/**",
 	],
 	fullyParallel: true,
 	workers: Math.min(4, availableParallelism()),

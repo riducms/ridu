@@ -1,8 +1,8 @@
-import { resolveAdminConfig, validateAdminManifest } from "../src/admin";
+import { resolveAdminConfig, validateAdminManifest } from "../src/lib/admin";
 import { expect, test } from "bun:test";
 import type { SchemaField } from "@riducms/protocol";
-import { defineFieldEditor } from "../src/editor";
-import { defineAdmin } from "../src/admin";
+import { defineFieldEditor } from "../src/lib/editor";
+import { defineAdmin } from "../src/lib/admin";
 
 const field: SchemaField = {
 	id: "accent",

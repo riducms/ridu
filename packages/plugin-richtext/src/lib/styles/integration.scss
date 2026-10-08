@@ -1,0 +1,455 @@
+@use "sass:meta";
+@use "@riducms/ui/styles.scss" as ui;
+
+// The editor's token defaults, below the admin theme and an app's unlayered CSS.
+@layer ridu.theme {
+	@include meta.load-css("editor");
+}
+
+// Each content rule also covers the server's copy of the document, which the renderer writes as
+// plain elements under [data-ridu-richtext-static], so nothing moves when the editor mounts.
+$static: "[data-ridu-richtext-static]";
+
+@layer ridu.components {
+	.ridu-richtext-editor {
+		min-inline-size: 0;
+		/* The gutter holds the block handle beside each block. */
+		&.is-gutterless,
+		&.is-read-only {
+			--ridu-richtext-gutter: 0px;
+		}
+	}
+
+	.ridu-richtext-canvas {
+		position: relative;
+	}
+
+	.ridu-richtext-content {
+		--lexical-indent-base-value: 40px;
+		position: relative;
+		z-index: 1;
+		min-block-size: 40px;
+		padding: 8px 0;
+		padding-inline-start: var(--ridu-richtext-gutter);
+		border: 0;
+		color: var(--ridu-richtext-text);
+		caret-color: var(--ridu-richtext-text);
+		outline: none;
+		font-family: var(--ridu-richtext-font);
+		font-size: var(--ridu-richtext-font-size);
+		line-height: var(--ridu-richtext-line-height);
+		tab-size: 1;
+		overflow-wrap: anywhere;
+
+		&::before {
+			position: absolute;
+			inset-block: 8px;
+			inset-inline-start: 0;
+			border-inline-start: 1px solid var(--ridu-richtext-surface-hover);
+			content: "";
+		}
+
+		&:focus-visible {
+			outline: none;
+		}
+	}
+
+	.ridu-richtext-editor.has-error .ridu-richtext-content::before {
+		border-inline-start: 2px solid var(--ridu-richtext-invalid);
+	}
+
+	.ridu-richtext-editor:is(.is-gutterless, .is-read-only) .ridu-richtext-content::before {
+		display: none;
+	}
+
+	.ridu-richtext-placeholder {
+		position: absolute;
+		top: 8px;
+		inset-inline-start: var(--ridu-richtext-gutter);
+		color: var(--ridu-richtext-placeholder);
+		font-family: var(--ridu-richtext-font);
+		font-size: var(--ridu-richtext-font-size);
+		line-height: var(--ridu-richtext-line-height);
+		pointer-events: none;
+		user-select: none;
+	}
+
+	.ridu-richtext-editor.is-read-only .ridu-richtext-placeholder {
+		inset-inline-start: 0;
+	}
+	.ridu-richtext-recovery {
+		margin-block: 12px;
+		color: var(--ridu-richtext-danger);
+	}
+	.ridu-richtext-announcement {
+		@include ui.visually-hidden;
+	}
+
+	.ridu-richtext-paragraph,
+	#{$static} p {
+		position: relative;
+		margin: 0 0 0.55em;
+		font-size: var(--ridu-richtext-font-size);
+		line-height: var(--ridu-richtext-line-height);
+	}
+
+	.ridu-richtext-heading,
+	#{$static} :is(h1, h2, h3, h4, h5, h6) {
+		font-family: var(--ridu-richtext-heading-font);
+		line-height: 1.125;
+		font-weight: 700;
+		letter-spacing: 0;
+	}
+
+	$heading-sizes: (
+		1: 28px,
+		2: 25px,
+		3: 22px,
+		4: 20px,
+		5: 18px,
+		6: 16px,
+	);
+	@each $level, $size in $heading-sizes {
+		.ridu-richtext-h#{$level},
+		#{$static} h#{$level} {
+			font-size: $size;
+			margin-block: (0.45em + $level * 0.05em) 0.4em;
+		}
+	}
+
+	.ridu-richtext-list-ordered,
+	.ridu-richtext-list-unordered,
+	.ridu-richtext-checklist,
+	#{$static} :is(ul, ol) {
+		padding: 0;
+		margin: 8px 0 16px;
+		list-style-position: outside;
+	}
+
+	.ridu-richtext-list-ordered,
+	#{$static} ol {
+		list-style-type: decimal;
+	}
+	.ridu-richtext-list-unordered,
+	#{$static} ul {
+		list-style-type: disc;
+	}
+	// Lexical numbers an ordered list by how deeply it's nested in other lists; the server's copy
+	// counts the same way.
+	$nested-ordered-lists: (
+		alpha-upper: upper-alpha,
+		alpha-lower: lower-alpha,
+		roman-upper: upper-roman,
+		roman-lower: lower-roman,
+	);
+	$nested-ordered-list: "ol";
+	@each $name, $style in $nested-ordered-lists {
+		$nested-ordered-list: ":is(ul, ol) #{$nested-ordered-list}";
+		.ridu-richtext-list-#{$name},
+		#{$static} #{$nested-ordered-list} {
+			list-style-type: $style;
+		}
+	}
+	.ridu-richtext-list-item,
+	#{$static} li {
+		margin-block-end: 0.4em;
+		margin-inline-start: 40px;
+	}
+	.ridu-richtext-list-item :is(ul, ol),
+	#{$static} li :is(ul, ol) {
+		margin-block: 0;
+	}
+	.ridu-richtext-list-item-nested,
+	#{$static} li:has(> :is(ul, ol)) {
+		list-style: none;
+	}
+	.ridu-richtext-list-item::marker,
+	#{$static} li::marker {
+		color: var(--ridu-richtext-text);
+	}
+
+	$check-item: "#{$static} ul[data-list-type='check'] > li";
+	.ridu-richtext-list-item-checked,
+	.ridu-richtext-list-item-unchecked,
+	#{$check-item} {
+		position: relative;
+		margin-inline-start: 15px;
+		padding-inline-start: 25px;
+		list-style: none;
+		outline: none;
+		&::before {
+			position: absolute;
+			top: 2px;
+			inset-inline-start: 0;
+			inline-size: 16px;
+			block-size: 16px;
+			border: 1px solid var(--ridu-richtext-border);
+			border-radius: 2px;
+			cursor: pointer;
+			content: "";
+		}
+		&:focus-visible::before {
+			outline: var(--ridu-richtext-focus);
+			outline-offset: var(--ridu-richtext-focus-offset);
+		}
+	}
+
+	.ridu-richtext-list-item-checked,
+	#{$check-item}[data-checked="true"] {
+		text-decoration: line-through;
+		&::before {
+			background: var(--ridu-richtext-surface-hover);
+			border-color: var(--ridu-richtext-text-muted);
+		}
+		&::after {
+			position: absolute;
+			top: 6px;
+			inset-inline-start: 7px;
+			inline-size: 3px;
+			block-size: 6px;
+			border: solid var(--ridu-richtext-text);
+			border-width: 0 2px 2px 0;
+			transform: rotate(45deg);
+			content: "";
+		}
+	}
+
+	.ridu-richtext-list-item-nested::before,
+	.ridu-richtext-list-item-nested::after,
+	#{$check-item}:has(> :is(ul, ol))::before,
+	#{$check-item}:has(> :is(ul, ol))::after {
+		display: none;
+	}
+
+	.ridu-richtext-link,
+	#{$static} a {
+		color: var(--ridu-richtext-link);
+		text-decoration: none;
+		border-block-end: 1px dotted;
+		cursor: text;
+	}
+
+	.ridu-richtext-quote,
+	#{$static} blockquote {
+		border-inline-start: 4px solid var(--ridu-richtext-border);
+		padding: 4px 0;
+		padding-inline-start: 12px;
+		margin: 16px 4px;
+		font-size: var(--ridu-richtext-font-size);
+		font-style: normal;
+		line-height: var(--ridu-richtext-line-height);
+	}
+
+	.ridu-richtext-bold,
+	#{$static} strong {
+		font-weight: bold;
+	}
+	.ridu-richtext-italic {
+		font-style: italic;
+	}
+	.ridu-richtext-underline {
+		text-decoration: underline;
+	}
+	.ridu-richtext-strikethrough {
+		text-decoration: line-through;
+	}
+	.ridu-richtext-underline.ridu-richtext-strikethrough {
+		text-decoration: underline line-through;
+	}
+	.ridu-richtext-subscript,
+	#{$static} sub {
+		vertical-align: sub;
+		font-size: 0.8em;
+	}
+	.ridu-richtext-superscript,
+	#{$static} sup {
+		vertical-align: super;
+		font-size: 0.8em;
+	}
+
+	.ridu-richtext-code-block,
+	#{$static} pre {
+		display: block;
+		overflow-x: auto;
+		background: var(--ridu-richtext-surface);
+		padding: 15px;
+		font-family: var(--ridu-richtext-mono-font);
+		font-size: 13px;
+		margin: 20px 0;
+		tab-size: 2;
+	}
+
+	// The browser gives code its own font; inside a code block it follows the block's, as in Lexical.
+	#{$static} pre code {
+		font: inherit;
+	}
+
+	.ridu-richtext-inline-code,
+	#{$static} :not(pre) > code {
+		background: var(--ridu-richtext-surface);
+		border: 1px solid var(--ridu-richtext-border);
+		border-radius: 2px;
+		color: var(--ridu-richtext-code);
+		font-family: var(--ridu-richtext-mono-font);
+		font-size: 0.875em;
+		padding: 2px 4px;
+		box-decoration-break: clone;
+	}
+
+	.ridu-richtext-rule,
+	#{$static} hr {
+		border: 0;
+		border-top: 1px solid var(--ridu-richtext-border);
+		margin: 20px 0;
+		&.is-selected {
+			border-top-color: var(--ridu-richtext-text);
+		}
+	}
+
+	// Lexical writes a block's alignment and indent as inline styles; the renderer writes them as
+	// data attributes. A list item's indent is its nesting depth, which the nested list shows.
+	@each $alignment in (center, right, justify, start, end) {
+		#{$static} [data-align="#{$alignment}"] {
+			text-align: $alignment;
+		}
+	}
+	@for $indent from 1 through 8 {
+		#{$static} :not(li)[data-indent="#{$indent}"] {
+			padding-inline-start: calc(#{$indent} * var(--lexical-indent-base-value));
+		}
+	}
+
+	// Lexical keeps a line box in an empty block, and after a line break that ends one, with a
+	// <br>; the renderer writes neither.
+	$static-blocks: ":is(p, h1, h2, h3, h4, h5, h6, blockquote, li, pre > code)";
+	#{$static} #{$static-blocks}:empty::before,
+	#{$static} #{$static-blocks}:has(> br:last-child)::after {
+		content: "\200b";
+	}
+
+	.ridu-richtext-footer {
+		position: relative;
+		z-index: 1;
+		display: block;
+		inline-size: 100%;
+		block-size: 24px;
+		margin-top: -8px;
+		border: 0;
+		background: transparent;
+		color: var(--ridu-richtext-text-muted);
+		padding: 4px 0 2px;
+		padding-inline-start: var(--ridu-richtext-gutter);
+		font: inherit;
+		cursor: text;
+		& > span[aria-hidden] {
+			display: block;
+			block-size: 100%;
+			border-radius: 2px;
+			opacity: 0;
+		}
+		&:hover > span[aria-hidden],
+		&:focus-visible > span[aria-hidden] {
+			opacity: 1;
+			background: var(--ridu-richtext-surface);
+		}
+		&:focus-visible {
+			outline: var(--ridu-richtext-focus);
+			outline-offset: var(--ridu-richtext-focus-offset);
+		}
+	}
+
+	/* The block toolbar tracks the hovered Lexical block inside the editor gutter. */
+	.ridu-richtext-block-toolbar {
+		position: absolute;
+		top: 0;
+		inset-inline-start: 0;
+		z-index: 2;
+		display: flex;
+		block-size: 24px;
+		gap: 2.6px;
+		margin-inline-start: -13px;
+		color: var(--ridu-richtext-text-muted);
+		opacity: 0;
+		pointer-events: none;
+		will-change: transform, opacity;
+		transition: opacity 100ms ease-out;
+		&.is-visible {
+			opacity: 1;
+			pointer-events: auto;
+		}
+	}
+
+	/* Without a gutter, the handle sits just outside the text, whatever its width. */
+	.ridu-richtext-editor.is-gutterless .ridu-richtext-block-toolbar {
+		inset-inline: auto 100%;
+		margin-inline: 0 8px;
+	}
+
+	.ridu-richtext-block-grip {
+		display: grid;
+		inline-size: 18px;
+		block-size: 24px;
+		grid-template-columns: repeat(2, 2px);
+		grid-template-rows: repeat(3, 2px);
+		place-content: center;
+		gap: 2px;
+		padding: 0;
+		cursor: grab;
+		&:active {
+			cursor: grabbing;
+		}
+		span {
+			inline-size: 2px;
+			block-size: 2px;
+			border-radius: 50%;
+			background: currentColor;
+		}
+	}
+
+	.ridu-richtext-block-add {
+		inline-size: 20px;
+		block-size: 24px;
+		padding: 0;
+		border-radius: 3px;
+		color: var(--ridu-richtext-text-muted);
+		font-size: 14px;
+		&:hover {
+			background: var(--ridu-richtext-surface-hover);
+			color: var(--ridu-richtext-text);
+		}
+	}
+
+	.ridu-richtext-drop-line {
+		position: absolute;
+		inset-block-start: 0;
+		left: 0;
+		z-index: 2;
+		block-size: 4px;
+		border-radius: 1px;
+		background: var(--ridu-richtext-accent);
+		opacity: 0;
+		pointer-events: none;
+		will-change: transform;
+		transition:
+			transform 100ms ease-out,
+			opacity 80ms ease-out;
+	}
+
+	.ridu-richtext-drop-highlight {
+		position: absolute;
+		top: 0;
+		left: 0;
+		z-index: 2;
+		border-radius: 4px;
+		background: var(--ridu-richtext-text);
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-richtext-block-toolbar,
+		.ridu-richtext-drop-line {
+			transition: none;
+		}
+	}
+}

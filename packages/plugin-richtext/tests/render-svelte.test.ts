@@ -8,8 +8,8 @@ import { build, type Plugin } from "vite";
 
 it("renders Svelte block components without importing an editor", async () => {
 	const dependencyGraph = await publishedRendererDependencyGraph();
-	expect(dependencyGraph.some((id) => id.endsWith("/src/render/index.ts"))).toBe(true);
-	expect(dependencyGraph.some((id) => id.endsWith("/src/render/rich-text.svelte"))).toBe(true);
+	expect(dependencyGraph.some((id) => id.endsWith("/dist/render/index.js"))).toBe(true);
+	expect(dependencyGraph.some((id) => id.endsWith("/dist/render/rich-text.svelte"))).toBe(true);
 	expect(dependencyGraph.filter(isEditorDependency)).toEqual([]);
 
 	const parent = fileURLToPath(new URL("../.ridu/", import.meta.url));
@@ -17,7 +17,7 @@ it("renders Svelte block components without importing an editor", async () => {
 	const directory = await mkdtemp(`${parent}richtext-render-`);
 	try {
 		const source = await readFile(
-			new URL("../src/render/rich-text.svelte", import.meta.url),
+			new URL("../dist/render/rich-text.svelte", import.meta.url),
 			"utf8"
 		);
 		const compiled = compile(source, {
@@ -60,7 +60,9 @@ async function publishedRendererDependencyGraph() {
 	const manifest = JSON.parse(
 		await readFile(new URL("../package.json", import.meta.url), "utf8")
 	) as { exports?: Record<string, unknown> };
-	const entry = manifest.exports?.["./svelte"];
+	// The published entry, as an application's bundler resolves it. Package first: bun run package.
+	const exported = manifest.exports?.["./svelte"] as { svelte?: string } | undefined;
+	const entry = exported?.svelte;
 	if (typeof entry !== "string")
 		throw new Error("package does not publish a Svelte renderer entry");
 

@@ -2150,12 +2150,12 @@
 					"entrypoints": [
 						{
 							"specifier": "@riducms/sveltekit",
-							"path": "packages/sveltekit/src/index.ts",
+							"path": "packages/sveltekit/src/lib/index.ts",
 							"tsconfig": "packages/sveltekit/tsconfig.json"
 						},
 						{
 							"specifier": "@riducms/sveltekit/server",
-							"path": "packages/sveltekit/src/server.ts",
+							"path": "packages/sveltekit/src/lib/server.ts",
 							"tsconfig": "packages/sveltekit/tsconfig.json"
 						}
 					]
@@ -2312,27 +2312,27 @@
 					"entrypoints": [
 						{
 							"specifier": "@riducms/plugin",
-							"path": "packages/plugin/src/index.ts",
+							"path": "packages/plugin/src/lib/index.ts",
 							"tsconfig": "packages/plugin/tsconfig.json"
 						},
 						{
 							"specifier": "@riducms/plugin/editor",
-							"path": "packages/plugin/src/editor/index.ts",
+							"path": "packages/plugin/src/lib/editor/index.ts",
 							"tsconfig": "packages/plugin/tsconfig.json"
 						},
 						{
 							"specifier": "@riducms/plugin/editor/field",
-							"path": "packages/plugin/src/editor/field.ts",
+							"path": "packages/plugin/src/lib/editor/field.ts",
 							"tsconfig": "packages/plugin/tsconfig.json"
 						},
 						{
 							"specifier": "@riducms/plugin/admin",
-							"path": "packages/plugin/src/admin.ts",
+							"path": "packages/plugin/src/lib/admin.ts",
 							"tsconfig": "packages/plugin/tsconfig.json"
 						},
 						{
 							"specifier": "@riducms/plugin/authoring/v1",
-							"path": "packages/plugin/src/authoring/v1.ts",
+							"path": "packages/plugin/src/lib/authoring/v1.ts",
 							"tsconfig": "packages/plugin/tsconfig.json",
 							"aliasesOnly": true
 						}
@@ -2484,8 +2484,6 @@
 			"symbolOrder": [
 				"ts:@riducms/build#createAdminApplicationConfig",
 				"ts:@riducms/build#AdminApplicationConfigOptions",
-				"ts:@riducms/build#createAdminLibraryConfig",
-				"ts:@riducms/build#AdminLibraryConfigOptions",
 				"ts:@riducms/build#createAdminUnoConfig",
 				"ts:@riducms/build/uno#presetRiduUtilities",
 				"ts:@riducms/build#AdminUnoConfigOptions",
@@ -2509,12 +2507,12 @@
 					"entrypoints": [
 						{
 							"specifier": "@riducms/ui",
-							"path": "packages/ui/src/index.ts",
+							"path": "packages/ui/src/lib/index.ts",
 							"tsconfig": "packages/ui/tsconfig.json"
 						},
 						{
 							"specifier": "@riducms/ui/code-theme",
-							"path": "packages/ui/src/code-theme.ts",
+							"path": "packages/ui/src/lib/code-theme.ts",
 							"tsconfig": "packages/ui/tsconfig.json"
 						}
 					]
@@ -2573,12 +2571,18 @@
 					"entrypoints": [
 						{
 							"specifier": "@riducms/plugin-richtext",
-							"path": "packages/plugin-richtext/src/index.ts",
+							"path": "packages/plugin-richtext/src/lib/index.ts",
 							"tsconfig": "packages/plugin-richtext/tsconfig.json"
 						},
 						{
+							"specifier": "@riducms/plugin-richtext/editor",
+							"path": "packages/plugin-richtext/src/lib/editor/index.ts",
+							"tsconfig": "packages/plugin-richtext/tsconfig.json",
+							"aliasesOnly": true
+						},
+						{
 							"specifier": "@riducms/plugin-richtext/svelte",
-							"path": "packages/plugin-richtext/src/render/index.ts",
+							"path": "packages/plugin-richtext/src/lib/render/index.ts",
 							"tsconfig": "packages/plugin-richtext/tsconfig.json",
 							"aliasesOnly": true
 						}
@@ -2609,7 +2613,7 @@
 					"entrypoints": [
 						{
 							"specifier": "@riducms/plugin-seo",
-							"path": "packages/plugin-seo/src/index.ts",
+							"path": "packages/plugin-seo/src/lib/index.ts",
 							"tsconfig": "packages/plugin-seo/tsconfig.json"
 						}
 					]
@@ -2641,12 +2645,12 @@
 					"entrypoints": [
 						{
 							"specifier": "@riducms/plugin-form-builder",
-							"path": "packages/plugin-form-builder/src/index.ts",
+							"path": "packages/plugin-form-builder/src/lib/index.ts",
 							"tsconfig": "packages/plugin-form-builder/tsconfig.json"
 						},
 						{
 							"specifier": "@riducms/plugin-form-builder/admin",
-							"path": "packages/plugin-form-builder/src/admin.ts",
+							"path": "packages/plugin-form-builder/src/lib/admin.ts",
 							"tsconfig": "packages/plugin-form-builder/tsconfig.json"
 						}
 					]
@@ -2705,7 +2709,7 @@
 					"entrypoints": [
 						{
 							"specifier": "@riducms/plugin-graphql",
-							"path": "packages/plugin-graphql/src/index.ts",
+							"path": "packages/plugin-graphql/src/lib/index.ts",
 							"tsconfig": "packages/plugin-graphql/tsconfig.json"
 						}
 					]

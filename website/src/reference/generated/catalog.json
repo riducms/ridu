@@ -9068,7 +9068,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.16.2\"",
+					"signature": "const FrameworkVersion = \"0.17.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -101452,7 +101452,7 @@
 					],
 					"source": {
 						"path": "plugins/seo/seo.go",
-						"line": 490
+						"line": 503
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -101488,7 +101488,7 @@
 					],
 					"source": {
 						"path": "plugins/seo/seo.go",
-						"line": 528
+						"line": 541
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -101524,7 +101524,7 @@
 					],
 					"source": {
 						"path": "plugins/seo/seo.go",
-						"line": 533
+						"line": 546
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -101560,7 +101560,7 @@
 					],
 					"source": {
 						"path": "plugins/seo/seo.go",
-						"line": 538
+						"line": 551
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -101596,7 +101596,7 @@
 					],
 					"source": {
 						"path": "plugins/seo/seo.go",
-						"line": 554
+						"line": 567
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -102091,7 +102091,7 @@
 					],
 					"source": {
 						"path": "plugins/seo/seo.go",
-						"line": 295
+						"line": 308
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115373,8 +115373,8 @@
 						"@riducms/sveltekit.defineRidu"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 65
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 66
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115389,7 +115389,7 @@
 					"kind": "function",
 					"group": "Functions",
 					"summary": "A SvelteKit `handle` that sets `event.locals.ridu` for each request. Compose it with other hooks through `sequence`.",
-					"signature": "function createRiduHandle<Config extends RiduConfigShape, Slug extends AuthCollectionSlug<Config>>(ridu: Binding<Config, Slug>, options?: ServerClientOptions): Handle",
+					"signature": "function createRiduHandle<Config extends RiduConfigShape, Slug extends AuthCollectionSlug<Config>>(ridu: Binding<Config, Slug>, options?: ServerClientOptions): RiduHandle",
 					"parameters": [
 						{
 							"name": "ridu",
@@ -115404,7 +115404,7 @@
 					],
 					"parametersLabel": "",
 					"returns": {
-						"type": "Handle",
+						"type": "RiduHandle",
 						"description": "The declared result."
 					},
 					"details": [],
@@ -115416,13 +115416,13 @@
 						"@riducms/sveltekit/server.createRiduHandle"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/server.ts",
-						"line": 56
+						"path": "packages/sveltekit/src/lib/server.ts",
+						"line": 65
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": [
-						"function createRiduHandle<Config extends RiduConfigShape, Slug extends AuthCollectionSlug<Config>>(ridu: Binding<Config, Slug>, options?: ServerClientOptions): Handle"
+						"function createRiduHandle<Config extends RiduConfigShape, Slug extends AuthCollectionSlug<Config>>(ridu: Binding<Config, Slug>, options?: ServerClientOptions): RiduHandle"
 					]
 				},
 				{
@@ -115441,7 +115441,7 @@
 						},
 						{
 							"name": "event",
-							"type": "Pick<RequestEvent<Record<string, string>, string | null>, \"cookies\" | \"url\"> & Partial<Pick<RequestEvent<Record<string, string>, string | null>, \"fetch\">>",
+							"type": "Pick<RequestEvent<Record<string, never>, null>, \"cookies\" | \"url\"> & Partial<Pick<RequestEvent<Record<string, never>, null>, \"fetch\">>",
 							"description": "The event value."
 						},
 						{
@@ -115464,13 +115464,45 @@
 						"@riducms/sveltekit/server.createServerClient"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/server.ts",
+						"path": "packages/sveltekit/src/lib/server.ts",
 						"line": 31
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": [
 						"function createServerClient<Config extends RiduConfigShape, Slug extends AuthCollectionSlug<Config>>(ridu: Binding<Config, Slug>, event: Pick<RequestEvent, \"cookies\" | \"url\"> & Partial<Pick<RequestEvent, \"fetch\">>, options?: ServerClientOptions): RiduClient<Config, Slug>"
+					]
+				},
+				{
+					"id": "ts:@riducms/sveltekit/server#RiduHandle",
+					"name": "RiduHandle",
+					"slug": "ridu-handle",
+					"kind": "type",
+					"group": "Types",
+					"summary": "A server `handle` hook. SvelteKit 2 exports `Handle` from `@sveltejs/kit` and SvelteKit 3 from `@sveltejs/kit/hooks`; this shape is assignable to both.",
+					"signature": "function RiduHandle(input: { event: RequestEvent; resolve: (event: RequestEvent) => Response | Promise<Response>; }): Response | Promise<Response>",
+					"parameters": [],
+					"parametersLabel": "",
+					"returns": {
+						"type": "Response | Promise<Response>",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RiduHandle",
+						"@riducms/sveltekit/server.RiduHandle"
+					],
+					"source": {
+						"path": "packages/sveltekit/src/lib/server.ts",
+						"line": 56
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": [
+						"function RiduHandle(input: { event: RequestEvent; resolve: (event: RequestEvent) => Response | Promise<Response>; }): Response | Promise<Response>"
 					]
 				},
 				{
@@ -115498,7 +115530,7 @@
 						"@riducms/sveltekit/server.ServerClientOptions"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/server.ts",
+						"path": "packages/sveltekit/src/lib/server.ts",
 						"line": 17
 					},
 					"relatedDocs": [],
@@ -115524,8 +115556,8 @@
 						"@riducms/sveltekit.AUTH_DEPENDENCY"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 21
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 22
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115554,8 +115586,8 @@
 						"@riducms/sveltekit.ClientFactory"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 18
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 19
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115582,8 +115614,8 @@
 						"@riducms/sveltekit.ConfigOf"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 18
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 19
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115608,8 +115640,8 @@
 						"@riducms/sveltekit.DEFAULT_COOKIE_NAME"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 17
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 18
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115634,8 +115666,8 @@
 						"@riducms/sveltekit.InferClient"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 49
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 50
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115660,8 +115692,8 @@
 						"@riducms/sveltekit.InferSession"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 53
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 54
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115692,8 +115724,8 @@
 						"@riducms/sveltekit.ProvideOptions"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 23
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 24
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115749,8 +115781,8 @@
 						"@riducms/sveltekit.Ridu"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 32
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 33
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115785,8 +115817,8 @@
 						"@riducms/sveltekit.Ridu.provide"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 41
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 42
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115817,8 +115849,8 @@
 						"@riducms/sveltekit.Ridu.use"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 43
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 44
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115871,8 +115903,8 @@
 						"@riducms/sveltekit.RiduDefinitionOptions"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/index.ts",
-						"line": 18
+						"path": "packages/sveltekit/src/lib/index.ts",
+						"line": 19
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115907,7 +115939,7 @@
 						"@riducms/sveltekit.RiduDefinitionOptions.createClient"
 					],
 					"source": {
-						"path": "packages/sveltekit/src/definition.ts",
+						"path": "packages/sveltekit/src/lib/definition.ts",
 						"line": 24
 					},
 					"relatedDocs": [],
@@ -122921,7 +122953,7 @@
 						"@riducms/plugin.ADMIN_PLUGIN_API_VERSION"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 39
 					},
 					"relatedDocs": [],
@@ -122959,7 +122991,7 @@
 						"@riducms/plugin.defineRowLabelPlugin"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 21
 					},
 					"relatedDocs": [],
@@ -122997,7 +123029,7 @@
 						"@riducms/plugin.defineAdminMessages"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 29
 					},
 					"relatedDocs": [],
@@ -123040,7 +123072,7 @@
 						"@riducms/plugin.validateAdminMessages"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 32
 					},
 					"relatedDocs": [],
@@ -123072,7 +123104,7 @@
 						"@riducms/plugin.getAdminI18n"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 30
 					},
 					"relatedDocs": [],
@@ -123104,7 +123136,7 @@
 						"@riducms/plugin.setAdminI18n"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 31
 					},
 					"relatedDocs": [],
@@ -123149,7 +123181,7 @@
 						"@riducms/plugin.resolveAdminExtensions"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 40
 					},
 					"relatedDocs": [],
@@ -123311,7 +123343,7 @@
 						"@riducms/plugin.AdminPlugin"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 42
 					},
 					"relatedDocs": [
@@ -123385,7 +123417,7 @@
 						"@riducms/plugin.BackendAdminPlugin"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 88
 					},
 					"relatedDocs": [],
@@ -123422,7 +123454,7 @@
 						"@riducms/plugin.AdminPluginPair"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 86
 					},
 					"relatedDocs": [],
@@ -123534,7 +123566,7 @@
 						"@riducms/plugin.ResolvedAdminExtensions"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 89
 					},
 					"relatedDocs": [],
@@ -123578,7 +123610,7 @@
 						"@riducms/plugin.RowLabelPlugin"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 23
 					},
 					"relatedDocs": [],
@@ -123633,7 +123665,7 @@
 						"@riducms/plugin.RowLabelComponentProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 22
 					},
 					"relatedDocs": [],
@@ -123661,7 +123693,7 @@
 						"@riducms/plugin.RowLabelSnapshot"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 24
 					},
 					"relatedDocs": [],
@@ -123687,7 +123719,7 @@
 						"@riducms/plugin.RowLabelValue"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 25
 					},
 					"relatedDocs": [],
@@ -123729,7 +123761,7 @@
 						"@riducms/plugin.FieldFormResource"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 27
 					},
 					"relatedDocs": [],
@@ -123755,7 +123787,7 @@
 						"@riducms/plugin.FieldDocument"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 9
 					},
 					"relatedDocs": [],
@@ -123827,7 +123859,7 @@
 						"@riducms/plugin.AdminI18n"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 33
 					},
 					"relatedDocs": [],
@@ -123864,7 +123896,7 @@
 						"@riducms/plugin.DefineAdminMessagesInput"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 34
 					},
 					"relatedDocs": [],
@@ -123901,7 +123933,7 @@
 						"@riducms/plugin.PluginMessageCatalog"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 35
 					},
 					"relatedDocs": [],
@@ -123927,7 +123959,7 @@
 						"@riducms/plugin.PluginTranslationKey"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 36
 					},
 					"relatedDocs": [],
@@ -124032,7 +124064,7 @@
 						"@riducms/plugin.FieldAuthoringHost"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 8
 					},
 					"relatedDocs": [
@@ -124087,7 +124119,7 @@
 						"@riducms/plugin.EmbeddedSchemaFormProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 3
 					},
 					"relatedDocs": [
@@ -124134,7 +124166,7 @@
 						"@riducms/plugin.EmbeddedSchemaFormScope"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 2
 					},
 					"relatedDocs": [],
@@ -124176,7 +124208,7 @@
 						"@riducms/plugin.EmbeddedSchemaVariantScope"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 5
 					},
 					"relatedDocs": [],
@@ -124288,7 +124320,7 @@
 						"@riducms/plugin.FieldReferenceBrowserProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 10
 					},
 					"relatedDocs": [],
@@ -124330,7 +124362,7 @@
 						"@riducms/plugin.FieldReferenceFilter"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 11
 					},
 					"relatedDocs": [],
@@ -124358,7 +124390,7 @@
 						"@riducms/plugin.AdminRoute"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 87
 					},
 					"relatedDocs": [],
@@ -124400,7 +124432,7 @@
 						"@riducms/plugin.AdminRouteNavigation"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 85
 					},
 					"relatedDocs": [],
@@ -124426,7 +124458,7 @@
 						"@riducms/plugin.AdminDashboardPanel"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 44
 					},
 					"relatedDocs": [],
@@ -124468,7 +124500,7 @@
 						"@riducms/plugin.AdminDashboardPanelProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 45
 					},
 					"relatedDocs": [],
@@ -124496,7 +124528,7 @@
 						},
 						{
 							"name": "position",
-							"type": "\"replace\" | \"before\" | \"after\"",
+							"type": "\"before\" | \"after\" | \"replace\"",
 							"description": "The position value."
 						}
 					],
@@ -124510,7 +124542,7 @@
 						"@riducms/plugin.AdminLoginComponent"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 50
 					},
 					"relatedDocs": [],
@@ -124562,7 +124594,7 @@
 						"@riducms/plugin.AdminLoginComponentProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 51
 					},
 					"relatedDocs": [],
@@ -124599,7 +124631,7 @@
 						"@riducms/plugin.AdminLoginExtensionHost"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 52
 					},
 					"relatedDocs": [],
@@ -124625,7 +124657,7 @@
 						"@riducms/plugin.AdminAccountSurface"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 56
 					},
 					"relatedDocs": [],
@@ -124658,7 +124690,7 @@
 						},
 						{
 							"name": "position",
-							"type": "\"replace\" | \"before\" | \"after\"",
+							"type": "\"before\" | \"after\" | \"replace\"",
 							"description": "The position value."
 						}
 					],
@@ -124672,7 +124704,7 @@
 						"@riducms/plugin.AdminAccountComponent"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 53
 					},
 					"relatedDocs": [],
@@ -124729,7 +124761,7 @@
 						"@riducms/plugin.AdminAccountComponentProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 54
 					},
 					"relatedDocs": [],
@@ -124771,7 +124803,7 @@
 						"@riducms/plugin.AdminAccountExtensionHost"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 55
 					},
 					"relatedDocs": [],
@@ -124797,7 +124829,7 @@
 						"@riducms/plugin.AdminNavigationPosition"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 59
 					},
 					"relatedDocs": [],
@@ -124839,7 +124871,7 @@
 						"@riducms/plugin.AdminNavigationComponent"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 57
 					},
 					"relatedDocs": [],
@@ -124886,7 +124918,7 @@
 						"@riducms/plugin.AdminNavigationComponentProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 58
 					},
 					"relatedDocs": [],
@@ -124923,7 +124955,7 @@
 						"@riducms/plugin.AdminLogoutButton"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 60
 					},
 					"relatedDocs": [],
@@ -124970,7 +125002,7 @@
 						"@riducms/plugin.AdminLogoutButtonProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 61
 					},
 					"relatedDocs": [],
@@ -125002,7 +125034,7 @@
 						"@riducms/plugin.AdminLogoutExtensionHost"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 62
 					},
 					"relatedDocs": [],
@@ -125028,7 +125060,7 @@
 						"@riducms/plugin.AdminCoreViewSurface"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 66
 					},
 					"relatedDocs": [],
@@ -125054,7 +125086,7 @@
 						"@riducms/plugin.AdminCoreView"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 63
 					},
 					"relatedDocs": [],
@@ -125126,7 +125158,7 @@
 						"@riducms/plugin.AdminCoreViewProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 65
 					},
 					"relatedDocs": [],
@@ -125168,7 +125200,7 @@
 						"@riducms/plugin.AdminCoreViewHost"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 64
 					},
 					"relatedDocs": [],
@@ -125194,7 +125226,7 @@
 						"@riducms/plugin.AdminBrandSurface"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 69
 					},
 					"relatedDocs": [],
@@ -125236,7 +125268,7 @@
 						"@riducms/plugin.AdminBrandComponent"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 67
 					},
 					"relatedDocs": [],
@@ -125283,7 +125315,7 @@
 						"@riducms/plugin.AdminBrandComponentProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 68
 					},
 					"relatedDocs": [],
@@ -125309,7 +125341,7 @@
 						"@riducms/plugin.AdminShellSlotPosition"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 72
 					},
 					"relatedDocs": [],
@@ -125351,7 +125383,7 @@
 						"@riducms/plugin.AdminShellSlot"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 70
 					},
 					"relatedDocs": [],
@@ -125398,7 +125430,7 @@
 						"@riducms/plugin.AdminShellSlotProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 71
 					},
 					"relatedDocs": [],
@@ -125435,7 +125467,7 @@
 						"@riducms/plugin.AdminProvider"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 73
 					},
 					"relatedDocs": [],
@@ -125472,7 +125504,7 @@
 						"@riducms/plugin.AdminProviderProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 74
 					},
 					"relatedDocs": [],
@@ -125529,7 +125561,7 @@
 						"@riducms/plugin.AdminListCellRenderer"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 80
 					},
 					"relatedDocs": [],
@@ -125581,7 +125613,7 @@
 						"@riducms/plugin.AdminListCellRendererProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 81
 					},
 					"relatedDocs": [],
@@ -125630,7 +125662,7 @@
 						"@riducms/plugin.AdminDocumentAction"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 75
 					},
 					"relatedDocs": [],
@@ -125682,7 +125714,7 @@
 						"@riducms/plugin.AdminDocumentView"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 78
 					},
 					"relatedDocs": [],
@@ -125729,7 +125761,7 @@
 						"@riducms/plugin.AdminDocumentExtensionProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 77
 					},
 					"relatedDocs": [],
@@ -125755,7 +125787,7 @@
 						"@riducms/plugin.AdminExtensionNotificationTone"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 79
 					},
 					"relatedDocs": [],
@@ -125792,7 +125824,7 @@
 						"@riducms/plugin.AdminDocumentExtensionHost"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 76
 					},
 					"relatedDocs": [],
@@ -125834,7 +125866,7 @@
 						"@riducms/plugin.AdminExtensionProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 49
 					},
 					"relatedDocs": [],
@@ -125875,7 +125907,7 @@
 						"@riducms/plugin.AdminAccountComponent.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 57
 					},
 					"relatedDocs": [],
@@ -125913,7 +125945,7 @@
 						"@riducms/plugin.AdminAccountComponentProps.defaultView"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 49
 					},
 					"relatedDocs": [],
@@ -125945,7 +125977,7 @@
 						"@riducms/plugin.AdminAccountExtensionHost.logout"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 41
 					},
 					"relatedDocs": [],
@@ -125993,7 +126025,7 @@
 						"@riducms/plugin.AdminAccountExtensionHost.notify"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 43
 					},
 					"relatedDocs": [],
@@ -126025,7 +126057,7 @@
 						"@riducms/plugin.AdminAccountExtensionHost.refreshUser"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 39
 					},
 					"relatedDocs": [],
@@ -126068,7 +126100,7 @@
 						"@riducms/plugin.AdminBrandComponent.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/shell.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/shell.ts",
 						"line": 46
 					},
 					"relatedDocs": [],
@@ -126100,7 +126132,7 @@
 						"@riducms/plugin.AdminCoreViewHost.documentsChanged"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 70
 					},
 					"relatedDocs": [],
@@ -126148,7 +126180,7 @@
 						"@riducms/plugin.AdminCoreViewHost.notify"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 72
 					},
 					"relatedDocs": [],
@@ -126180,7 +126212,7 @@
 						"@riducms/plugin.AdminCoreViewHost.refreshManifest"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 68
 					},
 					"relatedDocs": [],
@@ -126218,7 +126250,7 @@
 						"@riducms/plugin.AdminCoreViewProps.defaultView"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 81
 					},
 					"relatedDocs": [],
@@ -126261,7 +126293,7 @@
 						"@riducms/plugin.AdminDocumentAction.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/documents.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/documents.ts",
 						"line": 31
 					},
 					"relatedDocs": [],
@@ -126309,7 +126341,7 @@
 						"@riducms/plugin.AdminDocumentExtensionHost.notify"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/documents.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/documents.ts",
 						"line": 13
 					},
 					"relatedDocs": [],
@@ -126341,7 +126373,7 @@
 						"@riducms/plugin.AdminDocumentExtensionHost.refresh"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/documents.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/documents.ts",
 						"line": 11
 					},
 					"relatedDocs": [],
@@ -126384,7 +126416,7 @@
 						"@riducms/plugin.AdminDocumentView.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/documents.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/documents.ts",
 						"line": 41
 					},
 					"relatedDocs": [],
@@ -126427,8 +126459,8 @@
 						"@riducms/plugin.AdminI18n.formatDate"
 					],
 					"source": {
-						"path": "packages/translations/src/types.ts",
-						"line": 27
+						"path": "packages/translations/dist/types.d.ts",
+						"line": 26
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126470,8 +126502,8 @@
 						"@riducms/plugin.AdminI18n.formatList"
 					],
 					"source": {
-						"path": "packages/translations/src/types.ts",
-						"line": 30
+						"path": "packages/translations/dist/types.d.ts",
+						"line": 29
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126513,8 +126545,8 @@
 						"@riducms/plugin.AdminI18n.formatNumber"
 					],
 					"source": {
-						"path": "packages/translations/src/types.ts",
-						"line": 28
+						"path": "packages/translations/dist/types.d.ts",
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126556,8 +126588,8 @@
 						"@riducms/plugin.AdminI18n.formatRelativeTime"
 					],
 					"source": {
-						"path": "packages/translations/src/types.ts",
-						"line": 29
+						"path": "packages/translations/dist/types.d.ts",
+						"line": 28
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126599,8 +126631,8 @@
 						"@riducms/plugin.AdminI18n.t"
 					],
 					"source": {
-						"path": "packages/translations/src/types.ts",
-						"line": 26
+						"path": "packages/translations/dist/types.d.ts",
+						"line": 25
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126642,8 +126674,8 @@
 						"@riducms/plugin.AdminI18n.text"
 					],
 					"source": {
-						"path": "packages/translations/src/types.ts",
-						"line": 25
+						"path": "packages/translations/dist/types.d.ts",
+						"line": 24
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126685,7 +126717,7 @@
 						"@riducms/plugin.AdminListCellRenderer.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/lists.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
 						"line": 55
 					},
 					"relatedDocs": [],
@@ -126728,7 +126760,7 @@
 						"@riducms/plugin.AdminLoginComponent.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 29
 					},
 					"relatedDocs": [],
@@ -126766,7 +126798,7 @@
 						"@riducms/plugin.AdminLoginComponentProps.defaultView"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 22
 					},
 					"relatedDocs": [],
@@ -126804,7 +126836,7 @@
 						"@riducms/plugin.AdminLoginExtensionHost.login"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 15
 					},
 					"relatedDocs": [],
@@ -126852,7 +126884,7 @@
 						"@riducms/plugin.AdminLoginExtensionHost.notify"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/views.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/views.ts",
 						"line": 17
 					},
 					"relatedDocs": [],
@@ -126895,7 +126927,7 @@
 						"@riducms/plugin.AdminLogoutButton.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/shell.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/shell.ts",
 						"line": 33
 					},
 					"relatedDocs": [],
@@ -126927,7 +126959,7 @@
 						"@riducms/plugin.AdminLogoutExtensionHost.logout"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/shell.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/shell.ts",
 						"line": 23
 					},
 					"relatedDocs": [],
@@ -126970,7 +127002,7 @@
 						"@riducms/plugin.AdminNavigationComponent.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/shell.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/shell.ts",
 						"line": 17
 					},
 					"relatedDocs": [],
@@ -127008,7 +127040,7 @@
 						"@riducms/plugin.AdminNavigationComponentProps.defaultView"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/shell.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/shell.ts",
 						"line": 11
 					},
 					"relatedDocs": [],
@@ -127051,7 +127083,7 @@
 						"@riducms/plugin.AdminProvider.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/shell.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/shell.ts",
 						"line": 71
 					},
 					"relatedDocs": [],
@@ -127089,7 +127121,7 @@
 						"@riducms/plugin.AdminProviderProps.defaultView"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/shell.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/shell.ts",
 						"line": 64
 					},
 					"relatedDocs": [],
@@ -127132,7 +127164,7 @@
 						"@riducms/plugin.AdminShellSlot.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/shell.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/shell.ts",
 						"line": 59
 					},
 					"relatedDocs": [],
@@ -127180,7 +127212,7 @@
 						"@riducms/plugin.FieldAuthoringHost.findDocument"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 259
 					},
 					"relatedDocs": [],
@@ -127223,7 +127255,7 @@
 						"@riducms/plugin.FieldAuthoringHost.createSchemaPayload"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 236
 					},
 					"relatedDocs": [
@@ -127273,7 +127305,7 @@
 						"@riducms/plugin.FieldAuthoringHost.schemaForm"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 203
 					},
 					"relatedDocs": [
@@ -127318,7 +127350,7 @@
 						"@riducms/plugin.EmbeddedSchemaFormProps.onChange"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 115
 					},
 					"relatedDocs": [
@@ -127366,7 +127398,7 @@
 						"@riducms/plugin.FieldAuthoringHost.referenceBrowser"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 253
 					},
 					"relatedDocs": [],
@@ -127414,7 +127446,7 @@
 						"@riducms/plugin.FieldAuthoringHost.requestPlugin"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 270
 					},
 					"relatedDocs": [],
@@ -127446,7 +127478,7 @@
 						"@riducms/plugin.FieldReferenceBrowserProps.onClose"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 91
 					},
 					"relatedDocs": [],
@@ -127489,7 +127521,7 @@
 						"@riducms/plugin.FieldReferenceBrowserProps.onCommit"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 89
 					},
 					"relatedDocs": [],
@@ -127532,7 +127564,7 @@
 						"@riducms/plugin.RowLabelPlugin.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/row-label.ts",
+						"path": "packages/plugin/src/lib/row-label.ts",
 						"line": 37
 					},
 					"relatedDocs": [],
@@ -127678,7 +127710,7 @@
 						"@riducms/plugin/admin.AdminConfig"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin.ts",
+						"path": "packages/plugin/src/lib/admin.ts",
 						"line": 33
 					},
 					"relatedDocs": [
@@ -127851,7 +127883,7 @@
 						"register components"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin.ts",
+						"path": "packages/plugin/src/lib/admin.ts",
 						"line": 77
 					},
 					"relatedDocs": [
@@ -127930,7 +127962,7 @@
 						"summary"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin.ts",
+						"path": "packages/plugin/src/lib/admin.ts",
 						"line": 240
 					},
 					"relatedDocs": [
@@ -127967,9 +127999,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@6900",
+							"name": "__@registration@10903",
 							"type": "true",
-							"description": "The __@registration@6900 value."
+							"description": "The __@registration@10903 value."
 						}
 					],
 					"parametersLabel": "",
@@ -127982,8 +128014,8 @@
 						"@riducms/plugin/admin.RegisteredRowLabel"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin.ts",
-						"line": 241
+						"path": "packages/plugin/src/lib/admin.ts",
+						"line": 244
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -128023,7 +128055,7 @@
 						"@riducms/plugin/admin.RegisteredRowLabel.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/local-row-label.ts",
+						"path": "packages/plugin/src/lib/local-row-label.ts",
 						"line": 24
 					},
 					"relatedDocs": [],
@@ -128061,7 +128093,7 @@
 						"@riducms/plugin/admin.RegisteredRowLabel.decode"
 					],
 					"source": {
-						"path": "packages/plugin/src/local-row-label.ts",
+						"path": "packages/plugin/src/lib/local-row-label.ts",
 						"line": 25
 					},
 					"relatedDocs": [],
@@ -128099,7 +128131,7 @@
 						"@riducms/plugin/admin.resolveAdminConfig"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin.ts",
+						"path": "packages/plugin/src/lib/admin.ts",
 						"line": 92
 					},
 					"relatedDocs": [],
@@ -128158,7 +128190,7 @@
 						"@riducms/plugin/admin.ResolvedAdminConfig"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin.ts",
+						"path": "packages/plugin/src/lib/admin.ts",
 						"line": 82
 					},
 					"relatedDocs": [],
@@ -128203,8 +128235,8 @@
 						"@riducms/plugin/admin.RowLabelDefinition"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin.ts",
-						"line": 241
+						"path": "packages/plugin/src/lib/admin.ts",
+						"line": 243
 					},
 					"relatedDocs": [
 						"/docs/custom-components/row-labels/"
@@ -128272,8 +128304,8 @@
 						"@riducms/plugin/admin.RowLabelProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin.ts",
-						"line": 241
+						"path": "packages/plugin/src/lib/admin.ts",
+						"line": 242
 					},
 					"relatedDocs": [
 						"/docs/custom-components/row-labels/"
@@ -128323,7 +128355,7 @@
 						"@riducms/plugin/admin.validateAdminManifest"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin.ts",
+						"path": "packages/plugin/src/lib/admin.ts",
 						"line": 120
 					},
 					"relatedDocs": [],
@@ -128503,7 +128535,7 @@
 						"fields components difference"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring/v1.ts",
+						"path": "packages/plugin/src/lib/authoring/v1.ts",
 						"line": 53
 					},
 					"relatedDocs": [
@@ -128604,7 +128636,7 @@
 						"fieldType"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring/v1.ts",
+						"path": "packages/plugin/src/lib/authoring/v1.ts",
 						"line": 4
 					},
 					"relatedDocs": [
@@ -128699,7 +128731,7 @@
 						"custom plugin field"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring/v1.ts",
+						"path": "packages/plugin/src/lib/authoring/v1.ts",
 						"line": 4
 					},
 					"relatedDocs": [
@@ -128789,8 +128821,8 @@
 						"decodeConfig"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/index.ts",
-						"line": 2
+						"path": "packages/plugin/src/lib/editor/index.ts",
+						"line": 7
 					},
 					"relatedDocs": [
 						"/docs/custom-components/field-components/",
@@ -128874,8 +128906,8 @@
 						"@riducms/plugin/editor.FieldBinding"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/index.ts",
-						"line": 1
+						"path": "packages/plugin/src/lib/editor/index.ts",
+						"line": 2
 					},
 					"relatedDocs": [
 						"/docs/fields/live-validation/",
@@ -128915,7 +128947,7 @@
 						"@riducms/plugin/editor.FieldBinding.set"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/types.ts",
+						"path": "packages/plugin/src/lib/editor/types.ts",
 						"line": 71
 					},
 					"relatedDocs": [],
@@ -128968,8 +129000,8 @@
 						"@riducms/plugin/editor.FieldEditorDefinition"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/index.ts",
-						"line": 3
+						"path": "packages/plugin/src/lib/editor/index.ts",
+						"line": 8
 					},
 					"relatedDocs": [
 						"/docs/custom-components/field-components/"
@@ -129037,8 +129069,8 @@
 						"@riducms/plugin/editor.FieldEditorProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/index.ts",
-						"line": 1
+						"path": "packages/plugin/src/lib/editor/index.ts",
+						"line": 3
 					},
 					"relatedDocs": [
 						"/docs/custom-components/field-components/"
@@ -129069,8 +129101,8 @@
 						"@riducms/plugin/editor.FieldEditorType"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/index.ts",
-						"line": 1
+						"path": "packages/plugin/src/lib/editor/index.ts",
+						"line": 4
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -129095,8 +129127,8 @@
 						"@riducms/plugin/editor.FieldEditorValue"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/index.ts",
-						"line": 1
+						"path": "packages/plugin/src/lib/editor/index.ts",
+						"line": 5
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -129127,9 +129159,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@6032",
+							"name": "__@registration@7991",
 							"type": "true",
-							"description": "The __@registration@6032 value."
+							"description": "The __@registration@7991 value."
 						}
 					],
 					"parametersLabel": "",
@@ -129142,8 +129174,8 @@
 						"@riducms/plugin/editor.RegisteredFieldEditor"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/index.ts",
-						"line": 3
+						"path": "packages/plugin/src/lib/editor/index.ts",
+						"line": 8
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -129183,7 +129215,7 @@
 						"@riducms/plugin/editor.RegisteredFieldEditor.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/registry.ts",
+						"path": "packages/plugin/src/lib/editor/registry.ts",
 						"line": 46
 					},
 					"relatedDocs": [],
@@ -129221,7 +129253,7 @@
 						"@riducms/plugin/editor.RegisteredFieldEditor.decode"
 					],
 					"source": {
-						"path": "packages/plugin/src/editor/registry.ts",
+						"path": "packages/plugin/src/lib/editor/registry.ts",
 						"line": 47
 					},
 					"relatedDocs": [],
@@ -129295,7 +129327,7 @@
 						"@riducms/plugin.AdminCollectionList"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 82
 					},
 					"relatedDocs": [],
@@ -129334,7 +129366,7 @@
 						"@riducms/plugin.AdminCollectionList.documentHref"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/lists.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
 						"line": 18
 					},
 					"relatedDocs": [
@@ -129374,7 +129406,7 @@
 						"@riducms/plugin.AdminCollectionList.title"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/lists.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
 						"line": 16
 					},
 					"relatedDocs": [],
@@ -129417,7 +129449,7 @@
 						"@riducms/plugin.AdminCollectionList.toggleDocument"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/lists.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
 						"line": 14
 					},
 					"relatedDocs": [],
@@ -129455,7 +129487,7 @@
 						"@riducms/plugin.AdminCollectionList.togglePage"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/lists.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
 						"line": 15
 					},
 					"relatedDocs": [],
@@ -129572,7 +129604,7 @@
 						"@riducms/plugin.AdminContributions"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 43
 					},
 					"relatedDocs": [
@@ -129619,7 +129651,7 @@
 						"@riducms/plugin.AdminListResultsRenderer"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 83
 					},
 					"relatedDocs": [],
@@ -129660,7 +129692,7 @@
 						"@riducms/plugin.AdminListResultsRenderer.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/lists.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
 						"line": 31
 					},
 					"relatedDocs": [],
@@ -129707,7 +129739,7 @@
 						"@riducms/plugin.AdminListResultsRendererProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 84
 					},
 					"relatedDocs": [
@@ -129757,7 +129789,7 @@
 						"@riducms/plugin.AdminLoaderProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 46
 					},
 					"relatedDocs": [
@@ -129792,7 +129824,7 @@
 						"@riducms/plugin.AdminLoaderProps.refresh"
 					],
 					"source": {
-						"path": "packages/plugin/src/admin-extensions/shared.ts",
+						"path": "packages/plugin/src/lib/admin-extensions/shared.ts",
 						"line": 23
 					},
 					"relatedDocs": [],
@@ -129820,7 +129852,7 @@
 						"@riducms/plugin.AdminViewComponent"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 47
 					},
 					"relatedDocs": [],
@@ -129856,7 +129888,7 @@
 						"@riducms/plugin.assertAdminPluginPairs"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 41
 					},
 					"relatedDocs": [],
@@ -129925,7 +129957,7 @@
 						"@riducms/plugin.EmbeddedSchemaDraft"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 6
 					},
 					"relatedDocs": [],
@@ -129955,7 +129987,7 @@
 						"@riducms/plugin.EmbeddedSchemaDraft.discard"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 168
 					},
 					"relatedDocs": [],
@@ -129987,7 +130019,7 @@
 						"@riducms/plugin.EmbeddedSchemaDraft.payload"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 160
 					},
 					"relatedDocs": [],
@@ -130019,7 +130051,7 @@
 						"@riducms/plugin.EmbeddedSchemaDraft.validate"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 166
 					},
 					"relatedDocs": [],
@@ -130068,7 +130100,7 @@
 						"@riducms/plugin.EmbeddedSchemaDraftEditorProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 7
 					},
 					"relatedDocs": [],
@@ -130104,7 +130136,7 @@
 						"@riducms/plugin.EmbeddedSchemaDraftEditorProps.onApply"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 183
 					},
 					"relatedDocs": [],
@@ -130136,7 +130168,7 @@
 						"@riducms/plugin.EmbeddedSchemaDraftEditorProps.onCancel"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 185
 					},
 					"relatedDocs": [],
@@ -130185,7 +130217,7 @@
 						"@riducms/plugin.EmbeddedSchemaHeaderProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 4
 					},
 					"relatedDocs": [],
@@ -130221,7 +130253,7 @@
 						"@riducms/plugin.EmbeddedSchemaHeaderProps.onChange"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 125
 					},
 					"relatedDocs": [],
@@ -130259,7 +130291,7 @@
 						"@riducms/plugin.FieldAuthoringHost.beginSchemaDraft"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 216
 					},
 					"relatedDocs": [],
@@ -130297,7 +130329,7 @@
 						"@riducms/plugin.FieldAuthoringHost.canCreateDocument"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 251
 					},
 					"relatedDocs": [],
@@ -130340,7 +130372,7 @@
 						"@riducms/plugin.FieldAuthoringHost.copySchemaPayload"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 228
 					},
 					"relatedDocs": [],
@@ -130378,7 +130410,7 @@
 						"@riducms/plugin.FieldAuthoringHost.schemaDraftEditor"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 220
 					},
 					"relatedDocs": [],
@@ -130416,7 +130448,7 @@
 						"@riducms/plugin.FieldAuthoringHost.schemaHeader"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 209
 					},
 					"relatedDocs": [],
@@ -130454,7 +130486,7 @@
 						"@riducms/plugin.FieldAuthoringHost.schemaIssues"
 					],
 					"source": {
-						"path": "packages/plugin/src/authoring.ts",
+						"path": "packages/plugin/src/lib/authoring.ts",
 						"line": 222
 					},
 					"relatedDocs": [],
@@ -130508,7 +130540,7 @@
 						"@riducms/plugin.FieldDocumentForm"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 27
 					},
 					"relatedDocs": [],
@@ -130544,7 +130576,7 @@
 						"@riducms/plugin.FieldDocumentForm.get"
 					],
 					"source": {
-						"path": "packages/plugin/src/form.ts",
+						"path": "packages/plugin/src/lib/form.ts",
 						"line": 29
 					},
 					"relatedDocs": [],
@@ -130582,7 +130614,7 @@
 						"@riducms/plugin.FieldDocumentForm.issuesFor"
 					],
 					"source": {
-						"path": "packages/plugin/src/form.ts",
+						"path": "packages/plugin/src/lib/form.ts",
 						"line": 31
 					},
 					"relatedDocs": [],
@@ -130614,7 +130646,7 @@
 						"@riducms/plugin.FieldDocumentForm.snapshot"
 					],
 					"source": {
-						"path": "packages/plugin/src/form.ts",
+						"path": "packages/plugin/src/lib/form.ts",
 						"line": 37
 					},
 					"relatedDocs": [],
@@ -130662,7 +130694,7 @@
 						"live validation retry"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 27
 					},
 					"relatedDocs": [
@@ -130697,7 +130729,7 @@
 						"@riducms/plugin.FieldLiveValidation.retry"
 					],
 					"source": {
-						"path": "packages/plugin/src/form.ts",
+						"path": "packages/plugin/src/lib/form.ts",
 						"line": 45
 					},
 					"relatedDocs": [],
@@ -130778,7 +130810,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldBinding"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 14
 					},
 					"relatedDocs": [
@@ -130820,7 +130852,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldBinding.reportPendingEdit"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 74
 					},
 					"relatedDocs": [],
@@ -130859,7 +130891,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldBinding.set"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 63
 					},
 					"relatedDocs": [],
@@ -130929,7 +130961,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldProps"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 15
 					},
 					"relatedDocs": [
@@ -130958,9 +130990,9 @@
 							"description": "The type value."
 						},
 						{
-							"name": "__@valueContract@4036",
+							"name": "__@valueContract@6058",
 							"type": "{ value: (value: Value) => Value; input: (value: Input) => Input; }",
-							"description": "The __@valueContract@4036 value."
+							"description": "The __@valueContract@6058 value."
 						},
 						{
 							"name": "fieldType",
@@ -130993,9 +131025,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@4015",
+							"name": "__@registration@6037",
 							"type": "true",
-							"description": "The __@registration@4015 value."
+							"description": "The __@registration@6037 value."
 						}
 					],
 					"parametersLabel": "",
@@ -131009,7 +131041,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldRegistration"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 18
 					},
 					"relatedDocs": [],
@@ -131051,7 +131083,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldRegistration.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 169
 					},
 					"relatedDocs": [],
@@ -131090,7 +131122,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldRegistration.decodeConfig"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 170
 					},
 					"relatedDocs": [],
@@ -131129,7 +131161,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldRegistration.decodeFormValue"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 173
 					},
 					"relatedDocs": [],
@@ -131168,7 +131200,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldRegistration.decodeInput"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 172
 					},
 					"relatedDocs": [],
@@ -131207,7 +131239,7 @@
 						"@riducms/plugin/authoring/v1.PluginFieldRegistration.decodeValue"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 171
 					},
 					"relatedDocs": [],
@@ -131267,7 +131299,7 @@
 						"@riducms/plugin/authoring/v1.PluginForm"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 16
 					},
 					"relatedDocs": [],
@@ -131304,7 +131336,7 @@
 						"@riducms/plugin/authoring/v1.PluginForm.bind"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 108
 					},
 					"relatedDocs": [],
@@ -131343,7 +131375,7 @@
 						"@riducms/plugin/authoring/v1.PluginForm.get"
 					],
 					"source": {
-						"path": "packages/plugin/src/form.ts",
+						"path": "packages/plugin/src/lib/form.ts",
 						"line": 29
 					},
 					"relatedDocs": [],
@@ -131382,7 +131414,7 @@
 						"@riducms/plugin/authoring/v1.PluginForm.issuesFor"
 					],
 					"source": {
-						"path": "packages/plugin/src/form.ts",
+						"path": "packages/plugin/src/lib/form.ts",
 						"line": 31
 					},
 					"relatedDocs": [],
@@ -131415,7 +131447,7 @@
 						"@riducms/plugin/authoring/v1.PluginForm.snapshot"
 					],
 					"source": {
-						"path": "packages/plugin/src/form.ts",
+						"path": "packages/plugin/src/lib/form.ts",
 						"line": 37
 					},
 					"relatedDocs": [],
@@ -131469,9 +131501,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@4015",
+							"name": "__@registration@6037",
 							"type": "true",
-							"description": "The __@registration@4015 value."
+							"description": "The __@registration@6037 value."
 						}
 					],
 					"parametersLabel": "",
@@ -131484,7 +131516,7 @@
 						"@riducms/plugin.RegisteredPluginField"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 17
 					},
 					"relatedDocs": [],
@@ -131525,7 +131557,7 @@
 						"@riducms/plugin.RegisteredPluginField.component"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 169
 					},
 					"relatedDocs": [],
@@ -131563,7 +131595,7 @@
 						"@riducms/plugin.RegisteredPluginField.decodeConfig"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 170
 					},
 					"relatedDocs": [],
@@ -131601,7 +131633,7 @@
 						"@riducms/plugin.RegisteredPluginField.decodeFormValue"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 173
 					},
 					"relatedDocs": [],
@@ -131639,7 +131671,7 @@
 						"@riducms/plugin.RegisteredPluginField.decodeInput"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 172
 					},
 					"relatedDocs": [],
@@ -131677,7 +131709,7 @@
 						"@riducms/plugin.RegisteredPluginField.decodeValue"
 					],
 					"source": {
-						"path": "packages/plugin/src/field.ts",
+						"path": "packages/plugin/src/lib/field.ts",
 						"line": 171
 					},
 					"relatedDocs": [],
@@ -131726,7 +131758,7 @@
 						"@riducms/plugin.ResolvedPluginField"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 92
 					},
 					"relatedDocs": [],
@@ -131762,7 +131794,7 @@
 						"@riducms/plugin.resolvePluginFields"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 92
 					},
 					"relatedDocs": [],
@@ -131809,7 +131841,7 @@
 						"@riducms/plugin.withAdminLoader"
 					],
 					"source": {
-						"path": "packages/plugin/src/index.ts",
+						"path": "packages/plugin/src/lib/index.ts",
 						"line": 48
 					},
 					"relatedDocs": [
@@ -131969,100 +132001,6 @@
 					"overloads": []
 				},
 				{
-					"id": "ts:@riducms/build#createAdminLibraryConfig",
-					"name": "createAdminLibraryConfig",
-					"slug": "create-admin-library-config",
-					"kind": "function",
-					"group": "Functions",
-					"summary": "Create an ES-only Vite library config for a Svelte admin plugin package.",
-					"signature": "function createAdminLibraryConfig(options?: AdminLibraryConfigOptions): UserConfig",
-					"parameters": [
-						{
-							"name": "options",
-							"type": "AdminLibraryConfigOptions",
-							"description": "The options value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "UserConfig",
-						"description": "The declared result."
-					},
-					"details": [
-						"Externalizes bare dependencies, keeps Uno virtual CSS inside the bundle, enables runes and stable CSS hashes, and injects uno.css unless uno is false."
-					],
-					"example": "",
-					"language": "ts",
-					"typeLinks": {},
-					"aliases": [
-						"createAdminLibraryConfig",
-						"@riducms/build.createAdminLibraryConfig",
-						"@riducms/build/vite.createAdminLibraryConfig"
-					],
-					"source": {
-						"path": "packages/build/src/index.ts",
-						"line": 5
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": [
-						"function createAdminLibraryConfig(options?: AdminLibraryConfigOptions): UserConfig"
-					]
-				},
-				{
-					"id": "ts:@riducms/build#AdminLibraryConfigOptions",
-					"name": "AdminLibraryConfigOptions",
-					"slug": "admin-library-config-options",
-					"kind": "interface",
-					"group": "Interfaces",
-					"summary": "Entry, dedupe, pre-Svelte plugin, compiler, and UnoCSS options for a plugin library.",
-					"signature": "interface AdminLibraryConfigOptions { ... }",
-					"parameters": [
-						{
-							"name": "dedupe",
-							"type": "readonly string[]",
-							"description": "The dedupe value."
-						},
-						{
-							"name": "entry",
-							"type": "string",
-							"description": "The entry value."
-						},
-						{
-							"name": "pluginsBeforeSvelte",
-							"type": "readonly PluginOption[]",
-							"description": "The pluginsBeforeSvelte value."
-						},
-						{
-							"name": "svelte",
-							"type": "Partial<Options>",
-							"description": "The svelte value."
-						},
-						{
-							"name": "uno",
-							"type": "boolean",
-							"description": "The uno value."
-						}
-					],
-					"parametersLabel": "",
-					"details": [],
-					"example": "",
-					"language": "ts",
-					"typeLinks": {},
-					"aliases": [
-						"AdminLibraryConfigOptions",
-						"@riducms/build.AdminLibraryConfigOptions",
-						"@riducms/build/vite.AdminLibraryConfigOptions"
-					],
-					"source": {
-						"path": "packages/build/src/index.ts",
-						"line": 6
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
 					"id": "ts:@riducms/build#createAdminUnoConfig",
 					"name": "createAdminUnoConfig",
 					"slug": "create-admin-uno-config",
@@ -132201,7 +132139,7 @@
 					],
 					"source": {
 						"path": "packages/build/src/index.ts",
-						"line": 7
+						"line": 5
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -132215,7 +132153,7 @@
 					"slug": "package-source-alias-plugin",
 					"kind": "function",
 					"group": "Functions",
-					"summary": "Resolve the application @/ alias and each framework-owned source alias to its unambiguous src directory.",
+					"summary": "Resolve the application @/ alias and the admin's @admin/ source alias to their src directories.",
 					"signature": "function packageSourceAliasPlugin(): Plugin",
 					"parameters": [],
 					"parametersLabel": "",
@@ -132224,7 +132162,7 @@
 						"description": "The declared result."
 					},
 					"details": [
-						"Exported from @riducms/build/vite. Generated applications own @/, while @admin/, @ui/, @plugin-richtext/, and @plugin-seo/ resolve from the importing framework package. The same distinct aliases are emitted in the generated TypeScript configuration."
+						"Exported from @riducms/build/vite. Generated applications own @/, while @admin/ resolves from the admin package that imports it. Ridu's Svelte packages ship svelte-package output with relative imports, so they need no alias. The same aliases are emitted in the generated TypeScript configuration."
 					],
 					"example": "",
 					"language": "ts",
@@ -132236,7 +132174,7 @@
 					],
 					"source": {
 						"path": "packages/build/src/vite/index.ts",
-						"line": 4
+						"line": 3
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -132282,7 +132220,7 @@
 						"@riducms/ui.Button"
 					],
 					"source": {
-						"path": "packages/ui/src/button/button.svelte",
+						"path": "packages/ui/src/lib/button/button.svelte",
 						"line": 1
 					},
 					"relatedDocs": [
@@ -132313,8 +132251,8 @@
 						"@riducms/ui.ButtonProps"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 13
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 11
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -132341,8 +132279,8 @@
 						"@riducms/ui.buttonVariants"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 12
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 10
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -132367,8 +132305,8 @@
 						"@riducms/ui.ButtonVariant"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 15
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 13
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -132393,8 +132331,8 @@
 						"@riducms/ui.ButtonSize"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 14
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 12
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -132421,7 +132359,7 @@
 						"@riducms/ui.ConfirmationDialog"
 					],
 					"source": {
-						"path": "packages/ui/src/confirmation-dialog/confirmation-dialog.svelte",
+						"path": "packages/ui/src/lib/confirmation-dialog/confirmation-dialog.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132447,7 +132385,7 @@
 						"@riducms/ui.FieldFrame"
 					],
 					"source": {
-						"path": "packages/ui/src/field/field-frame.svelte",
+						"path": "packages/ui/src/lib/field/field-frame.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132473,7 +132411,7 @@
 						"@riducms/ui.Input"
 					],
 					"source": {
-						"path": "packages/ui/src/input/input.svelte",
+						"path": "packages/ui/src/lib/input/input.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132499,7 +132437,7 @@
 						"@riducms/ui.Textarea"
 					],
 					"source": {
-						"path": "packages/ui/src/textarea/textarea.svelte",
+						"path": "packages/ui/src/lib/textarea/textarea.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132527,7 +132465,7 @@
 						"@riducms/ui.CommandRoot"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-root.svelte",
+						"path": "packages/ui/src/lib/command/command-root.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132553,7 +132491,7 @@
 						"@riducms/ui.CommandInput"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-input.svelte",
+						"path": "packages/ui/src/lib/command/command-input.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132579,7 +132517,7 @@
 						"@riducms/ui.CommandList"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-list.svelte",
+						"path": "packages/ui/src/lib/command/command-list.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132605,7 +132543,7 @@
 						"@riducms/ui.CommandViewport"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-viewport.svelte",
+						"path": "packages/ui/src/lib/command/command-viewport.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132631,7 +132569,7 @@
 						"@riducms/ui.CommandGroup"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-group.svelte",
+						"path": "packages/ui/src/lib/command/command-group.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132657,7 +132595,7 @@
 						"@riducms/ui.CommandGroupHeading"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-group-heading.svelte",
+						"path": "packages/ui/src/lib/command/command-group-heading.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132683,7 +132621,7 @@
 						"@riducms/ui.CommandGroupItems"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-group-items.svelte",
+						"path": "packages/ui/src/lib/command/command-group-items.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132709,7 +132647,7 @@
 						"@riducms/ui.CommandItem"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-item.svelte",
+						"path": "packages/ui/src/lib/command/command-item.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132735,7 +132673,7 @@
 						"@riducms/ui.CommandEmpty"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-empty.svelte",
+						"path": "packages/ui/src/lib/command/command-empty.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132761,7 +132699,7 @@
 						"@riducms/ui.CommandSeparator"
 					],
 					"source": {
-						"path": "packages/ui/src/command/command-separator.svelte",
+						"path": "packages/ui/src/lib/command/command-separator.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132787,7 +132725,7 @@
 						"@riducms/ui.PopoverRoot"
 					],
 					"source": {
-						"path": "packages/ui/src/popover/popover-root.svelte",
+						"path": "packages/ui/src/lib/popover/popover-root.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132813,7 +132751,7 @@
 						"@riducms/ui.PopoverTrigger"
 					],
 					"source": {
-						"path": "packages/ui/src/popover/popover-trigger.svelte",
+						"path": "packages/ui/src/lib/popover/popover-trigger.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132839,7 +132777,7 @@
 						"@riducms/ui.PopoverContent"
 					],
 					"source": {
-						"path": "packages/ui/src/popover/popover-content.svelte",
+						"path": "packages/ui/src/lib/popover/popover-content.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132865,7 +132803,7 @@
 						"@riducms/ui.TooltipProvider"
 					],
 					"source": {
-						"path": "packages/ui/src/tooltip/tooltip-provider.svelte",
+						"path": "packages/ui/src/lib/tooltip/tooltip-provider.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132891,7 +132829,7 @@
 						"@riducms/ui.TooltipRoot"
 					],
 					"source": {
-						"path": "packages/ui/src/tooltip/tooltip-root.svelte",
+						"path": "packages/ui/src/lib/tooltip/tooltip-root.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132917,7 +132855,7 @@
 						"@riducms/ui.TooltipTrigger"
 					],
 					"source": {
-						"path": "packages/ui/src/tooltip/tooltip-trigger.svelte",
+						"path": "packages/ui/src/lib/tooltip/tooltip-trigger.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132943,7 +132881,7 @@
 						"@riducms/ui.TooltipContent"
 					],
 					"source": {
-						"path": "packages/ui/src/tooltip/tooltip-content.svelte",
+						"path": "packages/ui/src/lib/tooltip/tooltip-content.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132969,7 +132907,7 @@
 						"@riducms/ui.ToolbarRoot"
 					],
 					"source": {
-						"path": "packages/ui/src/toolbar/toolbar-root.svelte",
+						"path": "packages/ui/src/lib/toolbar/toolbar-root.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -132995,7 +132933,7 @@
 						"@riducms/ui.ToolbarButton"
 					],
 					"source": {
-						"path": "packages/ui/src/toolbar/toolbar-button.svelte",
+						"path": "packages/ui/src/lib/toolbar/toolbar-button.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133021,8 +132959,8 @@
 						"@riducms/ui.WithoutChild"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 4
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 2
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133047,8 +132985,8 @@
 						"@riducms/ui.WithoutChildren"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 5
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 3
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133073,8 +133011,8 @@
 						"@riducms/ui.WithoutChildrenOrChild"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 6
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 4
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133099,8 +133037,8 @@
 						"@riducms/ui.WithElementRef"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 7
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 5
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133127,8 +133065,8 @@
 						"@riducms/ui.VariantProps"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 9
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 7
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [
@@ -133169,8 +133107,8 @@
 						"CSS classes"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 9
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 7
 					},
 					"relatedDocs": [
 						"/docs/admin/customizing-css/"
@@ -133202,7 +133140,7 @@
 						"@riducms/ui/code-theme.riduCodeTheme"
 					],
 					"source": {
-						"path": "packages/ui/src/code-theme.ts",
+						"path": "packages/ui/src/lib/code-theme.ts",
 						"line": 2
 					},
 					"relatedDocs": [],
@@ -133228,7 +133166,7 @@
 						"@riducms/ui.Checkbox"
 					],
 					"source": {
-						"path": "packages/ui/src/checkbox/checkbox.svelte",
+						"path": "packages/ui/src/lib/checkbox/checkbox.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133254,7 +133192,7 @@
 						"@riducms/ui.Dialog"
 					],
 					"source": {
-						"path": "packages/ui/src/dialog/dialog.svelte",
+						"path": "packages/ui/src/lib/dialog/dialog.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133280,7 +133218,7 @@
 						"@riducms/ui.DialogClose"
 					],
 					"source": {
-						"path": "packages/ui/src/dialog/dialog-close.svelte",
+						"path": "packages/ui/src/lib/dialog/dialog-close.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133306,7 +133244,7 @@
 						"@riducms/ui.DialogContent"
 					],
 					"source": {
-						"path": "packages/ui/src/dialog/dialog-content.svelte",
+						"path": "packages/ui/src/lib/dialog/dialog-content.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133332,7 +133270,7 @@
 						"@riducms/ui.DialogDescription"
 					],
 					"source": {
-						"path": "packages/ui/src/dialog/dialog-description.svelte",
+						"path": "packages/ui/src/lib/dialog/dialog-description.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133358,7 +133296,7 @@
 						"@riducms/ui.DialogFooter"
 					],
 					"source": {
-						"path": "packages/ui/src/dialog/dialog-footer.svelte",
+						"path": "packages/ui/src/lib/dialog/dialog-footer.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133384,7 +133322,7 @@
 						"@riducms/ui.DialogHeader"
 					],
 					"source": {
-						"path": "packages/ui/src/dialog/dialog-header.svelte",
+						"path": "packages/ui/src/lib/dialog/dialog-header.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133410,7 +133348,7 @@
 						"@riducms/ui.DialogTitle"
 					],
 					"source": {
-						"path": "packages/ui/src/dialog/dialog-title.svelte",
+						"path": "packages/ui/src/lib/dialog/dialog-title.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133456,8 +133394,8 @@
 						"@riducms/ui.fieldControlARIA"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 29
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133494,8 +133432,8 @@
 						"@riducms/ui.fieldDescriptionID"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 29
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133532,8 +133470,8 @@
 						"@riducms/ui.fieldErrorID"
 					],
 					"source": {
-						"path": "packages/ui/src/index.ts",
-						"line": 29
+						"path": "packages/ui/src/lib/index.ts",
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133560,7 +133498,7 @@
 						"@riducms/ui.FieldFeedback"
 					],
 					"source": {
-						"path": "packages/ui/src/field/field-feedback.svelte",
+						"path": "packages/ui/src/lib/field/field-feedback.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133586,7 +133524,7 @@
 						"@riducms/ui.MenuContent"
 					],
 					"source": {
-						"path": "packages/ui/src/menu/menu-content.svelte",
+						"path": "packages/ui/src/lib/menu/menu-content.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133612,7 +133550,7 @@
 						"@riducms/ui.MenuItem"
 					],
 					"source": {
-						"path": "packages/ui/src/menu/menu-item.svelte",
+						"path": "packages/ui/src/lib/menu/menu-item.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133638,7 +133576,7 @@
 						"@riducms/ui.MenuRoot"
 					],
 					"source": {
-						"path": "packages/ui/src/menu/menu-root.svelte",
+						"path": "packages/ui/src/lib/menu/menu-root.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133664,7 +133602,7 @@
 						"@riducms/ui.MenuTrigger"
 					],
 					"source": {
-						"path": "packages/ui/src/menu/menu-trigger.svelte",
+						"path": "packages/ui/src/lib/menu/menu-trigger.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133690,7 +133628,7 @@
 						"@riducms/ui.PasswordInput"
 					],
 					"source": {
-						"path": "packages/ui/src/input/password-input.svelte",
+						"path": "packages/ui/src/lib/input/password-input.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133710,6 +133648,7 @@
 			"groupOrder": [
 				"Types",
 				"Interfaces",
+				"Constants",
 				"Components"
 			],
 			"symbols": [
@@ -133736,8 +133675,8 @@
 						"@riducms/plugin-richtext.richTextAdminPlugin"
 					],
 					"source": {
-						"path": "packages/plugin-richtext/src/index.ts",
-						"line": 13
+						"path": "packages/plugin-richtext/src/lib/index.ts",
+						"line": 11
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133746,7 +133685,7 @@
 				{
 					"id": "ts:@riducms/plugin-richtext#richTextMessages",
 					"name": "richTextMessages",
-					"slug": "rich-text-messages",
+					"slug": "rich-text-messages-constant",
 					"kind": "constant",
 					"group": "Types",
 					"summary": "Exact namespaced English, French, and Arabic messages used by the rich-text admin plugin.",
@@ -133764,8 +133703,8 @@
 						"@riducms/plugin-richtext.richTextMessages"
 					],
 					"source": {
-						"path": "packages/plugin-richtext/src/index.ts",
-						"line": 26
+						"path": "packages/plugin-richtext/src/lib/index.ts",
+						"line": 24
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133778,7 +133717,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "A rich-text authoring capability supported by the current editor.",
-					"signature": "type RichTextFeature = \"links\" | \"lists\" | \"code\" | \"horizontal-rule\" | \"uploads\" | \"relationships\" | \"blocks\"",
+					"signature": "type RichTextFeature = RichTextEditorFeature | \"uploads\" | \"relationships\" | \"blocks\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -133790,8 +133729,8 @@
 						"@riducms/plugin-richtext.RichTextFeature"
 					],
 					"source": {
-						"path": "packages/plugin-richtext/src/index.ts",
-						"line": 27
+						"path": "packages/plugin-richtext/src/lib/index.ts",
+						"line": 25
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133837,8 +133776,8 @@
 						"@riducms/plugin-richtext.RichTextConfig"
 					],
 					"source": {
-						"path": "packages/plugin-richtext/src/index.ts",
-						"line": 27
+						"path": "packages/plugin-richtext/src/lib/index.ts",
+						"line": 25
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133863,8 +133802,144 @@
 						"@riducms/plugin-richtext.SerializedUploadNode"
 					],
 					"source": {
-						"path": "packages/plugin-richtext/src/index.ts",
-						"line": 28
+						"path": "packages/plugin-richtext/src/lib/index.ts",
+						"line": 26
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/plugin-richtext/editor#RichTextEditor",
+					"name": "RichTextEditor",
+					"slug": "rich-text-editor",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "Public constant RichTextEditor from @riducms/plugin-richtext.",
+					"signature": "function RichTextEditor(internals: Brand<\"ComponentInternals\">, props: Record<string, any>): ReturnType<Component<Record<string, any>, Record<string, any>>>",
+					"parameters": [],
+					"parametersLabel": "",
+					"returns": {
+						"type": "{ $on?(type: string, callback: (e: any) => void): () => void; $set?(props: Partial<Record<string, any>>): void; } & Record<string, any>",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RichTextEditor",
+						"@riducms/plugin-richtext/editor.RichTextEditor"
+					],
+					"source": {
+						"path": "packages/plugin-richtext/src/lib/editor/index.ts",
+						"line": 9
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": [
+						"function RichTextEditor(internals: Brand<\"ComponentInternals\">, props: Record<string, any>): ReturnType<Component<Record<string, any>, Record<string, any>>>"
+					]
+				},
+				{
+					"id": "ts:@riducms/plugin-richtext/editor#RichTextEditorFeature",
+					"name": "RichTextEditorFeature",
+					"slug": "rich-text-editor-feature",
+					"kind": "type",
+					"group": "Types",
+					"summary": "The features the core editor implements.",
+					"signature": "type RichTextEditorFeature = \"links\" | \"lists\" | \"code\" | \"horizontal-rule\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RichTextEditorFeature",
+						"@riducms/plugin-richtext/editor.RichTextEditorFeature"
+					],
+					"source": {
+						"path": "packages/plugin-richtext/src/lib/editor/index.ts",
+						"line": 11
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/plugin-richtext/editor#RichTextMessageKey",
+					"name": "RichTextMessageKey",
+					"slug": "rich-text-message-key",
+					"kind": "type",
+					"group": "Types",
+					"summary": "One of the editor's messages, such as `\"editor.placeholder\"`.",
+					"signature": "type RichTextMessageKey = keyof Catalog",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RichTextMessageKey",
+						"@riducms/plugin-richtext/editor.RichTextMessageKey"
+					],
+					"source": {
+						"path": "packages/plugin-richtext/src/lib/editor/index.ts",
+						"line": 10
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/plugin-richtext/editor#RichTextMessages",
+					"name": "RichTextMessages",
+					"slug": "rich-text-messages-type",
+					"kind": "type",
+					"group": "Types",
+					"summary": "Text for some of the editor's messages, such as the app's own translations. Text keeps the English message's `{placeholders}`; messages left out come from the built-in catalogue.",
+					"signature": "type RichTextMessages = Readonly<Partial<Record<RichTextMessageKey, string>>>",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RichTextMessages",
+						"@riducms/plugin-richtext/editor.RichTextMessages"
+					],
+					"source": {
+						"path": "packages/plugin-richtext/src/lib/editor/index.ts",
+						"line": 10
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/plugin-richtext/editor#RichTextToolbar",
+					"name": "RichTextToolbar",
+					"slug": "rich-text-toolbar",
+					"kind": "type",
+					"group": "Types",
+					"summary": "Where the formatting toolbar appears: over a selection, above the text, or both.",
+					"signature": "type RichTextToolbar = \"floating\" | \"fixed\" | \"both\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RichTextToolbar",
+						"@riducms/plugin-richtext/editor.RichTextToolbar"
+					],
+					"source": {
+						"path": "packages/plugin-richtext/src/lib/editor/index.ts",
+						"line": 11
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -133889,7 +133964,7 @@
 						"@riducms/plugin-richtext/svelte.RichText"
 					],
 					"source": {
-						"path": "packages/plugin-richtext/src/render/rich-text.svelte",
+						"path": "packages/plugin-richtext/src/lib/render/rich-text.svelte",
 						"line": 1
 					},
 					"relatedDocs": [],
@@ -133915,7 +133990,7 @@
 						"@riducms/plugin-richtext/svelte.RichTextBlockComponents"
 					],
 					"source": {
-						"path": "packages/plugin-richtext/src/render/index.ts",
+						"path": "packages/plugin-richtext/src/lib/render/index.ts",
 						"line": 4
 					},
 					"relatedDocs": [],
@@ -133979,7 +134054,7 @@
 						"@riducms/plugin-seo.lengthState"
 					],
 					"source": {
-						"path": "packages/plugin-seo/src/index.ts",
+						"path": "packages/plugin-seo/src/lib/index.ts",
 						"line": 57
 					},
 					"relatedDocs": [],
@@ -134017,7 +134092,7 @@
 						"@riducms/plugin-seo.generationSnapshotToken"
 					],
 					"source": {
-						"path": "packages/plugin-seo/src/index.ts",
+						"path": "packages/plugin-seo/src/lib/index.ts",
 						"line": 58
 					},
 					"relatedDocs": [],
@@ -134062,7 +134137,7 @@
 						"@riducms/plugin-seo.generationScopeToken"
 					],
 					"source": {
-						"path": "packages/plugin-seo/src/index.ts",
+						"path": "packages/plugin-seo/src/lib/index.ts",
 						"line": 58
 					},
 					"relatedDocs": [],
@@ -134094,7 +134169,7 @@
 						"@riducms/plugin-seo.seoAdminPlugin"
 					],
 					"source": {
-						"path": "packages/plugin-seo/src/index.ts",
+						"path": "packages/plugin-seo/src/lib/index.ts",
 						"line": 19
 					},
 					"relatedDocs": [],
@@ -134122,7 +134197,7 @@
 						"@riducms/plugin-seo.seoMessages"
 					],
 					"source": {
-						"path": "packages/plugin-seo/src/index.ts",
+						"path": "packages/plugin-seo/src/lib/index.ts",
 						"line": 59
 					},
 					"relatedDocs": [],
@@ -134148,7 +134223,7 @@
 						"@riducms/plugin-seo.LengthStatus"
 					],
 					"source": {
-						"path": "packages/plugin-seo/src/index.ts",
+						"path": "packages/plugin-seo/src/lib/index.ts",
 						"line": 57
 					},
 					"relatedDocs": [],
@@ -134197,7 +134272,7 @@
 						"@riducms/plugin-seo.LengthState"
 					],
 					"source": {
-						"path": "packages/plugin-seo/src/index.ts",
+						"path": "packages/plugin-seo/src/lib/index.ts",
 						"line": 57
 					},
 					"relatedDocs": [],
@@ -134254,8 +134329,8 @@
 						"@riducms/plugin-form-builder.buildSubmissionInput"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 1
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 2
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134299,8 +134374,8 @@
 						"@riducms/plugin-form-builder.validateFormValues"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 1
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 5
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134337,8 +134412,8 @@
 						"@riducms/plugin-form-builder.confirmationFor"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 1
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 3
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134387,8 +134462,8 @@
 						"@riducms/plugin-form-builder.getPaymentTotal"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 1
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 4
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134420,7 +134495,7 @@
 						"@riducms/plugin-form-builder.formBuilderAdminPlugin"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/admin.ts",
+						"path": "packages/plugin-form-builder/src/lib/admin.ts",
 						"line": 5
 					},
 					"relatedDocs": [],
@@ -134449,7 +134524,7 @@
 						"@riducms/plugin-form-builder.formBuilderMessages"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/admin.ts",
+						"path": "packages/plugin-form-builder/src/lib/admin.ts",
 						"line": 11
 					},
 					"relatedDocs": [],
@@ -134501,8 +134576,8 @@
 						"@riducms/plugin-form-builder.FormFieldBase"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 14
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 19
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134563,8 +134638,8 @@
 						"@riducms/plugin-form-builder.TextFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 28
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 33
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134620,8 +134695,8 @@
 						"@riducms/plugin-form-builder.EmailFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 9
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 14
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134682,8 +134757,8 @@
 						"@riducms/plugin-form-builder.NumberFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 22
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134744,8 +134819,8 @@
 						"@riducms/plugin-form-builder.CheckboxFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 3
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 8
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134806,8 +134881,8 @@
 						"@riducms/plugin-form-builder.DateFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 8
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 13
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134848,8 +134923,8 @@
 						"@riducms/plugin-form-builder.FormOption"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 5
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 10
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134920,8 +134995,8 @@
 						"@riducms/plugin-form-builder.OptionFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 4
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 9
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -134977,8 +135052,8 @@
 						"@riducms/plugin-form-builder.CountryFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 7
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 12
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135019,8 +135094,8 @@
 						"@riducms/plugin-form-builder.MessageFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 21
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 26
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135096,8 +135171,8 @@
 						"@riducms/plugin-form-builder.UploadFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 29
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 34
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135158,8 +135233,8 @@
 						"@riducms/plugin-form-builder.PriceCondition"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 25
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 30
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135230,8 +135305,8 @@
 						"@riducms/plugin-form-builder.PaymentFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 23
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 28
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135256,8 +135331,8 @@
 						"@riducms/plugin-form-builder.FormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 13
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 18
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135313,8 +135388,8 @@
 						"@riducms/plugin-form-builder.CustomFormField"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 15
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 20
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135339,8 +135414,8 @@
 						"@riducms/plugin-form-builder.FormFieldDefinition"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 11
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 16
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135406,8 +135481,8 @@
 						"@riducms/plugin-form-builder.FormEmail"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 12
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 17
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135448,8 +135523,8 @@
 						"@riducms/plugin-form-builder.FormRedirect"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 16
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 21
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135515,8 +135590,8 @@
 						"@riducms/plugin-form-builder.FormDefinition"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 10
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 15
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135557,8 +135632,8 @@
 						"@riducms/plugin-form-builder.SubmissionValue"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 27
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 32
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135583,8 +135658,8 @@
 						"@riducms/plugin-form-builder.UploadReference"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 30
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 35
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135620,8 +135695,8 @@
 						"@riducms/plugin-form-builder.PolymorphicUploadReference"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 24
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 29
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135662,8 +135737,8 @@
 						"@riducms/plugin-form-builder.SubmissionUpload"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 26
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 31
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135704,8 +135779,8 @@
 						"@riducms/plugin-form-builder.FormSubmissionInput"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 17
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 22
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135746,8 +135821,8 @@
 						"@riducms/plugin-form-builder.FormValidationIssue"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 18
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 23
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135772,8 +135847,8 @@
 						"@riducms/plugin-form-builder.FormValue"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 19
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 24
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135798,8 +135873,8 @@
 						"@riducms/plugin-form-builder.FormValues"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 20
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 25
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135824,8 +135899,8 @@
 						"@riducms/plugin-form-builder.Confirmation"
 					],
 					"source": {
-						"path": "packages/plugin-form-builder/src/index.ts",
-						"line": 6
+						"path": "packages/plugin-form-builder/src/lib/index.ts",
+						"line": 11
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135868,7 +135943,7 @@
 						"@riducms/plugin-graphql.graphqlAdminPlugin"
 					],
 					"source": {
-						"path": "packages/plugin-graphql/src/index.ts",
+						"path": "packages/plugin-graphql/src/lib/index.ts",
 						"line": 9
 					},
 					"relatedDocs": [
@@ -135900,7 +135975,7 @@
 						"@riducms/plugin-graphql.graphqlMessages"
 					],
 					"source": {
-						"path": "packages/plugin-graphql/src/index.ts",
+						"path": "packages/plugin-graphql/src/lib/index.ts",
 						"line": 22
 					},
 					"relatedDocs": [

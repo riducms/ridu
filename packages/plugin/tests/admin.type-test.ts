@@ -3,8 +3,8 @@ import type {
 	AdminDashboardPanelProps,
 	AdminDocumentExtensionProps,
 	AdminListCellRendererProps,
-} from "../src/plugin";
-import { defineAdmin, defineRowLabel, type RowLabelProps } from "../src/admin";
+} from "../src/lib/plugin";
+import { defineAdmin, defineRowLabel, type RowLabelProps } from "../src/lib/admin";
 declare const Dashboard: Component<AdminDashboardPanelProps>;
 declare const Action: Component<AdminDocumentExtensionProps>;
 declare const Cell: Component<AdminListCellRendererProps>;

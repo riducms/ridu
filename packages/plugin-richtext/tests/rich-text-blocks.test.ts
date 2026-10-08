@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { bindSchemaManifest, type SchemaBlockType, type SchemaField } from "@riducms/protocol";
-import { copyBlockClipboardNodes } from "../src/block/rich-text-block-clipboard";
-import { richTextBlockTypes } from "../src/field/rich-text-blocks";
+import { copyBlockClipboardNodes } from "../src/lib/block/rich-text-block-clipboard";
+import { richTextBlockTypes } from "../src/lib/field/rich-text-blocks";
 
 const callout: SchemaBlockType = {
 	slug: "callout",

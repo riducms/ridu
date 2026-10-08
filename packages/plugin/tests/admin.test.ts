@@ -1,9 +1,13 @@
-import { resolveAdminConfig, validateAdminManifest } from "../src/admin";
+import { resolveAdminConfig, validateAdminManifest } from "../src/lib/admin";
 import { expect, test } from "bun:test";
 import type { SchemaField } from "@riducms/protocol";
-import { defineAdmin, defineRowLabel, type AdminConfig } from "../src/admin";
-import { defineAdminPlugin, defineFieldComponent, definePluginField } from "../src/authoring/v1";
-import { resolveAdminExtensions } from "../src/plugin";
+import { defineAdmin, defineRowLabel, type AdminConfig } from "../src/lib/admin";
+import {
+	defineAdminPlugin,
+	defineFieldComponent,
+	definePluginField,
+} from "../src/lib/authoring/v1";
+import { resolveAdminExtensions } from "../src/lib/plugin";
 import { createAdminI18n } from "@riducms/translations";
 import { createAdminLoader } from "@riducms/sdk";
 const Component = () => ({});

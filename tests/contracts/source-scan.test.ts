@@ -5,11 +5,10 @@ import { dirname, resolve } from "node:path";
 import { createServer, normalizePath, resolveConfig } from "vite";
 
 import { packageSourceAliasPlugin } from "../../packages/build/src/vite/source-alias";
-import { packageSourceScanPlugin } from "../../packages/build/src/vite/source-scan";
+import { adminSourceScanPlugin } from "../../packages/build/src/vite/source-scan";
 
-test("cold scan discovers dependencies behind excluded source packages before browser requests", async () => {
+test("cold scan discovers the admin source's dependencies before browser requests", async () => {
 	const root = await realpath(await mkdtemp(resolve(tmpdir(), "ridu-source-scan-")));
-	const sourcePackages = ["@riducms/admin", "@riducms/ui", "@riducms/plugin-richtext"];
 	async function file(path: string, content: string) {
 		const target = resolve(root, path);
 		await mkdir(dirname(target), { recursive: true });
@@ -53,28 +52,18 @@ test("cold scan discovers dependencies behind excluded source packages before br
 			root,
 			cacheDir: resolve(root, ".cache"),
 			logLevel: "silent",
-			plugins: [packageSourceAliasPlugin(), packageSourceScanPlugin(sourcePackages)],
-			optimizeDeps: { exclude: sourcePackages },
+			plugins: [packageSourceAliasPlugin(), adminSourceScanPlugin()],
+			optimizeDeps: { exclude: ["@riducms/admin"] },
 			server: { middlewareMode: true },
 		});
 		try {
-			expect(server.config.optimizeDeps.exclude).toEqual([
-				...sourcePackages,
-				"@admin",
-				"@ui",
-				"@plugin-richtext",
-				"@plugin-seo",
-			]);
+			expect(server.config.optimizeDeps.exclude).toEqual(["@riducms/admin", "@admin"]);
+			const source = normalizePath(resolve(root, "node_modules/@riducms/admin/src"));
 			expect(server.config.optimizeDeps.entries).toEqual([
 				"index.html",
-				...sourcePackages.slice(0, 2).flatMap((name) => {
-					const source = normalizePath(resolve(root, `node_modules/${name}/src`));
-					return [
-						`${source}/**/*.{js,ts,svelte}`,
-						`!${source}/**/*.d.ts`,
-						`!${source}/**/*.{test,spec}.{js,ts,svelte}`,
-					];
-				}),
+				`${source}/**/*.{js,ts,svelte}`,
+				`!${source}/**/*.d.ts`,
+				`!${source}/**/*.{test,spec}.{js,ts,svelte}`,
 			]);
 			const optimizer = server.environments.client?.depsOptimizer;
 			if (!optimizer) throw new Error("Missing client dependency optimizer");
@@ -84,7 +73,8 @@ test("cold scan discovers dependencies behind excluded source packages before br
 				...optimizer.metadata.optimized,
 				...optimizer.metadata.discovered,
 			});
-			expect(discovered.sort()).toEqual(["fixture-editor", "fixture-router", "fixture-theme"]);
+			// Packaged Ridu libraries are ordinary dependencies, prebundled with their own imports.
+			expect(discovered.sort()).toEqual(["@riducms/ui", "fixture-editor", "fixture-router"]);
 		} finally {
 			await server.close();
 		}
@@ -93,7 +83,7 @@ test("cold scan discovers dependencies behind excluded source packages before br
 	}
 }, 15_000);
 
-test("source scan preserves custom entries and reports an installed package with a missing entry", async () => {
+test("source scan preserves custom entries and reports an installed admin with a missing entry", async () => {
 	const root = await realpath(await mkdtemp(resolve(tmpdir(), "ridu-source-scan-config-")));
 	try {
 		for (const entries of ["custom.html", ["custom.html", "extra.ts"]]) {
@@ -101,7 +91,7 @@ test("source scan preserves custom entries and reports an installed package with
 				{
 					configFile: false,
 					root,
-					plugins: [packageSourceScanPlugin(["@riducms/absent-plugin"])],
+					plugins: [adminSourceScanPlugin()],
 					optimizeDeps: { entries },
 				},
 				"serve"
@@ -110,12 +100,12 @@ test("source scan preserves custom entries and reports an installed package with
 				typeof entries === "string" ? [entries] : entries
 			);
 		}
-		const directory = resolve(root, "node_modules/@riducms/broken-plugin");
+		const directory = resolve(root, "node_modules/@riducms/admin");
 		await mkdir(directory, { recursive: true });
 		await writeFile(
 			resolve(directory, "package.json"),
 			JSON.stringify({
-				name: "@riducms/broken-plugin",
+				name: "@riducms/admin",
 				exports: "./missing.ts",
 			})
 		);
@@ -124,11 +114,11 @@ test("source scan preserves custom entries and reports an installed package with
 				{
 					configFile: false,
 					root,
-					plugins: [packageSourceScanPlugin(["@riducms/broken-plugin"])],
+					plugins: [adminSourceScanPlugin()],
 				},
 				"serve"
 			)
-		).rejects.toThrow("@riducms/broken-plugin");
+		).rejects.toThrow("@riducms/admin");
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

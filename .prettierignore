@@ -16,4 +16,5 @@ tests/performance/blocks/payload/next-env.d.ts
 packages/protocol/src/generated.ts
 tests/contracts/unifiedfields/generated/ridu.generated.ts
 tests/contracts/primitivelists/generated/ridu.generated.ts
+tests/contracts/editor_app/src/lib/ridu.generated.ts
 tests/contracts/admin_app/loaders.generated.ts

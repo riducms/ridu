@@ -1,0 +1,10 @@
+// An app's own theme for the editor: Sass configuration sets the defaults it compiles, and custom
+// properties restyle it at runtime.
+@use "@riducms/plugin-richtext/editor.scss" with (
+	$radius: 10px,
+	$background: #fffbf2
+);
+
+:root {
+	--ridu-richtext-link: #b45309;
+}

@@ -35,7 +35,10 @@ invalid child. Collapse retains mounted fields and unfinished input.
 Content consumers import portable document types and HTML rendering from `@riducms/sdk/richtext`;
 installing `@riducms/sdk` is sufficient and does not install Svelte or Lexical.
 Optional typed Svelte rendering is available from `@riducms/plugin-richtext/svelte`, which does not
-load the admin editor. See the rich-text guide for strict payloads, localization, typed renderers
+load the admin editor. Applications that let their users write rich text import `RichTextEditor`
+from `@riducms/plugin-richtext/editor`, and can configure its styles with
+`@riducms/plugin-richtext/editor.scss`; see
+[Use the editor in your app](https://riducms.com/docs/rich-text/editor/). See the rich-text guide for strict payloads, localization, typed renderers
 and experimental-content migration.
 
 The supported authoring UI uses semantic SCSS, compact grouped insertion menus, six heading levels,
