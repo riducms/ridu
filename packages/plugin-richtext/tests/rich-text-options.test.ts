@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { filterRichTextOptions } from "../src/menu/rich-text-option-filter";
+import { filterRichTextOptions } from "../src/lib/menu/rich-text-option-filter";
 
 function option(label: string) {
 	return { label, description: "", keywords: [] };

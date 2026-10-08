@@ -6,10 +6,11 @@ import {
 	type RiduClient,
 	type RiduConfigShape,
 } from "@riducms/sdk";
-import type { Handle, RequestEvent } from "@sveltejs/kit";
+import type { RequestEvent } from "@sveltejs/kit";
+import type { Handle } from "@sveltejs/kit/hooks";
 
-import { defineRidu, type InferClient, type InferSession } from "../src";
-import { createRiduHandle, createServerClient } from "../src/server";
+import { defineRidu, type InferClient, type InferSession } from "../src/lib";
+import { createRiduHandle, createServerClient } from "../src/lib/server";
 
 interface Member {
 	id: string;
@@ -93,7 +94,7 @@ export async function signIn(client: Client) {
 }
 
 export function serverHooks(event: RequestEvent) {
-	// SvelteKit 2's Handle; the SvelteKit 3 consumer check covers @sveltejs/kit/hooks.
+	// SvelteKit 3's Handle, from @sveltejs/kit/hooks.
 	const handle: Handle = createRiduHandle(ridu);
 	const client: Client = createServerClient(ridu, event);
 	return { handle, client };

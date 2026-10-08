@@ -6,8 +6,8 @@ import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { documentRecoveryIssue } from "@riducms/sdk/richtext";
 import { $createParagraphNode, $createTextNode, $getRoot, createEditor } from "lexical";
 
-import { BlockNode } from "../src/block/rich-text-block-node";
-import { initialEditorState } from "../src/field/rich-text-document";
+import { BlockNode } from "../src/lib/block/rich-text-block-node";
+import { initialEditorState } from "../src/lib/field/rich-text-document";
 
 // Svelte-backed upload, relationship and horizontal-rule nodes need the admin build; the
 // rich-text editing Playwright test round-trips them through the real editor.

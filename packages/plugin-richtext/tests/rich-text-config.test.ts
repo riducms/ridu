@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { hasRichTextFeature, decodeRichTextConfig } from "../src/field/rich-text-config";
+import { hasRichTextFeature, decodeRichTextConfig } from "../src/lib/field/rich-text-config";
 
 const defaultAdmin = {
 	fixedToolbar: false,

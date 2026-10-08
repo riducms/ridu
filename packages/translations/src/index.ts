@@ -1,6 +1,6 @@
-export { ar, arMessages } from "./languages/ar";
-export { en, enMessages } from "./languages/en";
-export { fr, frMessages } from "./languages/fr";
+export { ar, arMessages } from "./languages/ar.js";
+export { en, enMessages } from "./languages/en.js";
+export { fr, frMessages } from "./languages/fr.js";
 export {
 	createAdminI18n,
 	defineTranslationLanguage,
@@ -10,7 +10,7 @@ export {
 	validatePluginMessageCatalog,
 	validateLanguageCatalogs,
 	type CreateAdminI18nOptions,
-} from "./runtime";
+} from "./runtime.js";
 export type {
 	AdminI18n,
 	AdminTranslationKey,
@@ -25,4 +25,4 @@ export type {
 	TranslationLanguage,
 	TranslationMessage,
 	TranslationVariables,
-} from "./types";
+} from "./types.js";

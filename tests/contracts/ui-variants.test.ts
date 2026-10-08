@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { cv } from "../../packages/ui/src/variants";
+import { cv } from "../../packages/ui/src/lib/variants";
 
 describe("semantic component variants", () => {
 	it("keeps defaults when optional component props are forwarded as undefined", () => {

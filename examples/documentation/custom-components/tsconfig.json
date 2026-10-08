@@ -9,10 +9,7 @@
 		"exactOptionalPropertyTypes": true,
 		"noUncheckedIndexedAccess": true,
 		"types": ["svelte", "vite/client"],
-		"skipLibCheck": true,
-		"paths": {
-			"@ui/*": ["../../../packages/ui/src/*"]
-		}
+		"skipLibCheck": true
 	},
 	"include": [
 		"admin/src/**/*.ts",

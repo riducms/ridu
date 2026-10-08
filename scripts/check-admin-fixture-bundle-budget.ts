@@ -183,7 +183,14 @@ const measurements = {
 // The list filter's hierarchical field picker (a nested-trail trigger plus a lazily loaded
 // panel with search and level navigation) measures 56,467 CSS bytes, 659 above the previous
 // cap. Allow a bounded 768-byte CSS slice; both JavaScript caps stay unchanged.
-const budgets = { entryJS: 215 * 1024, largestAsyncJS: 131 * 1024, totalCSS: 55.25 * 1024 };
+// The standalone editor entry splits the core editor's features and extensions into props and
+// opens only the nodes it registers. With its translations and tooltip provider kept in the
+// app-only wrapper, the lazy editor measures 134,153 gzip bytes, 47 more than before. Allow
+// 256 bytes async JS; the entry and CSS caps remain unchanged.
+// The editor's --ridu-richtext-* tokens, and the selectors that give its server-rendered copy the
+// editor's own rules, bring CSS to 57,462 bytes, 886 above the previous cap. Allow a bounded
+// 1.25 KiB CSS slice; both JavaScript caps stay unchanged.
+const budgets = { entryJS: 215 * 1024, largestAsyncJS: 131.25 * 1024, totalCSS: 56.5 * 1024 };
 
 for (const [name, size] of Object.entries(measurements)) {
 	console.log(

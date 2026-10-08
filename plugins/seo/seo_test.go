@@ -137,6 +137,62 @@ func TestTabbedUIKeepsAuthEmailTopLevelAndLiftsExistingTabs(t *testing.T) {
 	if fields[3].Path.String() != "meta" || fields[3].Admin.Tab != "SEO" {
 		t.Fatalf("SEO tab field = %#v", fields[3])
 	}
+	if fields[0].Admin.TabGroup != nil {
+		t.Fatalf("auth email joined a tab group: %#v", fields[0].Admin.TabGroup)
+	}
+	requireOneTabGroup(t, fields[1:])
+}
+
+// The admin shows one tab bar per tab group, so SEO must share the content's group.
+func TestTabbedUIPutsContentAndSEOInOneTabGroup(t *testing.T) {
+	manifest, err := ridu.Resolve(ridu.Config{
+		Name: "SEO", Plugins: []ridu.Plugin{seo.New(seo.Config{Collections: []schema.CollectionSlug{"posts"}, TabbedUI: true})},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+			field.Textarea("body"),
+		}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := manifest.Snapshot().Collections[0].Fields
+	if len(fields) != 3 || fields[0].Admin.Tab != "Content" || fields[1].Admin.Tab != "Content" || fields[2].Path.String() != "meta" || fields[2].Admin.Tab != "SEO" {
+		t.Fatalf("tabbed fields = %#v", fields)
+	}
+	requireOneTabGroup(t, fields)
+}
+
+func TestTabbedUIAddsSEOToLeadingTabs(t *testing.T) {
+	manifest, err := ridu.Resolve(ridu.Config{
+		Name: "SEO", Plugins: []ridu.Plugin{seo.New(seo.Config{Collections: []schema.CollectionSlug{"pages"}, TabbedUI: true})},
+		Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{
+			field.Tabs(field.Fields{
+				field.UnnamedTab("Hero", field.Fields{field.Text("heading")}),
+				field.NamedTab("layout", "Layout", field.Fields{field.Text("columns")}),
+			}),
+			field.Text("slug"),
+		}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := manifest.Snapshot().Collections[0].Fields
+	if len(fields) != 4 || fields[0].Admin.Tab != "Hero" || fields[1].Admin.Tab != "Layout" || fields[2].Path.String() != "meta" || fields[2].Admin.Tab != "SEO" {
+		t.Fatalf("tabbed fields = %#v", fields)
+	}
+	if fields[3].Path.String() != "slug" || fields[3].Admin.Tab != "" || fields[3].Admin.TabGroup != nil {
+		t.Fatalf("field after the authored tabs = %#v", fields[3])
+	}
+	requireOneTabGroup(t, fields[:3])
+}
+
+func requireOneTabGroup(t *testing.T, fields []schema.Field) {
+	t.Helper()
+	for _, resolved := range fields {
+		if resolved.Admin.TabGroup == nil || fields[0].Admin.TabGroup == nil || resolved.Admin.TabGroup.ID != fields[0].Admin.TabGroup.ID {
+			t.Fatalf("%s is not in the first field's tab group: %#v", resolved.Path, resolved.Admin.TabGroup)
+		}
+	}
 }
 
 func TestDirectPresentationConstructorsAcceptExplicitOverrides(t *testing.T) {

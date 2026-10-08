@@ -1,0 +1,1 @@
+import{Sn as e,Wn as t,hn as n,qn as r}from"./ridu-ui-MA5OmaHl.js";var i=new Set([`$$slots`,`$$events`,`$$legacy`]),a=r(`<svg><path d="M14 8L10 12L6 8" stroke="currentColor" stroke-linecap="square"></path></svg>`);function o(r,o){let s=n(o,i);var c=a();e(c,()=>({width:`20`,height:`20`,viewBox:`0 0 20 20`,fill:`none`,"aria-hidden":`true`,...s})),t(r,c)}export{o as t};

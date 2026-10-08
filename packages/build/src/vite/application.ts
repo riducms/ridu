@@ -21,7 +21,7 @@ import { contentCSSHash } from "./compiler-options.js";
 import { riduSchemaReloadPlugin } from "./schema-reload.js";
 import { packageSourceAliasPlugin } from "./source-alias.js";
 import { sharedDependencies } from "./shared-dependencies.js";
-import { packageSourceScanPlugin } from "./source-scan.js";
+import { adminPackage, adminSourceScanPlugin } from "./source-scan.js";
 import { riduAdminCheckPlugins } from "../admin-check.js";
 
 type SvelteOptions = NonNullable<Parameters<typeof svelte>[0]>;
@@ -44,13 +44,6 @@ export interface AdminApplicationConfigOptions {
 export function createAdminApplicationConfig(options: AdminApplicationConfigOptions) {
 	const svelteOptions = options.svelte ?? {};
 	const base = options.base ?? "/admin/";
-	const sourcePackages = [
-		"@riducms/admin",
-		"@riducms/ui",
-		"@riducms/plugin-richtext",
-		"@riducms/plugin-seo",
-		"@riducms/plugin-graphql",
-	];
 	return defineConfig(({ command }) => ({
 		...(options.root === undefined ? {} : { root: options.root }),
 		base,
@@ -61,7 +54,7 @@ export function createAdminApplicationConfig(options: AdminApplicationConfigOpti
 			canonicalBaseRedirectPlugin(base),
 			riduSchemaReloadPlugin(options.schemaReloadSignal),
 			packageSourceAliasPlugin(),
-			packageSourceScanPlugin(sourcePackages),
+			adminSourceScanPlugin(),
 			...(options.pluginsBeforeSvelte ?? []),
 			UnoCSS(createAdminUnoConfig()),
 			Icons({ compiler: "svelte" }),
@@ -88,12 +81,9 @@ export function createAdminApplicationConfig(options: AdminApplicationConfigOpti
 			dedupe: unique([...sharedDependencies, ...(options.dedupe ?? [])]),
 		},
 		optimizeDeps: {
-			// Preserve package-relative aliases and Svelte preprocessing in framework source.
-			exclude: unique([...sourcePackages, ...(options.optimizeDepsExclude ?? [])]),
+			// The admin ships as source: keep its @admin/ imports and Svelte preprocessing intact.
+			exclude: unique([adminPackage, ...(options.optimizeDepsExclude ?? [])]),
 			include: [
-				// Plugin source can be excluded from scanning while its editor is prebundled.
-				// Optimize the plugin-owned core too so custom nodes share the editor's classes.
-				"@riducms/plugin-richtext > lexical",
 				// Lexical loads its React devtools dynamically, beyond the initial dependency scan.
 				"react",
 				"react-dom",
@@ -105,6 +95,18 @@ export function createAdminApplicationConfig(options: AdminApplicationConfigOpti
 		build: {
 			outDir: options.outDir,
 			emptyOutDir: true,
+			rolldownOptions: {
+				output: {
+					codeSplitting: {
+						groups: [
+							// @riducms/ui ships one module per component. Keep its components in one shared
+							// chunk, as when the admin compiled their source, so the first screen loads a few
+							// files rather than one small chunk and stylesheet per component.
+							{ name: "ridu-ui", test: (id: string) => modulePackageName(id) === "@riducms/ui" },
+						],
+					},
+				},
+			},
 		},
 		...(options.proxyTarget === undefined
 			? {}
@@ -671,4 +673,30 @@ parentPort.postMessage(evaluated.default);
 				reject(new Error(`admin bootstrap config evaluation exited with status ${code}`));
 		});
 	});
+}
+
+const packageNames = new Map<string, string | undefined>();
+
+/** The name in the nearest package.json above a module, so a check works wherever the package is installed. */
+function modulePackageName(id: string) {
+	const path = id.replace(/^\0/, "").split("?", 1)[0] ?? id;
+	if (!path.startsWith("/")) return undefined;
+	const visited: string[] = [];
+	let directory = dirname(path);
+	while (directory !== dirname(directory)) {
+		if (packageNames.has(directory)) {
+			const name = packageNames.get(directory);
+			for (const seen of visited) packageNames.set(seen, name);
+			return name;
+		}
+		visited.push(directory);
+		const manifest = resolve(directory, "package.json");
+		if (existsSync(manifest)) {
+			const name = (JSON.parse(readFileSync(manifest, "utf8")) as { name?: string }).name;
+			for (const seen of visited) packageNames.set(seen, name);
+			return name;
+		}
+		directory = dirname(directory);
+	}
+	return undefined;
 }

@@ -1,0 +1,93 @@
+<script lang="ts">
+	import type { PluginFieldProps } from "@riducms/plugin";
+	import { Button, FieldFrame, Input, fieldControlARIA } from "@riducms/ui";
+
+	import { GenerationController } from "#lib/generation-controller.svelte.js";
+	import LengthIndicator from "#lib/length-indicator.svelte";
+	import "#lib/seo.scss";
+	import type { LengthConfig } from "#lib/seo-config.js";
+
+	let {
+		field: binding,
+		form,
+		config,
+		i18n,
+		authoring,
+	}: PluginFieldProps<string, LengthConfig, "text"> = $props();
+	const field = $derived(binding.schema);
+	const editingBlocked = $derived(binding.readOnly);
+
+	const minLength = $derived(field.text?.minLength ?? config.minLength);
+	const maxLength = $derived(field.text?.maxLength ?? config.maxLength);
+	const value = $derived(String(binding.value ?? ""));
+	const issues = $derived(binding.issues);
+	const inputARIA = $derived(
+		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
+	);
+	const generation = new GenerationController();
+
+	$effect(() => () => generation.cancel());
+
+	async function generate() {
+		const result = await generation.run(authoring, form, "generate-title");
+		if (result !== undefined) binding.set(result);
+	}
+</script>
+
+<div data-field-path={field.path}>
+	{#snippet headingAction()}
+		<span class="ridu-seo-heading-separator" aria-hidden="true">—</span>
+		<Button
+			variant="link"
+			size="xs"
+			class="ridu-seo-generate"
+			disabled={editingBlocked || generation.status === "pending"}
+			aria-busy={generation.status === "pending"}
+			onclick={generate}
+		>
+			{i18n.t("plugin.seo:autoGenerate")}
+		</Button>
+	{/snippet}
+	<FieldFrame
+		controlID={field.id}
+		label={field.admin.label}
+		required={field.required}
+		readOnly={field.admin.readOnly}
+		description={field.admin.description}
+		errors={issues.map((issue) => issue.message)}
+		class="ridu-seo-field"
+		headingAction={config.generate ? headingAction : undefined}
+	>
+		<p class="ridu-seo-guidance">
+			<span>{i18n.t("plugin.seo:lengthTipTitle", { minLength, maxLength })}</span>
+			<a
+				class="ridu-seo-guidance-link"
+				href="https://developers.google.com/search/docs/appearance/title-link#page-titles"
+				target="_blank"
+				rel="noopener noreferrer"
+			>
+				{i18n.t("plugin.seo:bestPractices")}
+			</a>
+			<span>.</span>
+		</p>
+		<Input
+			id={field.id}
+			name={field.path}
+			required={field.required}
+			readonly={editingBlocked}
+			minlength={field.text?.minLength}
+			maxlength={field.text?.maxLength}
+			aria-invalid={inputARIA["aria-invalid"]}
+			aria-describedby={inputARIA["aria-describedby"]}
+			aria-errormessage={inputARIA["aria-errormessage"]}
+			{value}
+			oninput={(event) => binding.set(event.currentTarget.value)}
+		/>
+		<LengthIndicator text={value} {minLength} {maxLength} {i18n} />
+		{#if generation.status === "error"}
+			<p class="ridu-seo-error" role="alert">
+				{i18n.t("plugin.seo:generationFailed")}
+			</p>
+		{/if}
+	</FieldFrame>
+</div>

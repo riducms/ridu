@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := check-fast
 
-.PHONY: check-dev check-fast check-full cli-clean-install-test demo dependency-check documentation-check dogfood-new format format-check go-format-check go-test go-test-after-vet go-test-dev go-vet go-vuln-check mongodb-fixture-test mongodb-generated-project-test mongodb-production-test mongodb-test packed-release-check performance-check playground-ridu-dev playground-ridu-down playground-ridu-hydrate playground-ridu-reset postgres-browser-test postgres-test release-build-check release-check release-version-check richtext-blocks-performance runtime-packages-build security-check sqlite-no-cgo-test sqlite-payload-baseline-test sqlite-race-test sqlite-smoke-test sqlite-test test
+.PHONY: check-dev check-fast check-full cli-clean-install-test demo dependency-check documentation-check dogfood-new format format-check go-format-check go-test go-test-after-vet go-test-dev go-vet go-vuln-check local-release local-release-serve mongodb-fixture-test mongodb-generated-project-test mongodb-production-test mongodb-test packed-release-check performance-check playground-ridu-dev playground-ridu-down playground-ridu-hydrate playground-ridu-reset postgres-browser-test postgres-test release-build-check release-check release-version-check richtext-blocks-performance runtime-packages-build security-check sqlite-no-cgo-test sqlite-payload-baseline-test sqlite-race-test sqlite-smoke-test sqlite-test test
 
 demo:
 	bun run generate:admin-assets
@@ -9,6 +9,12 @@ demo:
 dogfood-new:
 	@test -n "$(TARGET)" -o -n "$(filter 1 true yes,$(INTERACTIVE))" || (echo 'usage: make dogfood-new TARGET=/path/to/new-project [INTERACTIVE=1]' && exit 2)
 	go run ./internal/dogfood/new $(if $(strip $(TARGET)),--target "$(TARGET)",) $(if $(filter 1 true yes,$(INTERACTIVE)),--interactive,)
+
+local-release:
+	go run ./internal/localrelease stage $(if $(strip $(VERSION)),--version "$(VERSION)",)
+
+local-release-serve:
+	go run ./internal/localrelease serve
 
 playground-ridu-hydrate:
 	go run ./internal/dogfood/playground --target ./playground/ridu

@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/translations",
 	"description": "Typed admin translations, language negotiation, plurals, and Intl formatting for Ridu.",
-	"version": "0.16.2",
+	"version": "0.17.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -17,14 +17,25 @@
 		"provenance": true
 	},
 	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
 	"exports": {
-		".": "./src/index.ts",
-		"./languages/en": "./src/languages/en.ts"
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./languages/en": {
+			"types": "./dist/languages/en.d.ts",
+			"import": "./dist/languages/en.js",
+			"default": "./dist/languages/en.js"
+		}
 	},
 	"files": [
-		"src"
+		"dist"
 	],
 	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
 		"check": "tsc -p tsconfig.json",
 		"test": "bun test"
 	}

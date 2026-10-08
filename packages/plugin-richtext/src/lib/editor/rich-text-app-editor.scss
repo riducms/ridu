@@ -1,0 +1,104 @@
+@use "@riducms/ui/layers.css";
+
+// Ridu's UI components (the editor's buttons, menus, tooltips and link dialog) read the admin
+// theme's tokens, which an app doesn't define. Inside the editor and the popups it opens, they
+// read the editor's tokens instead, so an app restyles them through the same custom properties.
+// In an app, only the editor renders these components.
+
+// Tokens with no editor equivalent: the app's own value where its theme uses the same name,
+// otherwise the admin's light theme. They're resolved on :root, because a popup's token can't
+// fall back to its own name.
+$ui-defaults: (
+	primary: #2f2f2f,
+	primary-foreground: #fff,
+	ring: #9a9a9a,
+	accent-hover: #656565,
+	destructive-foreground: #fafafa,
+	destructive-hover: oklch(0.52 0.23 27.325),
+	action-disabled-surface: #d0d0d0,
+	action-disabled-foreground: #2f2f2f,
+	control-height: 40px,
+	control-padding-inline: 15px,
+	control-shadow: 0 2px 2px -1px rgb(0 0 0 / 10%),
+	control-hover-shadow: 0 2px 2px -1px rgb(0 0 0 / 20%),
+	control-border-hover: #c3c3c3,
+	control-border-disabled: #ddd,
+	control-surface-disabled: #ebebeb,
+	control-disabled-foreground: #9a9a9a,
+	control-invalid-surface: #faf1f0,
+	control-invalid-border-hover: #da4b48,
+	field-error-surface: #fd9a92,
+	field-error-foreground: #2c1a18,
+	shadow-dialog: 0 24px 80px oklch(0 0 0 / 24%),
+	media-overlay: oklch(0 0 0 / 40%),
+	// The link dialog's padding. The admin's depends on the screen width; this suits any.
+	admin-gutter: 24px,
+);
+
+// The editor and the popups it opens.
+$surfaces: (
+	".ridu-richtext-editor",
+	".ridu-richtext-floating-toolbar",
+	".ridu-richtext-link-preview",
+	".ridu-popover-content",
+	".ridu-menu",
+	".ridu-tooltip",
+	".ridu-dialog",
+	".ridu-dialog-drawer",
+	".ridu-dialog-overlay"
+);
+
+@layer ridu.theme {
+	:where(:root) {
+		@each $name, $value in $ui-defaults {
+			--_ridu-richtext-#{$name}: var(--#{$name}, #{$value});
+		}
+	}
+
+	:where(#{$surfaces}) {
+		--foreground: var(--ridu-richtext-text);
+		--popover-foreground: var(--ridu-richtext-text);
+		--ink-strong: var(--ridu-richtext-text);
+		--ink-label: var(--ridu-richtext-text);
+		--foreground-muted: var(--ridu-richtext-text-muted);
+		--ink-muted: var(--ridu-richtext-text-muted);
+		--ink-placeholder: var(--ridu-richtext-placeholder);
+		--destructive: var(--ridu-richtext-danger);
+		--background: var(--ridu-richtext-background);
+		--popover: var(--ridu-richtext-surface);
+		--control-surface: var(--ridu-richtext-surface);
+		--control-surface-hover: var(--ridu-richtext-surface-hover);
+		--border: var(--ridu-richtext-border);
+		--control-border: var(--ridu-richtext-border);
+		--control-invalid-border: var(--ridu-richtext-invalid);
+		--control-radius: var(--ridu-richtext-radius);
+		--shadow-popover: var(--ridu-richtext-shadow);
+		--focus-outline: var(--ridu-richtext-focus);
+		--focus-outline-offset: var(--ridu-richtext-focus-offset);
+		--font-sans: var(--ridu-richtext-ui-font);
+		--font-mono: var(--ridu-richtext-mono-font);
+		--font-size-body: var(--ridu-richtext-ui-font-size);
+		--line-height-body: var(--ridu-richtext-ui-line-height);
+		@each $name, $value in $ui-defaults {
+			--#{$name}: var(--_ridu-richtext-#{$name});
+		}
+	}
+}
+
+// The admin's base rules that Ridu's UI components rely on, for the editor's own elements only.
+// An app's unlayered CSS wins over these.
+@layer ridu.base {
+	:where(#{$surfaces}),
+	:where(#{$surfaces}) * {
+		box-sizing: border-box;
+	}
+
+	:where(#{$surfaces}) :where(button, input, select, textarea) {
+		font: inherit;
+	}
+
+	:where(#{$surfaces}) :focus-visible {
+		outline: var(--ridu-richtext-focus);
+		outline-offset: var(--ridu-richtext-focus-offset);
+	}
+}

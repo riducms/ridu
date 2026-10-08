@@ -1,4 +1,4 @@
-import { defineAdminMessages } from "../src/i18n";
+import { defineAdminMessages } from "../src/lib/i18n";
 
 defineAdminMessages({
 	fallback: {

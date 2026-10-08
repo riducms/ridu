@@ -3,11 +3,11 @@ import { buildSchema, parse } from "graphql";
 
 // Registry tests keep the page inert; the admin browser suite renders the real component.
 mock.module("../src/playground-route.svelte", () => ({ default: () => ({}) }));
-const { graphqlAdminPlugin } = await import("../src");
-const { playgroundLoader } = await import("../src/loader");
-const { executeOperation, operationNameAt, parseVariables } = await import("../src/operation");
-const { starterQuery } = await import("../src/starter-query");
-const { describeType, schemaRoots, searchSchema } = await import("../src/schema-docs");
+const { graphqlAdminPlugin } = await import("../src/lib");
+const { playgroundLoader } = await import("../src/lib/loader");
+const { executeOperation, operationNameAt, parseVariables } = await import("../src/lib/operation");
+const { starterQuery } = await import("../src/lib/starter-query");
+const { describeType, schemaRoots, searchSchema } = await import("../src/lib/schema-docs");
 
 const schema = buildSchema(`
 	"""A published article."""

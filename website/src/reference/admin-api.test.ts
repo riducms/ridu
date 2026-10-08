@@ -9,37 +9,37 @@ const helpers = [
 	{
 		name: 'defineAdmin',
 		id: 'ts:@riducms/plugin/admin#defineAdmin',
-		file: 'packages/plugin/src/admin.ts',
+		file: 'packages/plugin/src/lib/admin.ts',
 		slug: 'define-admin'
 	},
 	{
 		name: 'defineAdminPlugin',
 		id: 'ts:@riducms/plugin/authoring/v1#defineAdminPlugin',
-		file: 'packages/plugin/src/authoring/v1.ts',
+		file: 'packages/plugin/src/lib/authoring/v1.ts',
 		slug: 'define-admin-plugin'
 	},
 	{
 		name: 'definePluginField',
 		id: 'ts:@riducms/plugin/authoring/v1#definePluginField',
-		file: 'packages/plugin/src/field.ts',
+		file: 'packages/plugin/src/lib/field.ts',
 		slug: 'define-plugin-field'
 	},
 	{
 		name: 'defineFieldComponent',
 		id: 'ts:@riducms/plugin/authoring/v1#defineFieldComponent',
-		file: 'packages/plugin/src/field.ts',
+		file: 'packages/plugin/src/lib/field.ts',
 		slug: 'define-field-component'
 	},
 	{
 		name: 'defineFieldEditor',
 		id: 'ts:@riducms/plugin/editor#defineFieldEditor',
-		file: 'packages/plugin/src/editor/registry.ts',
+		file: 'packages/plugin/src/lib/editor/registry.ts',
 		slug: 'define-field-editor'
 	},
 	{
 		name: 'defineRowLabel',
 		id: 'ts:@riducms/plugin/admin#defineRowLabel',
-		file: 'packages/plugin/src/local-row-label.ts',
+		file: 'packages/plugin/src/lib/local-row-label.ts',
 		slug: 'define-row-label'
 	}
 ];

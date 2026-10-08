@@ -83,7 +83,7 @@ for package_directory in "$package_root"/*; do
 		echo "$package_target includes unrelated third-party notices" >&2
 		exit 1
 	fi
-	if [[ "$package_target" == "ridu-framework-protocol" || "$package_target" == "ridu-framework-sdk" || "$package_target" == "ridu-framework-build" ]]; then
+	if [[ "$package_target" == "ridu-framework-protocol" || "$package_target" == "ridu-framework-translations" || "$package_target" == "ridu-framework-sdk" || "$package_target" == "ridu-framework-build" ]]; then
 		if grep -Fq '"./src/' <<<"$packed_manifest"; then
 			echo "$package_target manifest exports raw TypeScript runtime sources" >&2
 			exit 1
@@ -111,6 +111,35 @@ for package_directory in "$package_root"/*; do
 			exit 1
 		fi
 	fi
+	case "$package_target" in
+	ridu-framework-sveltekit | ridu-framework-ui | ridu-framework-plugin | ridu-framework-plugin-*)
+		# svelte-package output: consumers resolve dist and the source stays behind. The template's
+		# `imports` field still names src/lib, but only the package's own source uses it.
+		if ! node --input-type=module --eval '
+			import { readFileSync } from "node:fs";
+			const manifest = JSON.parse(readFileSync(process.argv[1], "utf8"));
+			const entries = JSON.stringify([manifest.exports, manifest.svelte, manifest.types, manifest.main, manifest.module]);
+			process.exit(entries.includes("./src/") ? 1 : 0);
+		' "$packed_manifest_file"; then
+			echo "$package_target manifest exports package sources instead of svelte-package output" >&2
+			exit 1
+		fi
+		compiled_files=(package/dist/index.js package/dist/index.d.ts)
+		if [[ "$package_target" == "ridu-framework-plugin-richtext" ]]; then
+			compiled_files+=(package/dist/editor/index.js package/dist/editor/index.d.ts)
+		fi
+		for compiled_file in "${compiled_files[@]}"; do
+			if ! grep -Fxq -- "$compiled_file" "$packed_members"; then
+				echo "$package_target omits $compiled_file" >&2
+				exit 1
+			fi
+		done
+		if grep -q '^package/src/' "$packed_members"; then
+			echo "$package_target publishes its sources alongside svelte-package output" >&2
+			exit 1
+		fi
+		;;
+	esac
 done
 
 node_consumer="$release_workspace/node-consumer"
@@ -192,10 +221,12 @@ printf '%s\n' \
 	'import { seoMessages } from "@riducms/plugin-seo";' \
 	'import { formBuilderMessages } from "@riducms/plugin-form-builder/admin";' \
 	'import { graphqlMessages } from "@riducms/plugin-graphql";' \
+	'import { RichTextEditor } from "@riducms/plugin-richtext/editor";' \
 	'void richTextMessages;' \
 	'void seoMessages;' \
 	'void formBuilderMessages;' \
-	'void graphqlMessages;' > "$project_root/admin/src/framework-alias-contract.ts"
+	'void graphqlMessages;' \
+	'void RichTextEditor;' > "$project_root/admin/src/framework-alias-contract.ts"
 
 (
 	cd "$project_root"

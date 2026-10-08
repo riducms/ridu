@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/sveltekit",
 	"description": "SvelteKit integration for Ridu: direct browser requests, server rendering, and one session owner.",
-	"version": "0.16.2",
+	"version": "0.17.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -17,24 +17,39 @@
 		"provenance": true
 	},
 	"type": "module",
+	"svelte": "./dist/index.js",
+	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
-			"types": "./src/index.ts",
-			"svelte": "./src/index.ts",
-			"default": "./src/index.ts"
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
 		},
 		"./server": {
-			"types": "./src/server.ts",
-			"svelte": "./src/server.ts",
-			"default": "./src/server.ts"
+			"types": "./dist/server.d.ts",
+			"svelte": "./dist/server.js",
+			"default": "./dist/server.js"
 		}
 	},
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	},
 	"files": [
-		"src"
+		"dist",
+		"!dist/**/*.test.*",
+		"!dist/**/*.spec.*"
+	],
+	"sideEffects": [
+		"**/*.css"
 	],
 	"scripts": {
-		"check": "tsc -p tsconfig.json",
-		"test": "bun test"
+		"build": "bun run package",
+		"package": "svelte-kit sync && svelte-package && publint",
+		"dev": "svelte-kit sync && bun run --parallel dev:package",
+		"dev:package": "svelte-package --watch",
+		"check": "svelte-kit sync && tsc -p tsconfig.json",
+		"test": "svelte-kit sync && bun test"
 	},
 	"dependencies": {
 		"esm-env": "^1.2.2"
@@ -46,6 +61,9 @@
 	},
 	"devDependencies": {
 		"@riducms/sdk": "workspace:*",
-		"@sveltejs/kit": "^2.48.0"
+		"@sveltejs/kit": "^3.0.1",
+		"@sveltejs/package": "^3.0.0",
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"publint": "^0.3.25"
 	}
 }

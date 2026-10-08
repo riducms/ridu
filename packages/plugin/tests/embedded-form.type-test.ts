@@ -1,4 +1,4 @@
-import type { FieldAuthoringHost, EmbeddedSchemaFormProps } from "../src";
+import type { FieldAuthoringHost, EmbeddedSchemaFormProps } from "../src/lib";
 import type { Snippet } from "svelte";
 
 function renderPayload(host: FieldAuthoringHost, identity: string) {
