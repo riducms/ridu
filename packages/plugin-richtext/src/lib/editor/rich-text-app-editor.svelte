@@ -14,8 +14,12 @@
 		dir,
 		messages,
 		onchange,
+		name,
 		...props
-	}: Omit<ComponentProps<typeof RichTextEditor>, "lang" | "dir" | "extensions" | "onchange"> & {
+	}: Omit<
+		ComponentProps<typeof RichTextEditor>,
+		"lang" | "dir" | "extensions" | "onchange" | "name"
+	> & {
 		/**
 		 * The language of the editor's content, such as "fr". The editor's own text uses the
 		 * language it mounted with: its catalogue's translation, or English.
@@ -30,6 +34,11 @@
 		 * blocks, which only the admin's editor opens.
 		 */
 		onchange?: (value: RichTextDocument) => void;
+		/**
+		 * Submits the document with a form under this name, as JSON, like a native field. It also
+		 * names the downloaded recovery file.
+		 */
+		name?: string | undefined;
 	} = $props();
 
 	// An app has no admin translations, so the editor and its menus read its own catalogue from
@@ -46,8 +55,16 @@
 	<RichTextEditor
 		bind:value
 		{...props}
+		{name}
 		{lang}
 		{dir}
 		onchange={(next) => onchange?.(next as RichTextDocument)}
 	/>
 </TooltipProvider>
+{#if name !== undefined}
+	<input
+		type="hidden"
+		{name}
+		value={value === undefined || value === null ? "" : JSON.stringify(value)}
+	/>
+{/if}

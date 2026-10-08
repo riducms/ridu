@@ -1,0 +1,58 @@
+/* A reset in a layer, as Tailwind 4 has, declared before Ridu's layers as the docs say. */
+@layer base {
+	ol,
+	ul,
+	menu {
+		list-style: none;
+	}
+}
+@layer ridu, ridu-plugins, app;
+
+/*
+ * An app's own unlayered reset and focus style, like UnoCSS's preflight. The editor keeps its look
+ * under them (HVN-183).
+ */
+*,
+::before,
+::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+	border: 0 solid;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-size: inherit;
+	font-weight: inherit;
+}
+ol,
+ul,
+menu {
+	list-style: none;
+}
+a {
+	color: inherit;
+	text-decoration: inherit;
+}
+button,
+input {
+	font: inherit;
+	color: inherit;
+	background-color: transparent;
+	border-radius: 0;
+}
+:focus-visible {
+	outline: 2px solid black;
+	outline-offset: 2px;
+}
+
+/* An app's override of one of the editor's rules, which the reset's rollback keeps. */
+@layer app {
+	.ridu-richtext-editor blockquote {
+		border-inline-start-color: #b45309;
+	}
+}

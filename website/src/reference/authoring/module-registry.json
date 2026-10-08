@@ -2581,6 +2581,11 @@
 							"aliasesOnly": true
 						},
 						{
+							"specifier": "@riducms/plugin-richtext/markdown",
+							"path": "packages/plugin-richtext/src/lib/markdown/index.ts",
+							"tsconfig": "packages/plugin-richtext/tsconfig.json"
+						},
+						{
 							"specifier": "@riducms/plugin-richtext/svelte",
 							"path": "packages/plugin-richtext/src/lib/render/index.ts",
 							"tsconfig": "packages/plugin-richtext/tsconfig.json",

@@ -1,6 +1,13 @@
 import { isRecord } from "@riducms/protocol";
-/** The features the core editor implements. */
+/** A feature the core editor implements. */
 export type RichTextEditorFeature = "links" | "lists" | "code" | "horizontal-rule";
+/** Every core feature, which the editor offers unless told otherwise. */
+export const richTextEditorFeatures = [
+	"links",
+	"lists",
+	"code",
+	"horizontal-rule",
+] as const satisfies readonly RichTextEditorFeature[];
 /** A field's features; the admin adds uploads, relationships and blocks as editor extensions. */
 export type RichTextFeature = RichTextEditorFeature | "uploads" | "relationships" | "blocks";
 
@@ -89,7 +96,7 @@ export function hasRichTextFeature(config: RichTextConfig, feature: RichTextFeat
 	return config.features.includes(feature);
 }
 
-const editorFeatures = new Set<RichTextFeature>(["links", "lists", "code", "horizontal-rule"]);
+const editorFeatures: ReadonlySet<RichTextFeature> = new Set(richTextEditorFeatures);
 
 export function isRichTextEditorFeature(
 	feature: RichTextFeature
