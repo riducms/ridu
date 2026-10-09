@@ -119,8 +119,7 @@ Then write `note-field.svelte`:
 	readonly={field.readOnly}
 	aria-invalid={field.issues.length > 0}
 	aria-describedby={`${field.schema.id}-issues`}
-	value={field.value?.text ?? ""}
-	oninput={(event) => field.set({ text: event.currentTarget.value })}></textarea>
+	bind:value={() => field.value?.text ?? "", (text) => field.set({ text })}></textarea>
 <div id={`${field.schema.id}-issues`} aria-live="polite">
 	{#each field.issues as issue}<p>{issue.message}</p>{/each}
 </div>

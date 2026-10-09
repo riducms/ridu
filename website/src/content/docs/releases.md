@@ -18,7 +18,7 @@ or startup.
 
 | Surface         | Supported environment                                                                                 |
 | --------------- | ----------------------------------------------------------------------------------------------------- |
-| Go              | Go 1.25 or newer                                                                                      |
+| Go              | Go 1.26 or newer                                                                                      |
 | Initializer     | Node.js 20 or newer for the launcher alone; generated admin tooling has stricter requirements below.  |
 | Generated admin | Node.js 20.19+ (20.x), 22.12+ (22.x), or 24+; use 24+ for a new project.                              |
 | Source checkout | Bun 1.4.0                                                                                             |

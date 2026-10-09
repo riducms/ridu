@@ -46,7 +46,7 @@ func TestGeneratedGoBlocksExternalCodec(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	files := map[string]string{"go.mod": fmt.Sprintf("module example.com/block-consumer\n\ngo 1.25.13\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "blocks_test.go": generatedBlocksConsumer, "ergonomics_test.go": generatedBlocksErgonomicsConsumer, "array_retention_test.go": generatedArrayRetentionConsumer}
+	files := map[string]string{"go.mod": fmt.Sprintf("module example.com/block-consumer\n\ngo 1.26.9\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "blocks_test.go": generatedBlocksConsumer, "ergonomics_test.go": generatedBlocksErgonomicsConsumer, "array_retention_test.go": generatedArrayRetentionConsumer}
 	for name, data := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)

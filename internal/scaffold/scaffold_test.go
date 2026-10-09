@@ -314,7 +314,7 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 	if !strings.Contains(string(goModule), "github.com/riducms/ridu v1.2.3-beta.1") {
 		t.Fatalf("generated go.mod does not use the CLI release version:\n%s", goModule)
 	}
-	if !strings.Contains(string(goModule), "go 1.25.13") {
+	if !strings.Contains(string(goModule), "go 1.26.9") {
 		t.Fatalf("generated go.mod does not require the security-patched Go toolchain:\n%s", goModule)
 	}
 	for _, relative := range []string{"admin/package.json"} {

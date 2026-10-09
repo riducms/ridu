@@ -29,7 +29,7 @@ navigation:
 This guide takes you from an empty directory to a running CMS and a typed SDK read. The **Starter**
 template includes an authenticated `users` collection and a small `posts` collection.
 
-You need [Go 1.25 or newer](https://go.dev/doc/install), a compatible Node.js version, and one package manager:
+You need [Go 1.26 or newer](https://go.dev/doc/install), a compatible Node.js version, and one package manager:
 npm, Bun, pnpm, or Yarn. Use Node.js 24 or newer for a new project. The generated admin also supports
 Node.js 20.19+ on the 20.x line and 22.12+ on the 22.x line; see
 [Releases and compatibility](/docs/releases/#supported-matrix). You do not need a global `ridu` command.

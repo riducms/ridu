@@ -44,7 +44,7 @@ func TestCreateRendersPairedConformanceStarter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(goModule), "go 1.25.13") {
+	if !strings.Contains(string(goModule), "go 1.26.9") {
 		t.Fatalf("plugin scaffold does not require the security-patched Go toolchain:\n%s", goModule)
 	}
 	adminPackage, err := os.ReadFile(filepath.Join(target, "admin", "package.json"))

@@ -41,6 +41,10 @@ field.Date("startsAt").
 | `DateTime` | RFC 3339 timestamp    | An instant such as `2027-06-10T09:30:00Z`         |
 | `TimeOnly` | `HH:mm` or `HH:mm:ss` | A local opening time without a date               |
 
+Ridu stores a `DateTime` value in one form, UTC with milliseconds, whichever RFC 3339 form was
+sent: `2027-06-10T11:30:00+02:00` is stored as `2027-06-10T09:30:00.000Z`. Reads return that
+form.
+
 The field format controls server validation, OpenAPI, and the matching admin control. Omitting
 `Format` uses `field.DateOnly`. Changing its `Admin` settings does not change the accepted format.
 
@@ -65,9 +69,10 @@ fixes the timestamp when your configuration is built. Calculate it inside `.Defa
 when it should change with each new document. See [Set default field values](/docs/fields/defaults/).
 
 Date also supports `Required`, localization, uniqueness/indexing, and common admin options.
-Filters and sorts compare normalized accepted date strings. Use RFC 3339 with an explicit
-offset for day-and-time values; convert for display in the consumer rather than removing timezone
-information before storage.
+Filters and sorts compare the stored strings. Because every `DateTime` value is stored as UTC with
+milliseconds, string order is time order, and `query.DateTime` matches a value however it was
+written. Use RFC 3339 with an explicit offset for day-and-time values; convert for display in the
+consumer rather than removing timezone information before storage.
 
 A localized date is appropriate only when the underlying content really differs by locale. A
 single event instant usually should not be localized merely because each audience formats it

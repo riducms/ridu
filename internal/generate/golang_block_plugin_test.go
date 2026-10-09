@@ -39,7 +39,7 @@ func TestGeneratedGoBlockPluginPointerCodecs(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := map[string]string{
-		"go.mod":            fmt.Sprintf("module example.com/plugin-consumer\n\ngo 1.25.13\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root),
+		"go.mod":            fmt.Sprintf("module example.com/plugin-consumer\n\ngo 1.26.9\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root),
 		"ridu.generated.go": string(generated),
 		"pluginvalue/value.go": `package pluginvalue
 import "errors"

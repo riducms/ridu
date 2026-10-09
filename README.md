@@ -59,7 +59,7 @@ existing-project wiring and production limits, is covered by the public adapter 
 
 ## Try the source checkout
 
-Building the source checkout requires Go 1.25 or newer and [Bun](https://bun.sh/) 1.4.0.
+Building the source checkout requires Go 1.26 or newer and [Bun](https://bun.sh/) 1.4.0.
 
 ```sh
 git clone https://github.com/riducms/ridu.git

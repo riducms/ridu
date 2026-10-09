@@ -1,3 +1,3 @@
 module example.com/ridu-playground-suite
 
-go 1.25.13
+go 1.26.9

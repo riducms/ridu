@@ -124,9 +124,10 @@ Pass the value you compare with as an ordinary Go value of the kind the field ho
 Named types work too, so a `type Status string` constant can be compared with a select field
 directly. `"50"` is text and `50` is a number, so choose the one that matches the field.
 
-Dates are stored as text, so a comparison must use the same form the field stores.
-`query.DateTime` converts a `time.Time` to that form for date-and-time fields, `createdAt`, and
-`updatedAt`:
+Dates are stored as text, so a comparison must use the same form the field stores. Ridu stores
+every date-and-time value as UTC with milliseconds, such as `2026-09-29T14:05:00.000Z`, however it
+was written. `query.DateTime` converts a `time.Time` to that form for date-and-time fields,
+`createdAt`, and `updatedAt`:
 
 ```go
 recent := query.GreaterThan(

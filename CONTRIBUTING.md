@@ -6,7 +6,7 @@ contracts.
 
 ## Set up the repository
 
-Use Go 1.25.13 or newer, Node.js 24, and Bun 1.4.0. PostgreSQL integration uses PostgreSQL 17; SQLite uses the bundled
+Use Go 1.26.9 or newer, Node.js 24, and Bun 1.4.0. PostgreSQL integration uses PostgreSQL 17; SQLite uses the bundled
 pure-Go driver and does not require CGO or an external database service.
 
 ```sh
@@ -156,8 +156,10 @@ prepared freshly and then copied for repeated publication assertions.
 These caches are disposable and retain older source snapshots; remove `.ridu/test-cache/cli/`
 when reclaiming disk space, with no CLI fixture running.
 
-The four independent type-check groups run in parallel after runtime packages are built. Full
-checks finish frontend builds and live SDK verification before overlapping Go tests and browser
+The four independent type-check groups run in parallel after runtime packages are built. The builds
+that run beside them use `:prepared` scripts, which never rebuild those packages: `svelte-package`
+empties a package's output while it builds, so a concurrent rebuild can remove files a running test
+is loading. Full checks finish frontend builds and live SDK verification before overlapping Go tests and browser
 work. Do not start another encompassing gate against the same checkout. Playwright output belongs
 under distinct `.ridu/` subdirectories, outside Go's `./...` package traversal, so cleanup cannot
 race package discovery. Performance measurements run separately from that concurrent gate.

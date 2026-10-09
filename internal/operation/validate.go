@@ -293,8 +293,10 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 				if field.Required && !options.deferCompleteness {
 					issues.add(requiredIssue(field, path))
 				}
-			} else if !validDateValue(field, text) {
+			} else if canonical, valid := canonicalDateValue(field, text); !valid {
 				issues.add(schema.Issue{Code: "invalid_date", Path: path, Message: fmt.Sprintf("%s must match its configured date format", field.Admin.Label)})
+			} else if canonical != text {
+				object.set(field.Name, store.String(canonical))
 			}
 		case schema.FieldTypeNumber:
 			number, valid := value.NumberValue()
@@ -595,26 +597,38 @@ func validateRowKeyValue(value store.Value, exists bool, seen map[string]int, ro
 	return nil
 }
 
-func validDateValue(field schema.Field, value string) bool {
-	if field.Date == nil {
-		_, err := time.Parse("2006-01-02", value)
-		return err == nil
+// dateTimeLayout is the one stored form of a date-and-time value: UTC with
+// milliseconds, as the admin saves it and query.DateTime compares it. Its
+// fixed width makes the stored text sort in time order.
+const dateTimeLayout = "2006-01-02T15:04:05.000Z"
+
+// canonicalDateValue validates value against the field's date format and
+// returns the text to store. A date-and-time value in any RFC 3339 form, such
+// as one without milliseconds or with an offset, becomes dateTimeLayout, so it
+// equals and orders with every other stored value and query.DateTime operand.
+func canonicalDateValue(field schema.Field, value string) (string, bool) {
+	format := schema.DateOnly
+	if field.Date != nil {
+		format = field.Date.Format
 	}
-	switch field.Date.Format {
+	switch format {
 	case schema.DateOnly:
 		_, err := time.Parse("2006-01-02", value)
-		return err == nil
+		return value, err == nil
 	case schema.DateTime:
-		_, err := time.Parse(time.RFC3339, value)
-		return err == nil
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			return "", false
+		}
+		return parsed.UTC().Format(dateTimeLayout), true
 	case schema.TimeOnly:
 		if _, err := time.Parse("15:04", value); err == nil {
-			return true
+			return value, true
 		}
 		_, err := time.Parse("15:04:05", value)
-		return err == nil
+		return value, err == nil
 	default:
-		return false
+		return "", false
 	}
 }
 

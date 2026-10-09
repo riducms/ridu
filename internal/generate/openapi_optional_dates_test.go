@@ -40,7 +40,7 @@ func TestOpenAPIOptionalDatesValidateHTTPEmptyValues(t *testing.T) {
 			invalid := "2026-99-04"
 			switch appearance {
 			case field.DateTime:
-				valid = "2026-09-04T14:30:00Z"
+				valid = "2026-09-04T14:30:00.000Z"
 				invalid = "2026-09-04T25:30:00Z"
 			case field.TimeOnly:
 				valid = "14:30"

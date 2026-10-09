@@ -393,11 +393,11 @@ func TestGeneratedProjectIgnoresAnUnlistedEnclosingGoWorkspace(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
 	setFrameworkProxy(t, frameworkRoot)
 	workspaceRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workspaceRoot, "go.mod"), []byte("module example.com/outer-workspace\n\ngo 1.25.13\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "go.mod"), []byte("module example.com/outer-workspace\n\ngo 1.26.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	workFile := filepath.Join(workspaceRoot, "go.work")
-	if err := os.WriteFile(workFile, []byte("go 1.25.13\n\nuse .\n"), 0o644); err != nil {
+	if err := os.WriteFile(workFile, []byte("go 1.26.9\n\nuse .\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GOWORK", workFile)

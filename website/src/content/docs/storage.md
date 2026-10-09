@@ -138,8 +138,17 @@ func openUploadStorage(context.Context) (storage.Backend, error) {
 }
 ```
 
-Endpoint, region, bucket, access key, and secret key are required. Supply a custom `http.Client` to
-set deployment-specific transport and timeout policy; the default client timeout is 30 seconds.
+Endpoint, region, bucket, access key, and secret key are required. The endpoint is the provider's
+S3 endpoint without the bucket, such as `https://s3.us-east-1.amazonaws.com` or, for a Railway
+bucket, `https://t3.storageapi.dev`. Supply a custom `http.Client` to set deployment-specific
+transport and timeout policy; the default client timeout is 30 seconds.
+
+By default the backend addresses the bucket as a subdomain of the endpoint,
+`https://<bucket>.<endpoint host>/<key>`. AWS S3, Railway buckets (Tigris) and Cloudflare R2
+accept this virtual-hosted style, and Railway buckets created now accept nothing else. Set
+`PathStyle: true` to send `https://<endpoint>/<bucket>/<key>` instead. MinIO and other emulators
+addressed by IP address or a single host name need it, and so does a bucket whose name contains a
+dot. Without `PathStyle`, `s3storage.New` refuses those two cases.
 
 S3 signing needs the payload hash before upload. A seekable input is hashed and rewound. A
 non-seekable input is copied to a private temporary file, bounded by `MaxSpoolBytes`; zero selects
@@ -148,7 +157,8 @@ space for concurrent non-seekable uploads.
 
 > [!IMPORTANT]
 > S3 endpoints must use HTTPS. `AllowInsecureEndpoint` permits HTTP only for a trusted local emulator
-> such as MinIO. It sends storage credentials over plaintext and is not production configuration.
+> such as MinIO, which also needs `PathStyle`. It sends storage credentials over plaintext and is not
+> production configuration.
 
 `SignedURL` accepts a lifetime from one second through seven days. Signed possession is a temporary
 capability, not collection authorization; issue it only after the application has made the relevant

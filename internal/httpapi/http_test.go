@@ -608,6 +608,49 @@ func TestInternalErrorsUseDefaultLoggingAndRecoverPanickingCallbacks(t *testing.
 	}
 }
 
+// A refused host is logged once, so a health check from an unlisted host has
+// a visible cause, and the log stays bounded however many hosts are refused.
+func TestDeniedHostsAreLoggedOnceAndBounded(t *testing.T) {
+	previous := slog.Default()
+	var logs bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	handler := New(Config{AllowedHosts: []string{"my-app.up.railway.app"}})
+	for range 2 {
+		request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+		request.Host = "healthcheck.railway.app"
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "request host is not allowed") {
+			t.Fatalf("unlisted host = %d %s", response.Code, response.Body.String())
+		}
+	}
+	malformed := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	malformed.Host = "bad_host!"
+	handler.ServeHTTP(httptest.NewRecorder(), malformed)
+	if count := strings.Count(logs.String(), "host="); count != 1 || !strings.Contains(logs.String(), "host=healthcheck.railway.app") || !strings.Contains(logs.String(), "RIDU_ALLOWED_HOSTS") {
+		t.Fatalf("denied host logged %d times: %q", count, logs.String())
+	}
+	allowed := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	allowed.Host = "my-app.up.railway.app"
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, allowed)
+	if response.Code != http.StatusOK {
+		t.Fatalf("listed host = %d %s", response.Code, response.Body.String())
+	}
+
+	logs.Reset()
+	for index := range 2 * maxLoggedDeniedHosts {
+		request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		request.Host = fmt.Sprintf("probe-%d.example.test", index)
+		handler.ServeHTTP(httptest.NewRecorder(), request)
+	}
+	if count := strings.Count(logs.String(), "host=probe-"); count != maxLoggedDeniedHosts-1 || !strings.Contains(logs.String(), "logs no further refused hosts") {
+		t.Fatalf("logged %d further hosts: %q", count, logs.String())
+	}
+}
+
 func TestFailedAndRateLimitedLoginsEmitAuditEventsWithoutIdentityData(t *testing.T) {
 	var events []AuditEvent
 	handler := New(Config{
