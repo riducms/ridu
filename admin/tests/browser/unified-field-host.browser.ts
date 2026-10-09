@@ -22,8 +22,8 @@ const Editor = svelte`
 		bindings.push(field);
 	</script>
 	<Field {field}>
-		<input {...field.inputProps} value={field.value ?? ""} readonly={field.readOnly}
-			data-editor-config={config.prefix} oninput={event => field.set(event.currentTarget.value)} />
+		<input {...field.inputProps} bind:value={() => field.value ?? "", next => field.set(next)}
+			readonly={field.readOnly} data-editor-config={config.prefix} />
 	</Field>
 `;
 const PlainEditor = svelte`
@@ -34,8 +34,8 @@ const PlainEditor = svelte`
 		bindings.push(field);
 	</script>
 	<Field {field}>
-		<input {...field.inputProps} value={field.value ?? ""} readonly={field.readOnly}
-			data-has-config={"config" in rest} oninput={event => field.set(event.currentTarget.value)} />
+		<input {...field.inputProps} bind:value={() => field.value ?? "", next => field.set(next)}
+			readonly={field.readOnly} data-has-config={"config" in rest} />
 	</Field>
 `;
 const PlainLabel = svelte`

@@ -67,7 +67,7 @@ func TestDynamicDefaultsSupportedLogicalValuesAndOmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, expected := range map[string]string{"title": "Untitled", "description": "Description", "source": "const a = 1", "email": "hello@example.com", "date": "2026-09-08T10:00:00Z", "choice": "one", "radio": "two"} {
+	for name, expected := range map[string]string{"title": "Untitled", "description": "Description", "source": "const a = 1", "email": "hello@example.com", "date": "2026-09-08T10:00:00.000Z", "choice": "one", "radio": "two"} {
 		if actual, ok := created.Values[name].StringValue(); !ok || actual != expected {
 			t.Fatalf("%s = %#v, want %q", name, created.Values[name], expected)
 		}

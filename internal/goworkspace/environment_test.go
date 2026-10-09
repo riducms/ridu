@@ -10,10 +10,10 @@ import (
 
 func TestIsolateUnlistedModule(t *testing.T) {
 	workspaceRoot := t.TempDir()
-	writeFile(t, filepath.Join(workspaceRoot, "go.mod"), "module example.com/workspace\n\ngo 1.25.13\n")
-	writeFile(t, filepath.Join(workspaceRoot, "go.work"), "go 1.25.13\n\nuse .\n")
+	writeFile(t, filepath.Join(workspaceRoot, "go.mod"), "module example.com/workspace\n\ngo 1.26.9\n")
+	writeFile(t, filepath.Join(workspaceRoot, "go.work"), "go 1.26.9\n\nuse .\n")
 	projectRoot := filepath.Join(workspaceRoot, "project")
-	writeFile(t, filepath.Join(projectRoot, "go.mod"), "module example.com/project\n\ngo 1.25.13\n")
+	writeFile(t, filepath.Join(projectRoot, "go.mod"), "module example.com/project\n\ngo 1.26.9\n")
 
 	environment := goworkspace.IsolateUnlistedModule(projectRoot, []string{"PATH=/bin"})
 	if value := environmentValue(environment, "GOWORK"); value != "off" {
@@ -24,9 +24,9 @@ func TestIsolateUnlistedModule(t *testing.T) {
 func TestRetainWorkspaceForListedModule(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	projectRoot := filepath.Join(workspaceRoot, "project")
-	writeFile(t, filepath.Join(projectRoot, "go.mod"), "module example.com/project\n\ngo 1.25.13\n")
+	writeFile(t, filepath.Join(projectRoot, "go.mod"), "module example.com/project\n\ngo 1.26.9\n")
 	workFile := filepath.Join(workspaceRoot, "go.work")
-	writeFile(t, workFile, "go 1.25.13\n\nuse ./project\n")
+	writeFile(t, workFile, "go 1.26.9\n\nuse ./project\n")
 
 	environment := goworkspace.IsolateUnlistedModule(projectRoot, []string{"GOWORK=" + workFile})
 	if value := environmentValue(environment, "GOWORK"); value != workFile {
@@ -36,7 +36,7 @@ func TestRetainWorkspaceForListedModule(t *testing.T) {
 
 func TestRespectExplicitWorkspaceDisable(t *testing.T) {
 	projectRoot := t.TempDir()
-	writeFile(t, filepath.Join(projectRoot, "go.mod"), "module example.com/project\n\ngo 1.25.13\n")
+	writeFile(t, filepath.Join(projectRoot, "go.mod"), "module example.com/project\n\ngo 1.26.9\n")
 
 	environment := goworkspace.IsolateUnlistedModule(projectRoot, []string{"GOWORK=off"})
 	if value := environmentValue(environment, "GOWORK"); value != "off" {

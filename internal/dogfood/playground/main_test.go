@@ -10,7 +10,7 @@ func TestRequiredFrameworkVersion(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "go.mod")
-	contents := "module example.com/playground\n\ngo 1.25.13\n\nrequire github.com/riducms/ridu v0.0.0-playground.1\n"
+	contents := "module example.com/playground\n\ngo 1.26.9\n\nrequire github.com/riducms/ridu v0.0.0-playground.1\n"
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}

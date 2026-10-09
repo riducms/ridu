@@ -21,8 +21,8 @@ const NoteEditor = svelte`
 		let { field } = $props();
 		bindings.push(field);
 	</script>
-	<input aria-label="Note" value={field.value ?? ""} disabled={field.readOnly}
-		oninput={event => field.set(event.currentTarget.value)} />
+	<input aria-label="Note" bind:value={() => field.value ?? "", next => field.set(next)}
+		disabled={field.readOnly} />
 `;
 // Inline templates deliberately do not replace the separate component-prop type probes.
 const { bindings } = NoteEditor as unknown as {

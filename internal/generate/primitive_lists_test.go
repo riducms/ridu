@@ -135,7 +135,7 @@ func TestPrimitiveListGeneratedGoExternalCodec(t *testing.T) {
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	for name, source := range map[string]string{"go.mod": fmt.Sprintf("module example.com/list-consumer\n\ngo 1.25.13\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "lists_test.go": primitiveListGoConsumer} {
+	for name, source := range map[string]string{"go.mod": fmt.Sprintf("module example.com/list-consumer\n\ngo 1.26.9\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "lists_test.go": primitiveListGoConsumer} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(source), 0600); err != nil {
 			t.Fatal(err)
 		}

@@ -461,10 +461,15 @@ ridu.WithUploadStorage(func(
 ridu.WithAddress(serverAddress()),
 ```
 
+Set `S3_ENDPOINT` to the provider's endpoint without the bucket, such as `https://t3.storageapi.dev`
+for a Railway bucket. Ridu addresses the bucket as a subdomain of that endpoint, as AWS, Railway
+(Tigris) and Cloudflare R2 expect. For MinIO, or another provider that needs
+`<endpoint>/<bucket>` paths, add `PathStyle: true`.
+
 Use HTTPS for production endpoints. Size the private spool directory for concurrent uploads and
 back it with ephemeral disk; S3 signing may need to spool a non-seekable request before upload. See
-[Object storage](https://riducms.com/docs/storage/#s3-storage) for timeouts, local emulators, signed URLs, and the
-backend contract.
+[Object storage](https://riducms.com/docs/storage/#s3-storage) for addressing, timeouts, local emulators, signed URLs,
+and the backend contract.
 
 ## Prepare the schema change for deployment {#deploy-schema}
 

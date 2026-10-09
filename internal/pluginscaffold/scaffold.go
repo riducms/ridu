@@ -127,7 +127,7 @@ func validate(options Options) (string, data, error) {
 var templates = map[string]string{
 	"go.mod": `module {{.ModulePath}}
 
-go 1.25.13
+go 1.26.9
 
 require github.com/riducms/ridu {{.GoVersion}}
 `,
@@ -258,7 +258,7 @@ export function decodeValue(value: unknown): Value {
 </script>
 
 <label for={field.schema.id}>{field.schema.admin.label}</label>
-<input id={field.schema.id} value={field.value?.value ?? ""} disabled={field.readOnly} oninput={(event) => field.set({ value: event.currentTarget.value })} />
+<input id={field.schema.id} bind:value={() => field.value?.value ?? "", (value) => field.set({ value })} disabled={field.readOnly} />
 {#each field.issues as issue (issue.code)}<p>{issue.message}</p>{/each}
 `,
 	"admin/tests/plugin.test.ts": `import { expect, test } from "bun:test";

@@ -287,7 +287,14 @@ type API struct {
 	allowedHeaders   []string
 	allowedHeaderSet map[string]struct{}
 	restrictHosts    bool
+	// deniedHosts records the refused hosts already logged.
+	deniedHostsMutex sync.Mutex
+	deniedHosts      map[string]struct{}
 }
+
+// maxLoggedDeniedHosts bounds how many distinct refused hosts are logged, so
+// requests that vary the Host header cannot flood the log.
+const maxLoggedDeniedHosts = 32
 
 func New(config Config) http.Handler {
 	if config.MaxBodyBytes <= 0 {
@@ -380,6 +387,7 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 	}()
 	writer.Header().Set("X-Request-ID", requestID)
 	if !api.hostAllowed(request.Host) {
+		api.logDeniedHost(request.Host)
 		writer.Header().Set("Content-Type", "application/json")
 		api.writeError(writer, requestID, &operationengine.Error{Code: "host_denied", Status: 400, Message: "request host is not allowed"})
 		return
@@ -3091,6 +3099,30 @@ func (api *API) hostAllowed(raw string) bool {
 		}
 	}
 	return false
+}
+
+// logDeniedHost logs the first refusal of each well-formed host the allowed
+// hosts omit, so a platform health check or proxy that sends an unlisted host
+// leaves a visible cause. A malformed host is not logged: listing it would not
+// let it through.
+func (api *API) logDeniedHost(raw string) {
+	_, _, host, err := canonicalHost(raw)
+	if err != nil || !api.restrictHosts {
+		return
+	}
+	api.deniedHostsMutex.Lock()
+	defer api.deniedHostsMutex.Unlock()
+	if _, logged := api.deniedHosts[host]; logged || len(api.deniedHosts) >= maxLoggedDeniedHosts {
+		return
+	}
+	if api.deniedHosts == nil {
+		api.deniedHosts = make(map[string]struct{})
+	}
+	api.deniedHosts[host] = struct{}{}
+	slog.Warn("Ridu refused a request for a host the allowed hosts do not list; add it to RIDU_ALLOWED_HOSTS if it should be served", "host", host)
+	if len(api.deniedHosts) == maxLoggedDeniedHosts {
+		slog.Warn("Ridu logs no further refused hosts", "logged", maxLoggedDeniedHosts)
+	}
 }
 
 func (api *API) securityHeaders(writer http.ResponseWriter, request *http.Request) {

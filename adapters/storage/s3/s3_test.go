@@ -2,11 +2,14 @@ package s3_test
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -118,9 +121,147 @@ func TestBackendRequiresExplicitPlaintextEndpointOptIn(t *testing.T) {
 		t.Fatalf("plaintext endpoint error = %v", err)
 	}
 	config.AllowInsecureEndpoint = true
+	if _, err := s3storage.New(config); err == nil || !strings.Contains(err.Error(), "set PathStyle") {
+		t.Fatalf("virtual-hosted IP endpoint error = %v", err)
+	}
+	config.PathStyle = true
 	if _, err := s3storage.New(config); err != nil {
 		t.Fatalf("explicit local endpoint: %v", err)
 	}
+}
+
+func TestBackendRefusesBucketsVirtualHostedStyleCannotAddress(t *testing.T) {
+	config := s3storage.Config{Endpoint: "https://objects.example.test", Region: "test", Bucket: "media.example", AccessKey: "key", SecretKey: "secret"}
+	if _, err := s3storage.New(config); err == nil || !strings.Contains(err.Error(), "set PathStyle") {
+		t.Fatalf("dotted virtual-hosted bucket error = %v", err)
+	}
+	config.PathStyle = true
+	if _, err := s3storage.New(config); err != nil {
+		t.Fatalf("dotted path-style bucket: %v", err)
+	}
+}
+
+// Each request is signed for the host and path it is sent to, in both
+// addressing styles, including an endpoint written without a trailing slash.
+func TestBackendAddressesBucketsInEitherStyle(t *testing.T) {
+	for _, test := range []struct {
+		name                         string
+		endpoint                     string
+		pathStyle                    bool
+		host, object, bucket, signed string
+	}{
+		{name: "virtual-hosted", endpoint: "https://t3.storageapi.dev", host: "media.t3.storageapi.dev", object: "/uploads/a.txt", bucket: "/", signed: "https://media.t3.storageapi.dev/uploads/a.txt?"},
+		{name: "path-style", endpoint: "https://objects.example.test", pathStyle: true, host: "objects.example.test", object: "/media/uploads/a.txt", bucket: "/media", signed: "https://objects.example.test/media/uploads/a.txt?"},
+		{name: "path-style below a path", endpoint: "https://objects.example.test/storage/", pathStyle: true, host: "objects.example.test", object: "/storage/media/uploads/a.txt", bucket: "/storage/media", signed: "https://objects.example.test/storage/media/uploads/a.txt?"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			type sent struct{ method, host, path, query string }
+			var requests []sent
+			client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				if request.Body != nil {
+					_, _ = io.Copy(io.Discard, request.Body)
+				}
+				if err := verifySigV4(request, "secret", "test"); err != nil {
+					t.Errorf("%s %s: %v", request.Method, request.URL, err)
+				}
+				requests = append(requests, sent{request.Method, request.URL.Host, request.URL.EscapedPath(), request.URL.Query().Get("list-type")})
+				if request.Method == http.MethodGet {
+					return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>`))}, nil
+				}
+				return emptyResponse(http.StatusNoContent), nil
+			})}
+			backend, err := s3storage.New(s3storage.Config{Endpoint: test.endpoint, PathStyle: test.pathStyle, Region: "test", Bucket: "media", AccessKey: "key", SecretKey: "secret", Client: client})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := context.Background()
+			if err := backend.Put(ctx, "uploads/a.txt", strings.NewReader("a"), 1, "text/plain"); err != nil {
+				t.Fatal(err)
+			}
+			if err := backend.Ping(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := backend.List(ctx, storage.ListRequest{Prefix: "uploads/", Limit: 10}); err != nil {
+				t.Fatal(err)
+			}
+			if err := backend.Delete(ctx, "uploads/a.txt"); err != nil {
+				t.Fatal(err)
+			}
+			want := []sent{
+				{http.MethodPut, test.host, test.object, ""},
+				{http.MethodHead, test.host, test.bucket, ""},
+				{http.MethodGet, test.host, test.bucket, "2"},
+				{http.MethodDelete, test.host, test.object, ""},
+			}
+			if len(requests) != len(want) {
+				t.Fatalf("requests = %#v", requests)
+			}
+			for index := range want {
+				if requests[index] != want[index] {
+					t.Fatalf("request %d = %#v, want %#v", index, requests[index], want[index])
+				}
+			}
+			signed, err := backend.SignedURL(ctx, "uploads/a.txt", time.Minute)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(signed, test.signed) {
+				t.Fatalf("signed URL = %q, want prefix %q", signed, test.signed)
+			}
+			if err := verifyPresignedURL(signed, "secret", "test"); err != nil {
+				t.Fatalf("signed URL %q: %v", signed, err)
+			}
+		})
+	}
+}
+
+// verifySigV4 recomputes a header-signed request's signature from the host
+// and path it is actually sent to, as an S3 server does.
+func verifySigV4(request *http.Request, secret, region string) error {
+	authorization := request.Header.Get("Authorization")
+	date := request.Header.Get("X-Amz-Date")
+	payloadHash := request.Header.Get("X-Amz-Content-Sha256")
+	canonical := strings.Join([]string{
+		request.Method, request.URL.EscapedPath(), request.URL.Query().Encode(),
+		"host:" + request.URL.Host + "\n" + "x-amz-content-sha256:" + payloadHash + "\n" + "x-amz-date:" + date + "\n",
+		"host;x-amz-content-sha256;x-amz-date", payloadHash,
+	}, "\n")
+	signature := sigV4Signature(secret, region, date, canonical)
+	if !strings.HasSuffix(authorization, "Signature="+signature) {
+		return fmt.Errorf("signature does not match the request as sent: %s", authorization)
+	}
+	return nil
+}
+
+// verifyPresignedURL recomputes a signed URL's signature from its own host,
+// path and query.
+func verifyPresignedURL(signed, secret, region string) error {
+	parsed, err := url.Parse(signed)
+	if err != nil {
+		return err
+	}
+	query := parsed.Query()
+	signature := query.Get("X-Amz-Signature")
+	query.Del("X-Amz-Signature")
+	canonical := strings.Join([]string{http.MethodGet, parsed.EscapedPath(), query.Encode(), "host:" + parsed.Host + "\n", "host", "UNSIGNED-PAYLOAD"}, "\n")
+	if want := sigV4Signature(secret, region, query.Get("X-Amz-Date"), canonical); signature != want {
+		return fmt.Errorf("signature %s, want %s", signature, want)
+	}
+	return nil
+}
+
+func sigV4Signature(secret, region, timestamp, canonical string) string {
+	date := timestamp[:8]
+	scope := date + "/" + region + "/s3/aws4_request"
+	canonicalDigest := sha256.Sum256([]byte(canonical))
+	stringToSign := strings.Join([]string{"AWS4-HMAC-SHA256", timestamp, scope, hex.EncodeToString(canonicalDigest[:])}, "\n")
+	key := []byte("AWS4" + secret)
+	for _, part := range []string{date, region, "s3", "aws4_request", stringToSign} {
+		hash := hmac.New(sha256.New, key)
+		hash.Write([]byte(part))
+		key = hash.Sum(nil)
+	}
+	return hex.EncodeToString(key)
 }
 
 func TestPutRejectsDeclaredSizeMismatchBeforeSending(t *testing.T) {

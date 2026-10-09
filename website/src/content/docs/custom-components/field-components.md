@@ -57,9 +57,8 @@ Create `admin/src/components/title-field.svelte`:
 <Field {field}>
 	<Input
 		{...field.inputProps}
-		value={field.value ?? ''}
+		bind:value={() => field.value ?? '', (next) => field.set(next)}
 		readonly={field.readOnly}
-		oninput={(event) => field.set(event.currentTarget.value)}
 	/>
 	<p>{(field.value ?? '').length} characters</p>
 </Field>
@@ -67,7 +66,9 @@ Create `admin/src/components/title-field.svelte`:
 
 Ridu passes the current field to your component as a prop. `field.value` contains what the user
 has typed, including changes they have not saved. `field.set(...)` updates that value in the
-form; the normal Save button saves the document.
+form; the normal Save button saves the document. The function binding `bind:value={get, set}`
+reads the first and writes through the second. `set` is a method, so call it from an arrow
+function rather than passing `field.set` itself.
 
 `Field` adds the label, description, and validation messages. Spreading `field.inputProps` onto
 the input connects it to that label and those messages. `readonly={field.readOnly}` makes the

@@ -16,7 +16,7 @@ launchers, scaffold flags, existing services, and recovery.
 
 ## Requirements {#requirements}
 
-- Go 1.25 or newer.
+- Go 1.26 or newer.
 - Node.js 24 or newer is recommended. The generated admin also supports Node.js 20.19+ on the
   20.x line and 22.12+ on the 22.x line.
 - One supported package manager: npm, Bun, pnpm, or Yarn.

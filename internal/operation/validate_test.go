@@ -2,6 +2,7 @@ package operation
 
 import (
 	"testing"
+	"time"
 
 	"github.com/riducms/ridu/internal/schematest"
 	"github.com/riducms/ridu/query"
@@ -86,6 +87,35 @@ func TestDateFormatsValidateTheirWireShapes(t *testing.T) {
 				t.Fatalf("invalid value issues = %#v, want invalid_date", issues)
 			}
 		})
+	}
+}
+
+// A date-and-time value is stored in one form, UTC with milliseconds, however
+// it was written, so it equals and orders with query.DateTime operands.
+func TestDateTimeValuesAreStoredInOneCanonicalForm(t *testing.T) {
+	field := validationField(t, "when", schema.FieldTypeDate, true)
+	field.Date = &schema.DateField{Format: schema.DateTime}
+	for input, want := range map[string]string{
+		"2026-10-09T12:34:32Z":         "2026-10-09T12:34:32.000Z",
+		"2026-10-09T12:34:32.000Z":     "2026-10-09T12:34:32.000Z",
+		"2026-10-09T12:34:32.5Z":       "2026-10-09T12:34:32.500Z",
+		"2026-10-09T14:34:32+02:00":    "2026-10-09T12:34:32.000Z",
+		"2026-10-09T12:34:32.123456Z":  "2026-10-09T12:34:32.123Z",
+		"2026-10-09T08:34:32.25-04:00": "2026-10-09T12:34:32.250Z",
+	} {
+		validated, issues := validate([]schema.Field{field}, store.Values{"when": store.String(input)}, true, nil)
+		if stored, _ := validated["when"].StringValue(); len(issues) != 0 || stored != want {
+			t.Fatalf("%s stored as %q with %#v, want %q", input, stored, issues, want)
+		}
+	}
+	day := validationField(t, "day", schema.FieldTypeDate, true)
+	day.Date = &schema.DateField{Format: schema.DateOnly}
+	validated, issues := validate([]schema.Field{day}, store.Values{"day": store.String("2026-10-09")}, true, nil)
+	if stored, _ := validated["day"].StringValue(); len(issues) != 0 || stored != "2026-10-09" {
+		t.Fatalf("date-only value stored as %q with %#v", stored, issues)
+	}
+	if operand, _ := query.DateTime(time.Date(2026, 10, 9, 12, 34, 32, 0, time.UTC)).StringValue(); operand != "2026-10-09T12:34:32.000Z" {
+		t.Fatalf("query.DateTime writes %q, not the stored form", operand)
 	}
 }
 

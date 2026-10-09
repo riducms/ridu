@@ -24,7 +24,7 @@ func TestSnapshotVersionsTrackAllPublishedInputsAndPreservePreviousModules(t *te
 			t.Fatal(err)
 		}
 	}
-	write("go.mod", "module github.com/riducms/ridu\n\ngo 1.25.13\n")
+	write("go.mod", "module github.com/riducms/ridu\n\ngo 1.26.9\n")
 	write("ridu.go", "package ridu\nconst Value = 1\n")
 	write("go.sum", "original dependency checksums\n")
 	write("plugins/widget/contract.json", `{"version":1}`)

@@ -112,7 +112,7 @@ func compileRichTextGoConsumer(t *testing.T, generated []byte, consumer string) 
 	t.Helper()
 	root, _ := filepath.Abs("../..")
 	dir := t.TempDir()
-	for name, content := range map[string]string{"go.mod": fmt.Sprintf("module example.com/richtext-consumer\n\ngo 1.25.13\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "generated.go": string(generated), "consumer_test.go": consumer} {
+	for name, content := range map[string]string{"go.mod": fmt.Sprintf("module example.com/richtext-consumer\n\ngo 1.26.9\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "generated.go": string(generated), "consumer_test.go": consumer} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
 			t.Fatal(err)
 		}

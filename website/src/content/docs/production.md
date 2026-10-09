@@ -114,7 +114,7 @@ Generated projects read the deployment topology from environment variables:
   </div>
   <div>
     <dt><code>RIDU_ALLOWED_HOSTS</code></dt>
-    <dd>List public hosts, optionally with ports. Set it in production because an empty list accepts every syntactically valid host for development compatibility.</dd>
+    <dd>List public hosts, optionally with ports. Set it in production because an empty list accepts every syntactically valid host for development compatibility. Include the host your platform's health check sends, such as Railway's <code>healthcheck.railway.app</code>; Ridu refuses unlisted hosts before routing, including <code>/readyz</code>, and logs the first refusal of each.</dd>
   </div>
   <div>
     <dt><code>RIDU_ALLOWED_ORIGINS</code></dt>

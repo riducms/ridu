@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,6 +28,13 @@ const defaultMaxSpoolBytes int64 = 256 << 20
 type Config struct {
 	Endpoint, Region, Bucket, AccessKey, SecretKey string
 	Client                                         *http.Client
+	// PathStyle addresses objects as <endpoint>/<bucket>/<key>. Without it the
+	// bucket is a subdomain of the endpoint host, <bucket>.<endpoint>/<key>,
+	// the virtual-hosted style that AWS, Tigris (Railway buckets) and
+	// Cloudflare R2 accept and that new Railway buckets require. Set
+	// it for MinIO and other emulators addressed by IP address or a single
+	// host name, and for a bucket whose name contains a dot over HTTPS.
+	PathStyle bool
 	// AllowInsecureEndpoint explicitly permits plaintext HTTP for local S3
 	// emulators such as MinIO. Production credentials must use HTTPS.
 	AllowInsecureEndpoint bool
@@ -40,6 +48,7 @@ type Config struct {
 
 type Backend struct {
 	endpoint                       *url.URL
+	pathStyle                      bool
 	region, bucket, access, secret string
 	client                         *http.Client
 	maxSpoolBytes                  int64
@@ -70,6 +79,14 @@ func New(config Config) (*Backend, error) {
 	if config.Region == "" || config.Bucket == "" || config.AccessKey == "" || config.SecretKey == "" {
 		return nil, fmt.Errorf("S3 region, bucket, access key, and secret key are required")
 	}
+	if !config.PathStyle {
+		if net.ParseIP(endpoint.Hostname()) != nil {
+			return nil, fmt.Errorf("S3 endpoint %s is an IP address, which cannot carry the bucket as a subdomain; set PathStyle", endpoint.Hostname())
+		}
+		if endpoint.Scheme == "https" && strings.Contains(config.Bucket, ".") {
+			return nil, fmt.Errorf("S3 bucket %q contains a dot, which no TLS certificate covers as a subdomain; set PathStyle", config.Bucket)
+		}
+	}
 	if config.MaxSpoolBytes < 0 {
 		return nil, fmt.Errorf("S3 maximum spool size must not be negative")
 	}
@@ -82,6 +99,7 @@ func New(config Config) (*Backend, error) {
 	}
 	return &Backend{
 		endpoint:       endpoint,
+		pathStyle:      config.PathStyle,
 		region:         config.Region,
 		bucket:         config.Bucket,
 		access:         config.AccessKey,
@@ -426,9 +444,19 @@ func interruptReaderOnCancellation(ctx context.Context, source io.Reader) func()
 	}
 }
 
+// objectURL addresses key, or the bucket itself when key is empty. The path
+// is always absolute: SigV4 signs it as the canonical URI, so it must be the
+// path the request is sent to.
 func (backend *Backend) objectURL(key string) *url.URL {
 	cloned := *backend.endpoint
-	cloned.Path = path.Join(backend.endpoint.Path, backend.bucket, key)
+	segments := []string{"/", backend.endpoint.Path}
+	if backend.pathStyle {
+		segments = append(segments, backend.bucket)
+	} else {
+		cloned.Host = backend.bucket + "." + backend.endpoint.Host
+	}
+	cloned.Path = path.Join(append(segments, key)...)
+	cloned.RawPath = ""
 	return &cloned
 }
 

@@ -111,7 +111,7 @@ func compileGeneratedGo(t *testing.T, generated []byte) {
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	goModule := fmt.Sprintf("module example.com/ridu-generated-collision\n\ngo 1.25.13\n\nrequire github.com/riducms/ridu v0.0.0\n\nreplace github.com/riducms/ridu => %s\n", filepath.ToSlash(frameworkRoot))
+	goModule := fmt.Sprintf("module example.com/ridu-generated-collision\n\ngo 1.26.9\n\nrequire github.com/riducms/ridu v0.0.0\n\nreplace github.com/riducms/ridu => %s\n", filepath.ToSlash(frameworkRoot))
 	if err := os.WriteFile(filepath.Join(directory, "go.mod"), []byte(goModule), 0o644); err != nil {
 		t.Fatal(err)
 	}

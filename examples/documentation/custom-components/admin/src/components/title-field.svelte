@@ -11,9 +11,8 @@
 <Field {field}>
 	<Input
 		{...field.inputProps}
-		value={field.value ?? ''}
+		bind:value={() => field.value ?? '', (next) => field.set(next)}
 		readonly={field.readOnly}
-		oninput={(event) => field.set(event.currentTarget.value)}
 	/>
 	<p>{(field.value ?? '').length} characters</p>
 </Field>

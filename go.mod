@@ -1,6 +1,6 @@
 module github.com/riducms/ridu
 
-go 1.25.13
+go 1.26.9
 
 require (
 	ariga.io/atlas v1.0.0

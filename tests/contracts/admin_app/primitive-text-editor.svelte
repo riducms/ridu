@@ -5,6 +5,8 @@
 	let { field }: FieldEditorProps<"text-list"> = $props();
 </script>
 
+<!-- This fixture keeps the value-and-handler form on purpose, beside the
+     function bindings of the other editors, so both stay supported. -->
 <Field {field}>
 	<Textarea
 		{...field.inputProps}

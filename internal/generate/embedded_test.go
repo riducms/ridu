@@ -87,7 +87,7 @@ func TestEmbeddedGeneratedContractsAndHTTP(t *testing.T) {
 	}
 	root, _ := filepath.Abs("../..")
 	dir := t.TempDir()
-	files := map[string]string{"go.mod": fmt.Sprintf("module example.com/embedded-consumer\n\ngo 1.25.13\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "embedded_test.go": embeddedGoConsumer}
+	files := map[string]string{"go.mod": fmt.Sprintf("module example.com/embedded-consumer\n\ngo 1.26.9\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "embedded_test.go": embeddedGoConsumer}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
 			t.Fatal(err)

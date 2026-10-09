@@ -9068,7 +9068,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.19.0\"",
+					"signature": "const FrameworkVersion = \"0.20.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -104189,7 +104189,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/s3/s3.go",
-						"line": 62
+						"line": 71
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104202,7 +104202,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Endpoint, credentials, HTTP transport, and bounded upload-spooling settings.",
-					"signature": "type Config struct {\n\tEndpoint, Region, Bucket, AccessKey, SecretKey string\n\tClient                                         *http.Client\n\t// AllowInsecureEndpoint explicitly permits plaintext HTTP for local S3\n\t// emulators such as MinIO. Production credentials must use HTTPS.\n\tAllowInsecureEndpoint bool\n\t// MaxSpoolBytes bounds temporary disk use when Put receives a reader that\n\t// cannot be rewound for signing. Zero selects the Ridu upload limit.\n\tMaxSpoolBytes int64\n\t// SpoolDirectory optionally selects the directory for non-seekable Put\n\t// payloads. The operating system temporary directory is used by default.\n\tSpoolDirectory string\n}",
+					"signature": "type Config struct {\n\tEndpoint, Region, Bucket, AccessKey, SecretKey string\n\tClient                                         *http.Client\n\t// PathStyle addresses objects as <endpoint>/<bucket>/<key>. Without it the\n\t// bucket is a subdomain of the endpoint host, <bucket>.<endpoint>/<key>,\n\t// the virtual-hosted style that AWS, Tigris (Railway buckets) and\n\t// Cloudflare R2 accept and that new Railway buckets require. Set\n\t// it for MinIO and other emulators addressed by IP address or a single\n\t// host name, and for a bucket whose name contains a dot over HTTPS.\n\tPathStyle bool\n\t// AllowInsecureEndpoint explicitly permits plaintext HTTP for local S3\n\t// emulators such as MinIO. Production credentials must use HTTPS.\n\tAllowInsecureEndpoint bool\n\t// MaxSpoolBytes bounds temporary disk use when Put receives a reader that\n\t// cannot be rewound for signing. Zero selects the Ridu upload limit.\n\tMaxSpoolBytes int64\n\t// SpoolDirectory optionally selects the directory for non-seekable Put\n\t// payloads. The operating system temporary directory is used by default.\n\tSpoolDirectory string\n}",
 					"parameters": [
 						{
 							"name": "Endpoint",
@@ -104235,6 +104235,11 @@
 							"description": "The Client value."
 						},
 						{
+							"name": "PathStyle",
+							"type": "bool",
+							"description": "PathStyle addresses objects as <endpoint>/<bucket>/<key>. Without it the\nbucket is a subdomain of the endpoint host, <bucket>.<endpoint>/<key>,\nthe virtual-hosted style that AWS, Tigris (Railway buckets) and\nCloudflare R2 accept and that new Railway buckets require. Set\nit for MinIO and other emulators addressed by IP address or a single\nhost name, and for a bucket whose name contains a dot over HTTPS."
+						},
+						{
 							"name": "AllowInsecureEndpoint",
 							"type": "bool",
 							"description": "AllowInsecureEndpoint explicitly permits plaintext HTTP for local S3\nemulators such as MinIO. Production credentials must use HTTPS."
@@ -104263,7 +104268,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/s3/s3.go",
-						"line": 27
+						"line": 28
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104292,7 +104297,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/s3/s3.go",
-						"line": 41
+						"line": 49
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104328,7 +104333,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/s3/s3.go",
-						"line": 98
+						"line": 116
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104386,7 +104391,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/s3/s3.go",
-						"line": 106
+						"line": 124
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104427,7 +104432,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/s3/s3.go",
-						"line": 137
+						"line": 155
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104468,7 +104473,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/s3/s3.go",
-						"line": 159
+						"line": 177
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104509,7 +104514,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/s3/s3.go",
-						"line": 167
+						"line": 185
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104557,7 +104562,7 @@
 					],
 					"source": {
 						"path": "adapters/storage/s3/s3.go",
-						"line": 212
+						"line": 230
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],

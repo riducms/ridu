@@ -14,8 +14,7 @@
 	<Input
 		{...field.inputProps}
 		readonly={field.readOnly}
-		value={field.value ?? ""}
-		oninput={(event) => field.set(event.currentTarget.value)}
+		bind:value={() => field.value ?? "", (next) => field.set(next)}
 		data-local-editor="text"
 	/>
 	{#if config.capture}

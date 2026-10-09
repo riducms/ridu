@@ -52,12 +52,18 @@ for where to set the command and timeout.
 
 ## Set production variables {#variables}
 
-Add the public domain after Railway creates it:
+Add these variables after Railway creates the public domain:
 
 ```dotenv title="Railway variables"
-RIDU_ALLOWED_HOSTS=my-app.up.railway.app
+RIDU_ALLOWED_HOSTS=${{RAILWAY_PUBLIC_DOMAIN}},healthcheck.railway.app
 RIDU_READINESS_DRAIN_DELAY=-1s
 ```
+
+Ridu refuses requests for any host `RIDU_ALLOWED_HOSTS` doesn't list. Railway sends its healthcheck
+with the host `healthcheck.railway.app`, so keep that host in the list: without it every
+healthcheck is refused and the deployment never goes live. Ridu logs the first refusal of each
+host. `${{RAILWAY_PUBLIC_DOMAIN}}` follows the service's generated domain if it's renamed. Add a
+custom domain to the list as well.
 
 `DATABASE_URL` comes from the PostgreSQL service. Same-origin admin requests do not need
 `RIDU_ALLOWED_ORIGINS`. Add that variable only when a browser application on another origin calls

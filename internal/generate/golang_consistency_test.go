@@ -79,7 +79,7 @@ func runGeneratedGoConsumers(t *testing.T, fixtures []generatedGoConsumerFixture
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	module := fmt.Sprintf("module example.com/stable-consumer\n\ngo 1.25.13\n\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root)
+	module := fmt.Sprintf("module example.com/stable-consumer\n\ngo 1.26.9\n\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root)
 	if err := os.WriteFile(filepath.Join(directory, "go.mod"), []byte(module), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func runGeneratedGoConsumer(t *testing.T, generated []byte, consumer string) {
 	}
 	directory := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod":            fmt.Sprintf("module example.com/stable-consumer\n\ngo 1.25.13\n\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root),
+		"go.mod":            fmt.Sprintf("module example.com/stable-consumer\n\ngo 1.26.9\n\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root),
 		"ridu.generated.go": string(generated), "consumer_test.go": consumer,
 	} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(data), 0600); err != nil {

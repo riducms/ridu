@@ -22,7 +22,7 @@ import (
 
 func TestBuildDevelopmentBinaryCreatesOneDisposableExecutable(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-binary-test\n\ngo 1.25.13\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-binary-test\n\ngo 1.26.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n\nimport (\"fmt\"; \"os\")\n\nfunc main() { if len(os.Args) > 1 { panic(\"development panic\") }; fmt.Print(\"development-binary\") }\n"), 0o644); err != nil {
@@ -68,7 +68,7 @@ func TestBuildDevelopmentBinaryCreatesOneDisposableExecutable(t *testing.T) {
 
 func TestBuildDevelopmentBinaryCleansUpARejectedCandidate(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-binary-failure\n\ngo 1.25.13\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-binary-failure\n\ngo 1.26.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n\nfunc main() { this does not compile }\n"), 0o644); err != nil {
@@ -95,7 +95,7 @@ func TestBuildDevelopmentBinaryCleansUpARejectedCandidate(t *testing.T) {
 
 func TestRebuildForGeneratedGoReplacesTheStaleCandidate(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-binary-regeneration\n\ngo 1.25.13\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-binary-regeneration\n\ngo 1.26.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(filepath.Join(root, "generated"), 0o755); err != nil {
@@ -139,7 +139,7 @@ func TestRebuildForGeneratedGoReplacesTheStaleCandidate(t *testing.T) {
 
 func TestRebuildForGeneratedGoKeepsCandidateOutsideDependencyGraph(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-binary-no-regeneration\n\ngo 1.25.13\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-binary-no-regeneration\n\ngo 1.26.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(filepath.Join(root, "generated"), 0o755); err != nil {
@@ -180,7 +180,7 @@ func TestRebuildForGeneratedGoKeepsCandidateOutsideDependencyGraph(t *testing.T)
 
 func TestDevelopmentEntryImportsGeneratedGoOnlyWhenReachable(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-dependencies\n\ngo 1.25.13\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-development-dependencies\n\ngo 1.26.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(root, "generated"), 0o755); err != nil {
@@ -220,7 +220,7 @@ func TestStabilizeDevelopmentCandidateResolvesTheRebuiltExecutable(t *testing.T)
 		t.Fatal("runtime.Caller failed")
 	}
 	frameworkRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
-	goMod := "module example.com/ridu-development-fixed-point\n\ngo 1.25.13\n\nrequire github.com/riducms/ridu v0.0.0\n\nreplace github.com/riducms/ridu => " + filepath.ToSlash(frameworkRoot) + "\n"
+	goMod := "module example.com/ridu-development-fixed-point\n\ngo 1.26.9\n\nrequire github.com/riducms/ridu v0.0.0\n\nreplace github.com/riducms/ridu => " + filepath.ToSlash(frameworkRoot) + "\n"
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatal(err)
 	}
