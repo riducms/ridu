@@ -287,14 +287,36 @@ type API struct {
 	allowedHeaders   []string
 	allowedHeaderSet map[string]struct{}
 	restrictHosts    bool
-	// deniedHosts records the refused hosts already logged.
-	deniedHostsMutex sync.Mutex
-	deniedHosts      map[string]struct{}
+	deniedHosts      loggedRefusals
+	deniedOrigins    loggedRefusals
 }
 
-// maxLoggedDeniedHosts bounds how many distinct refused hosts are logged, so
-// requests that vary the Host header cannot flood the log.
-const maxLoggedDeniedHosts = 32
+// maxLoggedRefusals bounds how many distinct refused hosts, and separately
+// origins, are logged, so requests that vary those headers cannot flood the
+// log.
+const maxLoggedRefusals = 32
+
+// loggedRefusals records the values whose refusal was already logged.
+type loggedRefusals struct {
+	mutex sync.Mutex
+	seen  map[string]struct{}
+}
+
+// first reports whether value's refusal should be logged: the first time, and
+// only while fewer than maxLoggedRefusals values have been. last reports that
+// value fills the bound, so nothing further is logged.
+func (refusals *loggedRefusals) first(value string) (first, last bool) {
+	refusals.mutex.Lock()
+	defer refusals.mutex.Unlock()
+	if _, logged := refusals.seen[value]; logged || len(refusals.seen) >= maxLoggedRefusals {
+		return false, false
+	}
+	if refusals.seen == nil {
+		refusals.seen = make(map[string]struct{})
+	}
+	refusals.seen[value] = struct{}{}
+	return true, len(refusals.seen) == maxLoggedRefusals
+}
 
 func New(config Config) http.Handler {
 	if config.MaxBodyBytes <= 0 {
@@ -2803,6 +2825,7 @@ func (api *API) cors(writer http.ResponseWriter, request *http.Request, requestI
 	}
 	if request.Method == http.MethodOptions && strings.TrimSpace(request.Header.Get("Access-Control-Request-Method")) != "" {
 		if !allowed {
+			api.logDeniedOrigin(request, origin)
 			api.writeError(writer, requestID, &operationengine.Error{Code: "origin_denied", Status: 403, Message: "request origin is not allowed"})
 			return true
 		}
@@ -2828,6 +2851,7 @@ func (api *API) cors(writer http.ResponseWriter, request *http.Request, requestI
 		return true
 	}
 	if request.Method != http.MethodGet && request.Method != http.MethodHead && !allowed {
+		api.logDeniedOrigin(request, origin)
 		api.writeError(writer, requestID, &operationengine.Error{Code: "origin_denied", Status: 403, Message: "request origin is not allowed"})
 		return true
 	}
@@ -2846,7 +2870,23 @@ func (api *API) originAllowed(request *http.Request, origin string) bool {
 		}
 	}
 	requestCanonical, requestError := canonicalRequestOrigin(request, api.config.TrustedProxies)
-	return requestError == nil && originCanonical == requestCanonical
+	if requestError != nil {
+		return false
+	}
+	if originCanonical == requestCanonical {
+		return true
+	}
+	// A TLS-terminating proxy that Ridu does not trust, such as a hosting
+	// platform's edge, forwards a browser's HTTPS request as plain HTTP, so
+	// Ridu cannot see its scheme. Only a page served over HTTPS from this host
+	// sends this host's HTTPS origin, so the origin is this request's own
+	// whichever scheme carried it. Ridu still follows the scheme a trusted
+	// proxy reports, and still refuses an HTTP origin on an HTTPS request.
+	if request.TLS != nil || remoteRequestTrusted(request, api.config.TrustedProxies) {
+		return false
+	}
+	secureCanonical, secureError := canonicalSchemeHost("https", request.Host)
+	return secureError == nil && originCanonical == secureCanonical
 }
 
 func canonicalOrigin(encoded string) (string, error) {
@@ -3110,18 +3150,33 @@ func (api *API) logDeniedHost(raw string) {
 	if err != nil || !api.restrictHosts {
 		return
 	}
-	api.deniedHostsMutex.Lock()
-	defer api.deniedHostsMutex.Unlock()
-	if _, logged := api.deniedHosts[host]; logged || len(api.deniedHosts) >= maxLoggedDeniedHosts {
+	first, last := api.deniedHosts.first(host)
+	if !first {
 		return
 	}
-	if api.deniedHosts == nil {
-		api.deniedHosts = make(map[string]struct{})
-	}
-	api.deniedHosts[host] = struct{}{}
 	slog.Warn("Ridu refused a request for a host the allowed hosts do not list; add it to RIDU_ALLOWED_HOSTS if it should be served", "host", host)
-	if len(api.deniedHosts) == maxLoggedDeniedHosts {
-		slog.Warn("Ridu logs no further refused hosts", "logged", maxLoggedDeniedHosts)
+	if last {
+		slog.Warn("Ridu logs no further refused hosts", "logged", maxLoggedRefusals)
+	}
+}
+
+// logDeniedOrigin logs the first refusal of each well-formed origin, with the
+// origin Ridu computed for the request, so a browser client missing from the
+// allowed origins, or a proxy that changes the scheme or host, leaves a
+// visible cause.
+func (api *API) logDeniedOrigin(request *http.Request, origin string) {
+	canonical, err := canonicalOrigin(origin)
+	if err != nil {
+		return
+	}
+	first, last := api.deniedOrigins.first(canonical)
+	if !first {
+		return
+	}
+	requestOrigin, _ := canonicalRequestOrigin(request, api.config.TrustedProxies)
+	slog.Warn("Ridu refused a browser request from an origin other than its own; add the origin to RIDU_ALLOWED_ORIGINS if browser code on it should call Ridu", "origin", canonical, "request_origin", requestOrigin)
+	if last {
+		slog.Warn("Ridu logs no further refused origins", "logged", maxLoggedRefusals)
 	}
 }
 

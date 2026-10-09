@@ -468,35 +468,38 @@ func TestPreferenceAndLockTransportsCarryExactAuthIdentity(t *testing.T) {
 	}
 }
 
-func TestSameOriginRequiresEffectiveSchemeAndTrustsProxyProtoOnlyFromTrustedPeers(t *testing.T) {
+func TestSameOriginFollowsTrustedProxySchemeAndAcceptsTheHostsHTTPSOriginBehindOtherProxies(t *testing.T) {
 	handler := New(Config{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}})
-
-	downgrade := httptest.NewRequest(http.MethodPost, "https://app.example.test/missing", nil)
-	downgrade.Header.Set("Origin", "http://app.example.test")
-	downgradeResponse := httptest.NewRecorder()
-	handler.ServeHTTP(downgradeResponse, downgrade)
-	if downgradeResponse.Code != http.StatusForbidden {
-		t.Fatalf("HTTPS downgrade origin = %d, want 403", downgradeResponse.Code)
+	post := func(target, remote, forwardedProto, origin string) int {
+		request := httptest.NewRequest(http.MethodPost, target, nil)
+		request.RemoteAddr = remote
+		if forwardedProto != "" {
+			request.Header.Set("X-Forwarded-Proto", forwardedProto)
+		}
+		request.Header.Set("Origin", origin)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response.Code
 	}
-
-	proxied := httptest.NewRequest(http.MethodPost, "http://app.example.test/missing", nil)
-	proxied.RemoteAddr = "192.0.2.10:443"
-	proxied.Header.Set("X-Forwarded-Proto", "https")
-	proxied.Header.Set("Origin", "https://app.example.test")
-	proxiedResponse := httptest.NewRecorder()
-	handler.ServeHTTP(proxiedResponse, proxied)
-	if proxiedResponse.Code != http.StatusNotFound {
-		t.Fatalf("trusted HTTPS proxy origin = %d, want routed 404", proxiedResponse.Code)
-	}
-
-	untrusted := httptest.NewRequest(http.MethodPost, "http://app.example.test/missing", nil)
-	untrusted.RemoteAddr = "198.51.100.10:443"
-	untrusted.Header.Set("X-Forwarded-Proto", "https")
-	untrusted.Header.Set("Origin", "https://app.example.test")
-	untrustedResponse := httptest.NewRecorder()
-	handler.ServeHTTP(untrustedResponse, untrusted)
-	if untrustedResponse.Code != http.StatusForbidden {
-		t.Fatalf("untrusted proxy proto = %d, want 403", untrustedResponse.Code)
+	for _, test := range []struct {
+		name, target, remote, forwardedProto, origin string
+		want                                         int
+	}{
+		// Routed requests reach the missing route and return 404; refused ones 403.
+		{name: "HTTPS downgrade", target: "https://app.example.test/missing", remote: "203.0.113.4:1234", origin: "http://app.example.test", want: http.StatusForbidden},
+		{name: "trusted proxy reports HTTPS", target: "http://app.example.test/missing", remote: "192.0.2.10:443", forwardedProto: "https", origin: "https://app.example.test", want: http.StatusNotFound},
+		{name: "trusted proxy reports HTTP", target: "http://app.example.test/missing", remote: "192.0.2.10:443", forwardedProto: "http", origin: "https://app.example.test", want: http.StatusForbidden},
+		// A platform edge Ridu does not trust terminates TLS: only this host's
+		// own HTTPS page sends its HTTPS origin, with or without a spoofable
+		// forwarded header.
+		{name: "untrusted TLS proxy", target: "http://app.example.test/missing", remote: "198.51.100.10:443", origin: "https://app.example.test", want: http.StatusNotFound},
+		{name: "untrusted proxy with forwarded proto", target: "http://app.example.test/missing", remote: "198.51.100.10:443", forwardedProto: "https", origin: "https://app.example.test", want: http.StatusNotFound},
+		{name: "untrusted proxy, other host", target: "http://app.example.test/missing", remote: "198.51.100.10:443", forwardedProto: "https", origin: "https://evil.example.test", want: http.StatusForbidden},
+		{name: "untrusted proxy, other port", target: "http://app.example.test/missing", remote: "198.51.100.10:443", origin: "https://app.example.test:8443", want: http.StatusForbidden},
+	} {
+		if got := post(test.target, test.remote, test.forwardedProto, test.origin); got != test.want {
+			t.Errorf("%s: %s from origin %s = %d, want %d", test.name, test.target, test.origin, got, test.want)
+		}
 	}
 }
 
@@ -641,13 +644,39 @@ func TestDeniedHostsAreLoggedOnceAndBounded(t *testing.T) {
 	}
 
 	logs.Reset()
-	for index := range 2 * maxLoggedDeniedHosts {
+	for index := range 2 * maxLoggedRefusals {
 		request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 		request.Host = fmt.Sprintf("probe-%d.example.test", index)
 		handler.ServeHTTP(httptest.NewRecorder(), request)
 	}
-	if count := strings.Count(logs.String(), "host=probe-"); count != maxLoggedDeniedHosts-1 || !strings.Contains(logs.String(), "logs no further refused hosts") {
+	if count := strings.Count(logs.String(), "host=probe-"); count != maxLoggedRefusals-1 || !strings.Contains(logs.String(), "logs no further refused hosts") {
 		t.Fatalf("logged %d further hosts: %q", count, logs.String())
+	}
+}
+
+func TestDeniedOriginsAreLoggedOnceWithTheRequestOrigin(t *testing.T) {
+	previous := slog.Default()
+	var logs bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	handler := New(Config{})
+	send := func(method, origin string) int {
+		request := httptest.NewRequest(method, "http://api.example.test/missing", nil)
+		request.Header.Set("Origin", origin)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response.Code
+	}
+	for range 2 {
+		if code := send(http.MethodPost, "https://Web.Example.test"); code != http.StatusForbidden {
+			t.Fatalf("cross-origin POST = %d, want 403", code)
+		}
+	}
+	// A GET is answered without CORS headers rather than refused, so it is not logged.
+	send(http.MethodGet, "https://reader.example.test")
+	if count := strings.Count(logs.String(), "origin=https://web.example.test request_origin=http://api.example.test"); count != 1 || strings.Contains(logs.String(), "reader.example.test") || !strings.Contains(logs.String(), "RIDU_ALLOWED_ORIGINS") {
+		t.Fatalf("denied origin logs: %q", logs.String())
 	}
 }
 
