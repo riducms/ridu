@@ -73,7 +73,9 @@ healthcheck is refused and the deployment never goes live. Ridu logs the first r
 host. `${{RAILWAY_PUBLIC_DOMAIN}}` follows the service's generated domain if it's renamed. Add a
 custom domain to the list as well.
 
-`DATABASE_URL` comes from the PostgreSQL service. Same-origin admin requests do not need
+`DATABASE_URL` comes from the PostgreSQL service. Leave `RIDU_TRUSTED_PROXY_CIDRS` empty: Railway's
+edge terminates HTTPS and forwards plain HTTP from addresses it doesn't publish. Ridu still accepts
+the HTTPS origin of the domain each request names, so the admin signs in without
 `RIDU_ALLOWED_ORIGINS`. Add that variable only when a browser application on another origin calls
 the API.
 

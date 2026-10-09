@@ -311,7 +311,7 @@ audit event, and trusted internal error report.
 
 | Symptom                                        | What to check                                                                                                                                          |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Every browser write returns `origin_denied`    | Compare the exact scheme, host, and port; then check whether the TLS proxy is inside `TrustedProxyCIDRs`.                                              |
+| Every browser write returns `origin_denied`    | Compare the logged `origin` with `request_origin`: the exact scheme, host, and port; then check the scheme your trusted proxy reports.                 |
 | Real users receive `rate_limited` too quickly  | Distinguish HTTP auth throttling from per-account lockout, inspect the resolved client IP, and tune from measured traffic.                             |
 | Changing the email still produces `429`        | Auth throttling includes a client-wide bucket so attackers cannot bypass it by rotating identities.                                                    |
 | A legitimate document returns `body_too_large` | Measure its encoded request, then raise only the relevant shared or endpoint limit; do not disable every body limit.                                   |

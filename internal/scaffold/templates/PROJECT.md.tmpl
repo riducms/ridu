@@ -334,7 +334,9 @@ On Railway, where traffic cutover precedes termination, set
 `RIDU_READINESS_DRAIN_DELAY=-1s` and use the platform's separate drain window for in-flight work.
 
 TLS normally terminates at the platform edge. It must sanitize untrusted forwarding headers before
-sending them from one of `RIDU_TRUSTED_PROXY_CIDRS`. Ridu enables secure cookies by default; never
+sending them from one of `RIDU_TRUSTED_PROXY_CIDRS`. When the platform doesn't publish its edge
+addresses, as on Railway, leave that variable empty: Ridu then still accepts the HTTPS origin of
+the host each request names, so the admin needs no `RIDU_ALLOWED_ORIGINS` entry. Ridu enables secure cookies by default; never
 set `RIDU_SECURE_COOKIES=false` in production. {{if .MongoDB}}`RIDU_ALLOW_INSECURE_DATABASE=true` is a
 local-development escape only. The generated MongoDB server does not read
 `RIDU_ALLOW_UNVERIFIABLE_READINESS` or `RIDU_SKIP_READINESS_PREFLIGHT`; `ridu dev` owns its private

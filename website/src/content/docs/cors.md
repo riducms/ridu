@@ -195,14 +195,16 @@ headers, authentication cookie, and ordinary route authorization all pass.
 ## Proxies and HTTPS {#proxies}
 
 Same-origin comparison uses the API's effective scheme and host. When TLS terminates at a reverse
-proxy, configure only that proxy's immediate network in `TrustedProxyCIDRs` (or
+proxy you run, configure only that proxy's immediate network in `TrustedProxyCIDRs` (or
 `RIDU_TRUSTED_PROXY_CIDRS`). Ridu trusts forwarded scheme and client-address headers only from
-those networks.
+those networks, and follows the scheme they report.
 
-Without correct proxy trust, a browser may send `Origin: https://cms.example.com` while the Go
-process sees an untrusted HTTP request. Ridu treats those as different origins instead of trusting
-a spoofable forwarded header. Keep `AllowedHosts` aligned with the public API
-hostname as a separate host-header defense.
+A hosting platform's edge, such as Railway's, terminates TLS at addresses you can't list, so the
+Go process sees plain HTTP. Ridu still accepts the HTTPS origin of the host the request names: a
+request for `cms.example.com` may come from `https://cms.example.com`, because only a page on that
+host sends that origin. No other origin is accepted this way, a forwarded scheme header from an
+untrusted address is still ignored, and an HTTP origin on an HTTPS request is refused. Keep
+`AllowedHosts` aligned with the public API hostname as a separate host-header defense.
 
 ## Diagnose a blocked request {#troubleshooting}
 
@@ -215,9 +217,10 @@ Ridu error:
 | `cors_method_denied` | The preflight requested a method outside the browser allow-list                |
 | `cors_header_denied` | The preflight requested an unlisted or invalid header                          |
 
-Common mistakes are including a trailing slash, allowing the API rather than the browser origin,
-forgetting a local dev-server port, adding a custom header only on the frontend, or terminating
-HTTPS at an untrusted proxy. A failed `GET` or `HEAD` may appear only as a browser CORS error because
+Ridu logs the first refusal of each origin, with `request_origin`, the origin it computed for the
+request; compare the two. Common mistakes are including a trailing slash, allowing the API rather
+than the browser origin, forgetting a local dev-server port, adding a custom header only on the
+frontend, or a trusted proxy that reports the wrong scheme. A failed `GET` or `HEAD` may appear only as a browser CORS error because
 Ridu withholds the allow-origin response header; mutating requests and rejected preflights also
 return a structured `403`.
 
