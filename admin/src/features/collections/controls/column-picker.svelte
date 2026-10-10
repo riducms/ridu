@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { tick } from "svelte";
 	import { DragDropProvider, type DragDropEvents } from "@dnd-kit-svelte/svelte";
 	import { isSortable } from "@dnd-kit-svelte/svelte/sortable";
 	import { getAdminI18n } from "@riducms/plugin";
@@ -30,17 +29,8 @@
 		const focus = pendingColumnFocus;
 		if (!focus || !navigationIdle || JSON.stringify(columns) !== focus.columns) return;
 
-		let active = true;
-		tick().then(() => {
-			if (!active) return;
-
-			pendingColumnFocus = undefined;
-			if (focus.element.isConnected) focus.element.focus({ preventScroll: true });
-		});
-
-		return () => {
-			active = false;
-		};
+		pendingColumnFocus = undefined;
+		if (focus.element.isConnected) focus.element.focus({ preventScroll: true });
 	});
 
 	const orderedColumns = $derived(

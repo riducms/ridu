@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { useNavigation } from "@hvniel/svelte-router";
-	import { tick, untrack } from "svelte";
+	import { untrack } from "svelte";
 
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 
@@ -67,8 +67,9 @@
 	}
 
 	function afterDestinationPaint() {
-		// The destination DOM flushes at tick; two frames keep the progress bar visible until that
-		// DOM has reached a browser paint rather than finishing over the retained outgoing page.
+		// The destination DOM flushes before the first frame; two frames keep the progress bar
+		// visible until that DOM has reached a browser paint rather than finishing over the retained
+		// outgoing page.
 		return new Promise<void>((resolve) => {
 			requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
 		});
@@ -76,7 +77,6 @@
 
 	async function finish() {
 		const activeGeneration = generation;
-		await tick();
 		await afterDestinationPaint();
 		if (activeGeneration !== generation || phase === "idle" || phase === "finishing") return;
 		if (phase === "pending") {

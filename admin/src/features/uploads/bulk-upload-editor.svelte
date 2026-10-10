@@ -3,7 +3,7 @@
 	import { Link } from "@hvniel/svelte-router";
 	import { getAdminI18n } from "@riducms/plugin";
 	import { Button, buttonVariants } from "@riducms/ui";
-	import { tick, untrack } from "svelte";
+	import { untrack } from "svelte";
 	import ChevronLeftIcon from "~icons/lucide/chevron-left";
 	import ChevronRightIcon from "~icons/lucide/chevron-right";
 	import XIcon from "~icons/lucide/x";
@@ -60,7 +60,6 @@
 	}
 
 	async function focusActiveIssue() {
-		await tick();
 		const issue = controller.activeItem?.form.issues[0];
 		if (issue !== undefined && formElement) await focusFieldIssue(issue.path, formElement);
 	}

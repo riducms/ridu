@@ -75,20 +75,12 @@ export function useAdminScrollRestoration(
 		if (!retain || viewport === null) return;
 		const left = viewport instanceof HTMLElement ? viewport.scrollLeft : viewport.scrollX;
 		const top = viewport instanceof HTMLElement ? viewport.scrollTop : viewport.scrollY;
-		let active = true;
-		let frame: number | undefined;
-		// Capture before replacement DOM can clamp the scroll range. Flush the new
-		// editors, including external DOM initialization, before the next paint.
-		tick().then(() => {
-			if (!active) return;
-			frame = requestAnimationFrame(() => {
-				viewport.scrollTo({ left, top, behavior: "instant" });
-			});
+		// Capture before replacement DOM can clamp the scroll range. The new editors, including
+		// external DOM initialization, flush before this frame restores the position.
+		const frame = requestAnimationFrame(() => {
+			viewport.scrollTo({ left, top, behavior: "instant" });
 		});
-		return () => {
-			active = false;
-			if (frame !== undefined) cancelAnimationFrame(frame);
-		};
+		return () => cancelAnimationFrame(frame);
 	});
 
 	$effect(() => {

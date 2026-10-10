@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { tick } from "svelte";
 	import { Button, Input, buttonVariants } from "@riducms/ui";
 	import MoreVerticalIcon from "~icons/lucide/ellipsis-vertical";
 	import { Banner } from "@admin/components/ui/banner";
@@ -48,7 +47,6 @@
 		event.preventDefault();
 		if (await controller.saveEditor()) return;
 
-		await tick();
 		if (controller.credentialIssue !== undefined) {
 			formElement?.querySelector<HTMLInputElement>("[autocomplete='new-password']")?.focus();
 			return;

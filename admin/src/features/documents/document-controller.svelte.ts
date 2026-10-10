@@ -1507,12 +1507,10 @@ export class DocumentController {
 				this.options.editable &&
 				this.collection?.capabilities.locking === true
 			) {
-				// The form is complete before the lock request starts. Writes remain
-				// disabled until the server confirms ownership.
+				// The form renders while the lock request is pending. Writes remain disabled until the
+				// server confirms ownership.
 				this.form.writeBlocked = true;
 				this.loading = false;
-				await tick();
-				if (signal.aborted || this.#loadRequest !== request) return;
 				await this.lock.acquire(
 					slug,
 					documentID,
@@ -1565,26 +1563,15 @@ export class DocumentController {
 			this.collection?.capabilities.locking === true
 		) {
 			this.form.writeBlocked = true;
-			this.#acquirePreparedLock(this.#routeGeneration, slug, documentID);
+			this.lock.acquire(
+				slug,
+				documentID,
+				this.collection.documentLockSettings?.durationSeconds ?? 120
+			);
 		} else {
 			this.lock.release();
 		}
 		return true;
-	}
-
-	async #acquirePreparedLock(generation: number, slug: string, documentID: string) {
-		await tick();
-		if (
-			generation !== this.#routeGeneration ||
-			this.documentID !== documentID ||
-			!this.options.editable
-		)
-			return;
-		await this.lock.acquire(
-			slug,
-			documentID,
-			this.collection?.documentLockSettings?.durationSeconds ?? 120
-		);
 	}
 
 	async #refreshAccess(documentID: string) {

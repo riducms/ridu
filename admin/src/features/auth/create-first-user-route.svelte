@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { tick } from "svelte";
-
 	import { adminApplicationName } from "@admin/app-meta";
 	import { Banner } from "@admin/components/ui/banner";
 	import { Button } from "@riducms/ui";
@@ -25,7 +23,6 @@
 		const issuePath = await controller.submit();
 		if (issuePath === undefined) return;
 
-		await tick();
 		focusIssue(issuePath);
 	}
 

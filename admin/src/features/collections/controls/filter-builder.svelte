@@ -38,20 +38,12 @@
 	$effect(() => {
 		const focus = pendingFocus;
 		if (!focus || !navigationIdle || JSON.stringify(filters) !== focus.encoded) return;
+		if (!focus.element.isConnected) return;
 
-		let active = true;
-		tick().then(() => {
-			if (!active || !focus.element.isConnected) return;
-
-			pendingFocus = undefined;
-			focus.element.focus({ preventScroll: true });
-			if (focus.element instanceof HTMLInputElement && focus.start !== null && focus.end !== null)
-				focus.element.setSelectionRange(focus.start, focus.end);
-		});
-
-		return () => {
-			active = false;
-		};
+		pendingFocus = undefined;
+		focus.element.focus({ preventScroll: true });
+		if (focus.element instanceof HTMLInputElement && focus.start !== null && focus.end !== null)
+			focus.element.setSelectionRange(focus.start, focus.end);
 	});
 
 	type Row = { id: string; filter: ListFilter };

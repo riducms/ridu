@@ -180,6 +180,49 @@ test("command navigation, saved views, and bulk actions", async ({ page }) => {
 	expect(pageErrors).toEqual([]);
 });
 
+test("a rejected publish from a custom view focuses the invalid field in the editor", async ({
+	page,
+}) => {
+	const { consoleErrors, pageErrors } = observePageErrors(page);
+	await loginAsEditor(page);
+	consoleErrors.length = 0;
+	await page.goto("/admin/collections/posts");
+	await page.getByRole("link", { name: "Welcome to Ridu", exact: true }).click();
+	const title = page.locator('[data-field-path="title"]').getByRole("textbox");
+	await title.fill("Welcome to Ridu again");
+	await page.getByRole("button", { name: "Insights", exact: true }).click();
+	await expect(page.getByRole("heading", { name: "Editorial insights" })).toBeVisible();
+	await expect(title).toHaveCount(0);
+	await page.route(
+		/\/api\/collections\/posts\/[^/]+\/publish(?:\?.*)?$/,
+		(route) =>
+			route.fulfill({
+				status: 422,
+				contentType: "application/json",
+				body: JSON.stringify({
+					error: {
+						code: "validation",
+						status: 422,
+						message: "Title is invalid",
+						issues: [{ code: "reserved", path: "title", message: "Choose another title" }],
+					},
+				}),
+			}),
+		{ times: 1 }
+	);
+	await page
+		.locator(".ridu-document-actions")
+		.getByRole("button", { name: "Publish changes", exact: true })
+		.click();
+	await expect(title).toBeFocused();
+	await expect(page.getByText("Choose another title", { exact: true })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Editorial insights" })).toHaveCount(0);
+	expect(pageErrors).toEqual([]);
+	expect(consoleErrors).toEqual([
+		"Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+	]);
+});
+
 test("relationship browsers, inline documents, uploads, and the document API view", async ({
 	page,
 }) => {

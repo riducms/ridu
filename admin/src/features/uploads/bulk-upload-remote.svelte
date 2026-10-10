@@ -2,7 +2,7 @@
 	import { Link } from "@hvniel/svelte-router";
 	import { getAdminI18n } from "@riducms/plugin";
 	import { Button, Input } from "@riducms/ui";
-	import { tick, untrack } from "svelte";
+	import { untrack } from "svelte";
 
 	import { Banner } from "@admin/components/ui/banner";
 	import { focusFieldIssue } from "@admin/core/forms/field-issue-focus";
@@ -38,10 +38,7 @@
 
 		await controller.uploadRemote();
 		const issue = controller.remoteForm.issues[0];
-		if (issue !== undefined) {
-			await tick();
-			await focusFieldIssue(issue.path, form);
-		}
+		if (issue !== undefined) await focusFieldIssue(issue.path, form);
 	}
 </script>
 

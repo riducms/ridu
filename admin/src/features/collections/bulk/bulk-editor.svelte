@@ -3,7 +3,6 @@
 	import type { SchemaField } from "@riducms/protocol";
 	import { Button } from "@riducms/ui";
 	import { Dialog } from "bits-ui";
-	import { tick } from "svelte";
 	import XIcon from "~icons/lucide/x";
 
 	import { focusFieldIssue } from "@admin/core/forms/field-issue-focus";
@@ -100,7 +99,6 @@
 	async function focusFirstIssue() {
 		const issue = form.issues[0];
 		if (issue === undefined || fieldsViewport === null) return;
-		await tick();
 		await focusFieldIssue(issue.path, fieldsViewport);
 	}
 

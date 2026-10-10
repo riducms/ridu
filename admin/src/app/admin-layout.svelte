@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { Outlet, useHref, useLocation, useNavigation } from "@hvniel/svelte-router";
-	import { tick } from "svelte";
 	import { MediaQuery } from "svelte/reactivity";
 	import ChevronLeftIcon from "~icons/lucide/chevron-left";
 	import MenuIcon from "~icons/lucide/menu";
@@ -87,12 +86,8 @@
 		if (narrowNavigation.current) mobileNavigationRoute = undefined;
 	}
 
-	async function openCommandMenu() {
-		if (narrowNavigation.current) {
-			mobileNavigationRoute = undefined;
-			await tick();
-		}
-
+	function openCommandMenu() {
+		closeMobileNavigation();
 		commandOpen = true;
 	}
 </script>
