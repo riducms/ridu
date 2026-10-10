@@ -301,6 +301,9 @@ type UploadSettings struct {
 	MimeTypes   []string    `json:"mimeTypes"`
 	Private     bool        `json:"private"`
 	ImageSizes  []ImageSize `json:"imageSizes,omitempty"`
+	// MaxImageDimension is the largest width or height a stored JPEG or PNG
+	// original keeps; zero keeps originals at their uploaded size.
+	MaxImageDimension int `json:"maxImageDimension,omitempty"`
 }
 
 type ImageSize struct {

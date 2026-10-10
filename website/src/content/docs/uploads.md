@@ -443,6 +443,54 @@ the current `_revision` so an older editor cannot overwrite a newer crop. A zero
 height clear the crop. For a selected crop, `cropX`, `cropY`, `cropWidth`, and `cropHeight` use the
 same percentage coordinate system. The admin's width and height controls display source pixels.
 
+## Limit large images {#large-images}
+
+Phone cameras save photos of 12 megapixels or more. To store a smaller original, set
+`MaxImageDimension`:
+
+```go title="content/media.go"
+UploadConfig: ridu.UploadConfig{
+	MaxFileSize:       20 << 20,
+	MimeTypes:         []string{"image/jpeg", "image/png"},
+	MaxImageDimension: 2400,
+	ImageSizes: []ridu.ImageSize{
+		{Name: "card", Width: 1200, Height: 630, Fit: "cover"},
+		{Name: "thumb", Width: 320, Height: 320, Fit: "cover"},
+	},
+},
+```
+
+A JPEG or PNG original wider or taller than 2,400 pixels is scaled down to fit inside 2,400 × 2,400
+before Ridu stores it, keeping its shape. A smaller one is never enlarged. The scaled image replaces
+the original everywhere: the stored file with its `width`, `height`, and `filesize`, the private
+source that crops start from, and the image sizes made from it. Ridu stores it upright and without
+the camera's EXIF metadata, such as its location. GIFs and other files keep their uploaded bytes.
+`MaxImageDimension` must be at least the width and height of every image size.
+
+Changing `MaxImageDimension` doesn't rewrite stored files. When an author crops an older image, the
+new primary file is scaled to fit, and its private source stays as it was.
+
+Ridu processes an image within these limits:
+
+| Limit                       | Value                                                    |
+| --------------------------- | -------------------------------------------------------- |
+| Image dimensions            | At most 20,000 pixels wide or high, and 40 megapixels    |
+| Memory for image processing | 512 MiB at once, or half of `GOMEMLIMIT` when you set it |
+
+Before decoding an image, Ridu reserves the memory its processing needs from that budget, and an
+upload waits while other images use it. With the configuration above, a 12-megapixel phone JPEG
+reserves about 170 MiB, and a 24-megapixel one about 250 MiB, including scaling them to 2,400 pixels.
+The full picture is decoded before it can be scaled, so `MaxImageDimension` doesn't raise the
+largest image Ridu accepts.
+
+Set `GOMEMLIMIT` a little below the service's memory, for example `GOMEMLIMIT=900MiB` for 1 GB. An
+image that needs more than the whole budget fails with a `validation` error that tells the person
+uploading the most the server takes:
+
+```text
+image is 5712×4284 (24.5 megapixels), more than this server can process at once; upload an image of at most about 18.3 megapixels
+```
+
 ## Deliver files safely {#delivery}
 
 `asset.url` and each `asset.sizes[name].url` point at Ridu's access-checked delivery endpoint. Build
@@ -546,6 +594,7 @@ derived object keys.
 | The media picker is empty                       | Upload a media document first, confirm the Upload field targets `media`, and check that the signed-in actor can read that document.                |
 | A browser upload is unauthorized                | Sign in first; for a separate frontend origin, allow the exact CORS origin and credentials.                                                        |
 | A private `<img>` does not load                 | Use the Ridu delivery URL, preserve credentials where appropriate, and check the collection's read rule. Do not use `objectKey` as a URL.          |
+| `more than this server can process at once`     | Give the service more memory and set `GOMEMLIMIT` to match, or shrink photos in the browser before uploading them.                                 |
 | An image variant is missing                     | Confirm the original is a supported image, the size name exists in `ImageSizes`, and the requested variant is read from `asset.sizes.<name>.url`.  |
 | A create timed out or returned an uncertain 5xx | Refresh or query the media collection before retrying so a committed upload is not duplicated.                                                     |
 

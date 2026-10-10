@@ -24,6 +24,9 @@ func TestPublicAddressPolicyRejectsIANASpecialPurposeRanges(t *testing.T) {
 		"224.0.0.1", "240.0.0.1", "::", "::1", "::ffff:192.0.2.1", "64:ff9b::1",
 		"64:ff9b:1::1", "100::1", "100:0:0:1::1", "2001::1", "2001:db8::1", "2002::1",
 		"2620:4f:8000::1", "3fff::1", "5f00::1", "fc00::1", "fe80::1", "ff00::1",
+		// IPv6 outside the 2000::/3 global unicast block, including
+		// IPv4-compatible forms of loopback and link-local metadata.
+		"::7f00:1", "::a9fe:a9fe", "::1:0:0:1", "4000::1", "e000::1",
 	} {
 		if isPublic(netip.MustParseAddr(address)) {
 			t.Errorf("special-purpose address %s was accepted", address)
@@ -56,6 +59,8 @@ func TestFetchRejectsPrivateCredentialsSchemesAndOversize(t *testing.T) {
 		"http://100.100.100.200/latest/meta-data",
 		"http://198.18.0.1/internal",
 		"http://[2001:db8::1]/internal",
+		"http://[::127.0.0.1]/internal",
+		"http://[::169.254.169.254]/latest/meta-data",
 		"file:///tmp/file",
 		"https://user:pass@93.184.216.34/file",
 	} {

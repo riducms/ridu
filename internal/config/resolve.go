@@ -833,7 +833,19 @@ func (resolver *resolver) resolveCollection(index int, collection Collection) sc
 		if aggregateImagePixels > 100_000_000 {
 			resolver.issue("invalid_image_size_budget", path+".upload.imageSizes", "generated image sizes must not exceed 100 million aggregate pixels")
 		}
-		uploadSettings = &schema.UploadSettings{MaxFileSize: maximum, MimeTypes: mimeTypes, Private: collection.UploadConfig.Private, ImageSizes: sizes}
+		if dimension := collection.UploadConfig.MaxImageDimension; dimension != 0 {
+			if dimension < 1 || dimension > 20_000 {
+				resolver.issue("invalid_max_image_dimension", path+".upload.maxImageDimension", "the largest stored image dimension must be between 1 and 20,000 pixels, or zero to keep originals at their uploaded size")
+			}
+			for _, size := range sizes {
+				if size.Width > dimension || size.Height > dimension {
+					// A size larger than the capped original would only be enlarged.
+					resolver.issue("invalid_max_image_dimension", path+".upload.maxImageDimension", fmt.Sprintf("the largest stored image dimension must be at least the width and height of every image size; image size %q is %d×%d", size.Name, size.Width, size.Height))
+					break
+				}
+			}
+		}
+		uploadSettings = &schema.UploadSettings{MaxFileSize: maximum, MimeTypes: mimeTypes, Private: collection.UploadConfig.Private, ImageSizes: sizes, MaxImageDimension: collection.UploadConfig.MaxImageDimension}
 	}
 	var versionSettings *schema.VersionSettings
 	if collection.Versions {

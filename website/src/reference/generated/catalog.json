@@ -1599,6 +1599,11 @@
 							"name": "ImageSizes",
 							"type": "[]ImageSize",
 							"description": "Derived variants generated for supported image uploads."
+						},
+						{
+							"name": "MaxImageDimension",
+							"type": "int",
+							"description": "MaxImageDimension scales a JPEG or PNG original wider or taller than this\nmany pixels down to fit before it is stored. The scaled image replaces\nthe original, including the private source later crops start from, and\nimage sizes are made from it. Zero keeps originals at their uploaded\nsize. It must be at least the width and height of every image size."
 						}
 					],
 					"parametersLabel": "",
@@ -9068,7 +9073,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.20.1\"",
+					"signature": "const FrameworkVersion = \"0.21.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -17762,7 +17767,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 383
+						"line": 389
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -18820,7 +18825,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 361
+						"line": 367
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21069,7 +21074,7 @@
 					"kind": "type",
 					"group": "Uploads",
 					"summary": "Validation and object-storage behavior for an upload collection.",
-					"signature": "type UploadConfig struct {\n\t// MaxFileSize is the maximum accepted upload size in bytes. Zero uses the\n\t// framework default; values above 256 MiB are rejected so one request cannot\n\t// bypass the process-wide upload work budget.\n\tMaxFileSize int64\n\t// MimeTypes restricts uploads to the listed media types. Empty accepts any supported type.\n\tMimeTypes []string\n\t// Private requires authorized delivery instead of exposing storage objects publicly.\n\tPrivate bool\n\t// ImageSizes declares derived image variants generated from supported image uploads.\n\tImageSizes []ImageSize\n}",
+					"signature": "type UploadConfig struct {\n\t// MaxFileSize is the maximum accepted upload size in bytes. Zero uses the\n\t// framework default; values above 256 MiB are rejected so one request cannot\n\t// bypass the process-wide upload work budget.\n\tMaxFileSize int64\n\t// MimeTypes restricts uploads to the listed media types. Empty accepts any supported type.\n\tMimeTypes []string\n\t// Private requires authorized delivery instead of exposing storage objects publicly.\n\tPrivate bool\n\t// ImageSizes declares derived image variants generated from supported image uploads.\n\tImageSizes []ImageSize\n\t// MaxImageDimension scales a JPEG or PNG original wider or taller than this\n\t// many pixels down to fit before it is stored. The scaled image replaces\n\t// the original, including the private source later crops start from, and\n\t// image sizes are made from it. Zero keeps originals at their uploaded\n\t// size. It must be at least the width and height of every image size.\n\tMaxImageDimension int\n}",
 					"parameters": [
 						{
 							"name": "MaxFileSize",
@@ -21090,6 +21095,11 @@
 							"name": "ImageSizes",
 							"type": "[]ImageSize",
 							"description": "Derived variants generated for supported image uploads."
+						},
+						{
+							"name": "MaxImageDimension",
+							"type": "int",
+							"description": "MaxImageDimension scales a JPEG or PNG original wider or taller than this\nmany pixels down to fit before it is stored. The scaled image replaces\nthe original, including the private source later crops start from, and\nimage sizes are made from it. Zero keeps originals at their uploaded\nsize. It must be at least the width and height of every image size."
 						}
 					],
 					"parametersLabel": "",
@@ -21145,7 +21155,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 373
+						"line": 379
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21692,7 +21702,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 396
+						"line": 402
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -64352,7 +64362,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 721
+						"line": 724
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -64391,7 +64401,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 728
+						"line": 731
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -64429,7 +64439,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 742
+						"line": 745
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -64465,7 +64475,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 754
+						"line": 757
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -65226,7 +65236,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 341
+						"line": 344
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -65420,7 +65430,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 331
+						"line": 334
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -65520,7 +65530,7 @@
 					"kind": "type",
 					"group": "Capability settings",
 					"summary": "Resolved media validation and delivery policy.",
-					"signature": "type UploadSettings struct {\n\tMaxFileSize int64       `json:\"maxFileSize\"`\n\tMimeTypes   []string    `json:\"mimeTypes\"`\n\tPrivate     bool        `json:\"private\"`\n\tImageSizes  []ImageSize `json:\"imageSizes,omitempty\"`\n}",
+					"signature": "type UploadSettings struct {\n\tMaxFileSize int64       `json:\"maxFileSize\"`\n\tMimeTypes   []string    `json:\"mimeTypes\"`\n\tPrivate     bool        `json:\"private\"`\n\tImageSizes  []ImageSize `json:\"imageSizes,omitempty\"`\n\t// MaxImageDimension is the largest width or height a stored JPEG or PNG\n\t// original keeps; zero keeps originals at their uploaded size.\n\tMaxImageDimension int `json:\"maxImageDimension,omitempty\"`\n}",
 					"parameters": [
 						{
 							"name": "MaxFileSize",
@@ -65541,6 +65551,11 @@
 							"name": "ImageSizes",
 							"type": "[]ImageSize",
 							"description": "The ImageSizes value."
+						},
+						{
+							"name": "MaxImageDimension",
+							"type": "int",
+							"description": "MaxImageDimension is the largest width or height a stored JPEG or PNG\noriginal keeps; zero keeps originals at their uploaded size."
 						}
 					],
 					"parametersLabel": "",
@@ -65596,7 +65611,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 315
+						"line": 318
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -65881,7 +65896,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 322
+						"line": 325
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66047,7 +66062,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 306
+						"line": 309
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66178,7 +66193,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 380
+						"line": 383
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66227,7 +66242,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 412
+						"line": 415
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66321,7 +66336,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 422
+						"line": 425
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66373,7 +66388,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 428
+						"line": 431
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66410,7 +66425,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 438
+						"line": 441
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66452,7 +66467,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 471
+						"line": 474
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66499,7 +66514,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 444
+						"line": 447
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66536,7 +66551,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 454
+						"line": 457
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66578,7 +66593,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 462
+						"line": 465
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66625,7 +66640,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 478
+						"line": 481
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66669,7 +66684,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 487
+						"line": 490
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66701,7 +66716,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 495
+						"line": 498
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66743,7 +66758,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 500
+						"line": 503
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66787,7 +66802,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 508
+						"line": 511
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66819,7 +66834,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 524
+						"line": 527
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66845,7 +66860,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 529
+						"line": 532
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66871,7 +66886,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 532
+						"line": 535
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66918,7 +66933,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 535
+						"line": 538
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66950,7 +66965,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 556
+						"line": 559
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66992,7 +67007,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 561
+						"line": 564
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67034,7 +67049,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 568
+						"line": 571
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67086,7 +67101,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 586
+						"line": 589
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67123,7 +67138,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 594
+						"line": 597
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67175,7 +67190,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 600
+						"line": 603
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67212,7 +67227,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 610
+						"line": 613
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67266,7 +67281,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 701
+						"line": 704
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67331,7 +67346,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 575
+						"line": 578
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67393,7 +67408,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 545
+						"line": 548
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67453,7 +67468,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 621
+						"line": 624
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67500,7 +67515,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 632
+						"line": 635
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67542,7 +67557,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 642
+						"line": 645
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -67589,7 +67604,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 712
+						"line": 715
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68756,7 +68771,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 457
+						"line": 460
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68782,7 +68797,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 465
+						"line": 468
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68808,7 +68823,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 447
+						"line": 450
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68834,7 +68849,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 448
+						"line": 451
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68860,7 +68875,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 449
+						"line": 452
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68886,7 +68901,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 450
+						"line": 453
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68912,7 +68927,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 466
+						"line": 469
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68938,7 +68953,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 467
+						"line": 470
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68964,7 +68979,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 458
+						"line": 461
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69544,7 +69559,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2593
+						"line": 2596
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69580,7 +69595,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2602
+						"line": 2605
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69610,7 +69625,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2576
+						"line": 2579
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69640,7 +69655,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2571
+						"line": 2574
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69676,7 +69691,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2582
+						"line": 2585
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69702,7 +69717,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 613
+						"line": 616
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69728,7 +69743,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 614
+						"line": 617
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69784,7 +69799,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 540
+						"line": 543
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69810,7 +69825,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 541
+						"line": 544
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69836,7 +69851,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 539
+						"line": 542
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69862,7 +69877,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 538
+						"line": 541
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70024,7 +70039,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 650
+						"line": 653
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70054,7 +70069,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 660
+						"line": 663
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70090,7 +70105,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 670
+						"line": 673
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70163,7 +70178,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 694
+						"line": 697
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70371,7 +70386,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 1397
+						"line": 1400
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70465,7 +70480,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 515
+						"line": 518
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70491,7 +70506,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 518
+						"line": 521
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70517,7 +70532,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 519
+						"line": 522
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71089,7 +71104,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 405
+						"line": 408
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71353,7 +71368,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2055
+						"line": 2058
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71425,7 +71440,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 736
+						"line": 739
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71712,7 +71727,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 617
+						"line": 620
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71856,7 +71871,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 520
+						"line": 523
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119170,7 +119185,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 772
+						"line": 773
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119253,7 +119268,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 779
+						"line": 780
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119540,6 +119555,11 @@
 							"name": "imageSizes",
 							"type": "SchemaImageSize[]",
 							"description": "The imageSizes value."
+						},
+						{
+							"name": "maxImageDimension",
+							"type": "number",
+							"description": "The maxImageDimension value."
 						}
 					],
 					"parametersLabel": "",
@@ -119600,7 +119620,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 759
+						"line": 760
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119642,7 +119662,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 766
+						"line": 767
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119871,7 +119891,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 788
+						"line": 789
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119998,7 +120018,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 821
+						"line": 822
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120045,7 +120065,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 849
+						"line": 850
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120082,7 +120102,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 856
+						"line": 857
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120134,7 +120154,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 861
+						"line": 862
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120171,7 +120191,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 869
+						"line": 870
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120199,7 +120219,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 874
+						"line": 875
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120246,7 +120266,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 879
+						"line": 880
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120290,7 +120310,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 896
+						"line": 897
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120322,7 +120342,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 902
+						"line": 903
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120364,7 +120384,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 906
+						"line": 907
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120406,7 +120426,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 912
+						"line": 913
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120432,7 +120452,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 918
+						"line": 919
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120464,7 +120484,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 920
+						"line": 921
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120490,7 +120510,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 924
+						"line": 925
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120516,7 +120536,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 925
+						"line": 926
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120578,7 +120598,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 927
+						"line": 928
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120604,7 +120624,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 937
+						"line": 938
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120636,7 +120656,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 939
+						"line": 940
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120678,7 +120698,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 943
+						"line": 944
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120720,7 +120740,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 949
+						"line": 950
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120782,7 +120802,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 955
+						"line": 956
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120808,7 +120828,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 965
+						"line": 966
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120860,7 +120880,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 967
+						"line": 968
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120897,7 +120917,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 975
+						"line": 976
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120949,7 +120969,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 980
+						"line": 981
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121009,7 +121029,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 988
+						"line": 989
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121056,7 +121076,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 997
+						"line": 998
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121098,7 +121118,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1005
+						"line": 1006
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121150,7 +121170,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1018
+						"line": 1019
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121197,7 +121217,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1044
+						"line": 1045
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121229,7 +121249,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1051
+						"line": 1052
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122918,7 +122938,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1011
+						"line": 1012
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122975,7 +122995,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1026
+						"line": 1027
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123027,7 +123047,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1036
+						"line": 1037
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123064,7 +123084,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 844
+						"line": 845
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123101,7 +123121,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 891
+						"line": 892
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123127,7 +123147,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 886
+						"line": 887
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -128545,9 +128565,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@10927",
+							"name": "__@registration@10928",
 							"type": "true",
-							"description": "The __@registration@10927 value."
+							"description": "The __@registration@10928 value."
 						}
 					],
 					"parametersLabel": "",
@@ -129705,9 +129725,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@8015",
+							"name": "__@registration@8016",
 							"type": "true",
-							"description": "The __@registration@8015 value."
+							"description": "The __@registration@8016 value."
 						}
 					],
 					"parametersLabel": "",
@@ -131536,9 +131556,9 @@
 							"description": "The type value."
 						},
 						{
-							"name": "__@valueContract@6082",
+							"name": "__@valueContract@6083",
 							"type": "{ value: (value: Value) => Value; input: (value: Input) => Input; }",
-							"description": "The __@valueContract@6082 value."
+							"description": "The __@valueContract@6083 value."
 						},
 						{
 							"name": "fieldType",
@@ -131571,9 +131591,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@6061",
+							"name": "__@registration@6062",
 							"type": "true",
-							"description": "The __@registration@6061 value."
+							"description": "The __@registration@6062 value."
 						}
 					],
 					"parametersLabel": "",
@@ -132047,9 +132067,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@6061",
+							"name": "__@registration@6062",
 							"type": "true",
-							"description": "The __@registration@6061 value."
+							"description": "The __@registration@6062 value."
 						}
 					],
 					"parametersLabel": "",

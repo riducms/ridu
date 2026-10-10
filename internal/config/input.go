@@ -141,10 +141,11 @@ type GlobalAdmin struct {
 }
 
 type UploadConfig struct {
-	MaxFileSize int64
-	MimeTypes   []string
-	Private     bool
-	ImageSizes  []ImageSize
+	MaxFileSize       int64
+	MimeTypes         []string
+	Private           bool
+	ImageSizes        []ImageSize
+	MaxImageDimension int
 }
 
 type ImageSize struct {

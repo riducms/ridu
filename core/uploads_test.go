@@ -3,6 +3,7 @@ package core_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -3003,5 +3004,34 @@ func TestUploadCreateCanPublishAndReeditRedactedSource(t *testing.T) {
 	width, _ = reset.Values["width"].NumberValue()
 	if width != 10 {
 		t.Fatal("duplicate did not copy the private original")
+	}
+}
+
+func TestMaxImageDimensionMustCoverEveryImageSize(t *testing.T) {
+	config := func(dimension int) ridu.Config {
+		return ridu.Config{Name: "media", Collections: []ridu.Collection{{
+			Slug: "media", Upload: true,
+			UploadConfig: ridu.UploadConfig{MimeTypes: []string{"image/*"}, MaxImageDimension: dimension, ImageSizes: []ridu.ImageSize{{Name: "large", Width: 1600, Height: 900, Fit: "contain"}}},
+			Fields:       field.Fields{field.Text("alt")},
+		}}}
+	}
+	for _, dimension := range []int{-1, 1200, 20_001} {
+		if _, err := ridu.Resolve(config(dimension)); err == nil || !strings.Contains(err.Error(), "invalid_max_image_dimension") {
+			t.Fatalf("MaxImageDimension %d: error = %v", dimension, err)
+		}
+	}
+	manifest, err := ridu.Resolve(config(2400))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dimension := manifest.Snapshot().Collections[0].Upload.MaxImageDimension; dimension != 2400 {
+		t.Fatalf("manifest MaxImageDimension = %d", dimension)
+	}
+	unset, err := ridu.Resolve(config(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if encoded, err := json.Marshal(unset); err != nil || strings.Contains(string(encoded), "maxImageDimension") {
+		t.Fatalf("an unset MaxImageDimension changed the manifest: %v", err)
 	}
 }

@@ -754,6 +754,7 @@ export interface SchemaUploadSettings {
 	mimeTypes: string[];
 	private: boolean;
 	imageSizes?: SchemaImageSize[];
+	maxImageDimension?: number;
 }
 
 export interface SchemaImageSize {

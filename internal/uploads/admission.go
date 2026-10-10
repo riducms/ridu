@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"runtime/debug"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -27,7 +29,21 @@ type WorkAdmission struct {
 	queuedCapacity int
 }
 
-var processWorkAdmission = NewWorkAdmission(defaultFileBudgetBytes, defaultImageBudgetBytes, defaultQueuedUploads)
+// processWorkAdmission is made on first use, so a main function that sets
+// the memory limit with debug.SetMemoryLimit before serving is followed.
+var processWorkAdmission = sync.OnceValue(func() *WorkAdmission {
+	return NewWorkAdmission(defaultFileBudgetBytes, imageBudget(debug.SetMemoryLimit(-1)), defaultQueuedUploads)
+})
+
+// imageBudget bounds decoded image work: half the Go memory limit when one is
+// set, such as with GOMEMLIMIT, leaving the rest to the server, and otherwise
+// defaultImageBudgetBytes.
+func imageBudget(memoryLimit int64) int64 {
+	if memoryLimit <= 0 || memoryLimit == math.MaxInt64 {
+		return defaultImageBudgetBytes
+	}
+	return max(1, memoryLimit/2)
+}
 
 // NewWorkAdmission constructs an isolated admission controller. It is public
 // within the internal package so resource-bound behavior can be proven without
@@ -101,7 +117,7 @@ func (manager Manager) workAdmission() *WorkAdmission {
 	if manager.Admission != nil {
 		return manager.Admission
 	}
-	return processWorkAdmission
+	return processWorkAdmission()
 }
 
 // AcquireFile reserves compressed-byte capacity for a caller, such as remote

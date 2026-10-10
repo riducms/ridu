@@ -6,6 +6,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -535,5 +536,223 @@ func TestPrepareOrientsEXIFBeforeApplyingSourceCrop(t *testing.T) {
 	retained, err := io.ReadAll(reader)
 	if err != nil || !bytes.Equal(retained, original) {
 		t.Fatal("private EXIF original was altered")
+	}
+}
+
+func encodedImage(t *testing.T, picture image.Image, format string) []byte {
+	t.Helper()
+	var encoded bytes.Buffer
+	var err error
+	switch format {
+	case "jpeg":
+		err = jpeg.Encode(&encoded, picture, nil)
+	case "png":
+		err = png.Encode(&encoded, picture)
+	case "gif":
+		err = gif.Encode(&encoded, picture, nil)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded.Bytes()
+}
+
+func storedObject(t *testing.T, backend *localstorage.Backend, value store.Value) []byte {
+	t.Helper()
+	key, _ := value.StringValue()
+	reader, _, err := backend.Open(context.Background(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	encoded, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
+func decodedSize(t *testing.T, encoded []byte) image.Point {
+	t.Helper()
+	configuration, _, err := image.DecodeConfig(bytes.NewReader(encoded))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return image.Pt(configuration.Width, configuration.Height)
+}
+
+func TestMaxImageDimensionScalesTheStoredOriginal(t *testing.T) {
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "capped"}
+	settings := &schema.UploadSettings{MaxFileSize: 1 << 20, MimeTypes: []string{"image/*"}, MaxImageDimension: 300, ImageSizes: []schema.ImageSize{{Name: "thumb", Width: 200, Height: 200, Fit: "cover"}}}
+	collection := schema.Collection{Slug: "media", Upload: settings}
+	for _, test := range []struct {
+		name, format string
+		picture      image.Image
+		want         image.Point
+	}{
+		{name: "JPEG", format: "jpeg", picture: image.NewRGBA(image.Rect(0, 0, 1200, 800)), want: image.Pt(300, 200)},
+		{name: "PNG", format: "png", picture: image.NewNRGBA(image.Rect(0, 0, 500, 1500)), want: image.Pt(100, 300)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			prepared, err := manager.Prepare(t.Context(), collection, uploads.Input{Filename: "large." + test.format, Reader: bytes.NewReader(encodedImage(t, test.picture, test.format))})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer prepared.Release()
+			width, _ := prepared.Values["width"].NumberValue()
+			height, _ := prepared.Values["height"].NumberValue()
+			primary := storedObject(t, backend, prepared.Values["objectKey"])
+			if int(width) != test.want.X || int(height) != test.want.Y || decodedSize(t, primary) != test.want {
+				t.Fatalf("stored %v as %vx%v, want %v", decodedSize(t, primary), width, height, test.want)
+			}
+			if filesize, _ := prepared.Values["filesize"].NumberValue(); int(filesize) != len(primary) {
+				t.Fatalf("filesize = %v, stored %d bytes", filesize, len(primary))
+			}
+			// The scaled image replaces the original as the private source too.
+			source, _ := prepared.Values["source"].CopyObject()
+			sourceWidth, _ := source["width"].NumberValue()
+			if !bytes.Equal(storedObject(t, backend, source["objectKey"]), primary) || int(sourceWidth) != test.want.X {
+				t.Fatalf("private source %v is not the scaled original", source)
+			}
+			if _, exists := prepared.Values["sizes"].Get("thumb").CopyObject(); !exists {
+				t.Fatal("image size was not made from the scaled original")
+			}
+		})
+	}
+}
+
+func TestMaxImageDimensionScalesTheUprightPicture(t *testing.T) {
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := encodedImage(t, image.NewRGBA(image.Rect(0, 0, 1200, 600)), "jpeg")
+	// Little-endian TIFF orientation 6: the 1200x600 encoded image displays as 600x1200.
+	exif := []byte{'E', 'x', 'i', 'f', 0, 0, 'I', 'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 1, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0}
+	original := append([]byte{0xff, 0xd8, 0xff, 0xe1, 0, byte(len(exif) + 2)}, exif...)
+	original = append(original, encoded[2:]...)
+	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{MaxFileSize: 1 << 20, MimeTypes: []string{"image/jpeg"}, MaxImageDimension: 300}}
+	prepared, err := (uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "capped"}).Prepare(t.Context(), collection, uploads.Input{Filename: "phone.jpg", Reader: bytes.NewReader(original)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Release()
+	if size := decodedSize(t, storedObject(t, backend, prepared.Values["objectKey"])); size != image.Pt(150, 300) {
+		t.Fatalf("scaled phone photo = %v, want upright 150x300", size)
+	}
+}
+
+func TestMaxImageDimensionKeepsSmallerAndGIFOriginals(t *testing.T) {
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "capped"}
+	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{MaxFileSize: 1 << 20, MimeTypes: []string{"image/*"}, MaxImageDimension: 300}}
+	for name, original := range map[string][]byte{
+		"smaller JPEG": encodedImage(t, image.NewRGBA(image.Rect(0, 0, 300, 120)), "jpeg"),
+		// A GIF may be animated, and Ridu decodes only its first frame.
+		"larger GIF": encodedImage(t, image.NewPaletted(image.Rect(0, 0, 600, 400), color.Palette{color.Black, color.White}), "gif"),
+	} {
+		prepared, err := manager.Prepare(t.Context(), collection, uploads.Input{Filename: "kept", Reader: bytes.NewReader(original)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer prepared.Release()
+		if !bytes.Equal(storedObject(t, backend, prepared.Values["objectKey"]), original) || !bytes.Equal(storedObject(t, backend, prepared.Values["source"].Get("objectKey")), original) {
+			t.Fatalf("%s: original was not kept as uploaded", name)
+		}
+	}
+}
+
+func TestRegeneratingAnOlderSourceAppliesTheCap(t *testing.T) {
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := encodedImage(t, image.NewRGBA(image.Rect(0, 0, 1000, 500)), "png")
+	sourceKey := "ridu/capped/objects/0123456789abcdef0123456789abcdef/source/older.png"
+	if err := backend.Put(t.Context(), sourceKey, bytes.NewReader(original), int64(len(original)), "image/png"); err != nil {
+		t.Fatal(err)
+	}
+	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{MaxFileSize: 1 << 20, MimeTypes: []string{"image/png"}, MaxImageDimension: 400}}
+	manager := uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "capped"}
+	source := store.Values{"objectKey": store.String(sourceKey), "width": store.Number(1000), "height": store.Number(500), "mimeType": store.String("image/png"), "filesize": store.Number(float64(len(original)))}
+	for _, test := range []struct {
+		name      string
+		cropWidth float64
+		want      image.Point
+	}{
+		{name: "uncropped", want: image.Pt(400, 200)},
+		{name: "square crop", cropWidth: 50, want: image.Pt(400, 400)},
+	} {
+		cropHeight := 0.0
+		if test.cropWidth > 0 {
+			cropHeight = 100
+		}
+		prepared, err := manager.RegenerateImage(t.Context(), collection, uploads.ImageInput{ObjectKey: sourceKey, Source: source, FocalX: 50, FocalY: 50, CropWidth: test.cropWidth, CropHeight: cropHeight})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer prepared.Release()
+		if size := decodedSize(t, storedObject(t, backend, prepared.Values["objectKey"])); size != test.want {
+			t.Fatalf("%s: primary = %v, want %v", test.name, size, test.want)
+		}
+		// The older private source is kept, so a later edit can still reach all of it.
+		if key, _ := prepared.Values["source"].Get("objectKey").StringValue(); key != sourceKey {
+			t.Fatalf("%s: private source moved to %q", test.name, key)
+		}
+	}
+}
+
+func TestCoverSizeFromAJPEGFollowsTheFocalPoint(t *testing.T) {
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	picture := image.NewRGBA(image.Rect(0, 0, 400, 200))
+	for y := range 200 {
+		for x := range 400 {
+			if x < 200 {
+				picture.Set(x, y, color.RGBA{R: 255, A: 255})
+			} else {
+				picture.Set(x, y, color.RGBA{B: 255, A: 255})
+			}
+		}
+	}
+	original := encodedImage(t, picture, "jpeg")
+	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{MaxFileSize: 1 << 20, MimeTypes: []string{"image/jpeg"}, ImageSizes: []schema.ImageSize{{Name: "square", Width: 50, Height: 50, Fit: "cover"}}}}
+	manager := uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "focal"}
+	for focalX, red := range map[float64]bool{0: true, 100: false} {
+		prepared, err := manager.Prepare(t.Context(), collection, uploads.Input{Filename: "halves.jpg", Reader: bytes.NewReader(original), Image: &protocol.UploadImageEdit{FocalX: focalX, FocalY: 50}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer prepared.Release()
+		r, _, b, _ := variantPixel(t, backend, prepared, "square").RGBA()
+		if (r > b) != red {
+			t.Fatalf("focal x %v: cover size pixel r=%d b=%d", focalX, r, b)
+		}
+	}
+}
+
+func TestPrepareRefusesAnImageOverTheBudgetWithWhatFits(t *testing.T) {
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{MaxFileSize: 1 << 20, MimeTypes: []string{"image/*"}}}
+	manager := uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "budget", Admission: uploads.NewWorkAdmission(1<<30, 20<<20, 4)}
+	_, err = manager.Prepare(t.Context(), collection, uploads.Input{Filename: "large.jpg", Reader: bytes.NewReader(encodedImage(t, image.NewRGBA(image.Rect(0, 0, 3000, 2000)), "jpeg"))})
+	if err == nil || !strings.HasPrefix(err.Error(), "image is 3000×2000 (6.0 megapixels), more than this server can process at once; upload an image of at most about ") {
+		t.Fatalf("over-budget image error = %v", err)
+	}
+	_, err = manager.Prepare(t.Context(), collection, uploads.Input{Filename: "bomb.gif", Reader: bytes.NewReader([]byte{'G', 'I', 'F', '8', '9', 'a', 0x50, 0xc3, 0x10, 0x00, 0, 0, 0})})
+	if err == nil || err.Error() != "image is 50000×16 (0.8 megapixels); images can be at most 20000 pixels wide or high and 40 megapixels" {
+		t.Fatalf("oversized image error = %v", err)
 	}
 }

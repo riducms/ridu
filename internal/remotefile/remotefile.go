@@ -18,6 +18,10 @@ import (
 
 const maximumRedirects = 5
 
+// globalUnicastIPv6 is the only IANA-allocated IPv6 global unicast block.
+// IPv6 outside it, such as IPv4-compatible ::/96, is never public.
+var globalUnicastIPv6 = netip.MustParsePrefix("2000::/3")
+
 var nonPublicPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("0.0.0.0/8"),
 	netip.MustParsePrefix("10.0.0.0/8"),
@@ -169,6 +173,9 @@ func publicAddresses(ctx context.Context, host string) ([]netip.Addr, error) {
 func isPublic(address netip.Addr) bool {
 	address = address.Unmap()
 	if !address.IsValid() || !address.IsGlobalUnicast() {
+		return false
+	}
+	if address.Is6() && !globalUnicastIPv6.Contains(address) {
 		return false
 	}
 	for _, prefix := range nonPublicPrefixes {

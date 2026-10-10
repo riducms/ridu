@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
-	resample "golang.org/x/image/draw"
 
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/schema"
@@ -293,18 +292,23 @@ func (manager Manager) Prepare(ctx context.Context, collection schema.Collection
 	}
 	var source image.Image
 	if strings.HasPrefix(contentType, "image/") {
-		configuration, _, decodeError := image.DecodeConfig(bytes.NewReader(encoded))
+		configuration, format, decodeError := image.DecodeConfig(bytes.NewReader(encoded))
 		if decodeError != nil {
 			return Prepared{}, fmt.Errorf("decode image metadata: %w", decodeError)
 		}
-		if err := validateImageDimensions(configuration.Width, configuration.Height); err != nil {
+		if err := validateUploadedImageDimensions(configuration.Width, configuration.Height); err != nil {
 			return Prepared{}, err
 		}
-		imageBytes, estimateError := imageWorkBytes(collection, configuration.Width, configuration.Height, int64(len(encoded)), true)
+		work, estimateError := newImageWork(collection.Upload, configuration, format, encoded, input.Image)
 		if estimateError != nil {
 			return Prepared{}, estimateError
 		}
-		release, admissionError := manager.workAdmission().AcquireImage(ctx, imageBytes)
+		admission := manager.workAdmission()
+		imageBytes := work.bytes(configuration.Width, configuration.Height)
+		if imageBytes > admission.imageBudget {
+			return Prepared{}, work.tooLargeError(configuration.Width, configuration.Height, admission.imageBudget)
+		}
+		release, admissionError := admission.AcquireImage(ctx, imageBytes)
 		if admissionError != nil {
 			return Prepared{}, admissionError
 		}
@@ -333,6 +337,15 @@ func (manager Manager) Prepare(ctx context.Context, collection schema.Collection
 	keys := []string{key}
 	privateSource := store.CloneValues(input.Source)
 	newSource := source != nil && len(privateSource) == 0
+	if newSource {
+		// A capped original replaces the upload everywhere, private source included.
+		if fitted := fitImage(source, contentType, collection.Upload.MaxImageDimension); fitted != nil {
+			source = fitted
+			if encoded, err = encodeImage(source, contentType); err != nil {
+				return Prepared{}, fmt.Errorf("encode image: %w", err)
+			}
+		}
+	}
 	if source != nil {
 		keys = append(keys, imageSizeObjectKeys(collection, prefix, contentType)...)
 		if newSource {
@@ -354,12 +367,23 @@ func (manager Manager) Prepare(ctx context.Context, collection schema.Collection
 	}
 	sourceBytes := encoded
 	focalX, focalY := edit.FocalX, edit.FocalY
+	reencode := false
 	if edit.CropWidth > 0 && edit.CropHeight > 0 {
 		edit.FocalX = max(edit.CropX, min(edit.CropX+edit.CropWidth, edit.FocalX))
 		edit.FocalY = max(edit.CropY, min(edit.CropY+edit.CropHeight, edit.FocalY))
 		source = cropImage(source, edit.CropX, edit.CropY, edit.CropWidth, edit.CropHeight)
 		focalX = clampPercentage((edit.FocalX - edit.CropX) * 100 / edit.CropWidth)
 		focalY = clampPercentage((edit.FocalY - edit.CropY) * 100 / edit.CropHeight)
+		reencode = true
+	}
+	if source != nil {
+		// A source stored before the cap was configured can still exceed it.
+		if fitted := fitImage(source, contentType, collection.Upload.MaxImageDimension); fitted != nil {
+			source = fitted
+			reencode = true
+		}
+	}
+	if reencode {
 		encoded, err = encodeImage(source, contentType)
 		if err != nil {
 			return rollback(err)
@@ -486,31 +510,28 @@ func validateImageDimensions(width, height int) error {
 	return nil
 }
 
-func imageWorkBytes(collection schema.Collection, width, height int, encodedBytes int64, crop bool) (int64, error) {
-	if collection.Upload == nil {
-		return 0, fmt.Errorf("collection is not upload-enabled")
+// validateUploadedImageDimensions tells the person uploading which limit an
+// image exceeds.
+func validateUploadedImageDimensions(width, height int) error {
+	if validateImageDimensions(width, height) != nil {
+		return fmt.Errorf("image is %d×%d (%s megapixels); images can be at most %d pixels wide or high and %d megapixels", width, height, megapixels(int64(width)*int64(height)), maximumImageDimension, maximumImagePixels/1_000_000)
 	}
-	sourcePixels := int64(width) * int64(height)
-	var aggregatePixels, largestVariant int64
-	if len(collection.Upload.ImageSizes) > maximumImageVariants {
-		return 0, fmt.Errorf("image configuration exceeds the %d-variant processing limit", maximumImageVariants)
+	return nil
+}
+
+// fitImage scales a JPEG or PNG picture longer than dimension on either side
+// down to fit, keeping its shape. It returns nil when the picture already fits,
+// no dimension is set, or the format is not one Ridu re-encodes.
+func fitImage(source image.Image, contentType string, dimension int) image.Image {
+	bounds := source.Bounds()
+	side := max(bounds.Dx(), bounds.Dy())
+	if dimension < 1 || side <= dimension || contentType != "image/jpeg" && contentType != "image/png" {
+		return nil
 	}
-	for _, configured := range collection.Upload.ImageSizes {
-		if err := validateImageDimensions(configured.Width, configured.Height); err != nil {
-			return 0, fmt.Errorf("image size %q: %w", configured.Name, err)
-		}
-		pixels := int64(configured.Width) * int64(configured.Height)
-		aggregatePixels += pixels
-		largestVariant = max(largestVariant, pixels)
-	}
-	if aggregatePixels > maximumVariantPixels {
-		return 0, fmt.Errorf("image variants exceed the %d-pixel aggregate processing limit", maximumVariantPixels)
-	}
-	sourceBytesPerPixel := int64(16)
-	if crop {
-		sourceBytesPerPixel = 20
-	}
-	return sourcePixels*sourceBytesPerPixel + largestVariant*40 + encodedBytes*2, nil
+	scale := float64(dimension) / float64(side)
+	width := max(1, min(dimension, int(math.Round(float64(bounds.Dx())*scale))))
+	height := max(1, min(dimension, int(math.Round(float64(bounds.Dy())*scale))))
+	return imaging.Resize(source, width, height, imaging.CatmullRom)
 }
 
 func (manager Manager) storeImageSizes(ctx context.Context, collection schema.Collection, source image.Image, prefix, sourceType string, focalX, focalY float64) (store.Values, error) {
@@ -709,6 +730,9 @@ func encodeImage(source image.Image, contentType string) ([]byte, error) {
 	return output.Bytes(), err
 }
 
+// resize makes one image size. imaging resamples in two passes through an
+// NRGBA intermediate as wide as the result and as tall as the source, four
+// bytes a pixel, where golang.org/x/image/draw kept 32 bytes a pixel.
 func resize(source image.Image, width, height int, fit string, focalX, focalY float64) image.Image {
 	target := image.NewRGBA(image.Rect(0, 0, width, height))
 	bounds := source.Bounds()
@@ -717,7 +741,7 @@ func resize(source image.Image, width, height int, fit string, focalX, focalY fl
 		scale := min(float64(width)/sourceWidth, float64(height)/sourceHeight)
 		w, h := max(1, int(math.Round(sourceWidth*scale))), max(1, int(math.Round(sourceHeight*scale)))
 		x, y := (width-w)/2, (height-h)/2
-		resample.CatmullRom.Scale(target, image.Rect(x, y, x+w, y+h), source, bounds, draw.Src, nil)
+		draw.Draw(target, image.Rect(x, y, x+w, y+h), imaging.Resize(source, w, h, imaging.CatmullRom), image.Point{}, draw.Src)
 		return target
 	}
 	scale := min(sourceWidth/float64(width), sourceHeight/float64(height))
@@ -726,8 +750,19 @@ func resize(source image.Image, width, height int, fit string, focalX, focalY fl
 	x := max(0, min(bounds.Dx()-cropWidth, int(math.Round(sourceWidth*focalX/100-float64(cropWidth)/2))))
 	y := max(0, min(bounds.Dy()-cropHeight, int(math.Round(sourceHeight*focalY/100-float64(cropHeight)/2))))
 	crop := image.Rect(bounds.Min.X+x, bounds.Min.Y+y, bounds.Min.X+x+cropWidth, bounds.Min.Y+y+cropHeight)
-	resample.CatmullRom.Scale(target, target.Bounds(), source, crop, draw.Src, nil)
+	draw.Draw(target, target.Bounds(), imaging.Resize(subImage(source, crop), width, height, imaging.CatmullRom), image.Point{}, draw.Src)
 	return target
+}
+
+// subImage views part of a decoded picture without copying it. Every decoder
+// and imaging result Ridu uses supports SubImage; others are copied.
+func subImage(source image.Image, rectangle image.Rectangle) image.Image {
+	if viewer, ok := source.(interface {
+		SubImage(image.Rectangle) image.Image
+	}); ok {
+		return viewer.SubImage(rectangle)
+	}
+	return imaging.Crop(source, rectangle)
 }
 
 // ValidateObjectRoles keeps private sources out of public delivery positions.

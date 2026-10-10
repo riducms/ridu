@@ -327,7 +327,10 @@
 	margin-bottom: 0;
 }
 
-.docs-prose :is(.callout, .markdown-alert) :is(strong:first-child, .markdown-alert-title) {
+/* A hand-written callout's title is its first child; bold text that starts a
+   paragraph inside a callout stays inline. */
+.docs-prose :is(.callout, .markdown-alert) > strong:first-child,
+.docs-prose .markdown-alert-title {
 	display: flex;
 	align-items: center;
 	gap: 0.45rem;

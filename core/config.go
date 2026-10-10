@@ -355,6 +355,12 @@ type UploadConfig struct {
 	Private bool
 	// ImageSizes declares derived image variants generated from supported image uploads.
 	ImageSizes []ImageSize
+	// MaxImageDimension scales a JPEG or PNG original wider or taller than this
+	// many pixels down to fit before it is stored. The scaled image replaces
+	// the original, including the private source later crops start from, and
+	// image sizes are made from it. Zero keeps originals at their uploaded
+	// size. It must be at least the width and height of every image size.
+	MaxImageDimension int
 }
 
 // ImageSize describes one derived image variant for an upload collection.
@@ -712,7 +718,7 @@ func resolverCollections(collections []Collection) []configresolver.Collection {
 			}(),
 			APIKeys:              collection.AuthConfig.APIKeys,
 			Upload:               collection.Upload,
-			UploadConfig:         configresolver.UploadConfig{MaxFileSize: collection.UploadConfig.MaxFileSize, MimeTypes: append([]string(nil), collection.UploadConfig.MimeTypes...), Private: collection.UploadConfig.Private, ImageSizes: resolverImageSizes(collection.UploadConfig.ImageSizes)},
+			UploadConfig:         configresolver.UploadConfig{MaxFileSize: collection.UploadConfig.MaxFileSize, MimeTypes: append([]string(nil), collection.UploadConfig.MimeTypes...), Private: collection.UploadConfig.Private, ImageSizes: resolverImageSizes(collection.UploadConfig.ImageSizes), MaxImageDimension: collection.UploadConfig.MaxImageDimension},
 			Versions:             collection.Versions,
 			Trash:                collection.Trash,
 			LockDocuments:        collection.LockDocuments,
