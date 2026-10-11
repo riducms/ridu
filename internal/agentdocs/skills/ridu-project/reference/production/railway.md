@@ -56,6 +56,8 @@ Add these variables after Railway creates the public domain:
 
 ```dotenv title="Railway variables"
 RIDU_ALLOWED_HOSTS=${{RAILWAY_PUBLIC_DOMAIN}},healthcheck.railway.app
+RIDU_TRUSTED_PROXY_CIDRS=100.64.0.0/10
+RIDU_TRUSTED_PROXY_HOPS=2
 RIDU_READINESS_DRAIN_DELAY=-1s
 ```
 
@@ -65,11 +67,22 @@ healthcheck is refused and the deployment never goes live. Ridu logs the first r
 host. `${{RAILWAY_PUBLIC_DOMAIN}}` follows the service's generated domain if it's renamed. Add a
 custom domain to the list as well.
 
-`DATABASE_URL` comes from the PostgreSQL service. Leave `RIDU_TRUSTED_PROXY_CIDRS` empty: Railway's
-edge terminates HTTPS and forwards plain HTTP from addresses it doesn't publish. Ridu still accepts
-the HTTPS origin of the domain each request names, so the admin signs in without
+`DATABASE_URL` comes from the PostgreSQL service.
+
+Railway's edge terminates HTTPS, and its proxies currently connect to your service from
+`100.64.0.0/10`. Railway doesn't document that range and may change it. The proxies pass
+`X-Forwarded-For` as `<visitor>, <edge>`, replacing any value a visitor sends, and the edge's
+addresses aren't published. `RIDU_TRUSTED_PROXY_CIDRS` trusts the proxies, and
+`RIDU_TRUSTED_PROXY_HOPS=2` counts the edge in front of them, so Ridu sees each visitor's address.
+Sign-in limits, 10 attempts a minute per address by default, then apply to each visitor. Without
+these two variables Ridu sees the proxy's address, and one person's wrong passwords can block
+everyone's sign-in until the minute ends. An attacker with many addresses gets more attempts, but
+account lockout still locks an account after 5 wrong passwords from any address.
+
+Ridu follows the HTTPS scheme the trusted proxies report, so the admin signs in without
 `RIDU_ALLOWED_ORIGINS`. Add that variable only when a browser application on another origin calls
-the API.
+the API. If Railway's proxies move to another range, Ridu stops trusting them: sign-in still works,
+and every visitor shares the proxy's limit again.
 
 Railway supplies `PORT`; generated Ridu servers turn it into the listener address automatically.
 `RIDU_ADDRESS` remains available when you need to override the complete address yourself.

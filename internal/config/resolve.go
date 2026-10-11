@@ -824,8 +824,8 @@ func (resolver *resolver) resolveCollection(index int, collection Collection) sc
 			}
 			pixels := int64(size.Width) * int64(size.Height)
 			aggregateImagePixels += pixels
-			if !schema.IsValidPluginKey(size.Name) || seenSizes[size.Name] || size.Width < 1 || size.Height < 1 || size.Width > 20_000 || size.Height > 20_000 || pixels > 40_000_000 || fit != "cover" && fit != "contain" {
-				resolver.issue("invalid_image_size", fmt.Sprintf("%s.upload.imageSizes[%d]", path, index), "image sizes require a unique lowercase kebab-case name, cover or contain fit, dimensions up to 20,000, and at most 40 million pixels")
+			if !schema.IsValidPluginKey(size.Name) || seenSizes[size.Name] || size.Width < 1 || size.Height < 1 || size.Width > 20_000 || size.Height > 20_000 || pixels > 40_000_000 || fit != "cover" && fit != "contain" && fit != "inside" {
+				resolver.issue("invalid_image_size", fmt.Sprintf("%s.upload.imageSizes[%d]", path, index), "image sizes require a unique lowercase kebab-case name, a cover, contain or inside fit, dimensions up to 20,000, and at most 40 million pixels")
 			}
 			seenSizes[size.Name] = true
 			sizes[index] = schema.ImageSize{Name: size.Name, Width: size.Width, Height: size.Height, Fit: fit}

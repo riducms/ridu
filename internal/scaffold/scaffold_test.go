@@ -262,6 +262,7 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 		`AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS")`,
 		`AllowedHosts:            envList("RIDU_ALLOWED_HOSTS")`,
 		`TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS")`,
+		`TrustedProxyHops:        envInt("RIDU_TRUSTED_PROXY_HOPS")`,
 		`StrictTransportSecurity: os.Getenv("RIDU_STRICT_TRANSPORT_SECURITY")`,
 		`AllowUnverifiableReadiness: envBool("RIDU_ALLOW_UNVERIFIABLE_READINESS")`,
 		`SkipReadinessPreflight:     envBool("RIDU_SKIP_READINESS_PREFLIGHT")`,

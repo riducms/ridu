@@ -192,6 +192,7 @@ func runtimeOptions(applicationConfig ridu.Config, internalDevelopmentServer boo
 			AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS"),
 			AllowedHosts:            envList("RIDU_ALLOWED_HOSTS"),
 			TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS"),
+			TrustedProxyHops:        envInt("RIDU_TRUSTED_PROXY_HOPS"),
 			ReadinessTimeout:        envDuration("RIDU_READINESS_TIMEOUT"),
 			StrictTransportSecurity: os.Getenv("RIDU_STRICT_TRANSPORT_SECURITY"),
 		}),

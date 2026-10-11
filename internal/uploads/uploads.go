@@ -24,6 +24,9 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
+	// WebP uploads decode for image sizes; Go has no WebP encoder, so sizes
+	// are written as JPEG or PNG.
+	_ "golang.org/x/image/webp"
 
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/schema"
@@ -347,7 +350,7 @@ func (manager Manager) Prepare(ctx context.Context, collection schema.Collection
 		}
 	}
 	if source != nil {
-		keys = append(keys, imageSizeObjectKeys(collection, prefix, contentType)...)
+		keys = append(keys, imageSizeObjectKeys(collection, prefix, contentType, source)...)
 		if newSource {
 			sourceKey := prefix + "/source/" + filename
 			keys = append(keys, sourceKey)
@@ -549,13 +552,13 @@ func (manager Manager) storeImageSizes(ctx context.Context, collection schema.Co
 		return nil, fmt.Errorf("image variants exceed the %d-pixel aggregate processing limit", maximumVariantPixels)
 	}
 	sizes := make(store.Values, len(collection.Upload.ImageSizes))
-	keys := imageSizeObjectKeys(collection, prefix, sourceType)
+	keys := imageSizeObjectKeys(collection, prefix, sourceType, source)
 	for index, configured := range collection.Upload.ImageSizes {
 		if err := validateImageDimensions(configured.Width, configured.Height); err != nil {
 			return nil, fmt.Errorf("image size %q: %w", configured.Name, err)
 		}
 		resized := resize(source, configured.Width, configured.Height, configured.Fit, focalX, focalY)
-		outputType := imageOutputType(sourceType)
+		outputType := imageOutputType(sourceType, source, configured.Fit)
 		output, err := encodeImage(resized, outputType)
 		if err != nil {
 			return nil, fmt.Errorf("encode image size %q: %w", configured.Name, err)
@@ -564,20 +567,22 @@ func (manager Manager) storeImageSizes(ctx context.Context, collection schema.Co
 		if err := manager.Backend.Put(ctx, sizeKey, bytes.NewReader(output), int64(len(output)), outputType); err != nil {
 			return nil, fmt.Errorf("store image size %q: %w", configured.Name, err)
 		}
+		// An inside size keeps the picture's own shape, so it can be smaller than the box.
+		bounds := resized.Bounds()
 		sizes[configured.Name] = store.Object(store.Values{
-			"url": store.String(deliveryURL(collection.Slug, sizeKey)), "width": store.Number(float64(configured.Width)),
-			"height": store.Number(float64(configured.Height)), "mimeType": store.String(outputType),
+			"url": store.String(deliveryURL(collection.Slug, sizeKey)), "width": store.Number(float64(bounds.Dx())),
+			"height": store.Number(float64(bounds.Dy())), "mimeType": store.String(outputType),
 			"filesize": store.Number(float64(len(output))), "objectKey": store.String(sizeKey),
 		})
 	}
 	return sizes, nil
 }
 
-func imageSizeObjectKeys(collection schema.Collection, prefix, sourceType string) []string {
+func imageSizeObjectKeys(collection schema.Collection, prefix, sourceType string, source image.Image) []string {
 	keys := make([]string, len(collection.Upload.ImageSizes))
 	for index, configured := range collection.Upload.ImageSizes {
 		extension := ".jpg"
-		if imageOutputType(sourceType) == "image/png" {
+		if imageOutputType(sourceType, source, configured.Fit) == "image/png" {
 			extension = ".png"
 		}
 		keys[index] = prefix + "/sizes/" + configured.Name + extension
@@ -712,8 +717,16 @@ func Filename(original, contentType string) string {
 	return name
 }
 
-func imageOutputType(sourceType string) string {
+// imageOutputType is the format of an image size. JPEG stays JPEG. A lossy
+// WebP without an alpha channel, which decodes to YCbCr, is a photo and far
+// smaller as JPEG than as PNG; Go can't encode WebP. Other formats, a lossless
+// or transparent WebP, and a contain size, whose padding is transparent, are
+// PNG, so screenshots and graphics stay sharp.
+func imageOutputType(sourceType string, source image.Image, fit string) string {
 	if sourceType == "image/jpeg" {
+		return "image/jpeg"
+	}
+	if _, lossy := source.(*image.YCbCr); lossy && sourceType == "image/webp" && fit != "contain" {
 		return "image/jpeg"
 	}
 	return "image/png"
@@ -733,10 +746,23 @@ func encodeImage(source image.Image, contentType string) ([]byte, error) {
 // resize makes one image size. imaging resamples in two passes through an
 // NRGBA intermediate as wide as the result and as tall as the source, four
 // bytes a pixel, where golang.org/x/image/draw kept 32 bytes a pixel.
+//
+// cover fills width×height, cropping around the focal point. contain fits the
+// picture inside width×height and pads the rest of that canvas, as sharp and
+// Payload do. inside fits the picture inside width×height at its own shape,
+// without padding, and never enlarges it.
 func resize(source image.Image, width, height int, fit string, focalX, focalY float64) image.Image {
-	target := image.NewRGBA(image.Rect(0, 0, width, height))
 	bounds := source.Bounds()
 	sourceWidth, sourceHeight := float64(bounds.Dx()), float64(bounds.Dy())
+	if fit == "inside" {
+		scale := min(1, float64(width)/sourceWidth, float64(height)/sourceHeight)
+		if scale == 1 {
+			return source
+		}
+		w, h := max(1, min(width, int(math.Round(sourceWidth*scale)))), max(1, min(height, int(math.Round(sourceHeight*scale))))
+		return imaging.Resize(source, w, h, imaging.CatmullRom)
+	}
+	target := image.NewRGBA(image.Rect(0, 0, width, height))
 	if fit == "contain" {
 		scale := min(float64(width)/sourceWidth, float64(height)/sourceHeight)
 		w, h := max(1, int(math.Round(sourceWidth*scale))), max(1, int(math.Round(sourceHeight*scale)))

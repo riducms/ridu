@@ -528,6 +528,53 @@ func TestClientIPWalksTrustedForwardingChainFromNearestHop(t *testing.T) {
 	}
 }
 
+// Railway's proxies connect from 100.64.0.0/10 and rewrite X-Forwarded-For as
+// "<visitor>, <edge>" from edge addresses it doesn't publish.
+func TestClientIPTrustsCountedProxyHops(t *testing.T) {
+	railway := []netip.Prefix{netip.MustParsePrefix("100.64.0.0/10")}
+	tests := []struct {
+		name, remote, chain, want string
+		hops                      int
+	}{
+		{name: "without hops the edge is the client", remote: "100.64.1.2:123", chain: "203.0.113.9, 152.233.4.5", want: "152.233.4.5"},
+		{name: "two hops reach the visitor", hops: 2, remote: "100.64.1.2:123", chain: "203.0.113.9, 152.233.4.5", want: "203.0.113.9"},
+		{name: "a spoofed prefix stays out of reach", hops: 2, remote: "100.64.1.2:123", chain: "1.1.1.1, 203.0.113.9, 152.233.4.5", want: "203.0.113.9"},
+		{name: "an untrusted peer can't use hops", hops: 2, remote: "203.0.113.4:123", chain: "1.1.1.1, 198.51.100.7", want: "203.0.113.4"},
+		{name: "a short chain returns its leftmost address", hops: 3, remote: "100.64.1.2:123", chain: "152.233.4.5", want: "152.233.4.5"},
+		{name: "one hop trusts only the listed networks", hops: 1, remote: "100.64.1.2:123", chain: "203.0.113.9, 152.233.4.5", want: "152.233.4.5"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			api := &API{config: Config{TrustedProxies: railway, TrustedProxyHops: test.hops}}
+			request := httptest.NewRequest(http.MethodGet, "http://app.example.test/healthz", nil)
+			request.RemoteAddr = test.remote
+			request.Header.Set("X-Forwarded-For", test.chain)
+			if got := api.clientIP(request); got != test.want {
+				t.Fatalf("client IP = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestForwardedWithoutProtoFallsBackToForwardedProto(t *testing.T) {
+	trusted := []netip.Prefix{netip.MustParsePrefix("100.64.0.0/10")}
+	for _, test := range []struct{ forwarded, forwardedProto, want string }{
+		{forwarded: "for=203.0.113.9", forwardedProto: "https", want: "https"},
+		{forwarded: "for=203.0.113.9;proto=https", forwardedProto: "http", want: "https"},
+		{forwarded: "for=203.0.113.9", want: "http"},
+	} {
+		request := httptest.NewRequest(http.MethodGet, "http://app.example.test/", nil)
+		request.RemoteAddr = "100.64.1.2:123"
+		request.Header.Set("Forwarded", test.forwarded)
+		if test.forwardedProto != "" {
+			request.Header.Set("X-Forwarded-Proto", test.forwardedProto)
+		}
+		if got := effectiveRequestScheme(request, trusted); got != test.want {
+			t.Errorf("Forwarded %q, X-Forwarded-Proto %q: scheme = %q, want %q", test.forwarded, test.forwardedProto, got, test.want)
+		}
+	}
+}
+
 func TestPluginBodiesAreBoundedAndPanicsAreRedacted(t *testing.T) {
 	var diagnostic RequestErrorEvent
 	handler := New(Config{

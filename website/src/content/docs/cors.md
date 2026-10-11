@@ -206,6 +206,11 @@ host sends that origin. No other origin is accepted this way, a forwarded scheme
 untrusted address is still ignored, and an HTTP origin on an HTTPS request is refused. Keep
 `AllowedHosts` aligned with the public API hostname as a separate host-header defense.
 
+When the platform's proxies that connect to Ridu have addresses you can list, trust them and set
+`RIDU_TRUSTED_PROXY_HOPS` to count the edge in front of them. Ridu then follows the scheme the
+proxies report and sees each visitor's address. The
+[Railway guide](/docs/production/railway/#variables) shows this setup.
+
 ## Diagnose a blocked request {#troubleshooting}
 
 Use the browser network panel to inspect the preflight and the API response, then match the stable

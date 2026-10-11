@@ -165,6 +165,9 @@ type Config struct {
 	AllowedRequestHeaders        []string
 	AllowedHosts                 []string
 	TrustedProxies               []netip.Prefix
+	// TrustedProxyHops counts the proxies in front of a trusted peer, the
+	// peer included, whose addresses can't be listed. See clientIP.
+	TrustedProxyHops             int
 	AuthRateLimit                int
 	AuthRateWindow               time.Duration
 	Audit                        func(AuditEvent)
@@ -372,7 +375,7 @@ func New(config Config) http.Handler {
 	for _, endpoint := range config.PluginTransports {
 		api.pluginTransports[endpoint.Method+" "+endpoint.Path] = endpoint
 	}
-	return http.HandlerFunc(api.serveHTTP)
+	return compressResponses(http.HandlerFunc(api.serveHTTP))
 }
 
 func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -2930,11 +2933,10 @@ func effectiveRequestScheme(request *http.Request, trusted []netip.Prefix) strin
 	if !remoteRequestTrusted(request, trusted) {
 		return "http"
 	}
-	if forwarded := request.Header.Get("Forwarded"); forwarded != "" {
-		if scheme, ok := forwardedProto(forwarded); ok {
-			return scheme
-		}
-		return "http"
+	// Some proxies, such as Railway's, pass a visitor's own Forwarded header on
+	// and report the scheme only in X-Forwarded-Proto.
+	if scheme, ok := forwardedProto(request.Header.Get("Forwarded")); ok {
+		return scheme
 	}
 	if forwarded := request.Header.Get("X-Forwarded-Proto"); forwarded != "" {
 		parts := strings.Split(forwarded, ",")
@@ -3027,6 +3029,11 @@ func validHeaderName(value string) bool {
 	return true
 }
 
+// clientIP is the peer address, or, when the peer is a trusted proxy, the
+// nearest X-Forwarded-For address that isn't a trusted proxy. With
+// TrustedProxyHops, the first TrustedProxyHops-1 addresses before the peer are
+// proxies whatever their address, as for a platform that doesn't publish its
+// edge addresses but always rewrites the header.
 func (api *API) clientIP(request *http.Request) string {
 	host, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err != nil {
@@ -3038,6 +3045,7 @@ func (api *API) clientIP(request *http.Request) string {
 	}
 	if addressError == nil && addressTrusted(address, api.config.TrustedProxies) {
 		current := address
+		proxies := api.config.TrustedProxyHops - 1
 		chain := strings.Split(request.Header.Get("X-Forwarded-For"), ",")
 		for index := len(chain) - 1; index >= 0; index-- {
 			forwarded, err := netip.ParseAddr(strings.TrimSpace(chain[index]))
@@ -3046,6 +3054,10 @@ func (api *API) clientIP(request *http.Request) string {
 			}
 			forwarded = forwarded.Unmap()
 			current = forwarded
+			if proxies > 0 {
+				proxies--
+				continue
+			}
 			if !addressTrusted(forwarded, api.config.TrustedProxies) {
 				return forwarded.String()
 			}

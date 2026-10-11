@@ -80,7 +80,7 @@ func validateMongoUploadCollectionMetadata(collection schema.Collection) error {
 	var aggregatePixels int64
 	for _, size := range settings.ImageSizes {
 		pixels := int64(size.Width) * int64(size.Height)
-		if !schema.IsValidPluginKey(size.Name) || size.Width < 1 || size.Height < 1 || size.Width > 20_000 || size.Height > 20_000 || pixels > 40_000_000 || size.Fit != "cover" && size.Fit != "contain" {
+		if !schema.IsValidPluginKey(size.Name) || size.Width < 1 || size.Height < 1 || size.Width > 20_000 || size.Height > 20_000 || pixels > 40_000_000 || size.Fit != "cover" && size.Fit != "contain" && size.Fit != "inside" {
 			return fmt.Errorf("MongoDB upload collection %q has invalid image-size metadata", collection.ID)
 		}
 		if _, duplicate := seenSizes[size.Name]; duplicate {

@@ -1718,6 +1718,11 @@
 							"description": "Lists proxies whose forwarded client addresses may be trusted."
 						},
 						{
+							"name": "TrustedProxyHops",
+							"type": "int",
+							"description": "TrustedProxyHops counts the proxies a request passes through, the one\nin TrustedProxyCIDRs that connects to Ridu included, when the others\ncan't be listed. For a request from a trusted proxy, Ridu treats the\nlast TrustedProxyHops-1 X-Forwarded-For addresses as proxies too and\ntakes the client address from before them. Use it only when every proxy\nrewrites or appends to X-Forwarded-For, such as Railway's (2). Zero and\none trust only TrustedProxyCIDRs; it has no effect without them."
+						},
+						{
 							"name": "AuthRateLimit",
 							"type": "int",
 							"description": "Sets maximum auth attempts per identity and client window."
@@ -9073,7 +9078,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.22.0\"",
+					"signature": "const FrameworkVersion = \"0.23.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -12160,7 +12165,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 157
+						"line": 166
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -17767,7 +17772,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 389
+						"line": 397
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -18791,7 +18796,7 @@
 					"kind": "type",
 					"group": "Uploads",
 					"summary": "One named derived image variant and fit policy.",
-					"signature": "type ImageSize struct {\n\t// Name is the stable key used to address the generated variant.\n\tName string\n\t// Width is the target width in pixels.\n\tWidth int\n\t// Height is the target height in pixels.\n\tHeight int\n\t// Fit controls resizing and must be either \"cover\" or \"contain\".\n\tFit string\n}",
+					"signature": "type ImageSize struct {\n\t// Name is the stable key used to address the generated variant.\n\tName string\n\t// Width is the target width in pixels.\n\tWidth int\n\t// Height is the target height in pixels.\n\tHeight int\n\t// Fit controls resizing: \"cover\" (the default) fills Width×Height,\n\t// cropping around the focal point. \"inside\" fits the picture within\n\t// Width×Height at its own shape and never enlarges it, so the size's\n\t// stored width and height can be smaller. \"contain\" fits it within\n\t// Width×Height and pads the rest of that canvas: transparent in PNG,\n\t// black in JPEG.\n\tFit string\n}",
 					"parameters": [
 						{
 							"name": "Name",
@@ -18825,7 +18830,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 367
+						"line": 370
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -18905,7 +18910,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 98
+						"line": 106
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -18972,7 +18977,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 101
+						"line": 109
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -18985,7 +18990,7 @@
 					"kind": "type",
 					"group": "Runtime",
 					"summary": "Transport timing and response metadata for one completed request.",
-					"signature": "type RequestObservation struct {\n\t// Time is when the observation was recorded.\n\tTime time.Time\n\t// RequestID correlates the observation with audit events and logs.\n\tRequestID string\n\t// Method is the HTTP request method.\n\tMethod string\n\t// Path is the requested URL path.\n\tPath string\n\t// Status is the HTTP response status code.\n\tStatus int\n\t// ErrorCode is the stable public Ridu code for a failed request.\n\tErrorCode string\n\t// ErrorReason is the specific code behind ErrorCode, such as origin_denied\n\t// behind access_denied or body_too_large behind bad_request. Responses\n\t// carry only ErrorCode; use ErrorReason for monitoring and alerts.\n\tErrorReason string\n\t// ResponseBytes is the number of response-body bytes written.\n\tResponseBytes int64\n\t// Duration is the total handler execution time.\n\tDuration time.Duration\n}",
+					"signature": "type RequestObservation struct {\n\t// Time is when the observation was recorded.\n\tTime time.Time\n\t// RequestID correlates the observation with audit events and logs.\n\tRequestID string\n\t// Method is the HTTP request method.\n\tMethod string\n\t// Path is the requested URL path.\n\tPath string\n\t// Status is the HTTP response status code.\n\tStatus int\n\t// ErrorCode is the stable public Ridu code for a failed request.\n\tErrorCode string\n\t// ErrorReason is the specific code behind ErrorCode, such as origin_denied\n\t// behind access_denied or body_too_large behind bad_request. Responses\n\t// carry only ErrorCode; use ErrorReason for monitoring and alerts.\n\tErrorReason string\n\t// ResponseBytes is the number of response-body bytes the handler wrote,\n\t// before compression.\n\tResponseBytes int64\n\t// Duration is the total handler execution time.\n\tDuration time.Duration\n}",
 					"parameters": [
 						{
 							"name": "Time",
@@ -19044,7 +19049,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 121
+						"line": 129
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -19108,7 +19113,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 146
+						"line": 155
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21074,7 +21079,7 @@
 					"kind": "type",
 					"group": "Uploads",
 					"summary": "Validation and object-storage behavior for an upload collection.",
-					"signature": "type UploadConfig struct {\n\t// MaxFileSize is the maximum accepted upload size in bytes. Zero uses the\n\t// framework default; values above 256 MiB are rejected so one request cannot\n\t// bypass the process-wide upload work budget.\n\tMaxFileSize int64\n\t// MimeTypes restricts uploads to the listed media types. Empty accepts any supported type.\n\tMimeTypes []string\n\t// Private requires authorized delivery instead of exposing storage objects publicly.\n\tPrivate bool\n\t// ImageSizes declares derived image variants generated from supported image uploads.\n\tImageSizes []ImageSize\n\t// MaxImageDimension scales a JPEG or PNG original wider or taller than this\n\t// many pixels down to fit before it is stored. The scaled image replaces\n\t// the original, including the private source later crops start from, and\n\t// image sizes are made from it. Zero keeps originals at their uploaded\n\t// size. It must be at least the width and height of every image size.\n\tMaxImageDimension int\n}",
+					"signature": "type UploadConfig struct {\n\t// MaxFileSize is the maximum accepted upload size in bytes. Zero uses the\n\t// framework default; values above 256 MiB are rejected so one request cannot\n\t// bypass the process-wide upload work budget.\n\tMaxFileSize int64\n\t// MimeTypes restricts uploads to the listed media types. Empty accepts any supported type.\n\tMimeTypes []string\n\t// Private requires a signed-in caller to download files, on top of the\n\t// collection's read access. Every download is checked against read access\n\t// and sent as private, no-store whether or not Private is set, so leave it\n\t// off when read access lets visitors download the files.\n\tPrivate bool\n\t// ImageSizes declares derived image variants generated from supported image uploads.\n\tImageSizes []ImageSize\n\t// MaxImageDimension scales a JPEG or PNG original wider or taller than this\n\t// many pixels down to fit before it is stored. The scaled image replaces\n\t// the original, including the private source later crops start from, and\n\t// image sizes are made from it. Zero keeps originals at their uploaded\n\t// size. It must be at least the width and height of every image size.\n\tMaxImageDimension int\n}",
 					"parameters": [
 						{
 							"name": "MaxFileSize",
@@ -21155,7 +21160,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 379
+						"line": 387
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21331,7 +21336,7 @@
 					"kind": "type",
 					"group": "Runtime",
 					"summary": "HTTP API, embedded admin, observability, security, and worker configuration.",
-					"signature": "type HandlerOptions struct {\n\n\t// AdminAssets overrides the framework's embedded admin asset filesystem.\n\tAdminAssets fs.FS\n\t// MaxBodyBytes limits decoded request bodies. Zero uses the framework default.\n\tMaxBodyBytes int64\n\t// SecureCookies restricts auth cookies to HTTPS requests.\n\tSecureCookies bool\n\t// AllowedOrigins lists browser origins permitted by CORS.\n\tAllowedOrigins []string\n\t// AllowedRequestHeaders appends application-owned CORS request headers to\n\t// Ridu's SDK headers. Invalid HTTP token names are ignored.\n\tAllowedRequestHeaders []string\n\t// AllowedHosts restricts the HTTP Host header. Entries are exact hostnames\n\t// with an optional port; an entry without a port accepts any port. Empty\n\t// accepts every syntactically valid host for development. Production\n\t// deployments should set their public hostnames.\n\tAllowedHosts []string\n\t// TrustedProxyCIDRs lists proxies whose forwarded client addresses are trusted.\n\tTrustedProxyCIDRs []string\n\t// AuthRateLimit is the maximum auth attempts per identity and client window.\n\tAuthRateLimit int\n\t// AuthRateWindow is the duration over which AuthRateLimit is enforced.\n\tAuthRateWindow time.Duration\n\t// Audit receives security-relevant application events.\n\tAudit func(AuditEvent)\n\t// Observe receives timing and status metadata for completed requests.\n\tObserve func(RequestObservation)\n\t// RequestError receives trusted diagnostic detail for internal failures and\n\t// recovered panics. The HTTP response remains redacted.\n\tRequestError func(RequestErrorEvent)\n\t// RequestTimeout limits request execution. Zero uses the framework default;\n\t// a negative duration disables the handler deadline for streaming plugins.\n\tRequestTimeout time.Duration\n\t// ReadinessChecks add application/plugin dependencies to /readyz. Checks\n\t// must be read-only, repeatable, and honor Context cancellation.\n\tReadinessChecks []ReadinessCheck\n\t// ReadinessTimeout bounds the complete database, storage, and custom\n\t// readiness probe. Zero uses five seconds; a negative duration disables it.\n\tReadinessTimeout time.Duration\n\t// ContentSecurityPolicy overrides the framework admin policy. Empty uses a\n\t// conservative default compatible with live-preview frames.\n\tContentSecurityPolicy string\n\t// DisableContentSecurityPolicy explicitly disables the admin CSP when an\n\t// upstream gateway owns it.\n\tDisableContentSecurityPolicy bool\n\t// StrictTransportSecurity is emitted verbatim when non-empty. Configure it\n\t// only when every public request is HTTPS, normally at the TLS terminator.\n\tStrictTransportSecurity string\n\t// TaskInterval controls how often the durable task queues are polled. Zero\n\t// uses the framework default.\n\tTaskInterval time.Duration\n\t// TaskBatch limits durable task leases claimed during one polling cycle.\n\tTaskBatch int\n\t// TaskQueues optionally restricts this process to named queues. An empty\n\t// list consumes every queue, including unknown task slugs so they can be\n\t// moved to a stable terminal failure.\n\tTaskQueues []string\n\t// TaskLeaseDuration is extended by heartbeats while a handler is running.\n\tTaskLeaseDuration time.Duration\n\t// TaskHeartbeatInterval must remain shorter than TaskLeaseDuration.\n\tTaskHeartbeatInterval time.Duration\n\t// TaskPruneBatch bounds terminal records removed after their retention.\n\tTaskPruneBatch int\n\t// AuthPruneBatch bounds expired sessions and API keys removed from each\n\t// durable credential family during one background maintenance cycle.\n\tAuthPruneBatch int\n\t// JobError receives failures from scheduled background work.\n\tJobError func(error)\n\t// contains filtered or unexported fields\n}",
+					"signature": "type HandlerOptions struct {\n\n\t// AdminAssets overrides the framework's embedded admin asset filesystem.\n\tAdminAssets fs.FS\n\t// MaxBodyBytes limits decoded request bodies. Zero uses the framework default.\n\tMaxBodyBytes int64\n\t// SecureCookies restricts auth cookies to HTTPS requests.\n\tSecureCookies bool\n\t// AllowedOrigins lists browser origins permitted by CORS.\n\tAllowedOrigins []string\n\t// AllowedRequestHeaders appends application-owned CORS request headers to\n\t// Ridu's SDK headers. Invalid HTTP token names are ignored.\n\tAllowedRequestHeaders []string\n\t// AllowedHosts restricts the HTTP Host header. Entries are exact hostnames\n\t// with an optional port; an entry without a port accepts any port. Empty\n\t// accepts every syntactically valid host for development. Production\n\t// deployments should set their public hostnames.\n\tAllowedHosts []string\n\t// TrustedProxyCIDRs lists proxies whose forwarded client addresses are trusted.\n\tTrustedProxyCIDRs []string\n\t// TrustedProxyHops counts the proxies a request passes through, the one\n\t// in TrustedProxyCIDRs that connects to Ridu included, when the others\n\t// can't be listed. For a request from a trusted proxy, Ridu treats the\n\t// last TrustedProxyHops-1 X-Forwarded-For addresses as proxies too and\n\t// takes the client address from before them. Use it only when every proxy\n\t// rewrites or appends to X-Forwarded-For, such as Railway's (2). Zero and\n\t// one trust only TrustedProxyCIDRs; it has no effect without them.\n\tTrustedProxyHops int\n\t// AuthRateLimit is the maximum auth attempts per identity and client window.\n\tAuthRateLimit int\n\t// AuthRateWindow is the duration over which AuthRateLimit is enforced.\n\tAuthRateWindow time.Duration\n\t// Audit receives security-relevant application events.\n\tAudit func(AuditEvent)\n\t// Observe receives timing and status metadata for completed requests.\n\tObserve func(RequestObservation)\n\t// RequestError receives trusted diagnostic detail for internal failures and\n\t// recovered panics. The HTTP response remains redacted.\n\tRequestError func(RequestErrorEvent)\n\t// RequestTimeout limits request execution. Zero uses the framework default;\n\t// a negative duration disables the handler deadline for streaming plugins.\n\tRequestTimeout time.Duration\n\t// ReadinessChecks add application/plugin dependencies to /readyz. Checks\n\t// must be read-only, repeatable, and honor Context cancellation.\n\tReadinessChecks []ReadinessCheck\n\t// ReadinessTimeout bounds the complete database, storage, and custom\n\t// readiness probe. Zero uses five seconds; a negative duration disables it.\n\tReadinessTimeout time.Duration\n\t// ContentSecurityPolicy overrides the framework admin policy. Empty uses a\n\t// conservative default compatible with live-preview frames.\n\tContentSecurityPolicy string\n\t// DisableContentSecurityPolicy explicitly disables the admin CSP when an\n\t// upstream gateway owns it.\n\tDisableContentSecurityPolicy bool\n\t// StrictTransportSecurity is emitted verbatim when non-empty. Configure it\n\t// only when every public request is HTTPS, normally at the TLS terminator.\n\tStrictTransportSecurity string\n\t// TaskInterval controls how often the durable task queues are polled. Zero\n\t// uses the framework default.\n\tTaskInterval time.Duration\n\t// TaskBatch limits durable task leases claimed during one polling cycle.\n\tTaskBatch int\n\t// TaskQueues optionally restricts this process to named queues. An empty\n\t// list consumes every queue, including unknown task slugs so they can be\n\t// moved to a stable terminal failure.\n\tTaskQueues []string\n\t// TaskLeaseDuration is extended by heartbeats while a handler is running.\n\tTaskLeaseDuration time.Duration\n\t// TaskHeartbeatInterval must remain shorter than TaskLeaseDuration.\n\tTaskHeartbeatInterval time.Duration\n\t// TaskPruneBatch bounds terminal records removed after their retention.\n\tTaskPruneBatch int\n\t// AuthPruneBatch bounds expired sessions and API keys removed from each\n\t// durable credential family during one background maintenance cycle.\n\tAuthPruneBatch int\n\t// JobError receives failures from scheduled background work.\n\tJobError func(error)\n\t// contains filtered or unexported fields\n}",
 					"parameters": [
 						{
 							"name": "AdminAssets",
@@ -21367,6 +21372,11 @@
 							"name": "TrustedProxyCIDRs",
 							"type": "[]string",
 							"description": "Lists proxies whose forwarded client addresses may be trusted."
+						},
+						{
+							"name": "TrustedProxyHops",
+							"type": "int",
+							"description": "TrustedProxyHops counts the proxies a request passes through, the one\nin TrustedProxyCIDRs that connects to Ridu included, when the others\ncan't be listed. For a request from a trusted proxy, Ridu treats the\nlast TrustedProxyHops-1 X-Forwarded-For addresses as proxies too and\ntakes the client address from before them. Use it only when every proxy\nrewrites or appends to X-Forwarded-For, such as Railway's (2). Zero and\none trust only TrustedProxyCIDRs; it has no effect without them."
 						},
 						{
 							"name": "AuthRateLimit",
@@ -21702,7 +21712,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 402
+						"line": 410
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119615,7 +119625,7 @@
 						},
 						{
 							"name": "fit",
-							"type": "\"cover\" | \"contain\"",
+							"type": "\"cover\" | \"contain\" | \"inside\"",
 							"description": "The fit value."
 						}
 					],

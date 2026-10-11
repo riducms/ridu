@@ -93,6 +93,10 @@ rebuilds an equal object still supplies new backing, a changed wide root may nee
 and requested population still performs access-checked target reads. Use an application or edge
 cache only when its invalidation and authorization model are explicit.
 
+Across the network, Ridu gzips read responses of 1 KiB or more, such as collection pages, the
+schema and the admin's pages, for clients that accept gzip; see
+[Harden HTTP and proxies](/docs/production/#http).
+
 ## Avoid performance shortcuts that change behavior {#safe-optimizations}
 
 | Shortcut                                    | Problem                                                                                              | Use instead                                                                 |

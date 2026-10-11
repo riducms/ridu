@@ -43,6 +43,14 @@ type HandlerOptions struct {
 	AllowedHosts []string
 	// TrustedProxyCIDRs lists proxies whose forwarded client addresses are trusted.
 	TrustedProxyCIDRs []string
+	// TrustedProxyHops counts the proxies a request passes through, the one
+	// in TrustedProxyCIDRs that connects to Ridu included, when the others
+	// can't be listed. For a request from a trusted proxy, Ridu treats the
+	// last TrustedProxyHops-1 X-Forwarded-For addresses as proxies too and
+	// takes the client address from before them. Use it only when every proxy
+	// rewrites or appends to X-Forwarded-For, such as Railway's (2). Zero and
+	// one trust only TrustedProxyCIDRs; it has no effect without them.
+	TrustedProxyHops int
 	// AuthRateLimit is the maximum auth attempts per identity and client window.
 	AuthRateLimit int
 	// AuthRateWindow is the duration over which AuthRateLimit is enforced.
@@ -135,7 +143,8 @@ type RequestObservation struct {
 	// behind access_denied or body_too_large behind bad_request. Responses
 	// carry only ErrorCode; use ErrorReason for monitoring and alerts.
 	ErrorReason string
-	// ResponseBytes is the number of response-body bytes written.
+	// ResponseBytes is the number of response-body bytes the handler wrote,
+	// before compression.
 	ResponseBytes int64
 	// Duration is the total handler execution time.
 	Duration time.Duration
@@ -224,7 +233,7 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		LocalizationForRequest: application.localizationForRequest(),
 		AdminAssets:            assets,
 		MaxBodyBytes:           options.MaxBodyBytes, SecureCookies: options.SecureCookies,
-		AllowedOrigins: append([]string(nil), options.AllowedOrigins...), AllowedRequestHeaders: append([]string(nil), options.AllowedRequestHeaders...), AllowedHosts: append([]string(nil), options.AllowedHosts...), TrustedProxies: trusted,
+		AllowedOrigins: append([]string(nil), options.AllowedOrigins...), AllowedRequestHeaders: append([]string(nil), options.AllowedRequestHeaders...), AllowedHosts: append([]string(nil), options.AllowedHosts...), TrustedProxies: trusted, TrustedProxyHops: options.TrustedProxyHops,
 		AuthRateLimit: options.AuthRateLimit, AuthRateWindow: options.AuthRateWindow,
 		Login: func(ctx context.Context, collection, email, password string, metadata httpapi.LoginMetadata) (httpapi.AuthSession, error) {
 			session, err := application.LoginWithOptions(ctx, collection, email, password, LoginOptions{IPAddress: metadata.IPAddress, UserAgent: metadata.UserAgent})

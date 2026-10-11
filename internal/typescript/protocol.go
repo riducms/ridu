@@ -804,7 +804,7 @@ export interface SchemaImageSize {
 	name: string;
 	width: number;
 	height: number;
-	fit: "cover" | "contain";
+	fit: "cover" | "contain" | "inside";
 }
 
 export interface SchemaVersionSettings {

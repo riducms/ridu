@@ -72,9 +72,23 @@ var Media = ridu.Collection{
 ```
 
 The `media` collection now accepts images up to 10 MiB. JPEG and PNG originals are retained,
-and Ridu generates `card` and `thumb` JPEG variants. `Fit: "cover"` fills the requested dimensions
-by cropping around the image's focal point; use `"contain"` when the complete image must remain
-visible.
+and Ridu generates `card` and `thumb` JPEG variants. Every download is checked against the
+collection's read access; `Private: true` also requires a signed-in caller, so leave it off when
+read access lets visitors download the files.
+
+Each image size's `Fit` decides its shape:
+
+| `Fit`               | Result                                                                                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"cover"` (default) | Exactly `Width` × `Height`, cropped around the image's focal point.                                                                                                                   |
+| `"inside"`          | The complete image at its own shape, scaled down to fit within `Width` × `Height` and never enlarged. The size's stored `width` and `height` are the picture's, which can be smaller. |
+| `"contain"`         | The complete image scaled to fit within `Width` × `Height`, centred on a canvas of exactly that size. The rest of the canvas is transparent in a PNG and black in a JPEG.             |
+
+Use `"inside"` to show a whole photo, for example in a gallery or attachment. Sizes made from a JPEG
+are JPEG, so a `"contain"` canvas is padded in black. Sizes made from a lossy WebP without
+transparency, the usual way to save a photo as WebP, are also JPEG, which is much smaller than PNG
+for a photo, except `"contain"` sizes, whose padding needs PNG's transparency; Go can't write WebP.
+Sizes made from a lossless or transparent WebP, or any other image, are PNG.
 
 Ridu adds the following server-owned fields to every upload document:
 

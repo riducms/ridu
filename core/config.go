@@ -351,7 +351,10 @@ type UploadConfig struct {
 	MaxFileSize int64
 	// MimeTypes restricts uploads to the listed media types. Empty accepts any supported type.
 	MimeTypes []string
-	// Private requires authorized delivery instead of exposing storage objects publicly.
+	// Private requires a signed-in caller to download files, on top of the
+	// collection's read access. Every download is checked against read access
+	// and sent as private, no-store whether or not Private is set, so leave it
+	// off when read access lets visitors download the files.
 	Private bool
 	// ImageSizes declares derived image variants generated from supported image uploads.
 	ImageSizes []ImageSize
@@ -371,7 +374,12 @@ type ImageSize struct {
 	Width int
 	// Height is the target height in pixels.
 	Height int
-	// Fit controls resizing and must be either "cover" or "contain".
+	// Fit controls resizing: "cover" (the default) fills Width×Height,
+	// cropping around the focal point. "inside" fits the picture within
+	// Width×Height at its own shape and never enlarges it, so the size's
+	// stored width and height can be smaller. "contain" fits it within
+	// Width×Height and pads the rest of that canvas: transparent in PNG,
+	// black in JPEG.
 	Fit string
 }
 

@@ -73,6 +73,7 @@ func runtimeOptions(applicationConfig ridu.Config{{if .MongoDB}}, internalDevelo
 			AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS"),
 			AllowedHosts:            envList("RIDU_ALLOWED_HOSTS"),
 			TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS"),
+			TrustedProxyHops:        envInt("RIDU_TRUSTED_PROXY_HOPS"),
 			ReadinessTimeout:        envDuration("RIDU_READINESS_TIMEOUT"),
 			StrictTransportSecurity: os.Getenv("RIDU_STRICT_TRANSPORT_SECURITY"),
 		}),
@@ -136,6 +137,18 @@ func serverAddress() string {
 	value, err := strconv.ParseBool(raw)
 	if err != nil {
 		log.Fatalf("%s must be a boolean: %v", name, err)
+	}
+	return value
+}
+
+func envInt(name string) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		log.Fatalf("%s must be a whole number of zero or more", name)
 	}
 	return value
 }

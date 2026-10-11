@@ -322,6 +322,7 @@ defaults when an environment value is absent:
 | `RIDU_ALLOWED_HOSTS` | Comma-separated public hostnames, with optional ports. Set it in production because an empty list accepts every syntactically valid host for development compatibility. |
 | `RIDU_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to make cross-origin SDK requests. Same-origin admin traffic does not need an entry. |
 | `RIDU_TRUSTED_PROXY_CIDRS` | Only the immediate reverse-proxy networks allowed to supply forwarded client/proto information. Leave empty when the Go process is directly exposed. |
+| `RIDU_TRUSTED_PROXY_HOPS` | Optional count of the proxies each request passes through, the trusted one included, when the others can't be listed. Ridu then reads the client address from before them in `X-Forwarded-For`, so sign-in limits apply per visitor. Railway uses `2`. |
 | `RIDU_STRICT_TRANSPORT_SECURITY` | HSTS value emitted by Ridu. Set it only when the TLS terminator guarantees HTTPS for the complete declared scope. |
 | `RIDU_READINESS_TIMEOUT` | Optional Go duration bounding the combined database, object-storage, and application readiness probe. |
 {{if .MongoDB}}{{else}}| `RIDU_SKIP_READINESS_PREFLIGHT` | Development-only startup escape used by `ridu dev`; never set it for an ordinary production server. |
@@ -334,9 +335,12 @@ On Railway, where traffic cutover precedes termination, set
 `RIDU_READINESS_DRAIN_DELAY=-1s` and use the platform's separate drain window for in-flight work.
 
 TLS normally terminates at the platform edge. It must sanitize untrusted forwarding headers before
-sending them from one of `RIDU_TRUSTED_PROXY_CIDRS`. When the platform doesn't publish its edge
-addresses, as on Railway, leave that variable empty: Ridu then still accepts the HTTPS origin of
-the host each request names, so the admin needs no `RIDU_ALLOWED_ORIGINS` entry. Ridu enables secure cookies by default; never
+sending them from one of `RIDU_TRUSTED_PROXY_CIDRS`. On Railway, trust its proxies with
+`RIDU_TRUSTED_PROXY_CIDRS=100.64.0.0/10` and count its unpublished edge with
+`RIDU_TRUSTED_PROXY_HOPS=2`, so sign-in limits apply per visitor. When the platform's proxies can't
+be listed at all, leave both empty: Ridu then still accepts the HTTPS origin of the host each
+request names, so the admin needs no `RIDU_ALLOWED_ORIGINS` entry, but every visitor shares the
+proxy's sign-in limit. Ridu enables secure cookies by default; never
 set `RIDU_SECURE_COOKIES=false` in production. {{if .MongoDB}}`RIDU_ALLOW_INSECURE_DATABASE=true` is a
 local-development escape only. The generated MongoDB server does not read
 `RIDU_ALLOW_UNVERIFIABLE_READINESS` or `RIDU_SKIP_READINESS_PREFLIGHT`; `ridu dev` owns its private

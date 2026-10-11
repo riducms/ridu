@@ -117,6 +117,10 @@ Generated projects read the deployment topology from environment variables:
     <dd>List immediate proxy networks allowed to supply the forwarded address and scheme. Leave it empty when the Go process is directly exposed.</dd>
   </div>
   <div>
+    <dt><code>RIDU_TRUSTED_PROXY_HOPS</code></dt>
+    <dd>Count the proxies each request passes through, the trusted one that connects to Ridu included, when the others can't be listed. Ridu then takes the client address from before them in <code>X-Forwarded-For</code>, so sign-in limits apply per visitor. Set it only when every proxy rewrites or appends to that header.</dd>
+  </div>
+  <div>
     <dt><code>RIDU_STRICT_TRANSPORT_SECURITY</code></dt>
     <dd>Set the HSTS header. Use it only when HTTPS is permanent for the complete declared scope.</dd>
   </div>
@@ -195,6 +199,14 @@ ridu.WithServerOptions(ridu.ServerOptions{
 
 The framework supplies conservative defaults; customize them from measured traffic. A negative
 request timeout is an explicit streaming opt-out and must be paired with endpoint-owned bounds.
+
+Ridu gzips `GET` responses of 1 KiB or more that are JSON, HTML, CSS, JavaScript, SVG or other
+text when the client accepts gzip, and sends `Vary: Accept-Encoding`. It leaves responses under
+`/api/auth/`, and every response to other methods, uncompressed: those are the responses that can
+carry a session or preview token, and compressing a secret beside text an attacker chooses can
+reveal it through the response's length (BREACH). Custom and plugin endpoints are compressed by the
+same rules, so return secrets from `POST` endpoints, as Ridu does. A proxy in front of Ridu doesn't
+need to compress again.
 
 TLS termination must replace untrusted forwarding headers before traffic reaches a configured
 trusted proxy network. Keep CIDRs to immediate controlled hops. Secure cookies are enabled by the

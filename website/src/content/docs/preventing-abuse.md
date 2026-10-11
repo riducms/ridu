@@ -107,12 +107,13 @@ Generated projects already contain the following `HandlerOptions` block in
 `cmd/server/main.go`. Add the highlighted request and authentication limits alongside its existing
 host, origin, proxy, readiness, and HSTS settings:
 
-```go title="cmd/server/main.go" add={6-9}
+```go title="cmd/server/main.go" add={7-10}
 ridu.WithHandlerOptions(ridu.HandlerOptions{
 	AdminAssets:             adminassets.FS(),
 	AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS"),
 	AllowedHosts:            envList("RIDU_ALLOWED_HOSTS"),
 	TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS"),
+	TrustedProxyHops:        envInt("RIDU_TRUSTED_PROXY_HOPS"),
 	MaxBodyBytes:            1 << 20, // 1 × 2²⁰ = 1,048,576 bytes (1 MiB)
 	AuthRateLimit:           5,
 	AuthRateWindow:          5 * time.Minute,
@@ -140,6 +141,12 @@ Leave `RIDU_ALLOWED_ORIGINS` empty when every browser client is same-origin. Onl
 where trusted browser code runs. Configure `RIDU_TRUSTED_PROXY_CIDRS` with the immediate proxy
 networks you operate, not every possible client address. Otherwise an attacker can influence the
 scheme or client IP Ridu uses for origin checks and throttling.
+
+Sign-in limits count attempts per client address. Behind a platform whose edge addresses you can't
+list, set `RIDU_TRUSTED_PROXY_HOPS` to the number of proxies each request passes through, as the
+[Railway guide](/docs/production/railway/#variables) does. Otherwise Ridu sees the edge's address,
+and every visitor behind it shares one limit. Per-address limits don't stop an attacker who spreads
+guesses across many addresses; `MaxLoginAttempts` locks the account itself.
 
 The production executor enables secure cookies. If your application constructs `app.Handler`
 directly, set `SecureCookies: true` yourself whenever the public URL uses HTTPS.
