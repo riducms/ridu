@@ -693,6 +693,45 @@ func (harness *mongoDBProductionDeploymentHarness) startServer(
 	return server
 }
 
+// runBuiltMigration applies the project's migrations with the built Linux
+// binary alone, in the same runtime image and network as the server, as a
+// production host without the Ridu CLI would.
+func (harness *mongoDBProductionDeploymentHarness) runBuiltMigration(
+	t *testing.T,
+	project mongoDBProductionDeploymentProject,
+	binaryPath string,
+	databaseURL string,
+) string {
+	t.Helper()
+	environmentPath := filepath.Join(t.TempDir(), "migrate.env")
+	if err := os.WriteFile(environmentPath, []byte("DATABASE_URL="+databaseURL+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	name := "ridu-mongodb-migrate-" + project.template + "-" + mongoDBProductionRandomHex(t, 4)
+	t.Cleanup(func() {
+		_ = exec.Command("docker", "rm", "--force", name).Run()
+	})
+	command := exec.CommandContext(ctx, "docker",
+		"run", "--rm", "--name", name, "--network", "host", "--env-file", environmentPath,
+		"--volume", project.root+":"+mongoDBProductionContainerProjectRoot+":ro",
+		"--volume", harness.fixture.root+":"+mongoDBProductionContainerFixtureRoot+":ro",
+		"--workdir", mongoDBProductionContainerProjectRoot,
+		"--entrypoint", filepath.Join(mongoDBProductionContainerProjectRoot, filepath.ToSlash(binaryPath)),
+		harness.runtimeImage, "migrate", "up", "--advisory-lock-wait", "45s",
+	)
+	command.Dir = project.root
+	command.Env = mongoDBProductionDeploymentEnvironment(harness.environment, nil)
+	output, err := command.CombinedOutput()
+	secrets := project.database.secrets(databaseURL)
+	mongoDBProductionAssertSecretsAbsent(t, string(output), secrets...)
+	if err != nil || !strings.Contains(string(output), "Migrations are current.") {
+		t.Fatalf("built MongoDB %s binary migrate up: %v\n%s", project.template, err, mongoDBProductionRedacted(string(output), secrets...))
+	}
+	return string(output)
+}
+
 func (server *mongoDBProductionDeploymentServer) baseURL() string {
 	return "http://" + server.address
 }

@@ -106,8 +106,9 @@ later migration changes the collection, its shape no longer matches this migrati
 
 ## Register and bind it {#register}
 
-Pass your transforms to the adapter's migration driver in `cmd/server/main.go`, so every
-`ridu migrate` command can run them:
+Generated projects register the adapter's migration driver in `cmd/server/main.go`. Pass your
+transforms to it, so `ridu migrate` and the built binary's
+[`migrate up`](/docs/migrations/deploy/#binary) can run them:
 
 ```go title="cmd/server/main.go" focus={3-7}
 func main() {

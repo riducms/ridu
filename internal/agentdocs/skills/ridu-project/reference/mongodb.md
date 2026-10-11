@@ -122,7 +122,7 @@ MongoDB development needs more than replacing one `Open` call. The internal cand
 Copy the following generated pattern into `cmd/server/main.go` (retaining the project's admin asset
 and handler options):
 
-```go title="cmd/server/main.go" remove={10,26,34,38-42,77-78} add={3,11,15,19-22,27,35,43-62,79-80}
+```go title="cmd/server/main.go" remove={10,27,31,39,43-47,83-84} add={3,11,15,19-22,28,32,40,48-67,85-86}
 import (
 	"context"
 	"fmt"
@@ -146,10 +146,15 @@ func main() {
 		os.Args = os.Args[:1]
 	}
 
-	var options []ridu.ExecuteOption
+	// The migration driver lets the built binary apply its own migrations with
+	// `migrate up`, so production needs no Ridu CLI. Register data transforms here.
+	options := []ridu.ExecuteOption{
+		ridu.WithProjectMigrations(postgres.ProjectMigrations()),
+		ridu.WithProjectMigrations(mongodb.ProjectMigrations()),
+	}
 	if len(os.Args) == 1 {
-		options = runtimeOptions(applicationConfig)
-		options = runtimeOptions(applicationConfig, internalDevelopmentServer)
+		options = append(options, runtimeOptions(applicationConfig)...)
+		options = append(options, runtimeOptions(applicationConfig, internalDevelopmentServer)...)
 	}
 	if err := ridu.Execute(applicationConfig, options...); err != nil {
 		log.Fatal(err)

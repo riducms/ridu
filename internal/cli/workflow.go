@@ -469,6 +469,10 @@ func runBuild(ctx context.Context, args []string, stdout, stderr io.Writer, opti
 	} else if !filepath.IsAbs(target) {
 		target = filepath.Join(definition.Root, target)
 	}
+	if runtime.GOOS == "windows" && filepath.Ext(target) == "" {
+		// Windows runs only files with an executable extension.
+		target += ".exe"
+	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		reporter.Error("create build directory", err)
 		return 1

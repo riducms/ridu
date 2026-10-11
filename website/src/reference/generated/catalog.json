@@ -158,7 +158,7 @@
 					],
 					"source": {
 						"path": "ridu.go",
-						"line": 354
+						"line": 355
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -1923,7 +1923,7 @@
 					],
 					"source": {
 						"path": "ridu.go",
-						"line": 334
+						"line": 335
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -1964,7 +1964,7 @@
 					],
 					"source": {
 						"path": "ridu.go",
-						"line": 339
+						"line": 340
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -2047,7 +2047,7 @@
 					],
 					"source": {
 						"path": "ridu.go",
-						"line": 344
+						"line": 345
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -2088,7 +2088,7 @@
 					],
 					"source": {
 						"path": "ridu.go",
-						"line": 349
+						"line": 350
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -9078,7 +9078,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.23.0\"",
+					"signature": "const FrameworkVersion = \"0.24.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -21964,7 +21964,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 97
+						"line": 99
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22000,7 +22000,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 105
+						"line": 107
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22036,7 +22036,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 113
+						"line": 115
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22072,7 +22072,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 121
+						"line": 123
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22115,7 +22115,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 128
+						"line": 131
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],

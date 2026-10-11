@@ -28,9 +28,13 @@ import (
 	if internalDevelopmentServer {
 		os.Args = os.Args[:1]
 	}
-{{end}}	var options []ridu.ExecuteOption
+{{end}}	// The migration driver lets the built binary apply its own migrations with
+	// `migrate up`, so production needs no Ridu CLI. Register data transforms here.
+	options := []ridu.ExecuteOption{
+		ridu.WithProjectMigrations({{if .Postgres}}postgres{{else if .MongoDB}}mongodb{{else if .SQLite}}sqlite{{end}}.ProjectMigrations()),
+	}
 	if len(os.Args) == 1 {
-		options = runtimeOptions(applicationConfig{{if .MongoDB}}, internalDevelopmentServer{{end}})
+		options = append(options, runtimeOptions(applicationConfig{{if .MongoDB}}, internalDevelopmentServer{{end}})...)
 	}
 	if err := ridu.Execute(applicationConfig, options...); err != nil {
 		log.Fatal(err)

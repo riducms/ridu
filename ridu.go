@@ -329,8 +329,9 @@ func WithStore(factory StoreFactory) ExecuteOption {
 	return core.WithStore(factory)
 }
 
-// WithProjectMigrations registers an adapter-owned compiled migration driver
-// for checksum-bound application data callbacks.
+// WithProjectMigrations registers the adapter's migration driver and its
+// checksum-bound data transforms. A binary built with ridu build uses it to
+// apply its own migrations with `<binary> migrate up`.
 func WithProjectMigrations(driver migration.ProjectDriver) ExecuteOption {
 	return core.WithProjectMigrations(driver)
 }

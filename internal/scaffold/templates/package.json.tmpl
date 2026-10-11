@@ -56,7 +56,7 @@
 		"dev:admin": "{{.AdminDevCommand}}",
 		"ridu": "ridu",
 		"check": "ridu check",
-		"build": "ridu build",
+		"build": "ridu build --output dist/{{.ProjectName}}",
 		"migrate": "ridu migrate up",
 		"start": "./dist/{{.ProjectName}}"
 	}

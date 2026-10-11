@@ -137,6 +137,16 @@ dataset between adapters is an application-owned export, transform, validation, 
    `envBool` and `envInt32` parsers; copy them from a fresh `--database postgres` scaffold if the
    current entry does not already have them.
 
+   Swap the migration driver in `main` as well, so `ridu migrate` and the built binary's
+   `migrate up` use PostgreSQL. Move any data transforms to the new call:
+
+   ```go title="cmd/server/main.go" remove={2} add={3}
+   options := []ridu.ExecuteOption{
+     ridu.WithProjectMigrations(sqlite.ProjectMigrations()),
+     ridu.WithProjectMigrations(postgres.ProjectMigrations()),
+   }
+   ```
+
 3. Either copy the generated PostgreSQL service from a disposable scaffold into `compose.yaml`, or
    point at an existing PostgreSQL 17 service. The generated local service uses database/user/password
    `ridu`, host port `54329`, and `sslmode=disable`; never carry that plaintext credential into

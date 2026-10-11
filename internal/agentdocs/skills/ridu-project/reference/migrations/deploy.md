@@ -2,8 +2,9 @@
 
 # Deploy migrations
 
-The server never migrates a production database by itself. Run `ridu migrate up` as its own
-deployment step, with the same release you are about to start.
+The server never migrates a production database by itself. Run `migrate up` as its own deployment
+step, with the same release you are about to start: `ridu migrate up` from the project, or the
+built binary's own `./dist/<app> migrate up` on a host without the Ridu CLI.
 
 ## Release order {#order}
 
@@ -14,8 +15,10 @@ deployment step, with the same release you are about to start.
  3. back up                    the database and its uploads, together
  4. stop old writers           only when the pending migrations include
                                maintenance work (see below)
- 5. ridu migrate up            add --allow-maintenance after step 4
- 6. ridu migrate status        must report every migration applied
+ 5. ridu migrate up            add --allow-maintenance after step 4; or
+                               ./dist/<app> migrate up
+ 6. ridu migrate status        must report every migration applied; a host
+                               with only the binary relies on step 7
  7. start the new release      /readyz passes once the database has
                                exactly the history the binary was built with
 ```
@@ -26,6 +29,40 @@ timeouts below your deployment deadline.
 
 Use `ridu migrate plan --json` and `ridu migrate status --json` in deployment automation. Judge
 success by `status`, never by the exit of an `up` you asked to stop early.
+
+## Migrate from the built binary {#binary}
+
+A binary made by `ridu build` applies its own migrations, so the host that runs it needs no Ridu
+CLI, Go or JavaScript runtime:
+
+```sh title="terminal"
+./dist/my-app migrate up
+```
+
+It reads the artifacts from `migrations/` in the working directory, or from `--directory`, and
+applies them only when they are exactly the history the binary was built with, the same history its
+`/readyz` check requires. It selects the database like `ridu migrate up`, from `DATABASE_URL` or
+`RIDU_SQLITE_PATH` or the `--database-url` and `--database-path` flags, and takes the same
+`--allow-maintenance`, `--allow-insecure-database`, `--allow-unbounded` and timeout flags. `plan`,
+`status`, `verify` and stopping at a phase or step stay in the CLI.
+
+Where a migration runs in the same container as the server, as on a host that applies migrations
+at startup, use the binary. The CLI compiles the project before it migrates, and the files it reads
+can stay cached in the container's memory, which some hosts bill, while the server runs.
+
+The binary migrates through the adapter's migration driver, which projects created with Ridu 0.24.0
+or later register in `cmd/server/main.go`, as do older projects with
+[data transforms](./data-transforms.md). Otherwise, add it to the options passed to
+`ridu.Execute`, outside the `len(os.Args) == 1` branch:
+
+```go title="cmd/server/main.go"
+options := []ridu.ExecuteOption{
+	ridu.WithProjectMigrations(postgres.ProjectMigrations()),
+}
+if len(os.Args) == 1 {
+	options = append(options, runtimeOptions(applicationConfig)...)
+}
+```
 
 ## Maintenance work {#maintenance}
 

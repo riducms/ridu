@@ -32,18 +32,29 @@ match the source used by Railway.
 4. Generate a public domain for the Ridu service.
 
 Set these values in the Ridu service settings. Replace `bun` with the package manager selected when
-the project was created:
+the project was created, and `<project>` with the name in the `build` script's
+`--output dist/<project>`:
 
 ```text title="Railway service settings"
 Build command:      bun run build
-Pre-deploy command: bun run migrate
-Start command:      bun run start
+Pre-deploy command: ./dist/<project> migrate up
+Start command:      ./dist/<project>
 Healthcheck path:   /readyz
 ```
 
 The build command produces `dist/<project>` with the embedded admin. The pre-deploy command applies
 committed migrations before the release starts, and `/readyz` keeps traffic away until the database
 passes readiness.
+
+Both commands run the built binary itself. Its `migrate up` applies the committed `migrations/`
+without the Ridu CLI, which would compile the project with Go first, and the server runs with no
+package manager in front of it. Railway bills the memory a service uses, and a start command such
+as `bun run start` keeps Bun running beside the server. Railway's memory figure also counts the
+files a container has read, which is why the SQLite start command below migrates with the binary
+too.
+
+Projects created before Ridu 0.24.0 have a `build` script of plain `ridu build`, which names the
+binary after the directory Railway builds in. Add `--output dist/<project>` to it.
 
 The pre-deploy command has access to service variables and runs before the new application starts.
 Give it a timeout that is longer than a rehearsed migration but still fails a stuck deployment.
@@ -112,7 +123,7 @@ Railway does not mount volumes into pre-deploy containers, so run the SQLite mig
 start command instead:
 
 ```sh title="Railway start command"
-bun run migrate && exec bun run start
+./dist/<project> migrate up && exec ./dist/<project>
 ```
 
 Keep the replica count at one. A Railway volume is attached to one service replica, and Ridu's

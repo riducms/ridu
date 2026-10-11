@@ -175,6 +175,16 @@ state, uploads, and a rehearsed cutover.
    The duplicate adapter imports and return statements show the before/after change. Remove every
    red line; the finished file contains only the SQLite import and `sqlite.Open` call.
 
+   Swap the migration driver in `main` as well, so `ridu migrate` and the built binary's
+   `migrate up` use SQLite. Move any data transforms to the new call:
+
+   ```go title="cmd/server/main.go" remove={2} add={3}
+   options := []ridu.ExecuteOption{
+     ridu.WithProjectMigrations(postgres.ProjectMigrations()),
+     ridu.WithProjectMigrations(sqlite.ProjectMigrations()),
+   }
+   ```
+
    A fresh generated SQLite project contains the canonical helper, including support for an
    absolute opaque `file:` URI. Prefer copying that generated helper verbatim if you use URI paths.
 

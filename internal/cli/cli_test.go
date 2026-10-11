@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -640,6 +641,77 @@ func TestNewProjectIncludesTheMigrationRequiredByFirstBuild(t *testing.T) {
 	if !strings.Contains(stdout.String(), "Built dist/first-build") {
 		t.Fatalf("first ridu build output = %q", stdout.String())
 	}
+	proveBuiltBinaryMigrates(t, target, filepath.Join(target, "dist", "first-build"))
+}
+
+// proveBuiltBinaryMigrates runs only the built binary, as a production host
+// without the CLI, Go or a JavaScript runtime would.
+func proveBuiltBinaryMigrates(t *testing.T, root, binary string) {
+	t.Helper()
+	databasePath := filepath.Join(t.TempDir(), "production.sqlite")
+	// SQLite ignores DATABASE_URL, as the CLI and the server do.
+	environment := generatedEnvironment(map[string]string{"RIDU_SQLITE_PATH": databasePath, "DATABASE_URL": "postgres://ignored@127.0.0.1:1/ignored"})
+	migrate := func(directory string, extra ...string) (string, error) {
+		command := exec.Command(binary, append([]string{"migrate", "up", "--directory", directory}, extra...)...)
+		command.Dir = root
+		command.Env = environment
+		output, err := command.CombinedOutput()
+		return string(output), err
+	}
+	for flags, want := range map[string]string{
+		"--database-path=relative.sqlite": "must be an absolute file path",
+		"--allow-maintenance":             "SQLite migrations do not accept --allow-maintenance",
+	} {
+		if output, err := migrate("migrations", flags); err == nil || !strings.Contains(output, want) {
+			t.Fatalf("built binary migrate up %s: %v\n%s", flags, err, output)
+		}
+	}
+	// A second run finds the history already applied.
+	for range 2 {
+		if output, err := migrate("migrations"); err != nil || !strings.Contains(output, "Migrations are current.") {
+			t.Fatalf("built binary migrate up: %v\n%s", err, output)
+		}
+	}
+	// An equivalent history made separately isn't the one the binary was built with.
+	files, err := migrationartifact.ReadAll(filepath.Join(root, "migrations"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("committed history = %d files, %v", len(files), err)
+	}
+	other := t.TempDir()
+	if _, err := sqlite.CreateArtifact(context.Background(), other, "initial", schema.NewManifest(files[0].Artifact.After), time.Unix(1, 0), sqlite.ArtifactOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := migrate(other); err == nil || !strings.Contains(output, "not the history this binary was built with") {
+		t.Fatalf("built binary accepted another history: %v\n%s", err, output)
+	}
+
+	address := fmt.Sprintf("127.0.0.1:%d", freeTCPPort(t))
+	server := exec.Command(binary)
+	server.Dir = root
+	server.Env = append(environment, "RIDU_ADDRESS="+address)
+	var serverOutput bytes.Buffer
+	server.Stdout, server.Stderr = &serverOutput, &serverOutput
+	if err := server.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = server.Process.Kill()
+		_ = server.Wait()
+	})
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		response, err := http.Get("http://" + address + "/readyz")
+		if err == nil {
+			response.Body.Close()
+			if response.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("built server never became ready on the migrated database: %v\n%s", err, serverOutput.String())
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func TestNewMongoDBStarterAndBlankGenerateWithoutOpeningTheDatabase(t *testing.T) {
@@ -918,19 +990,19 @@ func TestGeneratedProjectMigratesAgainstPostgres(t *testing.T) {
 		`"github.com/riducms/ridu/adapters/postgres"`,
 		"\"github.com/riducms/ridu/adapters/postgres\"\n\t\"github.com/riducms/ridu/migration\"", 1)
 	serverText = strings.Replace(serverText,
-		"\tvar options []ridu.ExecuteOption\n\tif len(os.Args) == 1 {\n\t\toptions = runtimeOptions(applicationConfig)\n\t}",
-		"\toptions := []ridu.ExecuteOption{\n"+
-			"\t\tridu.WithProjectMigrations(postgres.ProjectMigrations(migration.DataTransform{\n"+
+		"postgres.ProjectMigrations()",
+		"postgres.ProjectMigrations(migration.DataTransform{\n"+
 			"\t\t\tDataTransformDescriptor: migration.DataTransformDescriptor{\n"+
 			"\t\t\t\tName: \"seed-data\", Checksum: migration.DataTransformChecksum([]byte(\"seed-data-v1\")),\n"+
 			"\t\t\t},\n"+
-			"\t\t\tUp: func(context.Context, migration.DataTransaction) error { return nil },\n"+
+			"\t\t\tUp: func(context.Context, migration.DataTransaction) error {\n"+
+			"\t\t\t\tif marker := os.Getenv(\"RIDU_TEST_TRANSFORM_MARKER\"); marker != \"\" {\n"+
+			"\t\t\t\t\treturn os.WriteFile(marker, []byte(\"up\"), 0o644)\n"+
+			"\t\t\t\t}\n"+
+			"\t\t\t\treturn nil\n"+
+			"\t\t\t},\n"+
 			"\t\t\tDown: func(context.Context, migration.DataTransaction) error { return nil },\n"+
-			"\t\t})),\n"+
-			"\t}\n"+
-			"\tif len(os.Args) == 1 {\n"+
-			"\t\toptions = append(options, runtimeOptions(applicationConfig)...)\n"+
-			"\t}", 1)
+			"\t\t})", 1)
 	if serverText == string(serverBytes) || !strings.Contains(serverText, "postgres.ProjectMigrations") {
 		t.Fatal("could not register compiled PostgreSQL migration callback in generated entry")
 	}
@@ -960,7 +1032,40 @@ func TestGeneratedProjectMigratesAgainstPostgres(t *testing.T) {
 		{"migrate", "create", "--name", "seed-data", "--transform", "seed-data"},
 		{"migrate", "plan", "--database-url", parsed.String(), "--allow-insecure-database", "--json"},
 		{"migrate", "verify", "--database-url", parsed.String(), "--allow-insecure-database", "--allow-maintenance"},
-		{"migrate", "up", "--database-url", parsed.String(), "--allow-insecure-database", "--allow-maintenance"},
+	} {
+		stdout.Reset()
+		stderr.Reset()
+		if exitCode := cli.Run(ctx, invocation, &stdout, &stderr, options); exitCode != 0 {
+			t.Fatalf("ridu %v: %s", invocation, stderr.String())
+		}
+	}
+	// The built binary applies the data-transform migration with no CLI.
+	projectPath := filepath.Join(target, "ridu.toml")
+	project, err := os.ReadFile(projectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectText := strings.ReplaceAll(string(project), "admin = \"./admin\"\n", "")
+	projectText = strings.ReplaceAll(projectText, "assets = \"./internal/adminassets/dist\"\n", "")
+	if err := os.WriteFile(projectPath, []byte(projectText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if exitCode := cli.Run(ctx, []string{"build"}, &stdout, &stderr, options); exitCode != 0 {
+		t.Fatalf("ridu build: %s", stderr.String())
+	}
+	binaryMigration := exec.Command(filepath.Join(target, "dist", filepath.Base(target)), "migrate", "up", "--database-url", parsed.String(), "--allow-insecure-database", "--allow-maintenance")
+	binaryMigration.Dir = target
+	marker := filepath.Join(t.TempDir(), "transform-ran")
+	binaryMigration.Env = generatedEnvironment(map[string]string{"DATABASE_URL": "", "RIDU_SQLITE_PATH": "", "RIDU_TEST_TRANSFORM_MARKER": marker})
+	if output, err := binaryMigration.CombinedOutput(); err != nil || !strings.Contains(string(output), "Migrations are current.") {
+		t.Fatalf("built binary migrate up: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("built binary didn't run the compiled data transform: %v", err)
+	}
+	for _, invocation := range [][]string{
 		{"migrate", "status", "--database-url", parsed.String(), "--allow-insecure-database", "--json"},
 		{"migrate", "status", "--database-url", parsed.String(), "--allow-insecure-database"},
 	} {
@@ -970,7 +1075,7 @@ func TestGeneratedProjectMigratesAgainstPostgres(t *testing.T) {
 			t.Fatalf("ridu %v: %s", invocation, stderr.String())
 		}
 	}
-	if !strings.Contains(stdout.String(), "applied") {
+	if !strings.Contains(stdout.String(), "applied") || strings.Contains(stdout.String(), "pending") {
 		t.Fatalf("migration status = %q", stdout.String())
 	}
 	files, err := migrationartifact.ReadAll(filepath.Join(target, "migrations"))
@@ -1007,19 +1112,14 @@ func TestGeneratedProjectUsesSQLiteMigrationLifecycle(t *testing.T) {
 		`"github.com/riducms/ridu/adapters/sqlite"`,
 		"\"github.com/riducms/ridu/adapters/sqlite\"\n\t\"github.com/riducms/ridu/migration\"", 1)
 	serverText = strings.Replace(serverText,
-		"\tvar options []ridu.ExecuteOption\n\tif len(os.Args) == 1 {\n\t\toptions = runtimeOptions(applicationConfig)\n\t}",
-		"\toptions := []ridu.ExecuteOption{\n"+
-			"\t\tridu.WithProjectMigrations(sqlite.ProjectMigrations(migration.DataTransform{\n"+
+		"sqlite.ProjectMigrations()",
+		"sqlite.ProjectMigrations(migration.DataTransform{\n"+
 			"\t\t\tDataTransformDescriptor: migration.DataTransformDescriptor{\n"+
 			"\t\t\t\tName: \"seed-data\", Checksum: migration.DataTransformChecksum([]byte(\"seed-data-v1\")),\n"+
 			"\t\t\t},\n"+
 			"\t\t\tUp: func(context.Context, migration.DataTransaction) error { return nil },\n"+
 			"\t\t\tDown: func(context.Context, migration.DataTransaction) error { return nil },\n"+
-			"\t\t})),\n"+
-			"\t}\n"+
-			"\tif len(os.Args) == 1 {\n"+
-			"\t\toptions = append(options, runtimeOptions(applicationConfig)...)\n"+
-			"\t}", 1)
+			"\t\t})", 1)
 	if serverText == string(serverBytes) || !strings.Contains(serverText, "WithProjectMigrations") {
 		t.Fatal("could not register compiled SQLite migration callback in generated entry")
 	}

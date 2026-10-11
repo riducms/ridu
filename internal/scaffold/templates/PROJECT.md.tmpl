@@ -355,7 +355,10 @@ of the exact ordered migration filenames and artifact digests in the binary. The
 {{if .Postgres}}PostgreSQL{{else if .SQLite}}SQLite{{else if .MongoDB}}MongoDB{{end}} store requires a reachable database, the matching executable manifest, and an applied ledger whose
 complete ordered history matches that fingerprint. A direct `go build` has no fingerprint and fails
 closed in ordinary production startup.{{if .MongoDB}} MongoDB readiness also non-mutatingly verifies every required physical index.{{end}}
-Apply and verify the exact release's migrations before starting it. If uploads are configured with `ridu.WithUploadStorage`, the backend
+Apply and verify the exact release's migrations before starting it. On a host that runs only the
+binary, apply them with `./dist/{{.ProjectName}} migrate up`, which needs the `migrations/` directory but no Ridu
+CLI or Go, and start `./dist/{{.ProjectName}}` itself: a package script would keep the package manager in
+memory beside the server. If uploads are configured with `ridu.WithUploadStorage`, the backend
 must implement `storage.HealthBackend`; the official local and S3 backends do. A custom backend may
 opt out only after equivalent external dependency checks exist.
 
@@ -382,6 +385,7 @@ only proves that a process is alive and never admits mixed manifests or migratio
 | `{{.RiduCommand}} generate` | Re-resolve Go config and atomically update generated contracts without starting the app. |
 | `{{.RiduCommand}} check` | Check generated drift, a non-empty migration history at the exact executable manifest, formatting, Go vet/tests, TypeScript, and Svelte. |
 | `{{.RiduCommand}} build` | Generate, build the static admin, and compile one production Go binary. |
+| `./dist/{{.ProjectName}} migrate up` | Apply the committed `migrations/` with the built binary alone, on a host without the Ridu CLI or Go. It refuses any history other than the one the binary was built with. |
 | `{{.RiduCommand}} migrate create --name …` | Create a reviewable immutable migration artifact without opening the database. |
 {{if .MongoDB}}
 | `{{.RiduCommand}} migrate plan --json` | Inspect immutable applied/pending artifact, phase, step, and durable checkpoint state without applying it. |

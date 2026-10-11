@@ -308,7 +308,8 @@ func qualifyGeneratedMongoDBInitialRelease(
 	assertMongoDBProductionDeploymentStatus(t, statuses, artifacts[0].Name, false, false)
 	verifyURL := harness.fixture.seedURL(harness.fixture.caPath, true)
 	runGeneratedMongoDBVerifiedCommand(t, harness, project, verifyURL, harness.fixture.adminUser, harness.fixture.adminPassword, 2*time.Minute, "migrate", "verify")
-	runGeneratedMongoDBLiveCommand(t, harness, project, project.database.hostURL, 2*time.Minute, "migrate", "up")
+	// The initial release migrates with its built binary alone.
+	harness.runBuiltMigration(t, project, binary, project.database.containerURL)
 	statusOutput = runGeneratedMongoDBLiveCommand(t, harness, project, project.database.hostURL, 45*time.Second, "migrate", "status", "--json")
 	statuses = parseMongoDBProductionDeploymentStatuses(t, statusOutput)
 	assertMongoDBProductionDeploymentStatus(t, statuses, artifacts[0].Name, true, false)

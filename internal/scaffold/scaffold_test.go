@@ -207,7 +207,7 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 		"dev:admin": "npm run dev --workspace @acme/admin",
 		"ridu":      "ridu",
 		"check":     "ridu check",
-		"build":     "ridu build",
+		"build":     "ridu build --output dist/acme-content",
 		"migrate":   "ridu migrate up",
 		"start":     "./dist/acme-content",
 	} {
@@ -255,8 +255,9 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 		t.Fatalf("generated PostgreSQL runtime is not gofmt-formatted: %v\n%s", err, serverMain)
 	}
 	for _, productionBoundary := range []string{
+		`ridu.WithProjectMigrations(postgres.ProjectMigrations()),`,
 		`if len(os.Args) == 1 {`,
-		`options = runtimeOptions(applicationConfig)`,
+		`options = append(options, runtimeOptions(applicationConfig)...)`,
 		`AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE")`,
 		`MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS")`,
 		`AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS")`,
@@ -380,7 +381,7 @@ func TestCreateRendersEachSupportedPackageManager(t *testing.T) {
 			if packageJSON.PackageManager != "" {
 				t.Fatalf("package.json forces packageManager %q", packageJSON.PackageManager)
 			}
-			if packageJSON.Scripts["dev:admin"] != test.adminScript || packageJSON.Scripts["check"] != "ridu check" || packageJSON.Scripts["build"] != "ridu build" || packageJSON.Scripts["migrate"] != "ridu migrate up" || packageJSON.Scripts["start"] != "./dist/content" {
+			if packageJSON.Scripts["dev:admin"] != test.adminScript || packageJSON.Scripts["check"] != "ridu check" || packageJSON.Scripts["build"] != "ridu build --output dist/content" || packageJSON.Scripts["migrate"] != "ridu migrate up" || packageJSON.Scripts["start"] != "./dist/content" {
 				t.Fatalf("scripts = %#v", packageJSON.Scripts)
 			}
 			if packageJSON.Overrides["lexical"] != "0.49.0" || packageJSON.Resolutions["lexical"] != "0.49.0" {
@@ -496,6 +497,7 @@ func TestCreateSQLiteRendersAdapterSpecificRuntimeWithoutCompose(t *testing.T) {
 	serverText := string(server)
 	if !strings.Contains(serverText, `"github.com/riducms/ridu/adapters/sqlite"`) ||
 		!strings.Contains(serverText, `sqlite.Open(ctx, sqliteDatabasePath())`) ||
+		!strings.Contains(serverText, `ridu.WithProjectMigrations(sqlite.ProjectMigrations()),`) ||
 		!strings.Contains(serverText, `filepath.IsAbs(path)`) ||
 		strings.Contains(serverText, `adapters/postgres`) || strings.Contains(serverText, `DATABASE_URL`) {
 		t.Fatalf("SQLite scaffold runtime is not adapter-specific:\n%s", server)
@@ -607,7 +609,8 @@ func TestCreateMongoDBRendersQualifiedReplicaSetGuidanceForStarterAndBlank(t *te
 				`const internalDevelopmentServerArgument = "--ridu-internal-development-server"`,
 				`internalDevelopmentServer := len(os.Args) == 2 && os.Args[1] == internalDevelopmentServerArgument`,
 				`os.Args = os.Args[:1]`,
-				`options = runtimeOptions(applicationConfig, internalDevelopmentServer)`,
+				`ridu.WithProjectMigrations(mongodb.ProjectMigrations()),`,
+				`options = append(options, runtimeOptions(applicationConfig, internalDevelopmentServer)...)`,
 				"backend, err := mongodb.OpenWithConfig(ctx, mongodb.Config{",
 				"manifest, err := ridu.Resolve(applicationConfig)",
 				"if err := backend.VerifyIndexes(ctx, manifest); err != nil {",

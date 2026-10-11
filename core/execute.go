@@ -91,9 +91,11 @@ func WithStore(factory StoreFactory) ExecuteOption {
 	}
 }
 
-// WithProjectMigrations registers the selected adapter's compiled migration
-// callbacks for the private project-command path. The driver is never used by
-// manifest generation or the ordinary HTTP runtime.
+// WithProjectMigrations registers the selected adapter's migration driver and
+// its compiled data transforms. The CLI uses it through the private
+// project-command path, and a binary built with ridu build uses it to apply its
+// own migrations with `<binary> migrate up`. Manifest generation and the HTTP
+// runtime never use it.
 func WithProjectMigrations(driver migration.ProjectDriver) ExecuteOption {
 	return func(options *executeOptions) {
 		options.projectMigrations = driver
@@ -124,11 +126,17 @@ func WithServerOptions(server ServerOptions) ExecuteOption {
 
 // Execute runs the framework-owned project command driver for a generated
 // application. Project commands resolve config without invoking the lazy
-// runtime store factory; the no-argument branch starts the HTTP server.
+// runtime store factory; `migrate up` applies the build's migrations; the
+// no-argument branch starts the HTTP server.
 func Execute(applicationConfig Config, supplied ...ExecuteOption) (result error) {
 	options := executeOptions{address: ":8080"}
 	for _, option := range supplied {
 		option(&options)
+	}
+	if len(os.Args) > 1 && os.Args[1] == migrateCommand {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return runMigrateCommand(ctx, os.Args[2:], os.Stdout, os.Stderr, applicationConfig, options.projectMigrations, executableMigrationHistoryDigest)
 	}
 	if len(os.Args) > 1 {
 		return project.Run(

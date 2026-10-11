@@ -288,12 +288,19 @@ func proveGeneratedMongoDBDirectServerFailsClosed(t *testing.T, root, databaseUR
 
 func createGeneratedMongoDBProject(t *testing.T, binary, frameworkRoot, target, template, poisonURL string, secrets []string) {
 	t.Helper()
+	// The starter's guidance is checked in the Codex layout, so name it: the
+	// real CLI defaults to Claude Code's layout when it runs inside Claude Code.
+	agent := "--agent=codex"
+	if template == "blank" {
+		agent = "--no-agent"
+	}
 	arguments := []string{
 		"new",
 		"--template",
 		template,
 		"--database",
 		"mongodb",
+		agent,
 		"--package-manager",
 		"bun",
 		"--release-version",
@@ -303,9 +310,6 @@ func createGeneratedMongoDBProject(t *testing.T, binary, frameworkRoot, target, 
 		"--scope",
 		"@fixture-mongodb-" + template,
 		target,
-	}
-	if template == "blank" {
-		arguments = append(arguments[:5], append([]string{"--no-agent"}, arguments[5:]...)...)
 	}
 	output, err := runGeneratedCommand(
 		3*time.Minute,

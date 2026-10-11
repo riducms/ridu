@@ -52,7 +52,8 @@ verification need `DATABASE_URL` because they create an isolated shadow schema o
 ## Apply migrations and start {#run}
 
 The binary checks that the target database has the exact migration history used during the build.
-Apply pending migrations before starting it.
+Apply pending migrations before starting it. The binary applies them itself with `migrate up`, so
+the host needs neither the Ridu CLI nor Go.
 
 Choose the target database below. SQLite needs an absolute path so the migration command and server
 open the same file. PostgreSQL needs its production connection URL.
@@ -61,8 +62,7 @@ open the same file. PostgreSQL needs its production connection URL.
 export RIDU_SQLITE_PATH="$PWD/.ridu/production.sqlite"
 
 ridu migrate plan
-ridu migrate up
-ridu migrate status
+./dist/my-app migrate up
 ./dist/my-app
 ```
 
@@ -70,14 +70,19 @@ ridu migrate status
 export DATABASE_URL='postgres://user:password@host/database?sslmode=verify-full'
 
 ridu migrate plan
-ridu migrate up
-ridu migrate status
+./dist/my-app migrate up
 ./dist/my-app
 ```
 
-The generated `start` package script runs the same binary, so `bun run start`, `npm run start`,
-`pnpm run start`, or `yarn start` is convenient when testing on the build machine. A production
-image only needs `dist/my-app`, trusted certificates, and its environment variables.
+`ridu migrate plan` shows what will run, and needs the project. `./dist/my-app migrate up` reads the
+artifacts from `migrations/` in the working directory, or from `--directory`, and applies them only
+when they are exactly the history the binary was built with. It takes the same `--allow-maintenance`
+and timeout flags as [`ridu migrate up`](/docs/migrations/deploy/).
+
+A production image needs `dist/my-app`, the `migrations/` directory, trusted certificates and its
+environment variables; it needs no Ridu CLI, Go or JavaScript runtime. Start the binary itself. The
+generated `start` package script runs the same binary, which is convenient on the build machine, but
+in production the package manager would stay in memory beside the server for as long as it runs.
 
 The server listens on `:8080` by default. Set `RIDU_ADDRESS` when you control the full address, or
 set `PORT` when a hosting platform assigns the port:
@@ -106,8 +111,16 @@ only replaces the destination after the complete build succeeds.
   pass `--database-path <path>`.
 - **Startup reports pending or mismatched migrations:** run `ridu migrate status`, restore the
   committed artifacts if they changed, then run `ridu migrate up`.
-- **A binary made with `go build` refuses to start:** use `ridu build`; it embeds the migration
-  fingerprint and admin assets.
+- **A binary made with `go build` refuses to start or migrate:** use `ridu build`; it embeds the
+  migration fingerprint and admin assets.
+- **`migrate up` says the migrations are not the history the binary was built with:** deploy the
+  `migrations/` directory from the commit the binary was built from.
+- **`migrate up` says the binary has no migration driver:** projects created before Ridu 0.24.0
+  register one only for data transforms. Add `ridu.WithProjectMigrations(postgres.ProjectMigrations())`,
+  or the `sqlite` or `mongodb` equivalent, to the options passed to `ridu.Execute` in
+  `cmd/server/main.go`, outside the `len(os.Args) == 1` branch, then build again.
+- **`migrate up` reports no migrations directory:** copy `migrations/` next to the binary, run it
+  from that directory, or pass `--directory`.
 - **The host cannot connect to the server:** set `PORT` or `RIDU_ADDRESS`, and configure its health
   check to use `/readyz`.
 
