@@ -35,8 +35,8 @@ hot reload is designed for feedback speed and is not a bundle-size result.
 
 Use the smallest extension surface that owns the behavior. A provider that fetches data for one
 page runs more broadly than a request started by that page. A list cell that makes its own request
-multiplies calls by visible rows; include needed data in the list selection or use a custom view
-when the interaction needs a separate query.
+multiplies calls by visible rows; name the fields it needs in its `fields` so the list reads them,
+or use a custom view when the interaction needs a separate query.
 
 ## Keep field updates local {#fields}
 

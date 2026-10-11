@@ -1,4 +1,5 @@
 import { documentLabel } from "@admin/features/documents/document-title";
+import { listPageCovers } from "@admin/features/collections/collection-list-query";
 import { untrack } from "svelte";
 import { RiduError } from "@riducms/sdk";
 import { blockFieldCapabilities } from "@riducms/protocol";
@@ -117,9 +118,13 @@ export class CollectionListController {
 			const prepared = this.options.prepared;
 			if (prepared !== undefined && prepared !== this.#prepared) {
 				this.#prepared = prepared;
-				// Merging selected-row access must not turn selection into a route dependency.
-				untrack(() => this.#adoptPrepared(request, prepared));
-				return;
+				// A page read for other columns has no values for some cells, so it is read
+				// again below with this list's own.
+				if (listPageCovers(request.query, prepared.query, collection)) {
+					// Merging selected-row access must not turn selection into a route dependency.
+					untrack(() => this.#adoptPrepared(request, prepared));
+					return;
+				}
 			}
 			const search = new URLSearchParams(request.query).get("q") ?? "";
 			const searchChanged =

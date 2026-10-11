@@ -390,11 +390,26 @@ func MapPopulatedDocuments(
 	allLocales bool,
 	transform func(schema.StableID, schema.LocaleCode, store.Document) store.Document,
 ) store.Values {
+	return MapPopulatedDocumentsAtPaths(fields, values, allLocales, func(_ string, targetID schema.StableID, locale schema.LocaleCode, document store.Document) store.Document {
+		return transform(targetID, locale, document)
+	})
+}
+
+// MapPopulatedDocumentsAtPaths is MapPopulatedDocuments with each document's
+// population path: the authored path of the relationship holding it, as a
+// population request names it. Documents nested in populated documents are
+// left to the transform.
+func MapPopulatedDocumentsAtPaths(
+	fields []schema.Field,
+	values store.Values,
+	allLocales bool,
+	transform func(path string, targetID schema.StableID, locale schema.LocaleCode, document store.Document) store.Document,
+) store.Values {
 	walker := populatedWalker{allLocales: allLocales, transform: transform}
 	var result store.Values
 	for _, field := range fields {
 		if value, exists := values[field.Name]; exists {
-			if updated, changed := walker.field(field, value, ""); changed {
+			if updated, changed := walker.field(field, value, "", field.Name); changed {
 				if result == nil {
 					result = store.CloneValues(values)
 				}
@@ -410,10 +425,12 @@ func MapPopulatedDocuments(
 
 type populatedWalker struct {
 	allLocales bool
-	transform  func(schema.StableID, schema.LocaleCode, store.Document) store.Document
+	transform  func(string, schema.StableID, schema.LocaleCode, store.Document) store.Document
 }
 
-func (w populatedWalker) object(fields []schema.Field, value store.Value, inheritedLocale schema.LocaleCode) (store.Value, bool) {
+// Each walker method receives the authored path of the field or object it
+// visits; array rows add nothing, and a block row adds its block type.
+func (w populatedWalker) object(fields []schema.Field, value store.Value, inheritedLocale schema.LocaleCode, path string) (store.Value, bool) {
 	if value.Kind() != store.ValueObject {
 		return value, false
 	}
@@ -426,7 +443,7 @@ func (w populatedWalker) object(fields []schema.Field, value store.Value, inheri
 		if !exists {
 			continue
 		}
-		if updated, changed := w.field(field, candidate, inheritedLocale); changed {
+		if updated, changed := w.field(field, candidate, inheritedLocale, path+"."+field.Name); changed {
 			if object == nil {
 				object, _ = value.CopyObject()
 			}
@@ -439,7 +456,7 @@ func (w populatedWalker) object(fields []schema.Field, value store.Value, inheri
 	return value, false
 }
 
-func (w populatedWalker) field(field schema.Field, value store.Value, inheritedLocale schema.LocaleCode) (store.Value, bool) {
+func (w populatedWalker) field(field schema.Field, value store.Value, inheritedLocale schema.LocaleCode, path string) (store.Value, bool) {
 	if field.Localized && w.allLocales {
 		if value.Kind() != store.ValueObject {
 			return value, false
@@ -447,7 +464,7 @@ func (w populatedWalker) field(field schema.Field, value store.Value, inheritedL
 		field.Localized = false
 		var localized store.Values
 		for locale, candidate := range value.Entries() {
-			if updated, changed := w.fieldValue(field, candidate, schema.LocaleCode(locale)); changed {
+			if updated, changed := w.fieldValue(field, candidate, schema.LocaleCode(locale), path); changed {
 				if localized == nil {
 					localized, _ = value.CopyObject()
 				}
@@ -460,14 +477,14 @@ func (w populatedWalker) field(field schema.Field, value store.Value, inheritedL
 		return value, false
 	}
 	field.Localized = false
-	return w.fieldValue(field, value, inheritedLocale)
+	return w.fieldValue(field, value, inheritedLocale, path)
 }
 
-func (w populatedWalker) fieldValue(field schema.Field, value store.Value, inheritedLocale schema.LocaleCode) (store.Value, bool) {
+func (w populatedWalker) fieldValue(field schema.Field, value store.Value, inheritedLocale schema.LocaleCode, path string) (store.Value, bool) {
 	if embedded.HasFields(field) {
 		changed := false
 		updated, err := embedded.TransformValue(field, value, field.Name, embedded.NewBudget(), func(o embedded.ReadOccurrence) (store.Value, bool, error) {
-			payload, found := w.object(o.Fields, o.Payload, inheritedLocale)
+			payload, found := w.object(o.Fields, o.Payload, inheritedLocale, path+"."+o.Tree.Key+"."+o.Case.TagValue+"."+o.Type.Slug)
 			changed = changed || found
 			return payload, found, nil
 		})
@@ -479,10 +496,10 @@ func (w populatedWalker) fieldValue(field schema.Field, value store.Value, inher
 
 	switch field.Type {
 	case schema.FieldTypeRelationship, schema.FieldTypeUpload, schema.FieldTypeJoin:
-		return w.reference(field, value, inheritedLocale)
+		return w.reference(field, value, inheritedLocale, path)
 	case schema.FieldTypeGroup:
 		if field.Nested != nil {
-			return w.object(field.Nested.ResolvedFields(), value, inheritedLocale)
+			return w.object(field.Nested.ResolvedFields(), value, inheritedLocale, path)
 		}
 	case schema.FieldTypeArray, schema.FieldTypeBlocks:
 		if value.Kind() != store.ValueList || (field.Type == schema.FieldTypeArray && field.Nested == nil) || (field.Type == schema.FieldTypeBlocks && field.Blocks == nil) {
@@ -490,11 +507,11 @@ func (w populatedWalker) fieldValue(field schema.Field, value store.Value, inher
 		}
 		return mapList(value, func(item store.Value) (store.Value, bool) {
 			if field.Type == schema.FieldTypeArray {
-				return w.object(field.Nested.ResolvedFields(), item, inheritedLocale)
+				return w.object(field.Nested.ResolvedFields(), item, inheritedLocale, path)
 			}
 			blockType, _ := item.Get("blockType").StringValue()
 			if block, found := field.Blocks.Definition(blockType); found {
-				return w.object(block.ResolvedFields(), item, inheritedLocale)
+				return w.object(block.ResolvedFields(), item, inheritedLocale, path+"."+block.Slug)
 			}
 			return item, false
 		})
@@ -502,7 +519,7 @@ func (w populatedWalker) fieldValue(field schema.Field, value store.Value, inher
 	return value, false
 }
 
-func (w populatedWalker) reference(field schema.Field, value store.Value, locale schema.LocaleCode) (store.Value, bool) {
+func (w populatedWalker) reference(field schema.Field, value store.Value, locale schema.LocaleCode, path string) (store.Value, bool) {
 	// This traversal only reads the schema. RelationshipDetails still returns a
 	// defensive copy at its caller-facing boundary.
 	relationship := field.Relationship
@@ -521,7 +538,7 @@ func (w populatedWalker) reference(field schema.Field, value store.Value, locale
 	mapOne := func(reference store.Value) (store.Value, bool) {
 		if !relationship.Polymorphic {
 			if document, populated := reference.CopyDocument(); populated {
-				return store.Populated(w.transform(relationship.CollectionID, locale, document)), true
+				return store.Populated(w.transform(path, relationship.CollectionID, locale, document)), true
 			}
 			return reference, false
 		}
@@ -530,7 +547,7 @@ func (w populatedWalker) reference(field schema.Field, value store.Value, locale
 			for _, target := range relationship.Targets {
 				if string(target.CollectionSlug) == slug {
 					document, _ := reference.Get("id").CopyDocument()
-					updated := store.Populated(w.transform(target.CollectionID, locale, document))
+					updated := store.Populated(w.transform(path, target.CollectionID, locale, document))
 					object, _ := reference.CopyObject()
 					object["id"] = updated
 					return store.Object(object), true

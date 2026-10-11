@@ -142,6 +142,9 @@ test("custom dashboard loaders and category cards preserve prepared navigation a
 	await page.getByRole("link", { name: "Categories", exact: true }).first().click();
 	await expect(page.getByTestId("category-cards")).toBeVisible();
 	await expect(page.getByTestId("category-cards").locator("article")).toHaveCount(2);
+	// No column shows seo; the layout's `fields` declaration is why the list reads it.
+	const newsCard = page.getByTestId("category-cards").locator("article", { hasText: "News" });
+	await expect(newsCard).toContainText("Product and framework updates.");
 	await expect(
 		page.getByTestId("category-cards").getByRole("link", { name: "News", exact: true })
 	).toHaveAttribute("href", /\/admin\/collections\/categories\/[^?]+\?locale=en$/);
@@ -153,12 +156,49 @@ test("custom dashboard loaders and category cards preserve prepared navigation a
 	await expectNoLoadingInsertion(page);
 	await page.reload();
 	await expect(page.getByTestId("category-cards")).toBeVisible();
+	await expect(newsCard).toContainText("Product and framework updates.");
 	await expectNoLoadingInsertion(page);
 	expect(reads).toEqual(["/api/admin/loaders/editorial-dashboard"]);
 	await page.goBack();
 	await expect(page.getByTestId("editorial-dashboard")).toBeVisible();
 	await expectNoLoadingInsertion(page);
 	expect(reads).toEqual(["/api/admin/loaders/editorial-dashboard"]);
+});
+
+test("collection lists read only the fields they render", async ({ page }) => {
+	const metadata = new Set([
+		"id",
+		"createdAt",
+		"updatedAt",
+		"deletedAt",
+		"_status",
+		"_revision",
+		"_publishedRevision",
+		"_hasDraftChanges",
+		"_localization",
+	]);
+	const renderedFields = async (url: string) => {
+		const response = await page.request.get(url, {
+			headers: { Accept: "application/vnd.ridu.admin-route-state+json" },
+		});
+		expect(response.ok(), await response.text()).toBe(true);
+		const body = await response.json();
+		const docs = (body.route?.data ?? body).page.value.docs as Record<string, unknown>[];
+		expect(docs.length).toBeGreaterThan(0);
+		return [...new Set(docs.flatMap((doc) => Object.keys(doc)))]
+			.filter((key) => !metadata.has(key))
+			.sort();
+	};
+	// Posts carry a summary and rich content; with only Title shown, neither is read.
+	expect(await renderedFields("/admin/collections/posts?columns=title,-summary")).toEqual([
+		"title",
+	]);
+	expect(
+		await renderedFields("/api/admin/collection-list/posts?part=page&columns=title,status")
+	).toEqual(["status", "title"]);
+	expect(
+		await renderedFields("/api/admin/collection-list/posts?part=page&columns=title&fields=summary")
+	).toEqual(["summary", "title"]);
 });
 
 test("custom routes and complete replacement views prepare data across reload, URL changes and history", async ({

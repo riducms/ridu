@@ -108,6 +108,10 @@ type AdminCollectionListQueryV1 struct {
 	CountWhere json.RawMessage `json:"countWhere,omitempty"`
 	Locale     string          `json:"locale,omitempty"`
 	Trash      bool            `json:"trash"`
+	// Columns are the active column paths a page was read for, and Fields the
+	// other fields its list extensions declared. The page holds no other field.
+	Columns []string `json:"columns,omitempty"`
+	Fields  []string `json:"fields,omitempty"`
 }
 
 type AdminCollectionListPageV1 struct {

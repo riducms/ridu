@@ -148,7 +148,7 @@ export default defineAdmin({
 				},
 			],
 	listResultsRenderers: [
-		{ key: "category-cards", collection: "categories", component: CategoryCards },
+		{ key: "category-cards", collection: "categories", fields: ["seo"], component: CategoryCards },
 	],
 	login: visualPreview
 		? []

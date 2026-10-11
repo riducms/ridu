@@ -186,7 +186,8 @@ type Request struct {
 	Select      []query.Path
 	Populate    []query.Population
 	// IncludeAccess enriches an ordinary collection list with collection and
-	// per-document capabilities evaluated in the list's read transaction.
+	// per-document capabilities evaluated in the list's read transaction, with
+	// batched reads rather than reads for every document.
 	IncludeAccess bool
 	// OutputFields limits computed and inverse-join resolution. Nil preserves
 	// the local API's historical behavior of resolving every output field; a
@@ -993,7 +994,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				sourceContext.ID = canonicalDocument.ID
 				sourceContext.AllLocales = len(selection.Configured) != 0
 				sourceResult := Result{Document: &canonicalDocument}
-				if redactError := engine.redactResult(collection, sourceContext, &sourceResult); redactError != nil {
+				if redactError := engine.redactResult(collection, sourceContext, &sourceResult, nil, nil); redactError != nil {
 					return Result{}, redactError
 				}
 			}
@@ -1256,10 +1257,11 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	}
 
 	storeSelection := appendOptionalPaths(request.Select)
-	if request.Select != nil && selectedVirtualOutput(collection.Schema.Fields, request.OutputFields) {
-		// Virtual resolvers do not declare dependencies. Fetch the complete stored
-		// document for trusted resolver input, then restore the caller's projection
-		// immediately after output resolution.
+	if request.Select != nil && (selectedVirtualOutput(collection.Schema.Fields, request.OutputFields) || readCallbacksObserveDocument(collection)) {
+		// Virtual resolvers, read hooks and field read rules don't declare the
+		// values they use. Fetch the complete stored document for them and
+		// project the result once they have run, so a selection shapes the
+		// response without changing what they observe.
 		storeSelection = nil
 	}
 	readPublishedOnly, draftError := engine.publishedOnly(request, collection, operationContext)
@@ -1298,6 +1300,8 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	if populationError := engine.preparePopulations(collection, operationContext, selection, &storeRequest, includeTargetDrafts); populationError != nil {
 		return Result{}, populationError
 	}
+	populationSelections := engine.widenPopulationSelections(collection, storeRequest.Populate)
+	selected := selectedResultPaths(collection.Schema.Fields, request.Select, request.OutputFields)
 	if len(storeRequest.Populate) != 0 {
 		storeRequest.PopulationBudget = store.NewPopulationBudget(store.MaxPopulationMaterializedDocuments)
 	}
@@ -1826,13 +1830,13 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	// requests every locale. Capture that projection only after response
 	// population so unchanged hooks cannot discard populated relationships.
 	if result.Document != nil {
-		if recoveryError := engine.validateBlockResponse(collection, result.Document, selection.All, true); recoveryError != nil {
+		if recoveryError := engine.validateBlockResponse(collection, result.Document, selection.All, true, selected, populationSelections); recoveryError != nil {
 			return Result{}, recoveryError
 		}
 	}
 	if result.Page != nil {
 		for index := range result.Page.Documents {
-			if recoveryError := engine.validateBlockResponse(collection, &result.Page.Documents[index], selection.All, true); recoveryError != nil {
+			if recoveryError := engine.validateBlockResponse(collection, &result.Page.Documents[index], selection.All, true, selected, populationSelections); recoveryError != nil {
 				return Result{}, recoveryError
 			}
 		}
@@ -1852,7 +1856,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			if populationError != nil {
 				return Result{}, translateStoreError(populationError)
 			}
-			if recoveryError := engine.validateBlockResponse(collection, &hookPopulated, hookSelection.All, true); recoveryError != nil {
+			if recoveryError := engine.validateBlockResponse(collection, &hookPopulated, hookSelection.All, true, selected, populationSelections); recoveryError != nil {
 				return Result{}, recoveryError
 			}
 			hookSource = &hookPopulated
@@ -1959,11 +1963,10 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	if err := engine.resolveOutputFields(state.transaction, collection, responseContext, selection, request.OutputFields, &result); err != nil {
 		return Result{}, err
 	}
-	projectSelectedResult(collection.Schema.Fields, request.Select, request.OutputFields, &result)
-	if err := runReadHooks(collection, responseContext, &result); err != nil {
+	if err := runReadHooks(collection, responseContext, &result, selected); err != nil {
 		return Result{}, err
 	}
-	if err := engine.redactResult(collection, responseContext, &result); err != nil {
+	if err := engine.redactResult(collection, responseContext, &result, selected, populationSelections); err != nil {
 		return Result{}, err
 	}
 
@@ -2326,10 +2329,10 @@ func (engine *Engine) readVersions(ctx context.Context, collectionName, document
 		if err := engine.resolveOutputFields(state.transaction, collection, versionContext, selection, nil, &versionResult); err != nil {
 			return nil, 0, err
 		}
-		if err := runReadHooks(collection, versionContext, &versionResult); err != nil {
+		if err := runReadHooks(collection, versionContext, &versionResult, nil); err != nil {
 			return nil, 0, err
 		}
-		if err := engine.redactResult(collection, versionContext, &versionResult); err != nil {
+		if err := engine.redactResult(collection, versionContext, &versionResult, nil, nil); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -2575,23 +2578,33 @@ func changedFieldLocations(before, after []fieldLocation) []fieldLocation {
 	return changed
 }
 
-func (engine *Engine) redactResult(collection Collection, operationContext Context, result *Result) error {
-	var redact func(Collection, Context, *store.Document) error
-	redact = func(current Collection, currentContext Context, document *store.Document) error {
+// redactResult applies field read rules to each complete document, then keeps
+// its selected roots; nil selected keeps every root. Only what is kept must be
+// recoverable. populations holds the target selections that
+// widenPopulationSelections removed from the store read, by population path, so
+// those populated documents are projected the same way once their rules ran.
+func (engine *Engine) redactResult(collection Collection, operationContext Context, result *Result, selected []query.Path, populations map[string][]query.Path) error {
+	var redact func(Collection, Context, *store.Document, []query.Path, map[string][]query.Path) error
+	redact = func(current Collection, currentContext Context, document *store.Document, selected []query.Path, populations map[string][]query.Path) error {
 		currentContext.ID = document.ID
-		if recoveryError := unknownBlockRecoveryError(current.Schema.Fields, document.Values, currentContext.AllLocales); recoveryError != nil {
+		returned := store.Document{Values: document.Values}
+		projectDocumentValues(&returned, selected)
+		if recoveryError := unknownBlockRecoveryError(current.Schema.Fields, returned.Values, currentContext.AllLocales); recoveryError != nil {
 			return recoveryError
 		}
 		if err := redactBoundFields(current, currentContext, document); err != nil {
 			return err
 		}
+		projectSelectedDocument(document, selected)
 		var nestedError error
-		document.Values = population.MapPopulatedDocuments(current.Schema.Fields, document.Values, currentContext.AllLocales, func(targetID schema.StableID, locale schema.LocaleCode, populated store.Document) store.Document {
+		document.Values = population.MapPopulatedDocumentsAtPaths(current.Schema.Fields, document.Values, currentContext.AllLocales, func(path string, targetID schema.StableID, locale schema.LocaleCode, populated store.Document) store.Document {
 			if nestedError != nil {
 				return populated
 			}
+			targetSelection := populations[path]
 			target, available := engine.collections[string(targetID)]
 			if !available {
+				projectSelectedDocument(&populated, targetSelection)
 				return populated
 			}
 			targetContext := currentContext
@@ -2602,7 +2615,9 @@ func (engine *Engine) redactResult(collection Collection, operationContext Conte
 			}
 			targetContext.Collection, targetContext.ID, targetContext.Document = target.Schema, populated.ID, &populated
 			targetContext.Data, targetContext.Original = store.Values{}, nil
-			nestedError = redact(target, targetContext, &populated)
+			// Population selections apply to the first level only, so documents
+			// nested in this one are complete.
+			nestedError = redact(target, targetContext, &populated, targetSelection, nil)
 			return populated
 		})
 		if nestedError != nil {
@@ -2612,7 +2627,7 @@ func (engine *Engine) redactResult(collection Collection, operationContext Conte
 		return nil
 	}
 	if result.Document != nil {
-		if err := redact(collection, operationContext, result.Document); err != nil {
+		if err := redact(collection, operationContext, result.Document, selected, populations); err != nil {
 			if failure, ok := err.(*Error); ok && failure.Code == "block_recovery_required" {
 				return failure
 			}
@@ -2621,7 +2636,7 @@ func (engine *Engine) redactResult(collection Collection, operationContext Conte
 	}
 	if result.Page != nil {
 		for index := range result.Page.Documents {
-			if err := redact(collection, operationContext, &result.Page.Documents[index]); err != nil {
+			if err := redact(collection, operationContext, &result.Page.Documents[index], selected, populations); err != nil {
 				if failure, ok := err.(*Error); ok && failure.Code == "block_recovery_required" {
 					return failure
 				}
@@ -2761,12 +2776,12 @@ func (engine *Engine) resolveOutputFields(transaction store.Transaction, collect
 				}
 				items := make([]store.Value, len(page.Documents))
 				for index, related := range page.Documents {
-					if err := engine.validateBlockResponse(target, &related, selection.All, true); err != nil {
+					if err := engine.validateBlockResponse(target, &related, selection.All, true, nil, nil); err != nil {
 						return err
 					}
 					projected := localization.ProjectDocument(related, target.Schema.Fields, selection)
 					targetResult := Result{Document: &projected}
-					if err := runReadHooks(target, joinContext, &targetResult); err != nil {
+					if err := runReadHooks(target, joinContext, &targetResult, nil); err != nil {
 						return err
 					}
 					items[index] = store.Populated(*targetResult.Document)
@@ -2812,9 +2827,11 @@ func selectedVirtualOutput(fields []schema.Field, selected []query.Path) bool {
 	return false
 }
 
-func projectSelectedResult(fields []schema.Field, stored, output []query.Path, result *Result) {
+// selectedResultPaths lists the roots a read returns: its stored selection and
+// selected computed output. Nil returns every root.
+func selectedResultPaths(fields []schema.Field, stored, output []query.Path) []query.Path {
 	if stored == nil {
-		return
+		return nil
 	}
 	selected := appendOptionalPaths(stored)
 	for _, field := range fields {
@@ -2822,14 +2839,47 @@ func projectSelectedResult(fields []schema.Field, stored, output []query.Path, r
 			selected = append(selected, field.Path)
 		}
 	}
-	if result.Document != nil {
-		projectDocumentValues(result.Document, selected)
+	return selected
+}
+
+// projectSelectedDocument keeps the selected roots and the localization
+// sources of what remains; nil selected keeps everything.
+func projectSelectedDocument(document *store.Document, selected []query.Path) {
+	if selected == nil {
+		return
 	}
-	if result.Page != nil {
-		for index := range result.Page.Documents {
-			projectDocumentValues(&result.Page.Documents[index], selected)
+	projectDocumentValues(document, selected)
+	pruneLocalizationSources(document)
+}
+
+// widenPopulationSelections removes a population's target selection from the
+// store read when a target collection has field read rules, which don't
+// declare the values they use. The engine applies the selection after
+// redaction instead; the result maps population paths to those selections.
+func (engine *Engine) widenPopulationSelections(collection Collection, populations []query.Population) map[string][]query.Path {
+	var selections map[string][]query.Path
+	for index := range populations {
+		candidate := &populations[index]
+		if candidate.Select == nil {
+			continue
+		}
+		field, _ := population.FieldAtPath(collection.Schema.Fields, candidate.Path)
+		relationship := population.RelationshipDetails(field)
+		if relationship == nil {
+			continue
+		}
+		for _, target := range relationshipSchemaTargets(relationship) {
+			if targetCollection, exists := engine.collections[string(target.CollectionID)]; exists && targetCollection.runtimePlan().fieldReadRule {
+				if selections == nil {
+					selections = map[string][]query.Path{}
+				}
+				selections[candidate.Path.String()] = candidate.Select
+				candidate.Select = nil
+				break
+			}
 		}
 	}
+	return selections
 }
 
 func projectDocumentValues(document *store.Document, selected []query.Path) {
@@ -2966,7 +3016,9 @@ func validVirtualValue(field schema.Field, value store.Value) bool {
 	}
 }
 
-func runReadHooks(collection Collection, operationContext Context, result *Result) error {
+// runReadHooks runs read hooks on each complete document and checks the output
+// of the selected roots; nil selected checks every root.
+func runReadHooks(collection Collection, operationContext Context, result *Result, selected []query.Path) error {
 	hooked := readHooksChangeValues(collection)
 	run := func(document *store.Document) error {
 		readContext := operationContext
@@ -2992,7 +3044,10 @@ func runReadHooks(collection Collection, operationContext Context, result *Resul
 			}
 		}
 		allowIncomplete := document.Status == store.StatusDraft || document.HasDraftChanges
-		return validateReadOutput(collection, document.Values, readContext.AllLocales, allowIncomplete, hooked, storedNulls)
+		// Projection builds a new root map, so the document keeps its values.
+		returned := store.Document{Values: document.Values}
+		projectDocumentValues(&returned, selected)
+		return validateReadOutput(collection, returned.Values, readContext.AllLocales, allowIncomplete, hooked, storedNulls)
 	}
 	if result.Document != nil {
 		return run(result.Document)

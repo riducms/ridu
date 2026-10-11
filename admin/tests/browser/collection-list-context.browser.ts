@@ -86,7 +86,8 @@ const access = {
 };
 function data(id: string, field = "title"): AdminCollectionListDataV1 {
 	return {
-		query: { trash: false },
+		// The server names the columns a page was read for; these match the seeded workspace.
+		query: { trash: false, columns: [field] },
 		counts: {},
 		page: {
 			value: {

@@ -137,7 +137,7 @@ func TestPopulatedFieldAccessUsesTargetProjectionSchema(t *testing.T) {
 		Context: t.Context(), Operation: operation.Read, Collection: source.Schema,
 		AllLocales: true, Locales: []schema.LocaleCode{"en", "fr"}, projections: localization.NewProjector(source.Schema.Fields),
 	}
-	if err := engine.redactResult(source, ctx, &Result{Document: &document}); err != nil {
+	if err := engine.redactResult(source, ctx, &Result{Document: &document}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if want := []schema.LocaleCode{"en", "fr"}; !reflect.DeepEqual(locales, want) {

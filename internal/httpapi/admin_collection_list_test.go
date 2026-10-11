@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -286,5 +288,161 @@ func TestAdminListTimestampFilterUsesQueryableSystemMetadata(t *testing.T) {
 	value, _ := expression.Node().Comparison.Value.StringValue()
 	if value != "2025-12-31T23:00:00Z" {
 		t.Fatalf("metadata timestamp = %q", value)
+	}
+}
+
+func TestAdminListSelectionReadsOnlyRenderedFields(t *testing.T) {
+	path := func(raw string) query.Path {
+		parsed, err := query.ParsePath(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return parsed
+	}
+	text := func(name string) schema.Field {
+		return schema.Field{ID: schema.StableID(name), Name: name, Path: path(name), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar}
+	}
+	parent := schema.Field{ID: "parent", Name: "parent", Path: path("parent"), Type: schema.FieldTypeRelationship, Category: schema.FieldCategoryScalar,
+		Relationship: &schema.RelationshipField{CollectionID: "posts", CollectionSlug: "posts"}}
+	meta := schema.Field{ID: "meta", Name: "meta", Path: path("meta"), Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{
+		{ID: "meta-views", Name: "views", Path: path("meta.views"), Type: schema.FieldTypeNumber, Category: schema.FieldCategoryScalar},
+	}}}
+	divider := schema.Field{ID: "divider", Name: "divider", Path: path("divider"), Type: schema.FieldTypeUI, Category: schema.FieldCategoryPresentation}
+	posts := schema.Collection{
+		ID: "posts", Slug: "posts",
+		Fields: []schema.Field{text("title"), text("body"), text("category"), meta, parent, text("badge"), text("extra"), text("cover"), divider},
+		Admin:  schema.CollectionAdmin{UseAsTitle: "title", DefaultColumns: []string{"category", "meta.views"}, ParentField: "parent"},
+	}
+	extensions := adminListExtensions{cells: map[string][]string{"badge": {"extra"}}, fields: []string{"cover"}}
+	for _, test := range []struct {
+		name       string
+		workspace  json.RawMessage
+		query      url.Values
+		extensions adminListExtensions
+		hierarchy  bool
+		want       []string
+	}{
+		{name: "default columns", want: []string{"category", "meta", "title"}},
+		{name: "custom cells join the defaults", extensions: extensions, want: []string{"badge", "category", "cover", "extra", "meta", "title"}},
+		{name: "a hidden cell reads nothing it declares", extensions: extensions, query: url.Values{"columns": {"category,-badge"}}, want: []string{"category", "cover", "title"}},
+		{name: "workspace", workspace: json.RawMessage(`{"columns":[{"path":"body","active":false},{"path":"meta.views","active":true}]}`), want: []string{"meta", "title"}},
+		{name: "hierarchy", hierarchy: true, want: []string{"category", "meta", "parent", "title"}},
+		{name: "browser declarations skip unknown and valueless fields", extensions: adminListExtensions{fields: []string{"extra", "missing", "divider"}}, query: url.Values{"columns": {"category"}}, want: []string{"category", "extra", "title"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			columns := adminListColumns(posts, test.workspace, test.query, test.extensions.cellFields())
+			got := slices.Sorted(maps.Keys(adminListSelection(posts, columns, test.hierarchy, test.extensions.declaredFields(posts, columns))))
+			if !slices.Equal(got, test.want) {
+				t.Fatalf("selection = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestAdminListPagesOmitFieldsTheListDoesNotRender(t *testing.T) {
+	field := func(name string) schema.Field {
+		path, _ := query.NewPath(name)
+		return schema.Field{ID: schema.StableID(name), Name: name, Path: path, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar}
+	}
+	posts := schema.Collection{ID: "posts", Slug: "posts", Fields: []schema.Field{field("title"), field("body"), field("category")}, Admin: schema.CollectionAdmin{UseAsTitle: "title", DefaultColumns: []string{"category"}}}
+	snapshot := schema.Snapshot{Version: schema.CurrentVersion, Application: schema.Application{Name: "select"}, Collections: []schema.Collection{posts}, Plugins: []schema.Plugin{}}
+	engine, err := operationengine.New(operationengine.Config{Store: teststore.New(), Collections: []operationengine.Collection{{Schema: posts}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Execute(t.Context(), operationengine.Request{Operation: operation.Create, Collection: "posts", ImportID: "post", Data: store.Values{"title": store.String("Acne care"), "body": store.String(strings.Repeat("long ", 100)), "category": store.String("Skin")}}); err != nil {
+		t.Fatal(err)
+	}
+	read := func(t *testing.T, handler http.Handler, target string) map[string]any {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, target, nil)
+		request.Header.Set("Accept", protocol.AdminPreparedRouteStateMediaType)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		data := &protocol.AdminCollectionListDataV1{}
+		if strings.HasPrefix(target, "/admin/") {
+			var state protocol.AdminPreparedRouteStateV1
+			if err := json.Unmarshal(response.Body.Bytes(), &state); err != nil {
+				t.Fatal(err)
+			}
+			if state.Route == nil || state.Route.Data == nil {
+				t.Fatalf("%s: %s", target, response.Body.String())
+			}
+			data = state.Route.Data
+		} else if err := json.Unmarshal(response.Body.Bytes(), data); err != nil {
+			t.Fatal(err)
+		}
+		if data.Page == nil || data.Page.Value == nil || len(data.Page.Value.Docs) != 1 {
+			t.Fatalf("%s: %s", target, response.Body.String())
+		}
+		return decodedDocument(t, data.Page.Value.Docs[0])
+	}
+	assets := adminInitialAssets(t)
+	handler := New(Config{AdminAssets: assets, Engine: engine, Manifest: schema.NewManifest(snapshot)})
+	// The prepared route reads extension fields from build metadata, never from its URL.
+	for _, target := range []string{"/admin/collections/posts", "/admin/collections/posts?fields=body", "/api/admin/collection-list/posts?part=page&columns=category"} {
+		document := read(t, handler, target)
+		if document["title"] != "Acne care" || document["category"] != "Skin" || document["id"] != "post" || document["createdAt"] == nil {
+			t.Fatalf("%s: rendered fields missing from %v", target, document)
+		}
+		if _, read := document["body"]; read {
+			t.Fatalf("%s: read a field the list doesn't render", target)
+		}
+	}
+	if document := read(t, handler, "/api/admin/collection-list/posts?part=page&columns=category&fields=body"); document["body"] == nil {
+		t.Fatal("browser read dropped a declared extension field")
+	}
+	// The response names what it was read for, so the admin can tell a page read for another layout.
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/admin/collection-list/posts?part=page&columns=category,-body,missing&fields=body,body", nil))
+	var echoed protocol.AdminCollectionListDataV1
+	if err := json.Unmarshal(response.Body.Bytes(), &echoed); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(echoed.Query.Columns, []string{"category"}) || !slices.Equal(echoed.Query.Fields, []string{"body"}) {
+		t.Fatalf("read for columns %v and fields %v", echoed.Query.Columns, echoed.Query.Fields)
+	}
+	var metadata adminBootstrapMetadata
+	if err := json.Unmarshal(assets["ridu-admin-bootstrap.json"].Data, &metadata); err != nil {
+		t.Fatal(err)
+	}
+	metadata.ListResultsFields = map[string][]string{"posts": {"body"}}
+	metadata.BuildID = adminBootstrapBuildID(metadata)
+	if assets["ridu-admin-bootstrap.json"].Data, err = json.Marshal(metadata); err != nil {
+		t.Fatal(err)
+	}
+	if document := read(t, New(Config{AdminAssets: assets, Engine: engine, Manifest: schema.NewManifest(snapshot)}), "/admin/collections/posts"); document["body"] == nil {
+		t.Fatal("prepared read dropped the results layout's declared field")
+	}
+}
+
+func TestAdminListPopulatesDeclaredRelationshipsExceptCustomCells(t *testing.T) {
+	field := func(name string, kind schema.FieldType) schema.Field {
+		path, _ := query.NewPath(name)
+		return schema.Field{ID: schema.StableID(name), Name: name, Path: path, Type: kind, Category: schema.FieldCategoryScalar}
+	}
+	author := field("author", schema.FieldTypeRelationship)
+	author.Relationship = &schema.RelationshipField{CollectionID: "authors", CollectionSlug: "authors"}
+	posts := schema.Collection{ID: "posts", Slug: "posts", Fields: []schema.Field{field("title", schema.FieldTypeText), author}}
+	authors := schema.Collection{ID: "authors", Slug: "authors", Fields: []schema.Field{field("name", schema.FieldTypeText)}}
+	snapshot := schema.Snapshot{Collections: []schema.Collection{posts, authors}}
+	populated := `{"author":{"select":{"id":true,"name":true}}}`
+	for _, test := range []struct {
+		name                     string
+		columns, cells, declared []string
+		want                     string
+	}{
+		// A declared relationship has the same shape whether or not its column is visible.
+		{name: "visible column", columns: []string{"title", "author"}, want: populated},
+		{name: "declared with its column hidden", columns: []string{"title"}, declared: []string{"author"}, want: populated},
+		{name: "custom cells receive saved values", columns: []string{"author"}, cells: []string{"author"}, declared: []string{"author"}, want: "null"},
+		{name: "not shown or declared", columns: []string{"title"}, want: "null"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, _ := json.Marshal(adminListPopulation(snapshot, posts, test.columns, test.cells, test.declared))
+			if string(got) != test.want {
+				t.Fatalf("population = %s, want %s", got, test.want)
+			}
+		})
 	}
 }

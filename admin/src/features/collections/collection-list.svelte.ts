@@ -137,6 +137,22 @@ export class CollectionList {
 			(results) => results.collection === this.slug
 		)
 	);
+	// The server reads only what the list renders. Browser reads don't use build metadata, so
+	// they name the custom cells, which receive saved values rather than populated ones, and the
+	// other fields the results layout and each visible custom cell declare.
+	#cellFields = $derived(this.#customListCells.map((cell) => cell.field.path).sort());
+	#extensionFields = $derived(
+		[
+			...new Set([
+				...(this.#customResults?.fields ?? []),
+				...this.#customListCells.flatMap((cell) =>
+					this.#visibleColumns.some((column) => column.path === cell.field.path)
+						? (cell.fields ?? [])
+						: []
+				),
+			]),
+		].sort()
+	);
 	#filtered = $derived(
 		this.#view.q !== "" ||
 			this.#view.status !== "" ||
@@ -186,6 +202,8 @@ export class CollectionList {
 				return query.readQuery({
 					limit: list.#pageSize,
 					columns: list.#visibleColumns.map((field) => field.path),
+					cells: list.#cellFields,
+					fields: list.#extensionFields,
 					locale: list.contentLocale,
 					trash: list.trashOnly,
 				});

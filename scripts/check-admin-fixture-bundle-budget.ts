@@ -21,7 +21,8 @@ const bootstrap = (await Bun.file(resolve(bootstrapRoot, "ridu-admin-bootstrap.j
 	buildId: string;
 	documentViewRoutes: string[];
 	extensionRoutes: string[];
-	listCellFields: Record<string, string[]>;
+	listCells: Record<string, Record<string, string[]>>;
+	listResultsFields: Record<string, string[]>;
 	moduleGroups: Record<string, string[]>;
 	replacedCoreViews: string[];
 	seedableCoreSurfaces: string[];
@@ -54,8 +55,10 @@ const expectedReplacements = [
 ];
 if (JSON.stringify(bootstrap.replacedCoreViews) !== JSON.stringify(expectedReplacements))
 	throw new Error("admin bootstrap metadata did not match the fixture's replaced core views");
-if (JSON.stringify(bootstrap.listCellFields) !== JSON.stringify({ posts: ["readingMinutes"] }))
+if (JSON.stringify(bootstrap.listCells) !== JSON.stringify({ posts: { readingMinutes: [] } }))
 	throw new Error("admin bootstrap metadata did not evaluate the fixture's additive list cells");
+if (JSON.stringify(bootstrap.listResultsFields) !== JSON.stringify({ categories: ["seo"] }))
+	throw new Error("admin bootstrap metadata did not evaluate the fixture's list results fields");
 if (bootstrap.seedableCoreSurfaces.includes("login"))
 	throw new Error("admin bootstrap metadata kept the replaced login surface seedable");
 if (!bootstrap.seedableCoreSurfaces.includes("setup"))
@@ -115,7 +118,8 @@ const bootstrapIdentity = JSON.stringify({
 	protocolVersion: bootstrap.protocolVersion,
 	documentViewRoutes: bootstrap.documentViewRoutes,
 	extensionRoutes: bootstrap.extensionRoutes,
-	listCellFields: bootstrap.listCellFields,
+	listCells: bootstrap.listCells,
+	listResultsFields: bootstrap.listResultsFields,
 	moduleGroups: bootstrap.moduleGroups,
 	replacedCoreViews: bootstrap.replacedCoreViews,
 	seedableCoreSurfaces: bootstrap.seedableCoreSurfaces,

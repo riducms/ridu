@@ -203,7 +203,7 @@ export interface AdminCollectionListPreferencesV1 {
 }
 
 export interface AdminCollectionListDataV1 {
-	query: { where?: Record<string, unknown>; countWhere?: Record<string, unknown>; locale?: string; trash: boolean };
+	query: { where?: Record<string, unknown>; countWhere?: Record<string, unknown>; locale?: string; trash: boolean; columns?: string[]; fields?: string[] };
 	page?: AdminCollectionListPageV1;
 	counts: Record<string, AdminCollectionListCountV1>;
 	preferences?: AdminCollectionListPreferencesV1;

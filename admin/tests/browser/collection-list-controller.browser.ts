@@ -102,6 +102,7 @@ async function fixture(
 		locale?: string;
 		trashOnly?: boolean;
 		slug?: string;
+		collection?: SchemaCollection;
 	} = {}
 ) {
 	let controller!: CollectionListController;
@@ -172,6 +173,46 @@ it("adopts explicit seeds before rendering, including retained pages and errors,
 	await controller.retry();
 	expect(controller.docs[0]?.id).toBe("retry");
 	expect(network.read).toHaveBeenCalledTimes(1);
+});
+
+it("reads again instead of adopting a page read for another column layout", async () => {
+	const network = clientFixture();
+	const title = {
+		id: "title",
+		name: "title",
+		path: "title",
+		type: "text",
+		category: "scalar",
+		required: false,
+		unique: false,
+		admin: { label: "Title" },
+	} as const;
+	const collection = {
+		id: "posts",
+		slug: "posts",
+		labels: { singular: "Post", plural: "Posts" },
+		fields: [title, { ...title, id: "status", name: "status", path: "status" }],
+		admin: {},
+		capabilities: { auth: false, upload: false, versions: false, trash: true, locking: false },
+	} satisfies SchemaCollection;
+	const covering = { ...data("seeded"), query: { trash: false, columns: ["status", "title"] } };
+	const { controller, props, screen } = await fixture(network.client, {
+		query: "columns=title,status&page=1",
+		collection,
+		prepared: covering,
+	});
+	expect(controller.docs[0]?.id).toBe("seeded");
+	expect(network.read).not.toHaveBeenCalled();
+
+	network.pageRead.mockResolvedValue(data("reread"));
+	await screen.rerender({
+		...props,
+		query: "columns=title,status&page=2",
+		prepared: { ...data("other-layout"), query: { trash: false, columns: ["title"] } },
+	});
+	await expect.poll(() => controller.docs[0]?.id).toBe("reread");
+	expect(network.read).toHaveBeenCalledTimes(1);
+	expect(network.read.mock.calls[0]?.[1]).toBe("columns=title,status&page=2");
 });
 
 it("retains selection for presentation changes, but clears selection for changed predicates", async () => {

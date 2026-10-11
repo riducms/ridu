@@ -74,6 +74,53 @@ test("list results reject competing renderers and replaced collection targets", 
 		)
 	).toThrow("replaced collection view");
 });
+test("list extensions declare only top-level fields that hold a value", () => {
+	const manifest = {
+		collections: [
+			{
+				slug: "posts",
+				fields: [
+					["status", "select", "scalar"],
+					["cover", "upload", "relationship"],
+					["summary", "virtual", "presentation"],
+					["divider", "ui", "presentation"],
+				].map(([name, type, category]) => ({ name, path: name, type, category, admin: {} })),
+			},
+		],
+		globals: [],
+		plugins: [],
+	} as unknown as Parameters<typeof validateAdminManifest>[1];
+	const cell = {
+		key: "status",
+		collection: "posts",
+		field: "status",
+		label: "Status",
+		fields: ["cover", "summary"],
+		component: Component,
+	};
+	const results = { key: "cards", collection: "posts", fields: ["cover"], component: Component };
+	validateAdminManifest(
+		resolveAdminConfig({ listCellRenderers: [cell], listResultsRenderers: [results] }),
+		manifest,
+		{ completeManifest: true }
+	);
+	for (const name of ["divider", "missing", "cover.alt"]) {
+		expect(() =>
+			validateAdminManifest(
+				resolveAdminConfig({ listCellRenderers: [{ ...cell, fields: [name] }] }),
+				manifest,
+				{ completeManifest: true }
+			)
+		).toThrow(`Admin list cell status reads unknown field posts.${name}.`);
+		expect(() =>
+			validateAdminManifest(
+				resolveAdminConfig({ listResultsRenderers: [{ ...results, fields: [name] }] }),
+				manifest,
+				{ completeManifest: true }
+			)
+		).toThrow(`Admin list results cards reads unknown field posts.${name}.`);
+	}
+});
 const plugin = defineAdminPlugin({
 	key: "paired",
 	pairingVersion: 1,

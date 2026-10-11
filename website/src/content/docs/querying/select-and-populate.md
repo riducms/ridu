@@ -64,6 +64,9 @@ curl -G "$RIDU/api/collections/posts" \
 `id`, `createdAt` and `updatedAt` are always included. A selected relationship stays an ID until you
 populate it. Select top-level fields; REST accepts at most 256.
 
+A selection only shapes the result. Read hooks and field read rules still receive the whole
+document, so a rule that checks another field gives the same answer whichever fields you select.
+
 In TypeScript, a literal `select` narrows the result's type to the selected fields. If you build
 the options separately, keep them literal with `as const` or `satisfies`, or the type stays broad.
 
@@ -108,7 +111,8 @@ curl -G "$RIDU/api/collections/posts" \
 
 Leave out `select` to get the whole related document. Ridu reads each related document with the
 caller's own access, so a document they can't read stays out, and fields they can't read are
-removed. In Go, a populated relationship's value is a `store.Populated` document.
+removed. As with a top-level `select`, the related collection's field read rules still see the
+whole document. In Go, a populated relationship's value is a `store.Populated` document.
 
 In TypeScript, a literal `populate` changes the relationship's type from an ID to the related
 document, including the fields you selected.

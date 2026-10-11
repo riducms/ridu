@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import type { SchemaField } from "@riducms/protocol";
-import { CollectionListQuery } from "@admin/features/collections/collection-list-query";
+import type { SchemaCollection, SchemaField } from "@riducms/protocol";
+import {
+	CollectionListQuery,
+	listPageCovers,
+} from "@admin/features/collections/collection-list-query";
 
 const titleField = {
 	id: "title",
@@ -44,11 +47,31 @@ function fixture(search: string) {
 describe("collection list URL behavior", () => {
 	it("uses normalized runtime locale for reads, including unlocalized applications", () => {
 		const { query } = fixture("locale=removed&q=hello");
-		const options = { limit: 10 as const, columns: ["title"], locale: undefined, trash: false };
+		const options = {
+			limit: 10 as const,
+			columns: ["title"],
+			cells: [],
+			fields: [],
+			locale: undefined,
+			trash: false,
+		};
 		expect(new URLSearchParams(query.readQuery(options)).has("locale")).toBe(false);
 		expect(new URLSearchParams(query.readQuery({ ...options, locale: "fr" })).get("locale")).toBe(
 			"fr"
 		);
+	});
+	it("names custom cells and extension fields only from the mounted list, never the URL", () => {
+		const { query } = fixture("cells=title&fields=body&q=hello");
+		const options = { limit: 10 as const, columns: ["title"], locale: undefined, trash: false };
+		const read = new URLSearchParams(query.readQuery({ ...options, cells: [], fields: [] }));
+		expect([read.has("cells"), read.has("fields")]).toEqual([false, false]);
+		const declared = new URLSearchParams(
+			query.readQuery({ ...options, cells: ["readingMinutes"], fields: ["cover", "status"] })
+		);
+		expect([declared.get("cells"), declared.get("fields")]).toEqual([
+			"readingMinutes",
+			"cover,status",
+		]);
 	});
 	it("reads subsequent navigation instead of retaining the initial query", () => {
 		const { query, visit } = fixture("q=first&page=2&sort=-title&locale=en");
@@ -136,5 +159,41 @@ describe("collection list URL behavior", () => {
 		expect(state.query.pageSize(25)).toBe(100);
 		expect(state.query.page).toBe(1);
 		expect(state.query.locale).toBe("fr");
+	});
+});
+
+describe("list page coverage", () => {
+	const collection = {
+		slug: "posts",
+		fields: [titleField, { ...titleField, id: "status", name: "status", path: "status" }],
+	} as SchemaCollection;
+
+	it("accepts a page read for every value column and declared field", () => {
+		const query = "columns=title,status,id,createdAt&fields=cover&page=2";
+		expect(
+			listPageCovers(
+				query,
+				{ trash: false, columns: ["status", "title"], fields: ["cover"] },
+				collection
+			)
+		).toBe(true);
+		// Metadata columns are always returned, and reading more than the list shows is harmless.
+		expect(
+			listPageCovers(
+				"columns=title,id",
+				{ trash: false, columns: ["title", "status"], fields: ["cover"] },
+				collection
+			)
+		).toBe(true);
+		expect(listPageCovers("page=1", { trash: false }, collection)).toBe(true);
+	});
+
+	it("rejects a page read for another layout or without a declared field", () => {
+		expect(
+			listPageCovers("columns=title,status", { trash: false, columns: ["title"] }, collection)
+		).toBe(false);
+		expect(
+			listPageCovers("columns=title&fields=cover", { trash: false, columns: ["title"] }, collection)
+		).toBe(false);
 	});
 });

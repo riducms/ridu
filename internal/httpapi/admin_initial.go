@@ -30,17 +30,20 @@ import (
 const maxAdminPreparedRouteBytes = 2 << 20
 
 type adminBootstrapMetadata struct {
-	DashboardLoaders     []string            `json:"dashboardLoaders"`
-	RouteLoaders         map[string]string   `json:"routeLoaders"`
-	ViewLoaders          map[string]string   `json:"viewLoaders"`
-	ProtocolVersion      uint32              `json:"protocolVersion"`
-	BuildID              string              `json:"buildId"`
-	DocumentViewRoutes   []string            `json:"documentViewRoutes"`
-	ExtensionRoutes      []string            `json:"extensionRoutes"`
-	ListCellFields       map[string][]string `json:"listCellFields"`
-	ModuleGroups         map[string][]string `json:"moduleGroups"`
-	ReplacedCoreViews    []string            `json:"replacedCoreViews"`
-	SeedableCoreSurfaces []string            `json:"seedableCoreSurfaces"`
+	DashboardLoaders   []string          `json:"dashboardLoaders"`
+	RouteLoaders       map[string]string `json:"routeLoaders"`
+	ViewLoaders        map[string]string `json:"viewLoaders"`
+	ProtocolVersion    uint32            `json:"protocolVersion"`
+	BuildID            string            `json:"buildId"`
+	DocumentViewRoutes []string          `json:"documentViewRoutes"`
+	ExtensionRoutes    []string          `json:"extensionRoutes"`
+	// ListCells maps each collection's custom list cells to the other fields they
+	// read, and ListResultsFields its results layout's fields.
+	ListCells            map[string]map[string][]string `json:"listCells"`
+	ListResultsFields    map[string][]string            `json:"listResultsFields"`
+	ModuleGroups         map[string][]string            `json:"moduleGroups"`
+	ReplacedCoreViews    []string                       `json:"replacedCoreViews"`
+	SeedableCoreSurfaces []string                       `json:"seedableCoreSurfaces"`
 }
 
 type adminPreparedRequestIDContextKey struct{}
@@ -57,7 +60,7 @@ type adminRouteClassification struct {
 	surface        string
 	segments       []string
 	location       string
-	listCellFields []string
+	listExtensions adminListExtensions
 }
 
 func (api *API) adminBootstrapMetadata() (adminBootstrapMetadata, error) {
@@ -150,16 +153,17 @@ func adminBootstrapBuildID(metadata adminBootstrapMetadata) string {
 	// BuildID is deliberately omitted from its own digest. The remaining fields
 	// are the complete static routing and module-selection contract.
 	encoded, _ := json.Marshal(struct {
-		DashboardLoaders     []string            `json:"dashboardLoaders"`
-		RouteLoaders         map[string]string   `json:"routeLoaders"`
-		ViewLoaders          map[string]string   `json:"viewLoaders"`
-		ProtocolVersion      uint32              `json:"protocolVersion"`
-		DocumentViewRoutes   []string            `json:"documentViewRoutes"`
-		ExtensionRoutes      []string            `json:"extensionRoutes"`
-		ListCellFields       map[string][]string `json:"listCellFields"`
-		ModuleGroups         map[string][]string `json:"moduleGroups"`
-		ReplacedCoreViews    []string            `json:"replacedCoreViews"`
-		SeedableCoreSurfaces []string            `json:"seedableCoreSurfaces"`
+		DashboardLoaders     []string                       `json:"dashboardLoaders"`
+		RouteLoaders         map[string]string              `json:"routeLoaders"`
+		ViewLoaders          map[string]string              `json:"viewLoaders"`
+		ProtocolVersion      uint32                         `json:"protocolVersion"`
+		DocumentViewRoutes   []string                       `json:"documentViewRoutes"`
+		ExtensionRoutes      []string                       `json:"extensionRoutes"`
+		ListCells            map[string]map[string][]string `json:"listCells"`
+		ListResultsFields    map[string][]string            `json:"listResultsFields"`
+		ModuleGroups         map[string][]string            `json:"moduleGroups"`
+		ReplacedCoreViews    []string                       `json:"replacedCoreViews"`
+		SeedableCoreSurfaces []string                       `json:"seedableCoreSurfaces"`
 	}{
 		DashboardLoaders:     metadata.DashboardLoaders,
 		RouteLoaders:         metadata.RouteLoaders,
@@ -167,7 +171,8 @@ func adminBootstrapBuildID(metadata adminBootstrapMetadata) string {
 		ProtocolVersion:      metadata.ProtocolVersion,
 		DocumentViewRoutes:   metadata.DocumentViewRoutes,
 		ExtensionRoutes:      metadata.ExtensionRoutes,
-		ListCellFields:       metadata.ListCellFields,
+		ListCells:            metadata.ListCells,
+		ListResultsFields:    metadata.ListResultsFields,
 		ModuleGroups:         metadata.ModuleGroups,
 		ReplacedCoreViews:    metadata.ReplacedCoreViews,
 		SeedableCoreSurfaces: metadata.SeedableCoreSurfaces,
@@ -861,7 +866,7 @@ func (api *API) completeAdminPreparedRoute(state *protocol.AdminPreparedRouteSta
 			preferences.Workspace = api.readAdminListPreference(request, identity.identity, "collection:"+slug+":workspace")
 			preferences.Presets = api.readAdminListPreference(request, identity.identity, "collection:"+slug+":presets")
 		}
-		data := api.loadAdminCollectionList(request, runtime.Manifest, identity.identity, slug, classification.kind == protocol.AdminPreparedRouteCollectionTrash, adminRouteLocale(runtime, request.URL.Query()), classification.listCellFields, "page", preferences.Workspace.Value)
+		data := api.loadAdminCollectionList(request, runtime.Manifest, identity.identity, slug, classification.kind == protocol.AdminPreparedRouteCollectionTrash, adminRouteLocale(runtime, request.URL.Query()), classification.listExtensions, "page", preferences.Workspace.Value)
 		data.Preferences = preferences
 		state.Route.Data = &data
 		return
@@ -977,7 +982,7 @@ func (api *API) prepareAdminStateBase(request *http.Request, metadata adminBoots
 		classification.loaders = metadata.DashboardLoaders
 	}
 	if classification.surface == "collectionList" {
-		classification.listCellFields = metadata.ListCellFields[classification.segments[1]]
+		classification.listExtensions = adminListExtensions{cells: metadata.ListCells[classification.segments[1]], fields: metadata.ListResultsFields[classification.segments[1]]}
 	}
 	if classification.location != "" {
 		state.Outcome = protocol.AdminPreparedRouteRedirect

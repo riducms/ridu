@@ -16,6 +16,9 @@
 			>
 				{list.title(document)}
 			</Link>
+			{#if typeof document.readingMinutes === 'number'}
+				<p class="text-sm">{document.readingMinutes} min read</p>
+			{/if}
 			<Button
 				variant="outline"
 				class="post-cards__select"

@@ -6,6 +6,7 @@ import (
 
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/population"
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -114,17 +115,23 @@ func unknownBlockRecoveryError(fields []schema.Field, values store.Values, canon
 }
 
 // Validate populated targets against their own schemas before exposing content.
-func (engine *Engine) validateBlockResponse(collection Collection, document *store.Document, allLocales, canonical bool) error {
-	if err := unknownBlockRecoveryError(collection.Schema.Fields, document.Values, canonical); err != nil {
+// A document read whole for read callbacks is checked only within the roots it
+// returns: selected for this one, and populations, by population path, for the
+// populated documents it holds. Nil selected checks every root.
+func (engine *Engine) validateBlockResponse(collection Collection, document *store.Document, allLocales, canonical bool, selected []query.Path, populations map[string][]query.Path) error {
+	// Projection builds a new root map, so the document keeps its values.
+	returned := store.Document{Values: document.Values}
+	projectDocumentValues(&returned, selected)
+	if err := unknownBlockRecoveryError(collection.Schema.Fields, returned.Values, canonical); err != nil {
 		return err
 	}
 	var nestedError error
-	population.MapPopulatedDocuments(collection.Schema.Fields, document.Values, canonical, func(targetID schema.StableID, _ schema.LocaleCode, targetDocument store.Document) store.Document {
+	population.MapPopulatedDocumentsAtPaths(collection.Schema.Fields, returned.Values, canonical, func(path string, targetID schema.StableID, _ schema.LocaleCode, targetDocument store.Document) store.Document {
 		if nestedError != nil {
 			return targetDocument
 		}
 		if target, exists := engine.collections[string(targetID)]; exists {
-			nestedError = engine.validateBlockResponse(target, &targetDocument, allLocales, allLocales)
+			nestedError = engine.validateBlockResponse(target, &targetDocument, allLocales, allLocales, populations[path], nil)
 		}
 		return targetDocument
 	})

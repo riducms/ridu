@@ -22,7 +22,7 @@ To replace the toolbar and the rest of the page too, use a
 
 ## 1. Render the documents {#component}
 
-```svelte title="admin/src/components/post-cards.svelte" focus={11,14-18,20-33}
+```svelte title="admin/src/components/post-cards.svelte" focus={11,14-21,23-36}
 <script lang="ts">
 	import type { AdminListResultsRendererProps } from '@riducms/plugin';
 	import { Link } from '@riducms/admin/routing';
@@ -41,6 +41,9 @@ To replace the toolbar and the rest of the page too, use a
 			>
 				{list.title(document)}
 			</Link>
+			{#if typeof document.readingMinutes === 'number'}
+				<p class="text-sm">{document.readingMinutes} min read</p>
+			{/if}
 			<Button
 				variant="outline"
 				class="post-cards__select"
@@ -62,6 +65,12 @@ To replace the toolbar and the rest of the page too, use a
 
 [`AdminListResultsRendererProps`](/reference/plugin/admin-list-results-renderer-props/) supplies the
 current `list`. Use it directly—do not fetch the documents again or copy them into local state.
+
+Each document holds what the list shows: its ID, timestamps, title field and visible columns.
+The list doesn't return other fields, so name any other field the layout uses in `fields` when
+you register it (step 2). Here, `readingMinutes` appears on every card even when its column is
+hidden. A relationship or upload field named there arrives as the related document's ID and
+title.
 
 `list.title(document)` uses the collection's configured title field, falling back to its ID.
 `list.documentHref(document)` builds the document destination with its encoded ID and content
@@ -96,7 +105,7 @@ overrides.
 
 ## 2. Choose the collection {#register}
 
-```ts title="admin/src/admin.config.ts" focus={7-9}
+```ts title="admin/src/admin.config.ts" focus={7-14}
 import { defineAdmin } from '@riducms/plugin/admin';
 import { generatedAdminPlugins } from './ridu.plugins.generated';
 import PostCards from './components/post-cards.svelte';
@@ -104,10 +113,19 @@ import PostCards from './components/post-cards.svelte';
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
 	listResultsRenderers: [
-		{ key: 'post-cards', collection: 'posts', component: PostCards }
+		{
+			key: 'post-cards',
+			collection: 'posts',
+			fields: ['readingMinutes'],
+			component: PostCards
+		}
 	]
 });
 ```
+
+`fields` names the other top-level fields the cards read. Without it, a card loses
+`readingMinutes` whenever an author hides that column. Ridu checks the names against the
+collection when it builds the admin.
 
 Add this entry to your existing `admin.config.ts`, keeping its other settings.
 With `bun run dev` running, open **Posts**. Existing posts should appear as cards below

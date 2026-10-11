@@ -222,6 +222,12 @@ export function isAdminCollectionListData(value: unknown): value is AdminCollect
 	if (value.query.locale !== undefined && typeof value.query.locale !== "string") return false;
 	if (value.query.where !== undefined && !isRecord(value.query.where)) return false;
 	if (value.query.countWhere !== undefined && !isRecord(value.query.countWhere)) return false;
+	for (const names of [value.query.columns, value.query.fields])
+		if (
+			names !== undefined &&
+			!(Array.isArray(names) && names.every((name) => typeof name === "string"))
+		)
+			return false;
 	if (
 		value.page !== undefined &&
 		!isReadResult(value.page, (page) => {

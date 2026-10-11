@@ -192,11 +192,33 @@ export function validateAdminManifest(
 				`Admin view ${"key" in view ? view.key : view.path} requires a matching generated Go loader; run ridu generate.`
 			);
 	}
+	// List reads select top-level fields that hold a value, as REST select does. A declaration
+	// outside them would silently read nothing.
+	const checkListFields = (
+		owner: string,
+		collection: (typeof manifest.collections)[number] | undefined,
+		fields: readonly string[] | undefined
+	) => {
+		for (const name of fields ?? [])
+			if (
+				!collection?.fields.some(
+					(field) =>
+						field.name === name &&
+						(field.category !== "presentation" || field.type === "join" || field.type === "virtual")
+				)
+			)
+				throw new Error(`${owner} reads unknown field ${collection?.slug}.${name}.`);
+	};
 	for (const results of extensions.listResultsRenderers) {
 		if (!collections.has(results.collection))
 			throw new Error(
 				`Admin list results ${results.key} selects unknown collection ${results.collection}.`
 			);
+		checkListFields(
+			`Admin list results ${results.key}`,
+			collections.get(results.collection),
+			results.fields
+		);
 		if (
 			extensions.coreViews.some(
 				(view) =>
@@ -212,6 +234,7 @@ export function validateAdminManifest(
 			throw new Error(
 				`Admin list cell ${cell.key} selects unknown field ${cell.collection}.${cell.field}.`
 			);
+		checkListFields(`Admin list cell ${cell.key}`, collection, cell.fields);
 	}
 	for (const view of extensions.coreViews) {
 		if ("collection" in view && view.collection !== undefined && !collections.has(view.collection))

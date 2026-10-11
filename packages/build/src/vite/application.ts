@@ -387,7 +387,8 @@ function riduAdminBootstrapMetadataPlugin(): Plugin {
 					viewLoaders,
 					documentViewRoutes,
 					extensionRoutes,
-					listCellFields,
+					listCells,
+					listResultsFields,
 					seedableCoreSurfaces,
 					replacedCoreViews,
 				} = coreMetadata;
@@ -401,7 +402,8 @@ function riduAdminBootstrapMetadataPlugin(): Plugin {
 					protocolVersion: ADMIN_PREPARED_ROUTE_STATE_VERSION,
 					documentViewRoutes,
 					extensionRoutes,
-					listCellFields,
+					listCells,
+					listResultsFields,
 					moduleGroups,
 					replacedCoreViews,
 					seedableCoreSurfaces,
@@ -419,7 +421,8 @@ function riduAdminBootstrapMetadataPlugin(): Plugin {
 							buildId,
 							documentViewRoutes,
 							extensionRoutes,
-							listCellFields,
+							listCells,
+							listResultsFields,
 							moduleGroups,
 							replacedCoreViews,
 							seedableCoreSurfaces,
@@ -439,7 +442,8 @@ interface AdminCoreViewMetadata {
 	viewLoaders: Record<string, string>;
 	documentViewRoutes: string[];
 	extensionRoutes: string[];
-	listCellFields: Record<string, string[]>;
+	listCells: Record<string, Record<string, string[]>>;
+	listResultsFields: Record<string, string[]>;
 	replacedCoreViews: string[];
 	seedableCoreSurfaces: string[];
 }
@@ -451,7 +455,8 @@ function emptyAdminCoreViewMetadata(): AdminCoreViewMetadata {
 		viewLoaders: {},
 		documentViewRoutes: [],
 		extensionRoutes: [],
-		listCellFields: {},
+		listCells: {},
+		listResultsFields: {},
 		replacedCoreViews: [],
 		seedableCoreSurfaces: [
 			"account",
@@ -632,19 +637,24 @@ export default JSON.stringify({
     ),
   ].sort(),
   extensionRoutes: [...new Set(resolved.extensions.routes.map((route) => route.path))].sort(),
-  listCellFields: Object.fromEntries(
+  // The fields list extensions declare, so the prepared route reads what they render.
+  listCells: Object.fromEntries(
     [...new Set(resolved.extensions.listCellRenderers.map((cell) => cell.collection))]
       .sort()
       .map((collection) => [
         collection,
-        [
-          ...new Set(
-            resolved.extensions.listCellRenderers
-              .filter((cell) => cell.collection === collection)
-              .map((cell) => cell.field),
-          ),
-        ].sort(),
+        Object.fromEntries(
+          resolved.extensions.listCellRenderers
+            .filter((cell) => cell.collection === collection)
+            .map((cell) => [cell.field, [...new Set(cell.fields ?? [])].sort()])
+            .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
+        ),
       ]),
+  ),
+  listResultsFields: Object.fromEntries(
+    resolved.extensions.listResultsRenderers
+      .map((results) => [results.collection, [...new Set(results.fields ?? [])].sort()])
+      .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
   ),
   replacedCoreViews: [...replaced].sort(),
   seedableCoreSurfaces: [...seedable].sort(),

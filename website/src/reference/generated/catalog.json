@@ -9073,7 +9073,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.21.1\"",
+					"signature": "const FrameworkVersion = \"0.22.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -83617,7 +83617,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 198
+						"line": 202
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83651,7 +83651,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 253
+						"line": 257
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83710,7 +83710,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 243
+						"line": 247
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83777,7 +83777,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 230
+						"line": 234
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83834,7 +83834,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 261
+						"line": 265
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83873,7 +83873,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 271
+						"line": 275
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83905,7 +83905,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 297
+						"line": 301
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83937,7 +83937,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 302
+						"line": 306
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83969,7 +83969,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 292
+						"line": 296
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84008,7 +84008,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 308
+						"line": 312
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84050,7 +84050,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 314
+						"line": 318
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84084,7 +84084,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 321
+						"line": 325
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84128,7 +84128,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 380
+						"line": 384
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84217,7 +84217,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 350
+						"line": 354
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84259,7 +84259,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 368
+						"line": 372
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84296,7 +84296,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 388
+						"line": 392
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84335,7 +84335,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 395
+						"line": 399
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84374,7 +84374,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 401
+						"line": 405
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84423,7 +84423,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 417
+						"line": 421
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84482,7 +84482,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 407
+						"line": 411
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84519,7 +84519,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 425
+						"line": 429
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84593,7 +84593,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 327
+						"line": 331
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84627,7 +84627,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 339
+						"line": 343
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84661,7 +84661,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 343
+						"line": 347
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84710,7 +84710,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 431
+						"line": 435
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84774,7 +84774,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 444
+						"line": 448
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84808,7 +84808,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 455
+						"line": 459
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84842,7 +84842,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 460
+						"line": 464
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84874,7 +84874,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 491
+						"line": 495
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84906,7 +84906,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 497
+						"line": 501
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84938,7 +84938,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 503
+						"line": 507
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84992,7 +84992,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 522
+						"line": 526
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85044,7 +85044,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 531
+						"line": 535
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85078,7 +85078,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 540
+						"line": 544
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85112,7 +85112,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 545
+						"line": 549
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85166,7 +85166,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 508
+						"line": 512
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85200,7 +85200,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 517
+						"line": 521
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85236,7 +85236,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 551
+						"line": 555
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85262,7 +85262,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 202
+						"line": 206
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85288,7 +85288,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 210
+						"line": 214
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85314,7 +85314,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 206
+						"line": 210
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85340,7 +85340,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 204
+						"line": 208
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85366,7 +85366,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 205
+						"line": 209
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85392,7 +85392,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 209
+						"line": 213
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85418,7 +85418,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 207
+						"line": 211
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85444,7 +85444,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 211
+						"line": 215
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85470,7 +85470,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 219
+						"line": 223
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85496,7 +85496,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 203
+						"line": 207
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85522,7 +85522,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 208
+						"line": 212
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85548,7 +85548,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 220
+						"line": 224
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85574,7 +85574,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 201
+						"line": 205
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85611,7 +85611,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 118
+						"line": 122
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85695,7 +85695,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 113
+						"line": 117
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85732,7 +85732,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 128
+						"line": 132
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85769,7 +85769,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 123
+						"line": 127
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85782,7 +85782,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Public type AdminCollectionListQueryV1 from github.com/riducms/ridu/protocol.",
-					"signature": "type AdminCollectionListQueryV1 struct {\n\tWhere      json.RawMessage `json:\"where,omitempty\"`\n\tCountWhere json.RawMessage `json:\"countWhere,omitempty\"`\n\tLocale     string          `json:\"locale,omitempty\"`\n\tTrash      bool            `json:\"trash\"`\n}",
+					"signature": "type AdminCollectionListQueryV1 struct {\n\tWhere      json.RawMessage `json:\"where,omitempty\"`\n\tCountWhere json.RawMessage `json:\"countWhere,omitempty\"`\n\tLocale     string          `json:\"locale,omitempty\"`\n\tTrash      bool            `json:\"trash\"`\n\t// Columns are the active column paths a page was read for, and Fields the\n\t// other fields its list extensions declared. The page holds no other field.\n\tColumns []string `json:\"columns,omitempty\"`\n\tFields  []string `json:\"fields,omitempty\"`\n}",
 					"parameters": [
 						{
 							"name": "Where",
@@ -85803,6 +85803,16 @@
 							"name": "Trash",
 							"type": "bool",
 							"description": "The Trash value."
+						},
+						{
+							"name": "Columns",
+							"type": "[]string",
+							"description": "Columns are the active column paths a page was read for, and Fields the\nother fields its list extensions declared. The page holds no other field."
+						},
+						{
+							"name": "Fields",
+							"type": "[]string",
+							"description": "The Fields value."
 						}
 					],
 					"parametersLabel": "",
@@ -85932,7 +85942,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 135
+						"line": 139
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86265,7 +86275,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 172
+						"line": 176
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86752,7 +86762,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 177
+						"line": 181
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86876,7 +86886,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 143
+						"line": 147
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86906,7 +86916,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 159
+						"line": 163
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87059,7 +87069,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 278
+						"line": 282
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87101,7 +87111,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 285
+						"line": 289
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87184,7 +87194,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 223
+						"line": 227
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87210,7 +87220,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 215
+						"line": 219
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87236,7 +87246,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 226
+						"line": 230
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87262,7 +87272,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 218
+						"line": 222
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87492,7 +87502,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 476
+						"line": 480
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87529,7 +87539,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 485
+						"line": 489
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87555,7 +87565,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 465
+						"line": 469
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87581,7 +87591,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 469
+						"line": 473
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87607,7 +87617,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 472
+						"line": 476
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116821,7 +116831,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 274
+						"line": 280
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116861,7 +116871,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 286
+						"line": 292
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116899,7 +116909,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 327
+						"line": 333
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117035,7 +117045,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 304
+						"line": 310
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121344,7 +121354,7 @@
 					"parameters": [
 						{
 							"name": "query",
-							"type": "{ where?: Record<string, unknown>; countWhere?: Record<string, unknown>; locale?: string; trash: boolean; }",
+							"type": "{ where?: Record<string, unknown>; countWhere?: Record<string, unknown>; locale?: string; trash: boolean; columns?: string[]; fields?: string[]; }",
 							"description": "The query value."
 						},
 						{
@@ -122471,7 +122481,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 344
+						"line": 350
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122509,7 +122519,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 315
+						"line": 321
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126102,6 +126112,11 @@
 							"description": "The field value."
 						},
 						{
+							"name": "fields",
+							"type": "readonly string[]",
+							"description": "Other top-level fields the cell reads from `document`, for example `[\"status\"]`. The list\nreturns only the fields it shows, so name every other value the cell uses. A relationship or\nupload field arrives as the related document's ID and title, like a relationship column."
+						},
+						{
 							"name": "label",
 							"type": "string",
 							"description": "The label value."
@@ -127284,7 +127299,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
-						"line": 55
+						"line": 72
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -128529,7 +128544,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin.ts",
-						"line": 240
+						"line": 263
 					},
 					"relatedDocs": [
 						"/docs/custom-components/row-labels/"
@@ -128565,9 +128580,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@10928",
+							"name": "__@registration@10932",
 							"type": "true",
-							"description": "The __@registration@10928 value."
+							"description": "The __@registration@10932 value."
 						}
 					],
 					"parametersLabel": "",
@@ -128581,7 +128596,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin.ts",
-						"line": 244
+						"line": 267
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -128802,7 +128817,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin.ts",
-						"line": 243
+						"line": 266
 					},
 					"relatedDocs": [
 						"/docs/custom-components/row-labels/"
@@ -128871,7 +128886,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin.ts",
-						"line": 242
+						"line": 265
 					},
 					"relatedDocs": [
 						"/docs/custom-components/row-labels/"
@@ -129725,9 +129740,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@8016",
+							"name": "__@registration@8020",
 							"type": "true",
-							"description": "The __@registration@8016 value."
+							"description": "The __@registration@8020 value."
 						}
 					],
 					"parametersLabel": "",
@@ -129840,7 +129855,7 @@
 						{
 							"name": "documents",
 							"type": "readonly FieldDocument[]",
-							"description": "The documents value."
+							"description": "The current page. Each document holds its metadata, title, visible columns and the fields\nthe results layout declares in `fields`; the list doesn't read anything else."
 						},
 						{
 							"name": "selectedIDs",
@@ -129933,7 +129948,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
-						"line": 18
+						"line": 22
 					},
 					"relatedDocs": [
 						"/docs/custom-components/list-results/"
@@ -129973,7 +129988,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
-						"line": 16
+						"line": 20
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -130016,7 +130031,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
-						"line": 14
+						"line": 18
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -130054,7 +130069,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
-						"line": 15
+						"line": 19
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -130202,6 +130217,11 @@
 							"description": "The collection value."
 						},
 						{
+							"name": "fields",
+							"type": "readonly string[]",
+							"description": "Top-level fields the layout reads beyond the title and visible columns, for example\n`[\"cover\"]`. The list returns only the fields it shows. A relationship or upload field\narrives as the related document's ID and title, like a relationship column."
+						},
+						{
 							"name": "component",
 							"type": "Component<AdminListResultsRendererProps, {}, string>",
 							"description": "The component value."
@@ -130259,7 +130279,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/lib/admin-extensions/lists.ts",
-						"line": 31
+						"line": 41
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -131556,9 +131576,9 @@
 							"description": "The type value."
 						},
 						{
-							"name": "__@valueContract@6083",
+							"name": "__@valueContract@6085",
 							"type": "{ value: (value: Value) => Value; input: (value: Input) => Input; }",
-							"description": "The __@valueContract@6083 value."
+							"description": "The __@valueContract@6085 value."
 						},
 						{
 							"name": "fieldType",
@@ -131591,9 +131611,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@6062",
+							"name": "__@registration@6064",
 							"type": "true",
-							"description": "The __@registration@6062 value."
+							"description": "The __@registration@6064 value."
 						}
 					],
 					"parametersLabel": "",
@@ -132067,9 +132087,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@6062",
+							"name": "__@registration@6064",
 							"type": "true",
-							"description": "The __@registration@6062 value."
+							"description": "The __@registration@6064 value."
 						}
 					],
 					"parametersLabel": "",

@@ -5,6 +5,11 @@ import PostCards from './components/post-cards.svelte';
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
 	listResultsRenderers: [
-		{ key: 'post-cards', collection: 'posts', component: PostCards }
+		{
+			key: 'post-cards',
+			collection: 'posts',
+			fields: ['readingMinutes'],
+			component: PostCards
+		}
 	]
 });

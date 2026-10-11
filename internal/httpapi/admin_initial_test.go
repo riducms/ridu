@@ -972,7 +972,7 @@ func TestAdminInitialListCellsKeepCorePreparationAndMatchColumnPopulation(t *tes
 		{name: "query", query: url.Values{"columns": {"custom,standard"}}, column: "standard"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			got, _ := json.Marshal(adminListPopulation(snapshot, posts, test.workspace, test.query, []string{"custom"}))
+			got, _ := json.Marshal(adminListPopulation(snapshot, posts, adminListColumns(posts, test.workspace, test.query, []string{"custom"}), []string{"custom"}, nil))
 			want, _ := json.Marshal(map[string]any{test.column: map[string]any{"select": map[string]any{"id": true, "name": true}}})
 			if string(got) != string(want) {
 				t.Fatalf("population = %s, want %s", got, want)
@@ -984,7 +984,7 @@ func TestAdminInitialListCellsKeepCorePreparationAndMatchColumnPopulation(t *tes
 	if err := json.Unmarshal(assets["ridu-admin-bootstrap.json"].Data, &metadata); err != nil {
 		t.Fatal(err)
 	}
-	metadata.ListCellFields = map[string][]string{"posts": {"custom"}}
+	metadata.ListCells = map[string]map[string][]string{"posts": {"custom": {}}}
 	metadata.BuildID = adminBootstrapBuildID(metadata)
 	encoded, err := json.Marshal(metadata)
 	if err != nil {
@@ -1153,7 +1153,7 @@ func adminInitialAssets(t *testing.T) fstest.MapFS {
 	metadata := adminBootstrapMetadata{
 		ProtocolVersion:    protocol.AdminPreparedRouteStateVersion,
 		DocumentViewRoutes: []string{}, ExtensionRoutes: []string{}, ReplacedCoreViews: []string{},
-		ListCellFields: map[string][]string{},
+		ListCells: map[string]map[string][]string{}, ListResultsFields: map[string][]string{},
 		ModuleGroups: map[string][]string{
 			"date": {"assets/app.js"}, "document": {"assets/app.js"}, "document-api": {"assets/app.js"}, "versions": {"assets/app.js"},
 			"entry": {"assets/app.js"}, "upload-preview": {"assets/app.js"}, "bulk-upload": {"assets/app.js"},

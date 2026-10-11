@@ -1,9 +1,17 @@
 <script lang="ts">
-	import type { AdminListResultsRendererProps } from "@riducms/plugin";
+	import type { AdminListResultsRendererProps, FieldDocument } from "@riducms/plugin";
 	import { Button } from "@riducms/ui";
 	import { Link } from "@riducms/admin/routing";
 
 	let { list, i18n }: AdminListResultsRendererProps = $props();
+
+	// The registration declares `seo`, so the list reads it although no column shows it.
+	function description(document: FieldDocument) {
+		const seo = document.seo;
+		return typeof seo === "object" && seo !== null && "description" in seo
+			? String(seo.description ?? "")
+			: "";
+	}
 </script>
 
 <div class="grid gap-4 py-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="category-cards">
@@ -27,7 +35,7 @@
 					{list.title(document)}
 				</Link>
 			</div>
-			<p class="text-sm text-foreground-muted">{String(document.description ?? "")}</p>
+			<p class="text-sm text-foreground-muted">{description(document)}</p>
 		</article>
 	{/each}
 </div>

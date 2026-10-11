@@ -28,6 +28,7 @@ This example displays a `readingMinutes` number as `5 min read` in the Posts tab
 | `listCellRenderers[].field`      | Yes      | Selects one top-level field name/path in that collection.                    |
 | `listCellRenderers[].label`      | Yes      | Provides the fallback column heading.                                        |
 | `listCellRenderers[].labelKey`   | No       | Uses a registered translated message for the heading.                        |
+| `listCellRenderers[].fields`     | No       | Names other top-level fields the cell reads from `document`.                 |
 | `listCellRenderers[].component`  | Yes      | Displays the saved `value` and document; it is not an editable form binding. |
 
 ## 1. Create the cell {#component}
@@ -45,8 +46,14 @@ This example displays a `readingMinutes` number as `5 min read` in the Posts tab
 ```
 
 Ridu passes this cell's `value` to the component. The example checks that it is a number before
-formatting it and shows `Not set` for an empty value. You can also receive `document` to read
-other saved values from the same row.
+formatting it and shows `Not set` for an empty value.
+
+The component also receives `document`, which holds what the list shows: the row's ID,
+timestamps, title field and visible columns. The list doesn't return other fields. To use another
+value from the row, name its field in the registration's `fields`, for example
+`fields: ['status']`. Ridu returns those fields whenever the cell's column is visible. A
+relationship or upload field named there arrives as the related document's ID and title, like a
+relationship column; the cell's own `value` is always the saved value.
 
 ## 2. Register it for a column {#register}
 

@@ -66,6 +66,13 @@ Per-user column/page-size choices and saved views use authenticated preferences.
 Relationship and upload cells resolve readable labels through access-checked requests. A redacted
 field stays redacted in the table even if another user saved it as a visible column.
 
+The list returns only what it shows: each document's ID, timestamps, title field and visible
+columns, the parent field in a hierarchy, and any fields that
+[custom cells](./custom-components/list-cells.md) or a
+[list layout](./custom-components/list-results.md) declare. A long rich-text body stays out of
+the response until someone shows its column. Search, filters and sorting run in the database, so
+they work on fields the list doesn't return.
+
 ![A Posts list in the Ridu admin showing one published post with search, filter, column, saved-view, sort, and selection controls.](https://raw.githubusercontent.com/riducms/ridu/main/docs/assets/ridu-admin-posts-list.png)
 
 Choose **API reference** in the collection header to inspect list, read, create, update, and delete

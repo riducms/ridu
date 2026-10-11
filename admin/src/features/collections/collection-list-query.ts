@@ -1,6 +1,7 @@
 import type { CollectionListPreset } from "@admin/features/collections/collection-list-preferences-controller.svelte";
-import type { SchemaField } from "@riducms/protocol";
+import type { AdminCollectionListDataV1, SchemaCollection, SchemaField } from "@riducms/protocol";
 import {
+	listColumnFields,
 	parseListFilters,
 	parseListPageSize,
 	sortableField,
@@ -11,6 +12,28 @@ import {
 	type ListFilterGroup,
 	type ListPageSize,
 } from "@admin/features/collections/list-workspace";
+
+/**
+ * Whether a page was read for every value column and extension field a list read query names.
+ * The server resolves a navigation's columns from the saved layout, which can differ from the
+ * mounted list's own, for example after another tab saved a different one.
+ */
+export function listPageCovers(
+	query: string,
+	read: AdminCollectionListDataV1["query"],
+	collection: SchemaCollection | undefined
+) {
+	const params = new URLSearchParams(query);
+	const names = (key: string) => (params.get(key) ?? "").split(",").filter(Boolean);
+	// Metadata columns are always returned, so only value columns need reading.
+	const valueColumns = new Set(listColumnFields(collection).map((field) => field.path));
+	const columns = new Set(read.columns);
+	const fields = new Set(read.fields);
+	return (
+		names("columns").every((path) => !valueColumns.has(path) || columns.has(path)) &&
+		names("fields").every((name) => fields.has(name))
+	);
+}
 
 /** Reads and updates the collection URL. The router remains the source of truth. */
 export class CollectionListQuery {
@@ -30,12 +53,18 @@ export class CollectionListQuery {
 	readQuery(options: {
 		limit: ListPageSize;
 		columns: string[];
+		cells: string[];
+		fields: string[];
 		locale: string | undefined;
 		trash: boolean;
 	}) {
 		const query = new URLSearchParams(this.params.current);
 		query.set("limit", String(options.limit));
 		query.set("columns", options.columns.join(","));
+		for (const key of ["cells", "fields"] as const) {
+			if (options[key].length === 0) query.delete(key);
+			else query.set(key, options[key].join(","));
+		}
 		if (options.locale === undefined) query.delete("locale");
 		else query.set("locale", options.locale);
 		query.set("trash", String(options.trash));

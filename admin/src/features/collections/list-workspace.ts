@@ -342,7 +342,7 @@ export function encodeColumnSelection(columns: readonly ListColumnSelection[]) {
 /** Group leaves become columns; repeated values are not flattened into table cells. */
 function groupColumnFields(group: SchemaField): SchemaField[] {
 	return (group.nested?.fields ?? []).flatMap((child) => {
-		if (child.type === "blocks") return [];
+		if (child.type === "blocks" || child.type === "ui") return [];
 		const field = group.queryRestricted ? { ...child, queryRestricted: true } : child;
 		const labelled = {
 			...field,

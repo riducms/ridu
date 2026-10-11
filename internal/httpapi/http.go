@@ -3586,7 +3586,7 @@ func decodeSelection(encoded string, collection schema.Collection) (fieldSelecti
 			continue
 		}
 		field, exists := topLevelField(collection, name)
-		if !exists || field.Category == schema.FieldCategoryPresentation && field.Type != schema.FieldTypeJoin && field.Type != schema.FieldTypeVirtual {
+		if !exists || !selectableField(field) {
 			return fieldSelection{}, fmt.Errorf("select field %q is not defined", name)
 		}
 		path, _ := query.NewPath(name)
@@ -3597,6 +3597,12 @@ func decodeSelection(encoded string, collection schema.Collection) (fieldSelecti
 		selection.stored = append(selection.stored, path)
 	}
 	return selection, nil
+}
+
+// selectableField reports whether select may name a top-level field. Presentation
+// fields hold no value, except joins and virtual fields, which are computed output.
+func selectableField(field schema.Field) bool {
+	return field.Category != schema.FieldCategoryPresentation || field.Type == schema.FieldTypeJoin || field.Type == schema.FieldTypeVirtual
 }
 
 func topLevelField(collection schema.Collection, name string) (schema.Field, bool) {

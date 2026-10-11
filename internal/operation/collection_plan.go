@@ -45,6 +45,8 @@ type collectionPlan struct {
 	bindingLast [][]int
 	// fieldAfterRead reports that a binding has an after-read hook.
 	fieldAfterRead bool
+	// fieldReadRule reports that a binding has a read access rule.
+	fieldReadRule bool
 }
 
 // outputPlan is the read-output contract of one field list: a resource's root
@@ -178,6 +180,7 @@ func newCollectionPlan(collection Collection, planner *outputPlanner) *collectio
 	narrowed := collection.placement.shared
 	for index, binding := range collection.Bindings {
 		plan.fieldAfterRead = plan.fieldAfterRead || len(binding.Hooks.AfterRead) != 0
+		plan.fieldReadRule = plan.fieldReadRule || binding.Access.Read != nil
 		if binding.Block != "" {
 			plan.definitionIndex[binding.Field.ID] = index
 			continue
@@ -271,6 +274,12 @@ func (lazy *lazyObject) hasAny(names []string) bool {
 // between the store and the response.
 func readHooksChangeValues(collection Collection) bool {
 	return len(collection.Hooks.AfterRead) != 0 || collection.runtimePlan().fieldAfterRead
+}
+
+// readCallbacksObserveDocument reports whether a read hook or field read rule
+// runs on each document a read returns. Neither declares the values it uses.
+func readCallbacksObserveDocument(collection Collection) bool {
+	return readHooksChangeValues(collection) || collection.runtimePlan().fieldReadRule
 }
 
 // outputLocation is one checked value's place in a document. Paths are built

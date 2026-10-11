@@ -170,3 +170,32 @@ func mustPath(t *testing.T, segments ...string) query.Path {
 	}
 	return path
 }
+
+// Paths match population requests: array rows add nothing, a block row adds
+// its block type, and an all-locales value adds no locale.
+func TestMapPopulatedDocumentsAtPathsReportsPopulationPaths(t *testing.T) {
+	relationship := func(name string, localized bool) schema.Field {
+		return schema.Field{Name: name, Type: schema.FieldTypeRelationship, Localized: localized, Relationship: &schema.RelationshipField{CollectionID: "people", CollectionSlug: "people"}}
+	}
+	quote := schema.BlockType{Slug: "quote", Fields: []schema.Field{relationship("source", false)}}
+	fields := schematest.Bind(t, "posts", []schema.BlockType{quote},
+		relationship("author", true),
+		schema.Field{Name: "links", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{relationship("page", false)}}},
+		schema.Field{Name: "sections", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{BlockReferences: []string{"quote"}}},
+	)
+	person := func(id string) store.Value { return store.Populated(store.Document{ID: id}) }
+	values := store.Values{
+		"author":   store.Object(store.Values{"en": person("en"), "fr": person("fr")}),
+		"links":    store.List(store.Object(store.Values{"page": person("link")})),
+		"sections": store.List(store.Object(store.Values{"blockType": store.String("quote"), "source": person("quote")})),
+	}
+	paths := map[string]string{}
+	population.MapPopulatedDocumentsAtPaths(fields, values, true, func(path string, _ schema.StableID, _ schema.LocaleCode, document store.Document) store.Document {
+		paths[document.ID] = path
+		return document
+	})
+	want := map[string]string{"en": "author", "fr": "author", "link": "links.page", "quote": "sections.quote.source"}
+	if !reflect.DeepEqual(paths, want) {
+		t.Fatalf("paths = %v, want %v", paths, want)
+	}
+}

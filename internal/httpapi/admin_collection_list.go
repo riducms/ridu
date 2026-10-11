@@ -3,10 +3,12 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"math"
 	"math/big"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -52,14 +54,47 @@ func (api *API) adminCollectionList(writer http.ResponseWriter, request *http.Re
 		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "list part must be page or counts"})
 		return
 	}
-	data := api.loadAdminCollectionList(request, snapshot, identity, slug, request.URL.Query().Get("trash") == "true", request.URL.Query().Get("locale"), nil, part, nil)
+	extensions := adminListExtensions{cells: map[string][]string{}, fields: uniqueNonEmptyStrings(strings.Split(request.URL.Query().Get("fields"), ","))}
+	for _, cell := range uniqueNonEmptyStrings(strings.Split(request.URL.Query().Get("cells"), ",")) {
+		extensions.cells[cell] = nil
+	}
+	data := api.loadAdminCollectionList(request, snapshot, identity, slug, request.URL.Query().Get("trash") == "true", request.URL.Query().Get("locale"), extensions, part, nil)
 	writeJSON(writer, http.StatusOK, data)
+}
+
+// adminListExtensions describes the custom cells and results layout registered for
+// one collection's list. The prepared route reads them from build metadata. Browser
+// reads don't depend on build metadata, so the admin sends its custom cells' fields
+// and every field its extensions declare instead.
+type adminListExtensions struct {
+	// cells maps each custom cell's field to the other fields that cell reads.
+	cells map[string][]string
+	// fields are read whichever columns are active: the results layout's
+	// declaration, or everything a browser read's extensions declare.
+	fields []string
+}
+
+func (extensions adminListExtensions) cellFields() []string {
+	return slices.Sorted(maps.Keys(extensions.cells))
+}
+
+// declaredFields returns the layout's fields and those of every custom cell whose
+// column is active, matching the fields the mounted list sends.
+func (extensions adminListExtensions) declaredFields(collection schema.Collection, columns []string) []string {
+	declared := slices.Clone(extensions.fields)
+	fields := adminListColumnFields(collection)
+	for cell, cellFields := range extensions.cells {
+		if field := adminFieldByPath(fields, cell); field != nil && slices.Contains(columns, field.Path.String()) {
+			declared = append(declared, cellFields...)
+		}
+	}
+	return declared
 }
 
 // loadAdminCollectionList owns list query planning for cold documents, router
 // navigation, browser fallback, refresh and focused retry. Each read still has
 // its own ordinary engine lifecycle; this is not a batch transaction or cache.
-func (api *API) loadAdminCollectionList(request *http.Request, snapshot schema.Snapshot, identity *AuthIdentity, slug string, trash bool, locale string, listCellFields []string, part string, workspace json.RawMessage) protocol.AdminCollectionListDataV1 {
+func (api *API) loadAdminCollectionList(request *http.Request, snapshot schema.Snapshot, identity *AuthIdentity, slug string, trash bool, locale string, extensions adminListExtensions, part string, workspace json.RawMessage) protocol.AdminCollectionListDataV1 {
 	values := request.URL.Query()
 	collection := adminCollection(snapshot, slug)
 	data := protocol.AdminCollectionListDataV1{Query: protocol.AdminCollectionListQueryV1{Locale: locale, Trash: trash}, Counts: map[string]protocol.AdminCollectionListCountV1{}}
@@ -79,7 +114,8 @@ func (api *API) loadAdminCollectionList(request *http.Request, snapshot schema.S
 	}
 	// Hierarchy mode uses one capped page instead of user pagination so ordinary parent/child sets
 	// are read together. The 100-document bound still applies to larger hierarchies.
-	if !trash && collection.Admin.ParentField != "" && values.Get("view") == "hierarchy" {
+	hierarchy := !trash && collection.Admin.ParentField != "" && values.Get("view") == "hierarchy"
+	if hierarchy {
 		page, limit = 1, 100
 	}
 	parameters := url.Values{"page": {strconv.Itoa(page)}, "limit": {strconv.Itoa(limit)}, "include-access": {"true"}}
@@ -103,9 +139,18 @@ func (api *API) loadAdminCollectionList(request *http.Request, snapshot schema.S
 		if sort := values.Get("sort"); sort != "" && adminListSortAllowed(*collection, sort) {
 			parameters.Set("sort", sort)
 		}
-		if population := adminListPopulation(snapshot, *collection, workspace, values, listCellFields); population != nil {
+		columns := adminListColumns(*collection, workspace, values, extensions.cellFields())
+		declared := extensions.declaredFields(*collection, columns)
+		// The admin reads again when these don't cover its own columns, as when a
+		// navigation resolved another tab's saved layout.
+		data.Query.Columns, data.Query.Fields = columns, slices.Sorted(slices.Values(uniqueNonEmptyStrings(declared)))
+		if population := adminListPopulation(snapshot, *collection, columns, extensions.cellFields(), declared); population != nil {
 			encoded, _ := json.Marshal(population)
 			parameters.Set("populate", string(encoded))
+		}
+		if selection := adminListSelection(*collection, columns, hierarchy, declared); selection != nil {
+			encoded, _ := json.Marshal(selection)
+			parameters.Set("select", string(encoded))
 		}
 		options, err := decodeListQuery(parameters, *collection, true)
 		var result protocol.CollectionPageEnvelope[json.RawMessage]
@@ -534,11 +579,10 @@ func adminTitleField(collection schema.Collection) *schema.Field {
 			return &collection.Fields[index]
 		}
 	}
-	for _, name := range []string{"title", "name"} {
-		for index := range collection.Fields {
-			if collection.Fields[index].Name == name {
-				return &collection.Fields[index]
-			}
+	// The first field named title or name, matching the admin's displayed title.
+	for index := range collection.Fields {
+		if collection.Fields[index].Name == "title" || collection.Fields[index].Name == "name" {
+			return &collection.Fields[index]
 		}
 	}
 	for index := range collection.Fields {
@@ -555,25 +599,27 @@ func adminTitleField(collection schema.Collection) *schema.Field {
 	return nil
 }
 
+// adminListColumnFields mirrors the admin's list columns: group leaves become
+// columns, while UI fields and blocks inside groups never do.
 func adminListColumnFields(collection schema.Collection) []schema.Field {
 	var result []schema.Field
-	var appendFields func([]schema.Field, bool)
-	appendFields = func(fields []schema.Field, inheritedRestricted bool) {
+	var appendFields func([]schema.Field, bool, bool)
+	appendFields = func(fields []schema.Field, inheritedRestricted, nested bool) {
 		for _, field := range fields {
 			field.QueryRestricted = field.QueryRestricted || inheritedRestricted
-			if field.Type == schema.FieldTypeUI {
+			if field.Type == schema.FieldTypeUI || nested && field.Type == schema.FieldTypeBlocks {
 				continue
 			}
 			if field.Type == schema.FieldTypeGroup {
 				if field.Nested != nil {
-					appendFields(field.Nested.Fields, field.QueryRestricted)
+					appendFields(field.Nested.Fields, field.QueryRestricted, true)
 				}
 				continue
 			}
 			result = append(result, field)
 		}
 	}
-	appendFields(collection.Fields, false)
+	appendFields(collection.Fields, false, false)
 	return result
 }
 
@@ -600,12 +646,64 @@ func adminListSortAllowed(collection schema.Collection, raw string) bool {
 	}
 }
 
-func adminListPopulation(snapshot schema.Snapshot, collection schema.Collection, workspace json.RawMessage, query url.Values, listCellFields []string) map[string]any {
+// adminListColumns resolves the active column paths in the mounted list's
+// precedence: the configured defaults plus every custom cell, replaced by a saved
+// workspace selection, replaced in turn by an explicit URL selection.
+func adminListColumns(collection schema.Collection, workspace json.RawMessage, query url.Values, cellFields []string) []string {
 	fields := adminListColumnFields(collection)
+	resolve := func(names []string) []string {
+		paths := make([]string, 0, len(names))
+		for _, name := range names {
+			if field := adminFieldByPath(fields, name); field != nil {
+				paths = append(paths, field.Path.String())
+			}
+		}
+		return uniqueNonEmptyStrings(paths)
+	}
+	columns := resolve(collection.Admin.DefaultColumns)
+	if len(columns) == 0 && len(fields) != 0 {
+		columns = []string{fields[0].Path.String()}
+	}
+	columns = resolve(append(columns, cellFields...))
+	if len(workspace) != 0 {
+		var decoded map[string]json.RawMessage
+		var storedColumns []any
+		if json.Unmarshal(workspace, &decoded) == nil && json.Unmarshal(decoded["columns"], &storedColumns) == nil && storedColumns != nil {
+			var active []string
+			for _, value := range storedColumns {
+				entry, ok := value.(map[string]any)
+				if !ok {
+					continue
+				}
+				name, _ := entry["path"].(string)
+				if selected, _ := entry["active"].(bool); selected {
+					active = append(active, name)
+				}
+			}
+			columns = resolve(active)
+		}
+	}
+	if _, present := query["columns"]; present {
+		columns = resolve(strings.Split(query.Get("columns"), ","))
+	}
+	return columns
+}
+
+// adminListPopulation reads the ID and title of the documents that relationship
+// and upload columns name. Declared fields get the same, so their shape doesn't
+// depend on whether their column is visible.
+func adminListPopulation(snapshot schema.Snapshot, collection schema.Collection, columns, cellFields, declared []string) map[string]any {
+	fields := adminListColumnFields(collection)
+	columns = slices.Clone(columns)
+	for _, name := range declared {
+		if field, exists := topLevelField(collection, name); exists && adminFieldByPath(fields, field.Path.String()) != nil {
+			columns = append(columns, field.Path.String())
+		}
+	}
 
 	// Custom cells receive document values directly, not the standard relationship-label population.
-	customPaths := make(map[string]bool, len(listCellFields))
-	for _, name := range listCellFields {
+	customPaths := make(map[string]bool, len(cellFields))
+	for _, name := range cellFields {
 		for _, field := range collection.Fields {
 			if field.Path.String() == name || field.Name == name {
 				customPaths[field.Path.String()] = true
@@ -613,51 +711,10 @@ func adminListPopulation(snapshot schema.Snapshot, collection schema.Collection,
 			}
 		}
 	}
-	available := make([]schema.Field, 0, len(fields))
-	for _, field := range fields {
-		if !customPaths[field.Path.String()] {
-			available = append(available, field)
-		}
-	}
-	defaults := make([]string, 0, 2)
-	for _, configured := range collection.Admin.DefaultColumns {
-		if field := adminFieldByPath(available, configured); field != nil {
-			defaults = append(defaults, field.Path.String())
-		}
-	}
-	if len(defaults) == 0 {
-		for index := 0; index < len(available) && index < 1; index++ {
-			defaults = append(defaults, available[index].Path.String())
-		}
-	}
-	columns := defaults
-	// Precedence mirrors the mounted list controller: saved workspace selection
-	// replaces defaults, and an explicit URL selection replaces both.
-	if len(workspace) != 0 {
-		var decoded map[string]json.RawMessage
-		var storedColumns []any
-		if json.Unmarshal(workspace, &decoded) == nil && json.Unmarshal(decoded["columns"], &storedColumns) == nil && storedColumns != nil {
-			columns = nil
-			for _, value := range storedColumns {
-				entry, ok := value.(map[string]any)
-				if !ok {
-					continue
-				}
-				name, _ := entry["path"].(string)
-				active, _ := entry["active"].(bool)
-				if active && adminFieldByPath(available, name) != nil {
-					columns = append(columns, name)
-				}
-			}
-		}
-	}
-	if _, present := query["columns"]; present {
-		columns = adminEligibleColumnNames(uniqueNonEmptyStrings(strings.Split(query.Get("columns"), ",")), available)
-	}
 	population := map[string]any{}
 	for _, name := range columns {
-		field := adminFieldByPath(available, name)
-		if field == nil {
+		field := adminFieldByPath(fields, name)
+		if field == nil || customPaths[field.Path.String()] {
 			continue
 		}
 		targets := adminPopulationTargets(*field)
@@ -680,14 +737,37 @@ func adminListPopulation(snapshot schema.Snapshot, collection schema.Collection,
 	return population
 }
 
-func adminEligibleColumnNames(names []string, fields []schema.Field) []string {
-	result := make([]string, 0, len(names))
-	for _, name := range names {
-		if adminFieldByPath(fields, name) != nil {
-			result = append(result, name)
+// adminListSelection names the top-level fields a list page renders: the title,
+// the active columns (a group's column reads its group), the parent field in a
+// hierarchy and the fields list extensions declare. Filters, sorting and access
+// are store predicates, so they need no returned values. Metadata is always
+// returned. Nil reads complete documents when the set exceeds the select limit.
+func adminListSelection(collection schema.Collection, columns []string, hierarchy bool, declared []string) map[string]bool {
+	selection := map[string]bool{}
+	add := func(name string) {
+		if field, exists := topLevelField(collection, name); exists && selectableField(field) {
+			selection[name] = true
 		}
 	}
-	return result
+	if title := adminTitleField(collection); title != nil {
+		add(title.Name)
+	}
+	fields := adminListColumnFields(collection)
+	for _, column := range columns {
+		if field := adminFieldByPath(fields, column); field != nil && field.Path.Len() != 0 {
+			add(field.Path.Segment(0))
+		}
+	}
+	if hierarchy {
+		add(collection.Admin.ParentField)
+	}
+	for _, name := range declared {
+		add(name)
+	}
+	if len(selection) > maxSelectionFields {
+		return nil
+	}
+	return selection
 }
 
 func uniqueNonEmptyStrings(values []string) []string {

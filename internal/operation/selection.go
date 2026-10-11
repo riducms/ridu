@@ -105,36 +105,18 @@ func (engine *Engine) ResolveFilteredSelection(ctx context.Context, request Filt
 		}
 	}
 
+	capabilities, missing, err := engine.documentCapabilities(state.transaction, collection, operationContext, selection.IDs, store.Request{
+		Filter: filter, Access: readDecision.Access, Deletion: deletion,
+	}, request.TrashOnly, localeSelection)
+	if err != nil {
+		return FilteredSelectionResult{}, err
+	}
+	if len(missing) != 0 {
+		return FilteredSelectionResult{}, &Error{Code: "conflict", Status: 409, Message: "filtered selection changed while it was being resolved"}
+	}
 	items := make([]FilteredSelectionItem, len(selection.IDs))
 	for index, id := range selection.IDs {
-		if err := ctx.Err(); err != nil {
-			return FilteredSelectionResult{}, err
-		}
-		document, findError := state.transaction.Find(transactionContext, store.Request{
-			Collection: collection.Schema, Collections: engine.schemas, ID: id,
-			Filter: filter, Access: readDecision.Access, Deletion: deletion,
-			Locales: localeSelection.Configured, LocaleChain: localeSelection.Chain, AllLocales: localeSelection.All,
-		})
-		if errors.Is(findError, store.ErrNotFound) {
-			return FilteredSelectionResult{}, &Error{Code: "conflict", Status: 409, Message: "filtered selection changed while it was being resolved"}
-		}
-		if findError != nil {
-			if errors.Is(findError, context.Canceled) || errors.Is(findError, context.DeadlineExceeded) {
-				return FilteredSelectionResult{}, findError
-			}
-			return FilteredSelectionResult{}, &Error{Code: "store_failed", Status: 500, Message: "read filtered selection document", Cause: findError}
-		}
-		document = localization.ProjectDocument(document, collection.Schema.Fields, localeSelection)
-		itemContext := operationContext
-		itemContext.ID = id
-		itemContext.Data = store.CloneValues(document.Values)
-		capabilities, capabilityError := engine.capabilitiesInTransaction(state.transaction, collection, itemContext, &document, deletion, request.TrashOnly, localeSelection)
-		if capabilityError != nil {
-			return FilteredSelectionResult{}, capabilityError
-		}
-		items[index] = FilteredSelectionItem{
-			ID: id, Capabilities: capabilities,
-		}
+		items[index] = FilteredSelectionItem{ID: id, Capabilities: capabilities[id]}
 	}
 	return FilteredSelectionResult{Items: items}, nil
 }

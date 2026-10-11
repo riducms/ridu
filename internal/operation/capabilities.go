@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/riducms/ridu/internal/localization"
 	"github.com/riducms/ridu/operation"
@@ -270,18 +271,18 @@ func (engine *Engine) MutatePublicationTarget(ctx context.Context, request Capab
 }
 
 func (engine *Engine) capabilitiesInTransaction(transaction store.Transaction, collection Collection, operationContext Context, document *store.Document, deletion store.DeletionMode, trashOnly bool, selection localization.Selection) (AccessCapabilities, error) {
-	operations, err := engine.operationCapabilities(transaction, collection, operationContext, document, deletion, trashOnly, selection)
+	operations, err := engine.operationCapabilities(transaction, collection, operationContext, document, deletion, trashOnly, selection, nil)
 	if err != nil {
 		return AccessCapabilities{}, err
 	}
-	if operationContext.ID != "" && document == nil && !collection.Schema.Capabilities.Global && !hasDocumentCapability(operations) {
+	if operationContext.ID != "" && document == nil && !collection.Schema.Capabilities.Global && !hasDocumentCapability(*operations) {
 		return AccessCapabilities{}, &Error{Code: "not_found", Status: 404, Message: "document was not found"}
 	}
-	capabilities, err := fieldCapabilities(collection, operationContext, document, operations)
+	capabilities, err := fieldCapabilities(collection, operationContext, document, *operations)
 	if err != nil {
 		return AccessCapabilities{}, err
 	}
-	capabilities.Operations = operations
+	capabilities.Operations = *operations
 	return capabilities, nil
 }
 
@@ -290,68 +291,219 @@ func (engine *Engine) collectionPageAccess(transaction store.Transaction, collec
 	if err != nil {
 		return nil, err
 	}
-	documents := make(map[string]AccessCapabilities, len(page.Documents))
-	for _, listed := range page.Documents {
-		if err := base.Context.Err(); err != nil {
-			return nil, err
-		}
-		document, findError := transaction.Find(base.Context, store.Request{
-			Collection: collection.Schema, Collections: engine.schemas, ID: listed.ID,
-			Access: readDecision.Access, Deletion: deletion, PublishedOnly: publishedOnly,
-			Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: selection.All,
-		})
-		if findError != nil {
-			return nil, translateStoreError(fmt.Errorf("read collection list capability document: %w", findError))
-		}
-		document = localization.ProjectDocument(document, collection.Schema.Fields, selection)
-		operationContext := base
-		operationContext.ID = document.ID
-		operationContext.Data = store.CloneValues(document.Values)
-		access, capabilityError := engine.capabilitiesInTransaction(transaction, collection, operationContext, &document, deletion, trashOnly, selection)
-		if capabilityError != nil {
-			return nil, capabilityError
-		}
-		documents[document.ID] = access
+	ids := make([]string, len(page.Documents))
+	for index, listed := range page.Documents {
+		ids[index] = listed.ID
+	}
+	documents, missing, err := engine.documentCapabilities(transaction, collection, base, ids, store.Request{
+		Access: readDecision.Access, Deletion: deletion, PublishedOnly: publishedOnly,
+	}, trashOnly, selection)
+	if err != nil {
+		return nil, err
+	}
+	if len(missing) != 0 {
+		return nil, translateStoreError(fmt.Errorf("read collection list capability document %q: %w", missing[0], store.ErrNotFound))
 	}
 	return &CollectionPageAccess{Collection: collectionAccess, Documents: documents}, nil
 }
 
-func (engine *Engine) operationCapabilities(transaction store.Transaction, collection Collection, base Context, document *store.Document, deletion store.DeletionMode, trashOnly bool, selection localization.Selection) (OperationCapabilities, error) {
-	allowed := func(kind operation.Kind, data store.Values, targetDeletion store.DeletionMode) (bool, error) {
+// documentCapabilities evaluates the access of many documents with a bounded
+// number of store reads: one read of their complete documents per hundred, and
+// one per hundred for each distinct filtered decision, instead of reads for
+// every document. read supplies the document read's access, filter, deletion
+// and draft scope. missing lists the IDs that read no longer finds.
+func (engine *Engine) documentCapabilities(transaction store.Transaction, collection Collection, base Context, ids []string, read store.Request, trashOnly bool, selection localization.Selection) (map[string]AccessCapabilities, []string, error) {
+	read.Collection, read.Collections = collection.Schema, engine.schemas
+	read.Locales, read.LocaleChain, read.AllLocales = selection.Configured, selection.Chain, selection.All
+	stored, err := engine.documentsByID(transaction, base.Context, ids, read)
+	if err != nil {
+		return nil, nil, capabilityReadError("read capability documents", err)
+	}
+	type evaluated struct {
+		context    Context
+		document   store.Document
+		operations *OperationCapabilities
+	}
+	documents := make([]evaluated, 0, len(ids))
+	var missing []string
+	var checks []capabilityCheck
+	for _, id := range ids {
+		if err := base.Context.Err(); err != nil {
+			return nil, nil, err
+		}
+		document, found := stored[id]
+		if !found {
+			missing = append(missing, id)
+			continue
+		}
+		document = localization.ProjectDocument(document, collection.Schema.Fields, selection)
+		operationContext := base
+		operationContext.ID = id
+		operationContext.Data = store.CloneValues(document.Values)
+		documents = append(documents, evaluated{context: operationContext, document: document})
+	}
+	for index := range documents {
+		current := &documents[index]
+		current.operations, err = engine.operationCapabilities(transaction, collection, current.context, &current.document, read.Deletion, trashOnly, selection, &checks)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	if err := engine.resolveCapabilityChecks(transaction, base.Context, collection, checks, selection); err != nil {
+		return nil, nil, err
+	}
+	result := make(map[string]AccessCapabilities, len(documents))
+	for _, current := range documents {
+		// Field rules see the resolved operations, as for a single document.
+		capabilities, err := fieldCapabilities(collection, current.context, &current.document, *current.operations)
+		if err != nil {
+			return nil, nil, err
+		}
+		capabilities.Operations = *current.operations
+		result[current.document.ID] = capabilities
+	}
+	return result, missing, nil
+}
+
+// capabilityReadError keeps cancellation recognizable to callers.
+func capabilityReadError(action string, err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	return translateStoreError(fmt.Errorf("%s: %w", action, err))
+}
+
+// capabilityBatchSize bounds the IDs one batched capability read names.
+const capabilityBatchSize = MaxBatchDocuments
+
+// documentsByID reads the complete documents that request matches among ids,
+// in reads of at most capabilityBatchSize IDs.
+func (engine *Engine) documentsByID(transaction store.Transaction, ctx context.Context, ids []string, request store.Request) (map[string]store.Document, error) {
+	documents := make(map[string]store.Document, len(ids))
+	for start := 0; start < len(ids); start += capabilityBatchSize {
+		chunk := ids[start:min(start+capabilityBatchSize, len(ids))]
+		chunkRequest := request
+		chunkRequest.Filter = idFilter(chunk, request.Filter)
+		chunkRequest.Page, chunkRequest.Limit, chunkRequest.SkipTotal = 1, len(chunk), true
+		page, err := transaction.List(ctx, chunkRequest)
+		if err != nil {
+			return nil, err
+		}
+		for _, document := range page.Documents {
+			documents[document.ID] = document
+		}
+	}
+	return documents, nil
+}
+
+// idFilter matches the documents among ids that also match filter, if any.
+func idFilter(ids []string, filter *query.Node) *query.Node {
+	node := query.In("id", ids...).Node()
+	if filter != nil {
+		node = query.Node{Kind: query.ExpressionAnd, Children: []query.Node{node, *filter}}
+	}
+	return &node
+}
+
+// capabilityCheck is a filtered decision about one document, answered with
+// the other checks that share its predicate and deletion scope. allowed is set
+// once the check is resolved.
+type capabilityCheck struct {
+	id       string
+	access   *query.Node
+	deletion store.DeletionMode
+	allowed  *bool
+}
+
+// resolveCapabilityChecks answers checks with one metadata-only read per
+// hundred documents for each distinct predicate and deletion scope. A
+// predicate matches a document exactly when a single filtered read would.
+func (engine *Engine) resolveCapabilityChecks(transaction store.Transaction, ctx context.Context, collection Collection, checks []capabilityCheck, selection localization.Selection) error {
+	type group struct {
+		access   *query.Node
+		deletion store.DeletionMode
+		members  []int
+	}
+	var groups []group
+	for index, check := range checks {
+		matched := false
+		for candidate := range groups {
+			if groups[candidate].deletion == check.deletion && reflect.DeepEqual(*groups[candidate].access, *check.access) {
+				groups[candidate].members = append(groups[candidate].members, index)
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			groups = append(groups, group{access: check.access, deletion: check.deletion, members: []int{index}})
+		}
+	}
+	for _, group := range groups {
+		ids := make([]string, 0, len(group.members))
+		seen := make(map[string]bool, len(group.members))
+		for _, member := range group.members {
+			if id := checks[member].id; !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+		matching, err := engine.documentsByID(transaction, ctx, ids, store.Request{
+			Collection: collection.Schema, Collections: engine.schemas, Access: group.access,
+			Deletion: group.deletion, Select: []query.Path{},
+			Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: selection.All,
+		})
+		if err != nil {
+			return capabilityReadError("evaluate filtered capabilities", err)
+		}
+		for _, member := range group.members {
+			_, *checks[member].allowed = matching[checks[member].id]
+		}
+	}
+	return nil
+}
+
+// operationCapabilities evaluates every operation for one document or, without
+// an ID, for the collection. A filtered decision about a document is a store
+// read; with checks it is queued there instead, and its capability stays false
+// until resolveCapabilityChecks answers it.
+func (engine *Engine) operationCapabilities(transaction store.Transaction, collection Collection, base Context, document *store.Document, deletion store.DeletionMode, trashOnly bool, selection localization.Selection, checks *[]capabilityCheck) (*OperationCapabilities, error) {
+	result := &OperationCapabilities{SelectAll: base.ID == "" && !collection.Schema.Capabilities.Global}
+	evaluate := func(target *bool, kind operation.Kind, data store.Values, targetDeletion store.DeletionMode) error {
 		operationContext := base
 		operationContext.Operation = kind
 		operationContext.Data = store.CloneValues(data)
 		operationContext.Original = cloneDocumentPointer(document)
 		decision, err := authorize(collection, operationContext)
 		if err != nil {
-			return false, accessRuleError("access rule failed", err)
+			return accessRuleError("access rule failed", err)
 		}
 		if decision.Kind == Deny || (kind == operation.Create || kind == operation.Admin) && decision.Kind == Where {
-			return false, nil
+			*target = false
+			return nil
 		}
 		if base.ID == "" || kind == operation.Create || kind == operation.Admin {
-			return decision.Kind == Allow || decision.Kind == Where, nil
+			*target = decision.Kind == Allow || decision.Kind == Where
+			return nil
 		}
 		if kind == operation.ReadVersions {
 			versionTransaction, ok := transaction.(store.VersionTransaction)
 			if !ok {
-				return false, &Error{Code: "store_failed", Status: 500, Message: "version-enabled collection requires store.VersionTransaction"}
+				return &Error{Code: "store_failed", Status: 500, Message: "version-enabled collection requires store.VersionTransaction"}
 			}
 			total, versionError := versionTransaction.CountVersions(base.Context, store.VersionRequest{
 				Collection: collection.Schema, DocumentID: base.ID, Access: decision.Access,
 				Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: selection.All,
 			})
 			if versionError != nil {
-				return false, translateStoreError(fmt.Errorf("evaluate filtered version capability: %w", versionError))
+				return translateStoreError(fmt.Errorf("evaluate filtered version capability: %w", versionError))
 			}
-			return total != 0, nil
+			*target = total != 0
+			return nil
 		}
 		if decision.Kind == Allow {
-			if collection.Schema.Capabilities.Global && (kind == operation.Read || kind == operation.Update) {
-				return true, nil
-			}
-			if document != nil {
-				return true, nil
+			if collection.Schema.Capabilities.Global && (kind == operation.Read || kind == operation.Update) || document != nil {
+				*target = true
+				return nil
 			}
 			// A resource may deliberately permit a mutation while denying Read.
 			// Probe only existence in that mutation's deletion scope so capability
@@ -361,125 +513,74 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 				Deletion: targetDeletion, Locales: selection.Configured,
 				LocaleChain: selection.Chain, AllLocales: selection.All,
 			})
-			if errors.Is(findError, store.ErrNotFound) {
-				return false, nil
+			if findError != nil && !errors.Is(findError, store.ErrNotFound) {
+				return translateStoreError(fmt.Errorf("evaluate mutation capability existence: %w", findError))
 			}
-			if findError != nil {
-				return false, translateStoreError(fmt.Errorf("evaluate mutation capability existence: %w", findError))
-			}
-			return true, nil
+			*target = findError == nil
+			return nil
+		}
+		if checks != nil {
+			*target = false
+			*checks = append(*checks, capabilityCheck{id: base.ID, access: decision.Access, deletion: targetDeletion, allowed: target})
+			return nil
 		}
 		_, findError := transaction.Find(base.Context, store.Request{
 			Collection: collection.Schema, Collections: engine.schemas, ID: base.ID,
 			Access: decision.Access, Deletion: targetDeletion, Locales: selection.Configured,
 			LocaleChain: selection.Chain, AllLocales: selection.All,
 		})
-		if errors.Is(findError, store.ErrNotFound) {
-			return false, nil
+		if findError != nil && !errors.Is(findError, store.ErrNotFound) {
+			return translateStoreError(fmt.Errorf("evaluate filtered capability: %w", findError))
 		}
-		if findError != nil {
-			return false, translateStoreError(fmt.Errorf("evaluate filtered capability: %w", findError))
-		}
-		return true, nil
+		*target = findError == nil
+		return nil
 	}
 
 	data := store.CloneValues(base.Data)
-	var err error
 	if len(data) == 0 && document != nil {
 		data = store.CloneValues(document.Values)
 	}
-	admin := false
-	if collection.Schema.Capabilities.Auth {
-		admin, err = allowed(operation.Admin, data, deletion)
-		if err != nil {
-			return OperationCapabilities{}, err
-		}
+	type step struct {
+		applies  bool
+		target   *bool
+		kind     operation.Kind
+		data     store.Values
+		deletion store.DeletionMode
 	}
-	create := false
-	if !collection.Schema.Capabilities.Global && !selection.All {
-		create, err = allowed(operation.Create, data, store.DeletionActive)
-		if err != nil {
-			return OperationCapabilities{}, err
-		}
+	steps := []step{
+		{collection.Schema.Capabilities.Auth, &result.Admin, operation.Admin, data, deletion},
+		{!collection.Schema.Capabilities.Global && !selection.All, &result.Create, operation.Create, data, store.DeletionActive},
+		{base.ID == "" || collection.Schema.Capabilities.Global && document == nil, &result.Read, operation.Read, data, deletion},
+		{collection.Schema.Versions != nil, &result.ReadVersions, operation.ReadVersions, data, deletion},
+		{!trashOnly && !selection.All, &result.Update, operation.Update, data, store.DeletionActive},
+		{!trashOnly, &result.Delete, operation.Delete, data, store.DeletionActive},
 	}
-	read := document != nil
-	if base.ID == "" || collection.Schema.Capabilities.Global && document == nil {
-		read, err = allowed(operation.Read, data, deletion)
-		if err != nil {
-			return OperationCapabilities{}, err
-		}
-	}
-	readVersions := false
-	if collection.Schema.Versions != nil {
-		readVersions, err = allowed(operation.ReadVersions, data, deletion)
-		if err != nil {
-			return OperationCapabilities{}, err
-		}
-	}
-	update, deleteAllowed := false, false
-	if !trashOnly {
-		if !selection.All {
-			update, err = allowed(operation.Update, data, store.DeletionActive)
-			if err != nil {
-				return OperationCapabilities{}, err
-			}
-		}
-		deleteAllowed, err = allowed(operation.Delete, data, store.DeletionActive)
-		if err != nil {
-			return OperationCapabilities{}, err
-		}
-	}
-	duplicate := false
+	result.Read = document != nil
 	if !trashOnly && !selection.All && base.ID != "" && document != nil && !collection.Schema.Capabilities.Global {
 		duplicateData := store.CloneValues(document.Values)
 		for name, value := range base.Data {
 			duplicateData[name] = value
 		}
-		duplicate, err = allowed(operation.Duplicate, duplicateData, store.DeletionActive)
-		if err != nil {
-			return OperationCapabilities{}, err
+		steps = append(steps, step{true, &result.Duplicate, operation.Duplicate, duplicateData, store.DeletionActive})
+	}
+	trashed := trashOnly && base.ID != ""
+	versioned := collection.Schema.Versions != nil && !trashOnly
+	steps = append(steps,
+		step{trashed, &result.RestoreDeleted, operation.RestoreDeleted, data, deletion},
+		step{trashed, &result.DeletePermanent, operation.DeletePermanent, data, deletion},
+		step{versioned, &result.Publish, operation.Publish, data, store.DeletionActive},
+		step{versioned && collection.Schema.Versions.Drafts, &result.Unpublish, operation.Unpublish, data, store.DeletionActive},
+		step{collection.Schema.DocumentLock != nil && !trashOnly && base.ID != "" && document != nil, &result.Unlock, operation.Unlock, data, store.DeletionActive},
+	)
+	for _, step := range steps {
+		if !step.applies {
+			continue
+		}
+		if err := evaluate(step.target, step.kind, step.data, step.deletion); err != nil {
+			return nil, err
 		}
 	}
-	restoreDeleted, deletePermanent := false, false
-	if trashOnly && base.ID != "" {
-		restoreDeleted, err = allowed(operation.RestoreDeleted, data, deletion)
-		if err != nil {
-			return OperationCapabilities{}, err
-		}
-		deletePermanent, err = allowed(operation.DeletePermanent, data, deletion)
-		if err != nil {
-			return OperationCapabilities{}, err
-		}
-	}
-	versioned := collection.Schema.Versions != nil
-	publish, unpublish := false, false
-	if versioned && !trashOnly {
-		publish, err = allowed(operation.Publish, data, store.DeletionActive)
-		if err != nil {
-			return OperationCapabilities{}, err
-		}
-		if collection.Schema.Versions.Drafts {
-			unpublish, err = allowed(operation.Unpublish, data, store.DeletionActive)
-			if err != nil {
-				return OperationCapabilities{}, err
-			}
-		}
-	}
-	unlock := false
-	if collection.Schema.DocumentLock != nil && !trashOnly && base.ID != "" && document != nil {
-		unlock, err = allowed(operation.Unlock, data, store.DeletionActive)
-		if err != nil {
-			return OperationCapabilities{}, err
-		}
-	}
-	return OperationCapabilities{
-		Admin: admin, Create: create, Read: read, ReadVersions: readVersions,
-		Update: update, Delete: deleteAllowed, Duplicate: duplicate,
-		Publish: publish, Unpublish: unpublish,
-		RestoreDeleted: restoreDeleted, DeletePermanent: deletePermanent,
-		SelectAll: base.ID == "" && !collection.Schema.Capabilities.Global,
-		Unlock:    unlock,
-	}, nil
+	return result, nil
 }
 
 func hasDocumentCapability(operations OperationCapabilities) bool {
