@@ -304,10 +304,11 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 			document.PublishedRevision = revision
 		}
 	}
-	if err := transaction.replaceUniqueValues(ctx, request.Collection, document); err != nil {
+	// Derived rows' foreign keys require the document row, so a new document has none to replace.
+	if err := transaction.insertUniqueValues(ctx, request.Collection, document); err != nil {
 		return store.Document{}, err
 	}
-	if err := transaction.replaceDocumentReferences(ctx, request.Collection, document); err != nil {
+	if err := transaction.insertDocumentReferences(ctx, request.Collection, document); err != nil {
 		return store.Document{}, err
 	}
 	return store.CloneDocument(document), nil
@@ -641,11 +642,23 @@ const (
 )
 
 type sqliteDocumentValue struct {
-	valueSQL        string
-	typeSQL         string
-	kind            sqliteDocumentValueKind
-	alwaysPresent   bool
+	valueSQL      string
+	typeSQL       string
+	kind          sqliteDocumentValueKind
+	alwaysPresent bool
+	// typed reports that valueSQL is NULL unless the stored JSON type matches kind, so a
+	// comparison needs no separate type guard and an expression index can answer it alone.
+	typed           bool
 	historicalShape bool
+}
+
+// typeGuard returns the condition a comparison must add so that a value stored with another JSON
+// type cannot match, or "" when the value expression already excludes it.
+func (value sqliteDocumentValue) typeGuard(types string) string {
+	if value.alwaysPresent || value.typed {
+		return ""
+	}
+	return value.typeSQL + " " + types + " AND "
 }
 
 // Predicate sources bind the same compiler to current documents or retained
@@ -704,9 +717,8 @@ func sqliteRequestPredicate(request store.Request) sqlitePredicate {
 	default:
 		appendExact("deleted_at IS NULL")
 	}
-	if request.PublishedOnly && request.Collection.Versions != nil {
-		appendExact("status = ?", string(store.StatusPublished))
-	}
+	// A published-only read of a versioned resource reads ridu_published_documents, whose rows
+	// are all published by constraint, so it needs no status predicate that an index cannot answer.
 	if request.ExpectedRevision > 0 {
 		appendExact("revision = ?", request.ExpectedRevision)
 	}
@@ -895,21 +907,13 @@ func compileSQLiteComparison(collection schema.Collection, comparison query.Comp
 			return sqlitePredicate{clause: "0", exact: true}, true
 		}
 		expected, _ := comparison.Value.StringValue()
-		guard := ""
-		if !value.alwaysPresent {
-			guard = value.typeSQL + " = 'text' AND "
-		}
-		return sqlitePredicate{clause: guard + value.valueSQL + " " + operator + " ? COLLATE BINARY", arguments: []any{expected}, exact: true}, true
+		return sqlitePredicate{clause: value.typeGuard("= 'text'") + value.valueSQL + " " + operator + " ? COLLATE BINARY", arguments: []any{expected}, exact: true}, true
 	case query.ValueNumber:
 		if value.kind != sqliteNumberValue {
 			return sqlitePredicate{clause: "0", exact: true}, true
 		}
 		expected, _ := comparison.Value.NumberValue()
-		guard := ""
-		if !value.alwaysPresent {
-			guard = value.typeSQL + " IN ('integer', 'real') AND "
-		}
-		return sqlitePredicate{clause: guard + value.valueSQL + " " + operator + " ?", arguments: []any{expected}, exact: true}, true
+		return sqlitePredicate{clause: value.typeGuard("IN ('integer', 'real')") + value.valueSQL + " " + operator + " ?", arguments: []any{expected}, exact: true}, true
 	default:
 		return sqlitePredicate{clause: "0", exact: true}, true
 	}
@@ -949,21 +953,13 @@ func sqliteEquality(value sqliteDocumentValue, expected query.Value) sqlitePredi
 			return sqlitePredicate{clause: "0", exact: true}
 		}
 		expectedText, _ := expected.StringValue()
-		guard := ""
-		if !value.alwaysPresent {
-			guard = value.typeSQL + " = 'text' AND "
-		}
-		return sqlitePredicate{clause: guard + value.valueSQL + " = ? COLLATE BINARY", arguments: []any{expectedText}, exact: true}
+		return sqlitePredicate{clause: value.typeGuard("= 'text'") + value.valueSQL + " = ? COLLATE BINARY", arguments: []any{expectedText}, exact: true}
 	case query.ValueNumber:
 		if value.kind != sqliteNumberValue {
 			return sqlitePredicate{clause: "0", exact: true}
 		}
 		expectedNumber, _ := expected.NumberValue()
-		guard := ""
-		if !value.alwaysPresent {
-			guard = value.typeSQL + " IN ('integer', 'real') AND "
-		}
-		return sqlitePredicate{clause: guard + value.valueSQL + " = ?", arguments: []any{expectedNumber}, exact: true}
+		return sqlitePredicate{clause: value.typeGuard("IN ('integer', 'real')") + value.valueSQL + " = ?", arguments: []any{expectedNumber}, exact: true}
 	case query.ValueBoolean:
 		if value.kind != sqliteBooleanValue {
 			return sqlitePredicate{clause: "0", exact: true}
@@ -975,10 +971,7 @@ func sqliteEquality(value sqliteDocumentValue, expected query.Value) sqlitePredi
 			wantType = "'true'"
 			want = 1
 		}
-		if value.alwaysPresent {
-			return sqlitePredicate{clause: value.valueSQL + " = ?", arguments: []any{want}, exact: true}
-		}
-		return sqlitePredicate{clause: value.typeSQL + " = " + wantType + " AND " + value.valueSQL + " = ?", arguments: []any{want}, exact: true}
+		return sqlitePredicate{clause: value.typeGuard("= "+wantType) + value.valueSQL + " = ?", arguments: []any{want}, exact: true}
 	default:
 		return sqlitePredicate{clause: "0", exact: true}
 	}
@@ -1037,7 +1030,7 @@ func sqliteValueAtPathForLocales(collection schema.Collection, path query.Path, 
 		}
 	}
 	valueSQL, typeSQL, kind, supported := sqliteDocumentPathExpression(source.valuesJSON, chain, locales)
-	return sqliteDocumentValue{valueSQL: valueSQL, typeSQL: typeSQL, kind: kind, historicalShape: source.snapshotValues}, supported
+	return sqliteDocumentValue{valueSQL: valueSQL, typeSQL: typeSQL, kind: kind, typed: true, historicalShape: source.snapshotValues}, supported
 }
 
 func sqliteSortClause(request store.Request) (string, bool) {
@@ -1122,11 +1115,9 @@ func listWindowQuery(request store.Request) (string, []any, error) {
 		return "", nil, fmt.Errorf("SQLite index window path %q is not a supported text index", request.IndexWindow.Path.String())
 	}
 	expression := value.valueSQL
-	typeExpression := value.typeSQL
 	predicates := []string{
 		"collection_id = ?",
-		typeExpression + " = 'text'",
-		expression + " >= ?",
+		value.typeGuard("= 'text'") + expression + " >= ?",
 		expression + " < ?",
 	}
 	arguments := []any{string(request.Collection.ID), request.IndexWindow.LowerBound, request.IndexWindow.UpperBound}
@@ -1577,9 +1568,10 @@ func (transaction *documentTransaction) Delete(ctx context.Context, request stor
 	if err != nil {
 		return store.Document{}, err
 	}
-	if _, err := transaction.connection.ExecContext(ctx, `DELETE FROM ridu_document_references
-WHERE owner_collection_id = ? AND owner_document_id = ?`, string(request.Collection.ID), request.ID); err != nil {
-		return store.Document{}, translateError(err)
+	// The document's own reference rows leave first: a reference to itself would otherwise
+	// restrict deleting its row.
+	if err := transaction.deleteDocumentReferences(ctx, store.DocumentReference{CollectionID: request.Collection.ID, DocumentID: request.ID}); err != nil {
+		return store.Document{}, err
 	}
 	result, err := transaction.connection.ExecContext(ctx, `DELETE FROM ridu_documents WHERE collection_id = ? AND id = ?`, string(request.Collection.ID), request.ID)
 	if err != nil {
@@ -1591,11 +1583,18 @@ WHERE owner_collection_id = ? AND owner_document_id = ?`, string(request.Collect
 	return document, nil
 }
 
+// replaceUniqueValues always clears the document's rows, even for a collection that now declares
+// no uniqueness: a server still running an earlier manifest while development sync rebuilt the
+// table can have written some, and they leave with the document's next write.
 func (transaction *documentTransaction) replaceUniqueValues(ctx context.Context, collection schema.Collection, document store.Document) error {
 	if _, err := transaction.connection.ExecContext(ctx, `DELETE FROM ridu_unique_values WHERE collection_id = ? AND document_id = ?`, string(collection.ID), document.ID); err != nil {
 		return translateError(err)
 	}
-	if document.DeletedAt != nil {
+	return transaction.insertUniqueValues(ctx, collection, document)
+}
+
+func (transaction *documentTransaction) insertUniqueValues(ctx context.Context, collection schema.Collection, document store.Document) error {
+	if !sqliteHasUniqueValues(collection) || document.DeletedAt != nil {
 		return nil
 	}
 	heads := []store.Document{document}
@@ -2313,10 +2312,20 @@ func projectDocument(document store.Document, selection []query.Path) store.Docu
 	return store.CloneDocument(document)
 }
 
+// replaceDocumentReferences always clears the document's own reference rows, even for a collection
+// that can no longer hold a reference, for the same reason as replaceUniqueValues. A stale row would
+// otherwise restrict deleting its target.
 func (transaction *documentTransaction) replaceDocumentReferences(ctx context.Context, collection schema.Collection, document store.Document) error {
 	owner := store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}
 	if err := transaction.deleteDocumentReferences(ctx, owner); err != nil {
 		return err
+	}
+	return transaction.insertDocumentReferences(ctx, collection, document)
+}
+
+func (transaction *documentTransaction) insertDocumentReferences(ctx context.Context, collection schema.Collection, document store.Document) error {
+	if !referenceindex.MayReference(collection) {
+		return nil
 	}
 	heads := []store.Document{document}
 	if collection.Versions != nil {
@@ -2546,8 +2555,22 @@ func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context,
 	if reference.CollectionID == "" || reference.DocumentID == "" {
 		return fmt.Errorf("document state cleanup requires collection and document IDs")
 	}
+	collectionID, documentID := string(reference.CollectionID), reference.DocumentID
+	// Retained versions have no foreign key to the document row.
+	if _, err := transaction.connection.ExecContext(ctx, `DELETE FROM ridu_versions WHERE collection_id = ? AND document_id = ?`, collectionID, documentID); err != nil {
+		return translateError(err)
+	}
+	var exists bool
+	if err := transaction.connection.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM ridu_documents WHERE collection_id = ? AND id = ?)`, collectionID, documentID).Scan(&exists); err != nil {
+		return translateError(err)
+	}
+	if !exists {
+		// Every table below references the document row, directly or through its credential,
+		// with ON DELETE CASCADE, and each connection enforces foreign keys. Once the row is gone
+		// none of them can hold its state.
+		return nil
+	}
 	statements := []string{
-		`DELETE FROM ridu_versions WHERE collection_id = ? AND document_id = ?`,
 		`DELETE FROM ridu_tasks WHERE (target_collection_id = ? AND target_document_id = ?) OR (requested_by_collection_id = ? AND requested_by_document_id = ?)`,
 		`DELETE FROM ridu_document_locks WHERE (collection_id = ? AND document_id = ?) OR (owner_collection_id = ? AND owner_id = ?)`,
 		`DELETE FROM ridu_auth_tokens WHERE collection_id = ? AND user_id = ?`,
@@ -2557,9 +2580,9 @@ func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context,
 		`DELETE FROM ridu_preferences WHERE collection_id = ? AND user_id = ?`,
 	}
 	for index, statement := range statements {
-		arguments := []any{string(reference.CollectionID), reference.DocumentID}
-		if index == 1 || index == 2 {
-			arguments = append(arguments, string(reference.CollectionID), reference.DocumentID)
+		arguments := []any{collectionID, documentID}
+		if index < 2 {
+			arguments = append(arguments, collectionID, documentID)
 		}
 		if _, err := transaction.connection.ExecContext(ctx, statement, arguments...); err != nil {
 			return translateError(err)

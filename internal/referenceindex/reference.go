@@ -325,6 +325,16 @@ func (lists referenceLists) field(field schema.Field) bool {
 	return found
 }
 
+// MayReference reports whether the collection's documents can hold a relationship or upload
+// value at any depth, including block and plugin payloads, and so own reference index entries.
+// Collect finds none in a collection for which it is false. Each block definition is inspected
+// once.
+func MayReference(collection schema.Collection) bool {
+	return !schema.WalkDefinitionFields(func(field schema.Field) bool {
+		return field.Relationship == nil && field.Upload == nil
+	}, collection.Fields)
+}
+
 // TargetsAnyResource reports whether the collection's current reference or
 // upload topology can address one of the supplied resource IDs. Migration
 // rollback uses this to purge version snapshots that could otherwise restore

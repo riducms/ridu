@@ -114,7 +114,7 @@ func OpenWithConfig(ctx context.Context, config Config) (*Store, error) {
 	parsed.RawQuery = parameters.Encode()
 	dsn = parsed.String()
 
-	database, err := sql.Open("sqlite", dsn)
+	database, err := sql.Open(sqliteDriverName, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("configure SQLite: %w", err)
 	}

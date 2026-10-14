@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -48,6 +49,11 @@ func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *
 		return err
 	}
 	if recorded {
+		// A newer adapter may add base indexes or define document indexes differently. Indexes hold
+		// no content, so bring them to this adapter before checking the recorded schema.
+		if err := upgradeDevelopmentIndexes(ctx, connection, previous); err != nil {
+			return fmt.Errorf("upgrade SQLite development indexes: %w", err)
+		}
 		if err := assertSQLitePhysicalSchema(ctx, connection, previous, false); err != nil {
 			return fmt.Errorf("current SQLite development schema: %w", err)
 		}
@@ -137,6 +143,36 @@ func reconcileDocumentIndexes(ctx context.Context, runner sqlRunner, manifest sc
 		return err
 	}
 	return reconcileDocumentIndexSet(ctx, runner, desired)
+}
+
+var sqliteBaseIndexStatement = regexp.MustCompile(`^CREATE (?:UNIQUE )?INDEX IF NOT EXISTS (\S+)\s+ON (\S+) \(`)
+
+// upgradeDevelopmentIndexes adds each base-schema index an older adapter did not create and
+// reconciles the manifest's document indexes, which are always derived from the manifest, to this
+// adapter's definitions. An altered base index, like any table difference, is left for the physical
+// schema check to report as drift. So is an index whose table is missing.
+func upgradeDevelopmentIndexes(ctx context.Context, runner sqlRunner, manifest schema.Manifest) error {
+	for _, statement := range sqliteSchemaStatements {
+		match := sqliteBaseIndexStatement.FindStringSubmatch(statement)
+		if match == nil {
+			continue
+		}
+		name, table := match[1], match[2]
+		var tables, indexes int
+		if err := runner.QueryRowContext(ctx, `SELECT
+  count(*) FILTER (WHERE type = 'table' AND name = ?),
+  count(*) FILTER (WHERE type = 'index' AND name = ?)
+FROM sqlite_schema`, table, name).Scan(&tables, &indexes); err != nil {
+			return fmt.Errorf("inspect SQLite index %q: %w", name, translateError(err))
+		}
+		if tables == 0 || indexes != 0 {
+			continue
+		}
+		if _, err := runner.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("create SQLite index %q: %w", name, translateError(err))
+		}
+	}
+	return reconcileDocumentIndexes(ctx, runner, manifest)
 }
 
 func reconcileDocumentIndexSet(ctx context.Context, runner sqlRunner, desired map[string]string) error {
@@ -299,9 +335,12 @@ func sqliteDeclaredIndexPaths(fields []schema.Field) []sqliteIndexPath {
 	return result
 }
 
+// sqliteCreateDocumentIndex orders entries by collection, typed values and id, so equality prefixes
+// page and sort without a temporary B-tree in every trash mode. The trailing deleted_at lets the
+// default active-document filter, and therefore a count, read only the index.
 func sqliteCreateDocumentIndex(name string, expressions []string) string {
 	keys := append([]string{"collection_id"}, expressions...)
-	keys = append(keys, "id COLLATE BINARY")
+	keys = append(keys, "id COLLATE BINARY", "deleted_at")
 	return fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON ridu_documents (%s)", quoteSQLiteIdentifier(name), strings.Join(keys, ", "))
 }
 
@@ -408,8 +447,9 @@ func sqliteFieldValueKind(field schema.Field) (sqliteDocumentValueKind, bool) {
 }
 
 // sqliteDocumentPathExpression resolves one non-repeated manifest path using
-// the same locale projection rules as the operation engine. It returns a
-// scalar value expression and its underlying JSON type expression. Callers
+// the same locale projection rules as the operation engine. It returns the
+// typed scalar expression from sqliteTypedDocumentValue and the underlying
+// JSON type expression, which null and existence checks read. Callers
 // must supply the effective request locale chain for localized paths.
 // base is the authored value JSON source, independent of its containing row.
 func sqliteDocumentPathExpression(base string, chain []schema.Field, locales []schema.LocaleCode) (string, string, sqliteDocumentValueKind, bool) {
@@ -444,14 +484,14 @@ func sqliteDocumentPathExpression(base string, chain []schema.Field, locales []s
 		}
 		base = sqliteLocaleCase(values, conditions)
 		if terminal {
-			value := sqliteCollatedDocumentValue(base, kind)
-			return value, sqliteLocaleCase(types, conditions), kind, true
+			typeExpression := sqliteLocaleCase(types, conditions)
+			return sqliteTypedDocumentValue(base, typeExpression, kind), typeExpression, kind, true
 		}
 		pending = pending[:0]
 	}
 	value := sqliteJSONExtractFrom(base, pending...)
 	typeExpression := sqliteJSONTypeFrom(base, pending...)
-	return sqliteCollatedDocumentValue(value, kind), typeExpression, kind, true
+	return sqliteTypedDocumentValue(value, typeExpression, kind), typeExpression, kind, true
 }
 
 func sqliteLocaleCase(values, conditions []string) string {
@@ -472,12 +512,18 @@ func sqliteLocaleCase(values, conditions []string) string {
 	return expression.String()
 }
 
-func sqliteCollatedDocumentValue(value string, kind sqliteDocumentValueKind) string {
+// sqliteTypedDocumentValue is the scalar that filters, sorts and indexes compare: the stored value
+// when its JSON type matches the field kind, otherwise NULL. json_extract alone returns an object
+// or array as JSON text and a boolean as an integer, so folding the type test into this one
+// expression keeps every comparison exact without a separate guard the index cannot answer.
+func sqliteTypedDocumentValue(value, typeExpression string, kind sqliteDocumentValueKind) string {
 	switch kind {
 	case sqliteStringValue:
-		return "(" + value + ") COLLATE BINARY"
+		return "(CASE WHEN " + typeExpression + " = 'text' THEN " + value + " END) COLLATE BINARY"
 	case sqliteNumberValue:
-		return "CAST(" + value + " AS REAL)"
+		return "CAST(CASE WHEN " + typeExpression + " IN ('integer', 'real') THEN " + value + " END AS REAL)"
+	case sqliteBooleanValue:
+		return "CASE WHEN " + typeExpression + " IN ('true', 'false') THEN " + value + " END"
 	default:
 		return value
 	}
@@ -687,6 +733,8 @@ var sqliteSchemaStatements = []string{
   FOREIGN KEY (collection_id, user_id)
     REFERENCES ridu_auth_credentials (collection_id, user_id) ON DELETE CASCADE
 ) STRICT`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ridu_auth_tokens_user_purpose_unique
+  ON ridu_auth_tokens (collection_id, user_id, purpose)`,
 	`CREATE TABLE IF NOT EXISTS ridu_auth_api_keys (
   id TEXT PRIMARY KEY,
   token_hash TEXT NOT NULL UNIQUE,
@@ -735,6 +783,8 @@ var sqliteSchemaStatements = []string{
   FOREIGN KEY (owner_collection_id, owner_id)
     REFERENCES ridu_documents (collection_id, id) ON DELETE CASCADE
 ) STRICT`,
+	`CREATE INDEX IF NOT EXISTS ridu_document_locks_owner
+  ON ridu_document_locks (owner_collection_id, owner_id)`,
 	`CREATE TABLE IF NOT EXISTS ridu_tasks (
   id TEXT PRIMARY KEY,
   slug TEXT NOT NULL,
@@ -778,6 +828,9 @@ var sqliteSchemaStatements = []string{
   ON ridu_tasks (target_collection_id, target_document_id, slug, created_at)`,
 	`CREATE INDEX IF NOT EXISTS ridu_tasks_retention
   ON ridu_tasks (retain_until, id)`,
+	`CREATE INDEX IF NOT EXISTS ridu_tasks_requester
+  ON ridu_tasks (requested_by_collection_id, requested_by_document_id)
+  WHERE requested_by_collection_id IS NOT NULL`,
 }
 
 func encodeTime(value time.Time) int64 { return value.UTC().UnixNano() }
@@ -893,6 +946,23 @@ ON CONFLICT DO NOTHING`,
 		}
 	}
 	return nil
+}
+
+// sqliteHasUniqueValues reports whether insertRawUniqueValues can write a row for the collection:
+// a top-level unique field or a unique compound index. Migrations rebuild every row from the
+// applied manifest, so a collection without either has none.
+func sqliteHasUniqueValues(collection schema.Collection) bool {
+	for _, field := range collection.Fields {
+		if field.Unique {
+			return true
+		}
+	}
+	for _, definition := range collection.Indexes {
+		if definition.Unique {
+			return true
+		}
+	}
+	return false
 }
 
 func insertRawUniqueValues(ctx context.Context, runner sqlRunner, collection schema.Collection, documentID string, values map[string]json.RawMessage) error {

@@ -267,7 +267,7 @@ ledger to match the migration filename/digest fingerprint embedded by `ridu buil
 the head manifest and physical schema in that same snapshot. This rejects missing, altered,
 renamed, reordered, or rolled-back data-only artifacts even when the final schema is unchanged.
 
-SQLite accepts only planner `ridu-sqlite` `1.3.0` artifacts. Its initial layout includes a separate
+SQLite accepts only planner `ridu-sqlite` `1.4.0` artifacts. Its initial layout includes a separate
 live head, independent of retained version history. Earlier framework layouts and planner histories
 are unsupported; recreate the database and migration history rather than rewriting old artifacts.
 Startup and readiness never convert an old layout.

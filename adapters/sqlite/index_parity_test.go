@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"strings"
 	"testing"
 
@@ -205,11 +206,17 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 			statement := `SELECT id FROM ridu_documents WHERE ` + predicate.clause + ` ORDER BY id COLLATE BINARY LIMIT ?`
 			arguments := append(append([]any(nil), predicate.arguments...), 10)
 			plan := sqliteExplainPlan(t, ctx, backend.db, statement, arguments...)
-			if !strings.Contains(plan, "USING INDEX "+indexed.index) {
+			if !sqlitePlanUsesIndex(plan, indexed.index) {
 				t.Fatalf("indexed query did not use %s:\n%s\nquery: %s", indexed.index, plan, statement)
 			}
 			if strings.Contains(plan, "USE TEMP B-TREE") {
 				t.Fatalf("indexed query used a temporary sort instead of %s:\n%s\nquery: %s", indexed.index, plan, statement)
+			}
+			// The page total must come from index entries alone, without reading and parsing
+			// each matching document.
+			count := `SELECT count(*) FROM ridu_documents WHERE ` + predicate.clause
+			if plan := sqliteExplainPlan(t, ctx, backend.db, count, predicate.arguments...); !strings.Contains(plan, "USING COVERING INDEX "+indexed.index) {
+				t.Fatalf("indexed count did not read only %s:\n%s\nquery: %s", indexed.index, plan, count)
 			}
 			plannedIndexes[indexed.index] = struct{}{}
 			read, err := backend.BeginSnapshot(ctx)
@@ -245,7 +252,7 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 	mediaStatement := `SELECT id FROM ridu_documents WHERE ` + mediaPredicate.clause + ` ORDER BY ` + mediaOrder + ` LIMIT ?`
 	mediaPlan := sqliteExplainPlan(t, ctx, backend.db, mediaStatement, mediaArguments...)
 	mediaIndex := documentCompoundIndexName(media.ID, []string{"filename", "filesize"}, nil)
-	if !strings.Contains(mediaPlan, "USING INDEX "+mediaIndex) || strings.Contains(mediaPlan, "USE TEMP B-TREE") {
+	if !sqlitePlanUsesIndex(mediaPlan, mediaIndex) || strings.Contains(mediaPlan, "USE TEMP B-TREE") {
 		t.Fatalf("upload metadata query did not use %s:\n%s\nquery: %s", mediaIndex, mediaPlan, mediaStatement)
 	}
 	plannedIndexes[mediaIndex] = struct{}{}
@@ -267,7 +274,7 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 	statement := `SELECT id FROM ridu_documents WHERE ` + predicate.clause + ` ORDER BY ` + order + ` LIMIT ?`
 	plan := sqliteExplainPlan(t, ctx, backend.db, statement, arguments...)
 	wantIndex := documentCompoundIndexName(posts.ID, []string{"tenant", "seo.slug"}, nil)
-	if !strings.Contains(plan, "USING INDEX "+wantIndex) || strings.Contains(plan, "USE TEMP B-TREE") {
+	if !sqlitePlanUsesIndex(plan, wantIndex) || strings.Contains(plan, "USE TEMP B-TREE") {
 		t.Fatalf("compound indexed query plan does not preserve SQL pagination:\n%s\nquery: %s", plan, statement)
 	}
 	plannedIndexes[wantIndex] = struct{}{}
@@ -297,7 +304,7 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 			statement := `SELECT id FROM ridu_documents WHERE ` + predicate.clause + ` ORDER BY ` + order + ` LIMIT ?`
 			plan := sqliteExplainPlan(t, ctx, backend.db, statement, arguments...)
 			index := documentCompoundIndexName(posts.ID, []string{"tenant", "localizedTitle"}, localizedCompound.locales)
-			if !strings.Contains(plan, "USING INDEX "+index) || strings.Contains(plan, "USE TEMP B-TREE") {
+			if !sqlitePlanUsesIndex(plan, index) || strings.Contains(plan, "USE TEMP B-TREE") {
 				t.Fatalf("localized compound query did not use %s:\n%s\nquery: %s", index, plan, statement)
 			}
 			plannedIndexes[index] = struct{}{}
@@ -320,7 +327,7 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 	localizedStatement := `SELECT id FROM ridu_documents WHERE ` + localizedPredicate.clause + ` ORDER BY ` + localizedOrder + ` LIMIT ?`
 	localizedPlan := sqliteExplainPlan(t, ctx, backend.db, localizedStatement, localizedArguments...)
 	localizedIndex := documentFieldIndexName(posts.ID, "localizedTitle", []schema.LocaleCode{"fr", "en"})
-	if !strings.Contains(localizedPlan, "USING INDEX "+localizedIndex) || strings.Contains(localizedPlan, "USE TEMP B-TREE") {
+	if !sqlitePlanUsesIndex(localizedPlan, localizedIndex) || strings.Contains(localizedPlan, "USE TEMP B-TREE") {
 		t.Fatalf("localized indexed query plan does not preserve SQL pagination:\n%s\nquery: %s", localizedPlan, localizedStatement)
 	}
 	plannedIndexes[localizedIndex] = struct{}{}
@@ -365,6 +372,195 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 	}
 	if len(plannedIndexes) != len(desiredIndexes) {
 		t.Fatalf("query-plan assertions cover %d indexes, manifest creates %d", len(plannedIndexes), len(desiredIndexes))
+	}
+}
+
+func TestSQLiteIndexedComparisonsIgnoreValuesOfAnotherJSONType(t *testing.T) {
+	ctx := context.Background()
+	manifest, err := ridu.Resolve(ridu.Config{Name: "SQLite typed comparisons", Collections: []ridu.Collection{{
+		Slug:   "posts",
+		Fields: field.Fields{field.Text("title").Index(), field.Number("score").Index(), field.Checkbox("featured").Index()},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	collection := manifest.Snapshot().Collections[0]
+	backend, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = backend.Close() })
+	if err := backend.Migrate(ctx, manifest); err != nil {
+		t.Fatal(err)
+	}
+	// json_extract returns an object or array as JSON text and a boolean as an integer, so each
+	// mismatched row stores something that would compare equal without the type test.
+	rows := map[string]string{
+		"a-typed":   `{"title":"alpha","score":42,"featured":true}`,
+		"b-object":  `{"title":{"x":1},"score":"42","featured":1}`,
+		"c-array":   `{"title":["alpha"],"score":true,"featured":"true"}`,
+		"d-null":    `{"title":null,"score":null,"featured":null}`,
+		"e-missing": `{}`,
+		"f-false":   `{"title":"beta","score":7.5,"featured":false}`,
+		"g-json":    `{"title":"{\"x\":1}","score":0,"featured":0}`,
+	}
+	if err := backend.withImmediate(ctx, func(connection *sql.Conn) error {
+		for id, values := range rows {
+			if _, err := connection.ExecContext(ctx, `INSERT INTO ridu_documents (collection_id, id, created_at, updated_at, values_json)
+VALUES (?, ?, 1, 1, ?)`, string(collection.ID), id, values); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	read, err := backend.BeginSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = read.Rollback(ctx) })
+	all, err := read.List(ctx, store.Request{Collection: collection, Page: 1, Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all.Documents) != len(rows) {
+		t.Fatalf("fixture documents = %d, want %d", len(all.Documents), len(rows))
+	}
+
+	for _, test := range []struct {
+		name   string
+		filter query.Expression
+		want   []string
+	}{
+		{"text equals", query.Equal("title", "alpha"), []string{"a-typed"}},
+		{"object text never equals a string", query.Equal("title", `{"x":1}`), []string{"g-json"}},
+		{"array text never equals a string", query.Equal("title", `["alpha"]`), nil},
+		{"text range excludes objects", query.GreaterThanEqual("title", "{"), []string{"g-json"}},
+		{"text range excludes arrays", query.LessThan("title", "b"), []string{"a-typed"}},
+		{"text in", query.In("title", "alpha", `{"x":1}`), []string{"a-typed", "g-json"}},
+		{"text not equals", query.NotEqual("title", "alpha"), nil},
+		{"negated text equality", query.Not(query.Equal("title", "alpha")), nil},
+		{"number equals excludes text", query.Equal("score", 42), []string{"a-typed"}},
+		{"number range excludes booleans", query.LessThanEqual("score", 1), []string{"g-json"}},
+		{"number range", query.GreaterThan("score", 1), []string{"a-typed", "f-false"}},
+		{"number in", query.In("score", 42, 0), []string{"a-typed", "g-json"}},
+		{"number not equals", query.NotEqual("score", 42), nil},
+		{"checkbox true excludes numbers and text", query.Equal("featured", true), []string{"a-typed"}},
+		{"checkbox false excludes zero", query.Equal("featured", false), []string{"f-false"}},
+		{"checkbox not equals", query.NotEqual("featured", true), nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			node := test.filter.Node()
+			request := store.Request{Collection: collection, Filter: &node, Page: 1, Limit: 100, Sort: []query.Sort{query.Asc("id")}}
+			predicate := sqliteRequestPredicate(request)
+			defer predicate.close()
+			if !predicate.exact || predicate.release != nil {
+				t.Fatalf("filter left native SQL: %s", predicate.clause)
+			}
+			// The in-process matcher defines the exact semantics the SQL must reproduce.
+			var matched []string
+			for _, document := range all.Documents {
+				if matchesRequest(document, request) {
+					matched = append(matched, document.ID)
+				}
+			}
+			slices.Sort(matched)
+			if test.want != nil && !slices.Equal(matched, test.want) {
+				t.Fatalf("matcher = %v, want %v", matched, test.want)
+			}
+			// List re-checks returned rows against the matcher, but its total comes from this
+			// count alone, so compare the compiled SQL itself.
+			var selected []string
+			rows, err := backend.db.QueryContext(ctx, `SELECT id FROM ridu_documents WHERE `+predicate.clause+` ORDER BY id`, predicate.arguments...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for rows.Next() {
+				var id string
+				if err := rows.Scan(&id); err != nil {
+					t.Fatal(err)
+				}
+				selected = append(selected, id)
+			}
+			if err := rows.Close(); err != nil {
+				t.Fatal(err)
+			}
+			var counted int
+			if err := backend.db.QueryRowContext(ctx, `SELECT count(*) FROM ridu_documents WHERE `+predicate.clause, predicate.arguments...).Scan(&counted); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(selected, matched) || counted != len(matched) {
+				t.Fatalf("SQL = %v (count %d), matcher = %v\nclause: %s", selected, counted, matched, predicate.clause)
+			}
+			page, err := read.List(ctx, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			listed := make([]string, len(page.Documents))
+			for index, document := range page.Documents {
+				listed[index] = document.ID
+			}
+			if !slices.Equal(listed, matched) || page.Total == nil || *page.Total != len(matched) {
+				t.Fatalf("SQL page = %v (total %v), matcher = %v", listed, page.Total, matched)
+			}
+		})
+	}
+}
+
+func TestSQLitePublishedOnlyIndexedCountReadsOnlyTheIndex(t *testing.T) {
+	ctx := context.Background()
+	manifest, err := ridu.Resolve(ridu.Config{Name: "SQLite published count", Collections: []ridu.Collection{{
+		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+		Fields: field.Fields{field.Text("title").Index()},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	collection := manifest.Snapshot().Collections[0]
+	backend, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = backend.Close() })
+	if err := backend.Migrate(ctx, manifest); err != nil {
+		t.Fatal(err)
+	}
+	write, err := backend.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, document := range []struct {
+		id     string
+		status store.Status
+	}{{"live", store.StatusPublished}, {"draft", store.StatusDraft}} {
+		if _, err := write.Create(ctx, store.CreateRequest{Collection: collection, ID: document.id, Status: document.status, Values: store.Values{"title": store.String("Same")}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := write.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	filter := query.Equal("title", "Same").Node()
+	request := store.Request{Collection: collection, Filter: &filter, PublishedOnly: true, Page: 1, Limit: 10}
+	predicate := sqliteRequestPredicate(request)
+	defer predicate.close()
+	index := strings.Replace(documentFieldIndexName(collection.ID, "title", nil), documentIndexPrefix, documentIndexPrefix+"pub_", 1)
+	count := `SELECT count(*) FROM ` + sqliteReadTable(request) + ` WHERE ` + predicate.clause
+	if plan := sqliteExplainPlan(t, ctx, backend.db, count, predicate.arguments...); !strings.Contains(plan, "USING COVERING INDEX "+index) {
+		t.Fatalf("published-only count did not read only %s:\n%s\nquery: %s", index, plan, count)
+	}
+	read, err := backend.BeginSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Rollback(ctx)
+	page, err := read.List(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total == nil || *page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != "live" {
+		t.Fatalf("published-only page = %#v", page)
 	}
 }
 
@@ -451,6 +647,10 @@ func sqliteCollectionBySlug(t *testing.T, manifest schema.Manifest, slug schema.
 	}
 	t.Fatalf("collection %q is missing", slug)
 	return schema.Collection{}
+}
+
+func sqlitePlanUsesIndex(plan, index string) bool {
+	return strings.Contains(plan, "USING INDEX "+index) || strings.Contains(plan, "USING COVERING INDEX "+index)
 }
 
 func sqliteExplainPlan(t *testing.T, ctx context.Context, database *sql.DB, statement string, arguments ...any) string {

@@ -9078,7 +9078,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.24.0\"",
+					"signature": "const FrameworkVersion = \"0.25.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -92812,7 +92812,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/schema.go",
-						"line": 28
+						"line": 29
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],

@@ -112,6 +112,36 @@ func TestCollectAndNullifyTargetAcrossNestedLocalizedReferenceShapes(t *testing.
 	}
 }
 
+func TestMayReferenceFindsReferencesAtAnyDepth(t *testing.T) {
+	image := schema.BlockType{Slug: "image", TypeName: "Image", Fields: []schema.Field{{
+		ID: "block-image-asset", Name: "asset", Path: mustPath("asset"), Type: schema.FieldTypeUpload,
+		Upload: &schema.UploadField{CollectionID: "media", OnDelete: schema.ReferenceDeleteNullify},
+	}}}
+	title := schema.Field{ID: "title", Name: "title", Type: schema.FieldTypeText}
+	for _, test := range []struct {
+		name   string
+		fields []schema.Field
+		want   bool
+	}{
+		{"plain fields", schematest.Bind(t, "notes", nil, title), false},
+		{"array row relationship", schematest.Bind(t, "posts", nil, title, schema.Field{
+			ID: "rows", Name: "rows", Type: schema.FieldTypeArray,
+			Nested: &schema.NestedField{Fields: []schema.Field{{
+				ID: "rows-tags", Name: "tags", Type: schema.FieldTypeRelationship,
+				Relationship: &schema.RelationshipField{CollectionID: "tags", HasMany: true, OnDelete: schema.ReferenceDeleteNullify},
+			}}},
+		}), true},
+		{"block upload", schematest.Bind(t, "pages", []schema.BlockType{image}, title, schema.Field{
+			ID: "layout", Name: "layout", Path: mustPath("layout"), Type: schema.FieldTypeBlocks,
+			Blocks: &schema.BlocksField{BlockReferences: []string{"image"}},
+		}), true},
+	} {
+		if got := referenceindex.MayReference(schema.Collection{ID: "resource", Fields: test.fields}); got != test.want {
+			t.Errorf("%s: MayReference = %v, want %v", test.name, got, test.want)
+		}
+	}
+}
+
 func TestNullifyTargetLeavesRestrictReferencesUntouched(t *testing.T) {
 	collection := schema.Collection{ID: "posts", Fields: []schema.Field{{
 		ID: "posts-owner", Name: "owner", Type: schema.FieldTypeRelationship, Required: true,

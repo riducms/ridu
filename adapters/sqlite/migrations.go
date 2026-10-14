@@ -30,7 +30,7 @@ import (
 // into a digest mismatch.
 const (
 	sqlitePlannerName    = "ridu-sqlite"
-	sqlitePlannerVersion = "1.3.0"
+	sqlitePlannerVersion = "1.4.0"
 )
 
 // sqliteUnsupportedPlannerVersion explains that an artifact or ledger row was

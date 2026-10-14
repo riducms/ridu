@@ -306,7 +306,7 @@ need to edit it, but it is worth reading in review:
 
 ```text title="migrations/20261006123216.089250000_rename-title.ridu.json" diagram
 name        "rename-title"
-planner     ridu-sqlite 1.3.0     the adapter that wrote it
+planner     ridu-sqlite 1.4.0     the adapter that wrote it
 previous    fdf4c4…               the migration before this one
 from        f42c8d…               schema digest before
 to          bf6c8a…               schema digest after

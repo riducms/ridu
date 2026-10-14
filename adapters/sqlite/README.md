@@ -20,7 +20,7 @@ server's adapter factory, and committed migrations together; deployed servers re
 
 Draft-enabled versioned content keeps one working head and an independently selected live head;
 the live head is not a retained-history version and survives history pruning. New databases and
-immutable migrations use the current `1.3.0` planner and physical layout. Older planner histories
+immutable migrations use the current `1.4.0` planner and physical layout. Older planner histories
 and databases missing the live-head table are unsupported; readiness and development synchronization
 reject them instead of converting stored content.
 
@@ -40,7 +40,9 @@ Payload's remote libSQL transport or a Cloudflare D1 compatibility mode.
 
 Filters and access predicates compile to SQL JSON expressions where SQL can match exactly what the
 in-process matcher matches; the rest of a predicate stays in the same `WHERE` clause as a call to
-that matcher. Membership filters on set-valued fields (lists, has-many selects, relationships and
+that matcher. A scalar comparison reads a typed value that is `NULL` for any other stored JSON type,
+the same expression the field's index stores, so an equality or range filter on an indexed field
+and its count need no document row. Membership filters on set-valued fields (lists, has-many selects, relationships and
 uploads, and polymorphic relationships) compile with `json_each`, through groups, localized
 containers, and array and Blocks rows. Items are compared by their JSON type, so the SQL also
 agrees with the matcher on values stored in an older field shape.

@@ -287,6 +287,17 @@ bun install --cwd tests/performance/blocks/payload --frozen-lockfile
 bun tests/performance/blocks/run.ts
 ```
 
+## Ridu versus PocketBase on SQLite
+
+[`pocketbase/`](./pocketbase/README.md) compares Ridu with PocketBase as single-binary Go servers on
+SQLite, with matching collections, access rules and indexes. It records startup, RSS, validated
+CRUD latency and throughput, and server CPU per request, plus a PocketBase variant whose commits
+use Ridu's `synchronous=FULL` durability:
+
+```sh
+bun tests/performance/pocketbase/run.ts
+```
+
 ## Optional GraphQL memory
 
 Two smaller binaries isolate the cost of importing and enabling GraphQL against the same synthetic

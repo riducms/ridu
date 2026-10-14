@@ -6,6 +6,57 @@ import (
 	"testing"
 )
 
+// Deleting a referenced row makes SQLite look up every child row that points at it, and the
+// adapter's cleanup filters children the same way. Without an index on the child columns each
+// lookup scans the whole child table while holding the database's single writer.
+func TestSQLiteForeignKeyChildLookupsUseIndexes(t *testing.T) {
+	ctx := context.Background()
+	backend := newSQLiteMigrationStore(t)
+	if err := installSchema(ctx, backend.db); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := backend.db.QueryContext(ctx, `SELECT m.name, f.id, f.seq, f."from"
+FROM sqlite_schema m JOIN pragma_foreign_key_list(m.name) f
+WHERE m.type = 'table' ORDER BY m.name, f.id, f.seq`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type foreignKey struct {
+		table   string
+		columns []string
+	}
+	var keys []foreignKey
+	for rows.Next() {
+		var table, column string
+		var id, sequence int
+		if err := rows.Scan(&table, &id, &sequence, &column); err != nil {
+			t.Fatal(err)
+		}
+		if sequence == 0 {
+			keys = append(keys, foreignKey{table: table})
+		}
+		keys[len(keys)-1].columns = append(keys[len(keys)-1].columns, column)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) == 0 {
+		t.Fatal("the adapter schema declares no foreign keys")
+	}
+	for _, key := range keys {
+		conditions := make([]string, len(key.columns))
+		arguments := make([]any, len(key.columns))
+		for index, column := range key.columns {
+			conditions[index] = quoteSQLiteIdentifier(column) + " = ?"
+			arguments[index] = "parent"
+		}
+		statement := "SELECT 1 FROM " + quoteSQLiteIdentifier(key.table) + " WHERE " + strings.Join(conditions, " AND ")
+		if plan := sqliteExplainPlan(t, ctx, backend.db, statement, arguments...); !strings.HasPrefix(plan, "SEARCH ") {
+			t.Errorf("child lookup for %s(%s) does not use an index:\n%s", key.table, strings.Join(key.columns, ", "), plan)
+		}
+	}
+}
+
 func TestReconcileDocumentIndexesScopesAdapterOwnershipToDocuments(t *testing.T) {
 	ctx := context.Background()
 
