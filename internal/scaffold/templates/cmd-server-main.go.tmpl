@@ -76,6 +76,7 @@ func runtimeOptions(applicationConfig ridu.Config{{if .MongoDB}}, internalDevelo
 			AdminAssets:             adminassets.FS(),
 			AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS"),
 			AllowedHosts:            envList("RIDU_ALLOWED_HOSTS"),
+			SetupToken:              os.Getenv("RIDU_SETUP_TOKEN"),
 			TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS"),
 			TrustedProxyHops:        envInt("RIDU_TRUSTED_PROXY_HOPS"),
 			ReadinessTimeout:        envDuration("RIDU_READINESS_TIMEOUT"),
@@ -91,6 +92,8 @@ func runtimeOptions(applicationConfig ridu.Config{{if .MongoDB}}, internalDevelo
 	}
 }
 
+// serverAddress listens only on this machine unless RIDU_ADDRESS says
+// otherwise. A hosting platform that assigns PORT expects every interface.
 func serverAddress() string {
 	if address := strings.TrimSpace(os.Getenv("RIDU_ADDRESS")); address != "" {
 		return address
@@ -98,7 +101,7 @@ func serverAddress() string {
 	if port := strings.TrimSpace(os.Getenv("PORT")); port != "" {
 		return ":" + port
 	}
-	return ":8080"
+	return "127.0.0.1:8080"
 }
 
 {{if .SQLite}}func sqliteDatabasePath() string {

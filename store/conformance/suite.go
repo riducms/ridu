@@ -855,6 +855,16 @@ func Run(t *testing.T, factory Factory) {
 			rollback(t, read)
 			t.Fatalf("versions = %#v, want newest revision then original", items)
 		}
+		timestamps := []time.Time{created.CreatedAt, created.UpdatedAt, updated.UpdatedAt}
+		for _, version := range items {
+			timestamps = append(timestamps, version.CreatedAt, version.Snapshot.CreatedAt, version.Snapshot.UpdatedAt)
+		}
+		for _, timestamp := range timestamps {
+			if timestamp.Location() != time.UTC {
+				rollback(t, read)
+				t.Fatalf("document or version timestamp %v has location %q, want UTC", timestamp, timestamp.Location())
+			}
+		}
 		firstAccess := query.Equal(mustPath("state"), "first").Node()
 		secondAccess := query.Equal(mustPath("state"), "second").Node()
 		hiddenAccess := query.Equal(mustPath("state"), "hidden").Node()

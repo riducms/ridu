@@ -50,7 +50,7 @@ func UploadFields(authored field.Fields, path string) (field.Fields, error) {
 			found = true
 			fieldPath := fmt.Sprintf("%s[%d]", path, index)
 			if view.Kind() != shape.Kind() || view.Localized() {
-				issues = append(issues, schema.Issue{Code: "invalid_upload_metadata_field", Path: fieldPath, Message: fmt.Sprintf("upload metadata %q requires its fixed nonlocalized %s shape", shape.Name(), shape.Kind())})
+				issues = append(issues, schema.Issue{Code: "invalid_upload_metadata_field", Path: fieldPath, Message: fmt.Sprintf("upload collections reserve %q for file metadata; rename this field, or declare it as a nonlocalized %s field to customize the metadata field", shape.Name(), shape.Kind())})
 				continue
 			}
 			_, hasDefault := view.Default()

@@ -133,7 +133,11 @@ const riduFramework: Framework = {
 	bootstrap: async () => {
 		await checkedFetch(
 			"http://127.0.0.1:18281/api/auth/users/create-user",
-			jsonRequest("POST", { data: { email }, password }),
+			jsonRequest("POST", {
+				data: { email },
+				password,
+				setupToken: "benchmark-setup-token-0123456789abcdef",
+			}),
 			[201]
 		);
 	},

@@ -118,8 +118,8 @@ func TestDraftInputGeneratorsPreserveExactFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, fragment := range []string{
-		"type PageDraft struct", "*core.Input[string]", "type HeroDraft struct",
-		"core.NewTypedCollection[Page, PageCreate, PageUpdate, PageDraft]",
+		"type PageDraftInput struct", "*core.Input[string]", "type HeroDraft struct",
+		"core.NewTypedCollection[Page, PageCreateInput, PageUpdateInput, PageDraftInput]",
 		`json:"_publishedRevision,omitempty"`, `json:"_hasDraftChanges,omitempty"`,
 	} {
 		if !strings.Contains(string(generated), fragment) {

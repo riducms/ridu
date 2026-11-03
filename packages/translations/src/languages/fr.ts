@@ -274,6 +274,7 @@ export const frMessages = {
 	"auth:emailVerificationFailed": "Impossible de vérifier l’adresse e-mail.",
 	"auth:emailVerified": "Votre adresse e-mail a été vérifiée.",
 	"auth:enterPassword": "Saisissez un mot de passe.",
+	"auth:enterSetupToken": "Saisissez le jeton de configuration.",
 	"auth:firstAccountCreateFailed": "Impossible de créer le premier compte.",
 	"auth:firstAccountExists": "Un premier compte existe déjà. Connectez-vous.",
 	"auth:firstAccountIdentityUnavailable": "L’identité du nouveau compte est indisponible.",
@@ -284,6 +285,7 @@ export const frMessages = {
 		"Saisissez votre adresse e-mail pour recevoir un lien de réinitialisation du mot de passe.",
 	"auth:hidePassword": "Masquer le mot de passe",
 	"auth:hidePasswordConfirmation": "Masquer la confirmation du mot de passe",
+	"auth:hideSetupToken": "Masquer le jeton de configuration",
 	"auth:login": "Se connecter",
 	"auth:loginFailed": "Impossible de vous connecter.",
 	"auth:logout": "Se déconnecter",
@@ -310,8 +312,14 @@ export const frMessages = {
 	"auth:sendVerificationLink": "Envoyer le lien de vérification",
 	"auth:sending": "Envoi…",
 	"auth:setupCompleted": "Configuration déjà terminée",
+	"auth:setupToken": "Jeton de configuration",
+	"auth:setupTokenDescription":
+		"Copiez-le depuis le journal du serveur, qui l’affiche tant qu’aucun utilisateur n’existe.",
+	"auth:setupTokenInvalid":
+		"Ce jeton de configuration ne correspond pas à celui du journal du serveur.",
 	"auth:showPassword": "Afficher le mot de passe",
 	"auth:showPasswordConfirmation": "Afficher la confirmation du mot de passe",
+	"auth:showSetupToken": "Afficher le jeton de configuration",
 	"auth:signingIn": "Connexion…",
 	"auth:verificationDescription":
 		"Saisissez votre adresse e-mail pour recevoir un nouveau lien de vérification.",

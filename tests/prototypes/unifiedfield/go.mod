@@ -1,6 +1,6 @@
 module example.com/ridu-gate1
 
-go 1.26.9
+go 1.26.10
 
 require github.com/riducms/ridu v0.0.0
 

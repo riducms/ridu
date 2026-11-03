@@ -18,12 +18,12 @@ func TestGeneratedUnifiedContractsThroughTypedLocalAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	users := g.UsersCollection.With(app.Local())
-	user, err := users.Create(t.Context(), g.UserCreate{Name: "Ada"}, core.TypedMutationOptions{})
+	user, err := users.Create(t.Context(), g.UserCreateInput{Name: "Ada"}, core.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	articles := g.UnifiedArticlesCollection.With(app.Local())
-	var input g.UnifiedArticleCreate
+	var input g.UnifiedArticleCreateInput
 	if err := json.Unmarshal([]byte(`{"title":"Typed graph","sku":" sku-root ","sections":[{"_key":"A","products":[{"_key":"B","sku":"sku-b"}]}],"content":[{"blockType":"unified-card","_key":"C","sku":"sku-c"}],"localizedTitle":"English","privateNote":"redacted"}`), &input); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestGeneratedUnifiedContractsThroughTypedLocalAPI(t *testing.T) {
 	if created.Content == nil || len(*created.Content) != 1 || (*created.Content)[0].BlockType() != unifiedfields.CardSlug || (*created.Content)[0].BlockKey() != "C" {
 		t.Fatal("typed Block discriminated identity")
 	}
-	var patch g.UnifiedArticleUpdate
+	var patch g.UnifiedArticleUpdateInput
 	if err := json.Unmarshal([]byte(`{"sections":[{"_key":"A","products":[{"_key":"B","sku":"sku-new"}]}],"localizedTitle":"Français"}`), &patch); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestGeneratedUnifiedContractsThroughTypedLocalAPI(t *testing.T) {
 	if selected.Title == nil || selected.Sku != nil || selected.Sections != nil {
 		t.Fatal("typed selected output preserves omission")
 	}
-	_, err = articles.Update(t.Context(), created.ID, g.UnifiedArticleUpdate{Sku: core.Set("invalid")}, core.TypedMutationOptions{})
+	_, err = articles.Update(t.Context(), created.ID, g.UnifiedArticleUpdateInput{Sku: core.Set("invalid")}, core.TypedMutationOptions{})
 	var operationError *core.OperationError
 	if !errors.As(err, &operationError) || len(operationError.Issues) != 1 || operationError.Issues[0].Code != "sku" || operationError.Issues[0].Path != "sku" || operationError.Issues[0].Target == "" {
 		t.Fatalf("typed structured issue: %v", err)

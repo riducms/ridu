@@ -1267,13 +1267,13 @@ func TestRESTLoginCurrentSessionAndLogout(t *testing.T) {
 
 func TestRESTCreatesAuthUserWithoutExposingPassword(t *testing.T) {
 	application := httpFixture(t)
-	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
+	client := handlerClient(application.Handler(ridu.HandlerOptions{SetupToken: testSetupToken}))
 	created := requestJSON(
 		t,
 		client,
 		http.MethodPost,
 		"http://ridu.test/api/auth/users/create-user",
-		strings.NewReader(`{"data":{"email":"new-user@example.test"},"password":"correct-horse"}`),
+		strings.NewReader(`{"data":{"email":"new-user@example.test"},"password":"correct-horse","setupToken":"`+testSetupToken+`"}`),
 		"",
 	)
 	if created.StatusCode != http.StatusCreated {
@@ -1338,7 +1338,7 @@ func TestRESTReportsOneTimeAdminBootstrapAvailability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
+	client := handlerClient(application.Handler(ridu.HandlerOptions{SetupToken: testSetupToken}))
 
 	status := requestJSON(t, client, http.MethodGet, "http://ridu.test/api/auth/users/bootstrap", nil, "")
 	if status.StatusCode != http.StatusOK || status.Header.Get("Cache-Control") != "no-store" {
@@ -1350,7 +1350,18 @@ func TestRESTReportsOneTimeAdminBootstrapAvailability(t *testing.T) {
 		t.Fatal("empty admin collection did not advertise setup")
 	}
 
-	created := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/users/create-user", strings.NewReader(`{"data":{"email":"admin@example.test"},"password":"correct-horse"}`), "")
+	for _, token := range []string{"", "wrong-" + testSetupToken} {
+		refused := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/users/create-user", strings.NewReader(`{"data":{"email":"admin@example.test"},"password":"correct-horse","setupToken":"`+token+`"}`), "")
+		if refused.StatusCode != http.StatusForbidden {
+			t.Fatalf("first admin create with setup token %q = %d: %s", token, refused.StatusCode, readBody(t, refused))
+		}
+		var failure protocol.ErrorEnvelope
+		decodeResponse(t, refused, &failure)
+		if failure.Error.Code != protocol.ErrorSetupTokenInvalid {
+			t.Fatalf("first admin create with setup token %q = %#v", token, failure)
+		}
+	}
+	created := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/users/create-user", strings.NewReader(`{"data":{"email":"admin@example.test"},"password":"correct-horse","setupToken":"`+testSetupToken+`"}`), "")
 	if created.StatusCode != http.StatusCreated {
 		t.Fatalf("first admin create = %d: %s", created.StatusCode, readBody(t, created))
 	}
@@ -1408,13 +1419,13 @@ func TestRESTAnonymousBootstrapIsLimitedToConfiguredAdminCollection(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
-	staff := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/staff/create-user", strings.NewReader(`{"data":{"email":"staff@example.test"},"password":"correct-horse"}`), "")
+	client := handlerClient(application.Handler(ridu.HandlerOptions{SetupToken: testSetupToken}))
+	staff := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/staff/create-user", strings.NewReader(`{"data":{"email":"staff@example.test"},"password":"correct-horse","setupToken":"`+testSetupToken+`"}`), "")
 	if staff.StatusCode != http.StatusForbidden {
 		t.Fatalf("secondary auth bootstrap = %d: %s", staff.StatusCode, readBody(t, staff))
 	}
 	staff.Body.Close()
-	admin := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/users/create-user", strings.NewReader(`{"data":{"email":"admin@example.test"},"password":"correct-horse"}`), "")
+	admin := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/users/create-user", strings.NewReader(`{"data":{"email":"admin@example.test"},"password":"correct-horse","setupToken":"`+testSetupToken+`"}`), "")
 	if admin.StatusCode != http.StatusCreated {
 		t.Fatalf("admin auth bootstrap = %d: %s", admin.StatusCode, readBody(t, admin))
 	}
@@ -1588,6 +1599,9 @@ func TestAuthRateLimitCannotBeBypassedByRotatingIdentities(t *testing.T) {
 		response.Body.Close()
 	}
 }
+
+// testSetupToken is the first-user setup token for handlers in these tests.
+const testSetupToken = "setup-token-for-core-tests-0123456789"
 
 func httpFixture(t *testing.T) *ridu.App {
 	t.Helper()

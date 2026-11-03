@@ -52,7 +52,15 @@ export RIDU_ALLOWED_ORIGINS='https://app.example.com,https://staff.example.com'
 
 Use complete origins with no path, query, fragment, credentials, or trailing slash. Ridu
 canonicalizes host casing and default ports, but it does not support `*` or wildcard subdomains.
-List each trusted browser origin.
+List each trusted browser origin. The server refuses to start when an entry is not an origin.
+
+A packaged desktop or mobile app has an origin with its own scheme, such as `tauri://localhost`
+for Tauri on macOS and Linux or `capacitor://localhost` for Capacitor on iOS. List it the same way;
+it matches only that exact origin:
+
+```sh title="terminal"
+export RIDU_ALLOWED_ORIGINS='https://app.example.com,tauri://localhost'
+```
 
 For local frontend development, add the exact dev-server port:
 

@@ -302,7 +302,7 @@ func TestPostgresAnonymousFirstAuthUserBootstrapHasOneWinner(t *testing.T) {
 	for _, email := range []string{"first@example.test", "second@example.test"} {
 		email := email
 		go func() {
-			document, err := application.CreateAuthUserForTransport(ctx, "users", store.Values{"email": store.String(email)}, "correct-horse", ridu.MutationOptions{})
+			document, err := application.CreateAuthUserForTransport(ctx, "users", store.Values{"email": store.String(email)}, "correct-horse", ridu.MutationOptions{}, true)
 			results <- result{document: document, err: err}
 		}()
 	}

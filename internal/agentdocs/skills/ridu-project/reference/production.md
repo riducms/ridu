@@ -94,7 +94,7 @@ Generated projects read the deployment topology from environment variables:
   </div>
   <div>
     <dt><code>RIDU_ADDRESS</code></dt>
-    <dd>Set the complete listener address. It defaults to <code>:8080</code>.</dd>
+    <dd>Set the complete listener address. It defaults to <code>127.0.0.1:8080</code>, which only the same machine can reach; a container or a server reached over the network needs, for example, <code>:8080</code>.</dd>
   </div>
   <div>
     <dt><code>PORT</code></dt>
@@ -105,8 +105,12 @@ Generated projects read the deployment topology from environment variables:
     <dd>Size the separate pool for cross-process object locks. Its default is four; count these connections alongside document connections on every replica.</dd>
   </div>
   <div>
+    <dt><code>RIDU_SETUP_TOKEN</code></dt>
+    <dd>Choose the token that creating the first user requires, at least 32 characters. Without it, each server process generates one and logs it the first time it offers setup. Set it when several replicas serve one database.</dd>
+  </div>
+  <div>
     <dt><code>RIDU_ALLOWED_HOSTS</code></dt>
-    <dd>List public hosts, optionally with ports. Set it in production because an empty list accepts every syntactically valid host for development compatibility. Include the host your platform's health check sends, such as Railway's <code>healthcheck.railway.app</code>; Ridu refuses unlisted hosts before routing, including <code>/readyz</code>, and logs the first refusal of each.</dd>
+    <dd>List public hosts, optionally with ports. Set it in production because an empty list accepts every syntactically valid host, except on a server that listens only on loopback, which then answers only <code>localhost</code>, <code>127.0.0.1</code> and <code>[::1]</code>. Include the host your platform's health check sends, such as Railway's <code>healthcheck.railway.app</code>; Ridu refuses unlisted hosts before routing, including <code>/readyz</code>, and logs the first refusal of each.</dd>
   </div>
   <div>
     <dt><code>RIDU_ALLOWED_ORIGINS</code></dt>

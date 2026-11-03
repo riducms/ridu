@@ -571,7 +571,7 @@ func TestAnonymousFirstAuthUserBootstrapIsAtomic(t *testing.T) {
 	for _, email := range []string{"first@example.test", "second@example.test"} {
 		email := email
 		go func() {
-			document, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{"email": store.String(email)}, "correct-horse", ridu.MutationOptions{})
+			document, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{"email": store.String(email)}, "correct-horse", ridu.MutationOptions{}, true)
 			results <- result{document: document, err: err}
 		}()
 	}
@@ -611,7 +611,7 @@ func TestAnonymousFirstAuthUserBootstrapIsAtomic(t *testing.T) {
 	}
 }
 
-func TestAuthBootstrapAvailableIsLimitedToUninitializedAdminCollectionWithOmittedCreatePolicy(t *testing.T) {
+func TestAuthBootstrapAvailableIsLimitedToTheUninitializedAdminCollection(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Auth bootstrap availability", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
@@ -651,8 +651,43 @@ func TestAuthBootstrapAvailableIsLimitedToUninitializedAdminCollectionWithOmitte
 	if err != nil {
 		t.Fatal(err)
 	}
-	if available, err := publicRegistration.AuthBootstrapAvailable(context.Background(), "users"); err != nil || available {
+	if available, err := publicRegistration.AuthBootstrapAvailable(context.Background(), "users"); err != nil || !available {
 		t.Fatalf("explicit create policy bootstrap = %v, %v", available, err)
+	}
+}
+
+// A Create rule that only people may add users must not leave a fresh install
+// without a first user: setup ignores the rule.
+func TestFirstUserSetupIgnoresTheCreateRule(t *testing.T) {
+	application, err := ridu.New(ridu.Config{
+		Name: "Restricted user creation", Admin: ridu.AdminConfig{User: "users"},
+		Collections: []ridu.Collection{{
+			Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
+			Fields: field.Fields{field.Email("email").Required().Unique()},
+			Access: ridu.CollectionAccess{Create: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+				if ctx.Actor == nil {
+					return ridu.Deny(), nil
+				}
+				return ridu.Allow(), nil
+			}},
+		}},
+	}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := application.CreateAuthUserForTransport(ctx, "users", store.Values{"email": store.String("anonymous@example.test")}, "correct-horse", ridu.MutationOptions{}, false); !operationCode(err, "access_denied") {
+		t.Fatalf("anonymous create without setup = %v, want access_denied from the rule", err)
+	}
+	first, err := application.CreateAuthUserForTransport(ctx, "users", store.Values{"email": store.String("first@example.test")}, "correct-horse", ridu.MutationOptions{}, true)
+	if err != nil {
+		t.Fatalf("first-user setup under a Create rule: %v", err)
+	}
+	if _, err := application.CreateAuthUserForTransport(ctx, "users", store.Values{"email": store.String("second@example.test")}, "correct-horse", ridu.MutationOptions{}, true); !operationCode(err, "access_denied") {
+		t.Fatalf("setup after the first user = %v, want access_denied", err)
+	}
+	if _, err := application.CreateAuthUserForTransport(ctx, "users", store.Values{"email": store.String("invited@example.test")}, "correct-horse", ridu.MutationOptions{Actor: &first, ActorCollection: "users"}, false); err != nil {
+		t.Fatalf("signed-in create under the rule: %v", err)
 	}
 }
 
@@ -675,7 +710,7 @@ func TestAnonymousFirstAdminBootstrapCanSetFieldsProtectedFromAnonymousCreation(
 	user, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{
 		"email": store.String("admin@example.test"),
 		"role":  store.String("administrator"),
-	}, "correct-horse", ridu.MutationOptions{})
+	}, "correct-horse", ridu.MutationOptions{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -702,7 +737,7 @@ func TestAnonymousFirstAdminBootstrapDoesNotDependOnEmailVerification(t *testing
 	})
 	if _, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{
 		"email": store.String("bootstrap-verified@example.test"),
-	}, "correct-horse", ridu.MutationOptions{}); err != nil {
+	}, "correct-horse", ridu.MutationOptions{}, true); err != nil {
 		t.Fatal(err)
 	}
 	if deliveries != 0 {

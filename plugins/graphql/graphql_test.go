@@ -770,7 +770,12 @@ func TestGraphQLAuthenticationUsesRiduSessionsAndActorCollection(t *testing.T) {
 	}
 	secondaryBootstrap := graphQL(t, server.URL, `mutation { createStaff(data: {email: "staff@example.com", password: "correct horse battery staple"}) { id } }`)
 	assertErrorCode(t, secondaryBootstrap, "access_denied")
-	graphQL(t, server.URL, `mutation { createUser(data: {email: "user@example.com", name: "Ada", password: "correct horse battery staple"}) { id email } }`)
+	// First-user setup needs the setup token, which only the REST route checks.
+	adminBootstrap := graphQL(t, server.URL, `mutation { createUser(data: {email: "user@example.com", name: "Ada", password: "correct horse battery staple"}) { id email } }`)
+	assertErrorCode(t, adminBootstrap, "setup_token_invalid")
+	if _, err := application.CreateAuthUser(t.Context(), "users", store.Values{"email": store.String("user@example.com"), "name": store.String("Ada")}, "correct horse battery staple", ridu.MutationOptions{System: true}); err != nil {
+		t.Fatal(err)
+	}
 	initialization = graphQL(t, server.URL, `{ initializedUser initializedStaff }`)
 	if objectAt(t, initialization, "data")["initializedUser"] != true || objectAt(t, initialization, "data")["initializedStaff"] != false {
 		t.Fatalf("initialized auth state = %#v", initialization)

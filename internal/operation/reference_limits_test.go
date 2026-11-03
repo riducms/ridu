@@ -34,6 +34,7 @@ func TestReferenceAdmissionRejectsOverLimitBeforeStoreLookups(t *testing.T) {
 		transaction,
 		store.Values{"related": store.List(items...)},
 		localization.Selection{},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("validate references: %v", err)

@@ -1594,7 +1594,11 @@ export interface RiduAuth<
 		options?: RequestOptions
 	): Promise<AuthActionEnvelope>;
 
-	/** Create a user in an auth-enabled collection, including sign-up and managed-user flows. */
+	/**
+	 * Create a user in an auth-enabled collection, including sign-up and managed-user flows. To
+	 * create the first user of an empty admin-user collection without signing in, pass the
+	 * `setupToken` the server logs; that setup ignores the collection's Create rule.
+	 */
 	createUser<
 		Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<
 			SessionCollection<Config, DefaultAuth>,
@@ -1605,19 +1609,21 @@ export interface RiduAuth<
 		// resolves through the published overload instead of returning never.
 		input: [Slug] extends [never]
 			? never
-			: { data: DraftCreateFor<Config, Slug>; password: string } & AuthCollectionInput<
-					DefaultAuth,
-					Slug
-				>,
+			: {
+					data: DraftCreateFor<Config, Slug>;
+					password: string;
+					setupToken?: string;
+				} & AuthCollectionInput<DefaultAuth, Slug>,
 		options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true }
 	): Promise<OutputFor<Config, Slug>>;
 
 	/** Explicit publication requires the complete generated user data contract. */
 	createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(
-		input: { data: CreateFor<Config, Slug>; password: string } & AuthCollectionInput<
-			DefaultAuth,
-			Slug
-		>,
+		input: {
+			data: CreateFor<Config, Slug>;
+			password: string;
+			setupToken?: string;
+		} & AuthCollectionInput<DefaultAuth, Slug>,
 		options?: CreateOptions<
 			LocaleFor<Config>,
 			CollectionVersionsFor<Config, Slug>,
@@ -1625,7 +1631,7 @@ export interface RiduAuth<
 		>
 	): Promise<OutputFor<Config, Slug>>;
 
-	/** Check whether an auth collection still permits its first bootstrap user. */
+	/** Check whether the admin-user collection is still empty and offers first-user setup. */
 	bootstrap<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(
 		input: AuthCollectionInput<DefaultAuth, Slug>,
 		options?: RequestOptions

@@ -125,7 +125,8 @@ directory; Ridu warns first and stops if any project paths conflict with existin
 
 Keep the selected tab's `dev` command running. Wait for it to print healthy API and admin URLs, then
 open `http://localhost:8080/admin`. On an empty database Ridu shows the setup screen instead of a
-login form. Create the first user with an email address and a password.
+login form. Copy the setup token from the `dev` output, where the server logs it, then create the
+first user with an email address and a password.
 
 The setup operation is available only while the configured auth collection is empty. After it
 succeeds, the same URL shows the login screen.

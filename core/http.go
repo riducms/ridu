@@ -31,16 +31,26 @@ type HandlerOptions struct {
 	MaxBodyBytes int64
 	// SecureCookies restricts auth cookies to HTTPS requests.
 	SecureCookies bool
-	// AllowedOrigins lists browser origins permitted by CORS.
+	// AllowedOrigins lists browser origins permitted by CORS. Each entry is
+	// scheme://host[:port] with no path, such as https://app.example.com or an
+	// app scheme like tauri://localhost. Execute refuses to start on an entry
+	// that is not an origin; Handler ignores it with a warning.
 	AllowedOrigins []string
 	// AllowedRequestHeaders appends application-owned CORS request headers to
 	// Ridu's SDK headers. Invalid HTTP token names are ignored.
 	AllowedRequestHeaders []string
 	// AllowedHosts restricts the HTTP Host header. Entries are exact hostnames
 	// with an optional port; an entry without a port accepts any port. Empty
-	// accepts every syntactically valid host for development. Production
-	// deployments should set their public hostnames.
+	// accepts every syntactically valid host, except that Execute limits a
+	// server listening only on loopback to localhost, 127.0.0.1 and [::1].
+	// Production deployments should set their public hostnames.
 	AllowedHosts []string
+	// SetupToken is the secret an anonymous request must present to create the
+	// first user of the empty admin-user collection. When it is empty the
+	// handler generates one and logs it the first time it offers setup. Set
+	// the same value on every replica that serves one database, at least 32
+	// characters long; Execute refuses a shorter one.
+	SetupToken string
 	// TrustedProxyCIDRs lists proxies whose forwarded client addresses are trusted.
 	TrustedProxyCIDRs []string
 	// TrustedProxyHops counts the proxies a request passes through, the one
@@ -234,7 +244,7 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		AdminAssets:            assets,
 		MaxBodyBytes:           options.MaxBodyBytes, SecureCookies: options.SecureCookies,
 		AllowedOrigins: append([]string(nil), options.AllowedOrigins...), AllowedRequestHeaders: append([]string(nil), options.AllowedRequestHeaders...), AllowedHosts: append([]string(nil), options.AllowedHosts...), TrustedProxies: trusted, TrustedProxyHops: options.TrustedProxyHops,
-		AuthRateLimit: options.AuthRateLimit, AuthRateWindow: options.AuthRateWindow,
+		AuthRateLimit: options.AuthRateLimit, AuthRateWindow: options.AuthRateWindow, SetupToken: options.SetupToken,
 		Login: func(ctx context.Context, collection, email, password string, metadata httpapi.LoginMetadata) (httpapi.AuthSession, error) {
 			session, err := application.LoginWithOptions(ctx, collection, email, password, LoginOptions{IPAddress: metadata.IPAddress, UserAgent: metadata.UserAgent})
 			return httpapi.AuthSession{ID: session.ID, Token: session.Token, Collection: session.Collection, User: session.User, ExpiresAt: session.ExpiresAt}, err
@@ -279,12 +289,12 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		VerifyEmail:            application.VerifyEmail,
 		ChangePassword:         application.ChangePassword,
 		AuthBootstrapAvailable: application.AuthBootstrapAvailable,
-		CreateAuthUser: func(ctx context.Context, collection string, values store.Values, password string, identity *httpapi.AuthIdentity, options httpapi.LocaleOptions, draft *bool) (store.Document, error) {
+		CreateAuthUser: func(ctx context.Context, collection string, values store.Values, password string, identity *httpapi.AuthIdentity, options httpapi.LocaleOptions, draft *bool, setup bool) (store.Document, error) {
 			return application.CreateAuthUserForTransport(ctx, collection, values, password, MutationOptions{
 				Actor: httpIdentityActor(identity), ActorCollection: httpIdentityCollection(identity), Draft: draft,
 				Locale: schema.LocaleCode(options.Locale), FallbackLocales: options.FallbackLocales,
 				DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
-			})
+			}, setup)
 		},
 		CreateAPIKey: func(ctx context.Context, token, name string, expiresAt time.Time) (httpapi.APIKey, error) {
 			key, err := application.CreateAPIKey(ctx, token, name, expiresAt)

@@ -67,13 +67,15 @@ request; the access rule itself stays in Go.
 
 ## Use the generated Go types {#go}
 
-The Go file gives you separate types for documents, create input, and update input. Bind a
+The Go file gives you separate types for documents, create input, and update input. They are
+named after the collection's singular label: a `posts` collection labeled "Post" gets `Post`,
+`PostCreateInput` and `PostUpdateInput`, plus `PostDraftInput` when it has drafts. Bind a
 collection to your application's local API, then call its methods with those types:
 
 ```go
 posts := generated.PostsCollection.With(app.Local())
 
-created, err := posts.Create(ctx, generated.PostCreate{
+created, err := posts.Create(ctx, generated.PostCreateInput{
 	Title: core.Set("Hello, Ridu"),
 }, core.TypedMutationOptions{Actor: actor})
 if err != nil {

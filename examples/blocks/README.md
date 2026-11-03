@@ -56,7 +56,7 @@ Go creation uses the generated typed collection and immutable discriminator code
 
 ```go
 page, err := generated.PagesCollection.With(app.Local()).Create(ctx,
-    generated.PageCreate{
+    generated.PageCreateInput{
         Title: "Home",
         Layout: core.NonNull(generated.PagesLayoutInput{
             &generated.HeroInput{Heading: "Welcome"},
@@ -78,7 +78,7 @@ Block output `_key` remains mandatory. A Hero's
 
 | Task | Type or binding |
 | --- | --- |
-| Create a page / add a new block | `PageCreate`, `HeroInput`, `PagesLayoutInput` |
+| Create a page / add a new block | `PageCreateInput`, `HeroInput`, `PagesLayoutInput` |
 | Render one locale | `Page`, `Hero`, `PagesCollection` |
 | Edit existing blocks | `page.Layout.Retain()`, then `HeroUpdate` inside `PagesLayoutUpdate` |
 | Export or inspect every translation | `PageAllLocales`, `HeroAllLocales`, `PagesCollectionAllLocales` |
@@ -129,7 +129,7 @@ for _, value := range patch {
         hero.Heading = &heading
     }
 }
-_, err = pages.Update(ctx, pageID, generated.PageUpdate{Layout: core.SetNonNull(patch)}, core.TypedMutationOptions{ExpectedRevision: revision, Locale: "fr"})
+_, err = pages.Update(ctx, pageID, generated.PageUpdateInput{Layout: core.SetNonNull(patch)}, core.TypedMutationOptions{ExpectedRevision: revision, Locale: "fr"})
 ```
 
 `Retain()` preserves every occurrence and its order using fresh key-only updates.

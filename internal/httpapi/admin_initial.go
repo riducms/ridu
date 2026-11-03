@@ -354,7 +354,7 @@ func (api *API) prepareAdminRuntime(ctx context.Context, request *http.Request, 
 		runtime.EncodedManifest = manifest.encoded
 	}
 	if snapshot.Application.Admin != nil && api.config.AuthBootstrapAvailable != nil {
-		available, err := api.config.AuthBootstrapAvailable(ctx, string(snapshot.Application.Admin.UserCollectionSlug))
+		available, err := api.setupAvailable(ctx, string(snapshot.Application.Admin.UserCollectionSlug))
 		if err != nil {
 			return nil, preparedIdentity, "", err
 		}

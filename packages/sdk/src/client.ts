@@ -299,7 +299,7 @@ class FetchClient<
 				return { success: true as const };
 			},
 			createUser: async (
-				input: { data: unknown; password: string } & CollectionChoice,
+				input: { data: unknown; password: string; setupToken?: string } & CollectionChoice,
 				options?: CreateOptions
 			) => {
 				const collection = client.#collectionFor(input.collection, "createUser");
@@ -309,7 +309,14 @@ class FetchClient<
 				const suffix = query.size === 0 ? "" : `?${query}`;
 				const body = await client.#request(
 					`/api/auth/${encodeURIComponent(collection)}/create-user${suffix}`,
-					{ method: "POST", body: JSON.stringify({ data: input.data, password: input.password }) },
+					{
+						method: "POST",
+						body: JSON.stringify({
+							data: input.data,
+							password: input.password,
+							...(input.setupToken === undefined ? {} : { setupToken: input.setupToken }),
+						}),
+					},
 					options
 				);
 				return documentFromEnvelope(body);

@@ -39,7 +39,14 @@ type documentReference struct {
 	optionFilters []schema.RelationshipFilter
 }
 
-func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.Transaction, values store.Values, selection localization.Selection) ([]schema.Issue, error) {
+// validateDocumentReferences checks that every reference in values points at
+// a document the actor may link to. saved holds the stored document's values
+// when the operation changes an existing document. A reference saved already
+// holds may point at a document in trash, so moving a target to trash does not
+// block later writes to, or the restore of, the documents that refer to it.
+// Access rules and option filters still apply to such a reference, and a
+// reference the write adds must point at an active document.
+func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.Transaction, values store.Values, selection localization.Selection, saved store.Values) ([]schema.Issue, error) {
 	references, limitIssue, err := engine.collectReferenceValidationCandidates(ctx.Collection.Fields, values, selection, ctx.projections)
 	if err != nil {
 		return nil, &Error{Code: "validation", Status: 422, Message: "localized reference validation failed", Cause: err}
@@ -47,10 +54,27 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 	if limitIssue != nil {
 		return []schema.Issue{*limitIssue}, nil
 	}
+	var savedReferences map[string]struct{}
+	if saved != nil {
+		// A saved document over the limit only loses the trash allowance for
+		// references beyond it. Projecting it uncached keeps the projector's
+		// entries for values.
+		existing, _, existingError := engine.collectReferenceValidationCandidates(ctx.Collection.Fields, saved, selection, nil)
+		if existingError != nil {
+			return nil, &Error{Code: "validation", Status: 422, Message: "localized reference validation failed", Cause: existingError}
+		}
+		savedReferences = make(map[string]struct{}, len(existing))
+		for _, reference := range existing {
+			savedReferences[savedReferenceKey(reference)] = struct{}{}
+		}
+	}
 	type referenceCheck struct {
 		reference documentReference
 		selection localization.Selection
 		filter    *query.Node
+		// saved reports that every reference sharing this check is already
+		// saved, so a target in trash still counts as available.
+		saved bool
 	}
 	checks := make(map[string]referenceCheck, len(references))
 	referenceKeys := make([][]string, len(references))
@@ -58,6 +82,7 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 	// once, on first use, and then only read.
 	var localeSources map[schema.LocaleCode]store.Values
 	for referenceIndex, reference := range references {
+		_, alreadySaved := savedReferences[savedReferenceKey(reference)]
 		selections, resolveError := engine.referenceValidationSelections(reference, selection)
 		if resolveError != nil {
 			return nil, &Error{Code: "validation", Status: 422, Message: "localized reference validation failed", Cause: resolveError}
@@ -80,7 +105,11 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 				return nil, &Error{Code: "store_failed", Status: 500, Message: "reference option filter configuration is invalid", Cause: filterError}
 			}
 			key := documentReferenceKey(reference, referenceSelection, filterIdentity)
-			checks[key] = referenceCheck{reference: reference, selection: referenceSelection, filter: filter}
+			checkSaved := alreadySaved
+			if existing, seen := checks[key]; seen {
+				checkSaved = checkSaved && existing.saved
+			}
+			checks[key] = referenceCheck{reference: reference, selection: referenceSelection, filter: filter, saved: checkSaved}
 			referenceKeys[referenceIndex] = append(referenceKeys[referenceIndex], key)
 		}
 	}
@@ -125,9 +154,13 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 		if err != nil {
 			return nil, err
 		}
+		deletion := store.DeletionActive
+		if check.saved && target.Schema.Capabilities.Trash {
+			deletion = store.DeletionAll
+		}
 		lookupKey := ""
 		if decision.Kind != Deny && access == nil && check.filter == nil {
-			lookupKey = string(target.Schema.ID) + "\x00" + reference.id + "\x00" + strconv.FormatBool(publishedOnly)
+			lookupKey = string(target.Schema.ID) + "\x00" + reference.id + "\x00" + strconv.FormatBool(publishedOnly) + "\x00" + string(deletion)
 			if available, seen := unfilteredLookups[lookupKey]; seen {
 				checked[key] = available
 				continue
@@ -135,7 +168,7 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 		}
 		_, err = transaction.Find(ctx.Context, store.Request{
 			Collection: target.Schema, Collections: engine.schemas, ID: reference.id,
-			Filter: check.filter, Access: access, PublishedOnly: publishedOnly,
+			Filter: check.filter, Access: access, PublishedOnly: publishedOnly, Deletion: deletion,
 			Lock: store.LockReference, Locales: referenceSelection.Configured,
 			LocaleChain: referenceSelection.Chain, AllLocales: referenceSelection.All,
 		})
@@ -212,6 +245,14 @@ func (engine *Engine) collectReferenceValidationCandidates(fields []schema.Field
 func referenceOccurrenceKey(reference documentReference) string {
 	return string(reference.target.CollectionID) + "\x00" + reference.id + "\x00" + reference.path + "\x00" +
 		string(reference.locale) + "\x00" + string(reference.kind) + "\x00" + reference.fieldIdentity
+}
+
+// savedReferenceKey identifies a reference by its field, locale and target,
+// not its path, so a saved reference keeps its trash allowance when its array
+// row moves.
+func savedReferenceKey(reference documentReference) string {
+	return string(reference.target.CollectionID) + "\x00" + reference.id + "\x00" + string(reference.locale) + "\x00" +
+		string(reference.kind) + "\x00" + reference.fieldIdentity
 }
 
 func (engine *Engine) referenceValidationSelections(reference documentReference, selection localization.Selection) ([]localization.Selection, error) {

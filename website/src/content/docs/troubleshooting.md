@@ -184,10 +184,10 @@ Check the browser boundary rather than weakening authentication:
 - verify that the auth collection named by `Admin.User` exists and that the user is active.
 
 Use the [CORS guide](/docs/cors/) to distinguish an unlisted origin, custom-header preflight, cookie
-SameSite restriction, and untrusted TLS proxy. If the admin-user collection is empty and its Create
-policy is omitted, the admin opens its
-one-time first-user setup screen. An explicit Create policy owns registration instead and disables
-that default. See [Authentication](/docs/authentication/) and [REST API](/docs/rest-api/).
+SameSite restriction, and untrusted TLS proxy. If the admin-user collection is empty, the admin opens its
+one-time first-user setup screen, which asks for the setup token the server logs. If the screen
+says the token doesn't match, copy it again from the log of the server that answered, or set the
+same `RIDU_SETUP_TOKEN` on every replica. See [Authentication](/docs/authentication/) and [REST API](/docs/rest-api/).
 
 ## A request is denied or a field disappears {#access-denied}
 

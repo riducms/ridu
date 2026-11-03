@@ -31,6 +31,9 @@ import (
 	"github.com/riducms/ridu/tests/performance/blocks/blockspec"
 )
 
+// benchmarkSetupToken lets run.ts create the benchmark's first user.
+const benchmarkSetupToken = "benchmark-setup-token-0123456789abcdef"
+
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
 		log.Print(err)
@@ -141,7 +144,7 @@ func serve(parent context.Context, spec blockspec.Spec) error {
 		response.Header().Set("Content-Type", "application/octet-stream")
 		_, _ = response.Write(cpuProfile.Bytes())
 	})
-	mux.Handle("/", application.Handler(ridu.HandlerOptions{AuthRateLimit: 1000}))
+	mux.Handle("/", application.Handler(ridu.HandlerOptions{AuthRateLimit: 1000, SetupToken: benchmarkSetupToken}))
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return err

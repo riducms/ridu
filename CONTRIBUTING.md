@@ -6,7 +6,7 @@ contracts.
 
 ## Set up the repository
 
-Use Go 1.26.9 or newer, Node.js 24, and Bun 1.4.0. PostgreSQL integration uses PostgreSQL 17; SQLite uses the bundled
+Use Go 1.26.10 or newer, Node.js 24, and Bun 1.4.0. PostgreSQL integration uses PostgreSQL 17; SQLite uses the bundled
 pure-Go driver and does not require CGO or an external database service.
 
 ```sh

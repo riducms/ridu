@@ -269,6 +269,7 @@ func TestGraphQLAuthPasswordVariableNullDoesNotUseDefault(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "GraphQL auth password null", Admin: ridu.AdminConfig{User: "users"}, Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{{Slug: "users", Auth: true, Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
+			Access:     ridu.CollectionAccess{Create: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }},
 			Fields:     field.Fields{field.Email("email").Required().Unique(), field.Text("displayName").Required()},
 		}},
 	}, teststore.New())

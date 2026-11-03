@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -300,6 +301,43 @@ func TestExecuteBindsListenerBeforeStartingDurableWorkers(t *testing.T) {
 	time.Sleep(25 * time.Millisecond)
 	if calls.Load() != 0 {
 		t.Fatalf("worker ran %d tasks before listener bind", calls.Load())
+	}
+}
+
+func TestALoopbackServerAnswersOnlyLocalHostNames(t *testing.T) {
+	local := []string{"localhost", "127.0.0.1", "[::1]"}
+	for _, test := range []struct {
+		address    string
+		configured []string
+		want       []string
+	}{
+		{address: "127.0.0.1:8080", want: local},
+		{address: "localhost:8080", want: local},
+		{address: "[::1]:8080", want: local},
+		{address: "127.0.0.1:8080", configured: []string{"app.example.test"}, want: []string{"app.example.test"}},
+		{address: ":8080"},
+		{address: "0.0.0.0:8080"},
+		{address: "192.168.1.20:8080"},
+	} {
+		if got := listenerAllowedHosts(test.address, test.configured); !slices.Equal(got, test.want) {
+			t.Errorf("allowed hosts for %s with %v = %v, want %v", test.address, test.configured, got, test.want)
+		}
+	}
+}
+
+func TestExecuteRefusesAnAllowedOriginThatIsNotAnOrigin(t *testing.T) {
+	arguments := os.Args
+	os.Args = []string{"ridu-test-app"}
+	defer func() { os.Args = arguments }()
+	opened := false
+	err := Execute(
+		Config{Name: "origin validation", Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
+		WithStore(func(context.Context) (store.Store, error) { opened = true; return teststore.New(), nil }),
+		WithAddress("127.0.0.1:0"),
+		WithHandlerOptions(HandlerOptions{AllowedOrigins: []string{"https://app.example.test/"}}),
+	)
+	if err == nil || !strings.Contains(err.Error(), `allowed origin "https://app.example.test/"`) || opened {
+		t.Fatalf("Execute with a path in an allowed origin = %v (store opened: %t)", err, opened)
 	}
 }
 

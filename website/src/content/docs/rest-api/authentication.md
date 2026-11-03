@@ -41,16 +41,16 @@ list call only returns metadata.
 
 ## Create users and manage sign-in {#accounts}
 
-| Method and path                                    | What it does                                                |
-| -------------------------------------------------- | ----------------------------------------------------------- |
-| `GET /api/auth/{collection}/bootstrap`             | Check whether one-time first-admin setup is available.      |
-| `POST /api/auth/{collection}/create-user`          | Create a user with `{ "data": { … }, "password": "…" }`.    |
-| `POST /api/auth/{collection}/login`                | Authenticate; `"transport": "token"` returns the token.     |
-| `POST /api/auth/{collection}/forgot-password`      | Request a recovery notification when enabled.               |
-| `POST /api/auth/{collection}/reset-password`       | Consume a recovery token when enabled.                      |
-| `POST /api/auth/{collection}/request-verification` | Request an email-verification notification when enabled.    |
-| `POST /api/auth/{collection}/verify`               | Consume an email-verification token when enabled.           |
-| `POST /api/auth/{collection}/{id}/unlock`          | Clear login-attempt lock state when enabled and authorized. |
+| Method and path                                    | What it does                                                                                       |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `GET /api/auth/{collection}/bootstrap`             | Check whether one-time first-admin setup is available.                                             |
+| `POST /api/auth/{collection}/create-user`          | Create a user with `{ "data": { … }, "password": "…" }`; the first user also sends `"setupToken"`. |
+| `POST /api/auth/{collection}/login`                | Authenticate; `"transport": "token"` returns the token.                                            |
+| `POST /api/auth/{collection}/forgot-password`      | Request a recovery notification when enabled.                                                      |
+| `POST /api/auth/{collection}/reset-password`       | Consume a recovery token when enabled.                                                             |
+| `POST /api/auth/{collection}/request-verification` | Request an email-verification notification when enabled.                                           |
+| `POST /api/auth/{collection}/verify`               | Consume an email-verification token when enabled.                                                  |
+| `POST /api/auth/{collection}/{id}/unlock`          | Clear login-attempt lock state when enabled and authorized.                                        |
 
 See [Authentication](/docs/authentication/) for password policies, token delivery callbacks,
 strategy authentication, lockouts, and the bootstrap lifecycle.

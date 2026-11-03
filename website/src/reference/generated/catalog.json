@@ -982,7 +982,7 @@
 						{
 							"name": "Local",
 							"type": "*LocalAPI",
-							"description": "Local performs nested reads and writes through the normal operation engine.\nPass Context to reuse the transaction, and pass Actor, ActorCollection, and\nlocale options explicitly when the nested operation represents the same user.\nStandalone reads reject nested writes; AfterCommit starts new transactions."
+							"description": "Local performs nested reads and writes through the normal operation engine.\nPass Context to reuse the transaction, and pass Actor, ActorCollection, and\nlocale options explicitly when the nested operation represents the same user.\nStandalone reads reject nested writes; AfterCommit starts new transactions.\nA failed nested write, or a nested read that fails in the store, rolls the\nshared transaction back: later nested calls and this operation fail too. A\nnested read that finds nothing or is refused leaves the transaction usable,\nso the hook may handle that error and continue."
 						},
 						{
 							"name": "Error",
@@ -1711,6 +1711,11 @@
 							"name": "AllowedHosts",
 							"type": "[]string",
 							"description": "Restricts Host to exact hostnames with optional ports; empty accepts syntactically valid development hosts."
+						},
+						{
+							"name": "SetupToken",
+							"type": "string",
+							"description": "SetupToken is the secret an anonymous request must present to create the\nfirst user of the empty admin-user collection. When it is empty the\nhandler generates one and logs it the first time it offers setup. Set\nthe same value on every replica that serves one database, at least 32\ncharacters long; Execute refuses a shorter one."
 						},
 						{
 							"name": "TrustedProxyCIDRs",
@@ -9078,7 +9083,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.25.0\"",
+					"signature": "const FrameworkVersion = \"0.26.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -12165,7 +12170,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 166
+						"line": 176
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12398,7 +12403,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 121
+						"line": 122
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12454,7 +12459,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 138
+						"line": 139
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12509,7 +12514,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 245
+						"line": 266
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12552,7 +12557,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 338
+						"line": 359
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12595,7 +12600,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 353
+						"line": 374
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12638,7 +12643,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 390
+						"line": 411
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12686,7 +12691,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 425
+						"line": 446
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12729,7 +12734,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 473
+						"line": 494
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12772,7 +12777,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 445
+						"line": 466
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12825,7 +12830,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 504
+						"line": 525
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12875,7 +12880,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 771
+						"line": 792
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12928,7 +12933,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 809
+						"line": 830
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12976,7 +12981,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 847
+						"line": 868
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -13024,7 +13029,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 881
+						"line": 902
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -13079,7 +13084,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 556
+						"line": 577
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -13122,7 +13127,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 688
+						"line": 709
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -13167,7 +13172,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 734
+						"line": 755
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14355,7 +14360,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 613
+						"line": 634
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14403,7 +14408,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 652
+						"line": 673
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14446,7 +14451,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 681
+						"line": 702
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14747,8 +14752,8 @@
 					"slug": "app-create-auth-user-for-transport-method",
 					"kind": "method",
 					"group": "Methods",
-					"summary": "CreateAuthUserForTransport is the selection-aware transport form of CreateAuthUserForTransport.",
-					"signature": "func (application *App) CreateAuthUserForTransport(ctx context.Context, collection string, values store.Values, password string, options MutationOptions) (store.Document, error)",
+					"summary": "CreateAuthUserForTransport creates an auth user for a transport request. setup reports that an anonymous request presented the transport's setup token: it creates the first user of the empty admin-user collection as trusted server code, whatever the collection's Create rule says. Otherwise the Create rule decides, and anonymous creation without one is refused.",
+					"signature": "func (application *App) CreateAuthUserForTransport(ctx context.Context, collection string, values store.Values, password string, options MutationOptions, setup bool) (store.Document, error)",
 					"parameters": [
 						{
 							"name": "ctx",
@@ -14774,6 +14779,11 @@
 							"name": "options",
 							"type": "MutationOptions",
 							"description": "The options value."
+						},
+						{
+							"name": "setup",
+							"type": "bool",
+							"description": "The setup value."
 						}
 					],
 					"parametersLabel": "",
@@ -14791,7 +14801,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 144
+						"line": 148
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14844,7 +14854,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 212
+						"line": 233
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14904,7 +14914,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 251
+						"line": 272
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14949,7 +14959,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 727
+						"line": 748
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -16650,7 +16660,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 123
+						"line": 127
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -16690,7 +16700,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 89
+						"line": 93
 					},
 					"relatedDocs": [
 						"/docs/hooks/collections/",
@@ -16706,7 +16716,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "HookContext supplies the request, values, and local API to a collection or global hook. Change entries in Data before saving, or values in Document to change the response after saving. A Hook returns only an error.",
-					"signature": "type HookContext struct {\n\t// Context carries cancellation, deadlines, and the active transaction.\n\t// Pass it to Local calls that must succeed or roll back with this operation.\n\tContext context.Context\n\t// Operation names the document operation, such as Create, Update, or Read,\n\t// not the hook phase. Shared hooks should check it before running write-only work.\n\tOperation operation.Kind\n\t// WritePhase identifies draft saves versus publication writes independently\n\t// of the row's current public status.\n\tWritePhase operation.WritePhase\n\t// CollectionID is the collection's stable resource ID, not its slug.\n\t// It is empty for a global operation.\n\tCollectionID schema.StableID\n\t// GlobalID is the global's stable resource ID, not its slug.\n\t// It is empty for a collection operation.\n\tGlobalID schema.StableID\n\t// Actor is the authenticated document, or nil for an anonymous operation.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// System reports that trusted server code started this operation with\n\t// System set, so no access rule ran. Nested Local calls do not inherit it:\n\t// pass System again when the nested work is also trusted.\n\tSystem bool\n\t// Data contains the values being saved. On an update it holds only the\n\t// top-level fields the caller sent; Candidate adds the unchanged ones from\n\t// Original. Change map entries to change stored values; assigning a new map\n\t// to Data does not replace the engine's values. Changes after saving are not\n\t// persisted.\n\tData store.Values\n\t// Document is the response document when available. AfterRead receives each\n\t// document in a list separately. Changes to Document.Values affect the response,\n\t// not stored data, and remain subject to field read access rules.\n\tDocument *store.Document\n\t// Original is a detached copy of the saved document before an update, delete,\n\t// or duplication. Changing it does not change storage.\n\tOriginal *store.Document\n\t// Local performs nested reads and writes through the normal operation engine.\n\t// Pass Context to reuse the transaction, and pass Actor, ActorCollection, and\n\t// locale options explicitly when the nested operation represents the same user.\n\t// Standalone reads reject nested writes; AfterCommit starts new transactions.\n\tLocal *LocalAPI\n\t// Error is set only for after-error hooks and preserves the original failure.\n\t// Returning nil from AfterError does not make the failed operation succeed.\n\tError error\n\t// Locale is the selected content language. Write hooks use the write locale;\n\t// AfterRead uses the response locale, whose values may include fallback text.\n\tLocale schema.LocaleCode\n\t// AllLocales reports whether localized values contain maps keyed by locale.\n\t// It describes this hook's values, which may differ from the requested response.\n\tAllLocales bool\n}",
+					"signature": "type HookContext struct {\n\t// Context carries cancellation, deadlines, and the active transaction.\n\t// Pass it to Local calls that must succeed or roll back with this operation.\n\tContext context.Context\n\t// Operation names the document operation, such as Create, Update, or Read,\n\t// not the hook phase. Shared hooks should check it before running write-only work.\n\tOperation operation.Kind\n\t// WritePhase identifies draft saves versus publication writes independently\n\t// of the row's current public status.\n\tWritePhase operation.WritePhase\n\t// CollectionID is the collection's stable resource ID, not its slug.\n\t// It is empty for a global operation.\n\tCollectionID schema.StableID\n\t// GlobalID is the global's stable resource ID, not its slug.\n\t// It is empty for a collection operation.\n\tGlobalID schema.StableID\n\t// Actor is the authenticated document, or nil for an anonymous operation.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// System reports that trusted server code started this operation with\n\t// System set, so no access rule ran. Nested Local calls do not inherit it:\n\t// pass System again when the nested work is also trusted.\n\tSystem bool\n\t// Data contains the values being saved. On an update it holds only the\n\t// top-level fields the caller sent; Candidate adds the unchanged ones from\n\t// Original. Change map entries to change stored values; assigning a new map\n\t// to Data does not replace the engine's values. Changes after saving are not\n\t// persisted.\n\tData store.Values\n\t// Document is the response document when available. AfterRead receives each\n\t// document in a list separately. Changes to Document.Values affect the response,\n\t// not stored data, and remain subject to field read access rules.\n\tDocument *store.Document\n\t// Original is a detached copy of the saved document before an update, delete,\n\t// or duplication. Changing it does not change storage.\n\tOriginal *store.Document\n\t// Local performs nested reads and writes through the normal operation engine.\n\t// Pass Context to reuse the transaction, and pass Actor, ActorCollection, and\n\t// locale options explicitly when the nested operation represents the same user.\n\t// Standalone reads reject nested writes; AfterCommit starts new transactions.\n\t// A failed nested write, or a nested read that fails in the store, rolls the\n\t// shared transaction back: later nested calls and this operation fail too. A\n\t// nested read that finds nothing or is refused leaves the transaction usable,\n\t// so the hook may handle that error and continue.\n\tLocal *LocalAPI\n\t// Error is set only for after-error hooks and preserves the original failure.\n\t// Returning nil from AfterError does not make the failed operation succeed.\n\tError error\n\t// Locale is the selected content language. Write hooks use the write locale;\n\t// AfterRead uses the response locale, whose values may include fallback text.\n\tLocale schema.LocaleCode\n\t// AllLocales reports whether localized values contain maps keyed by locale.\n\t// It describes this hook's values, which may differ from the requested response.\n\tAllLocales bool\n}",
 					"parameters": [
 						{
 							"name": "Context",
@@ -16766,7 +16776,7 @@
 						{
 							"name": "Local",
 							"type": "*LocalAPI",
-							"description": "Local performs nested reads and writes through the normal operation engine.\nPass Context to reuse the transaction, and pass Actor, ActorCollection, and\nlocale options explicitly when the nested operation represents the same user.\nStandalone reads reject nested writes; AfterCommit starts new transactions."
+							"description": "Local performs nested reads and writes through the normal operation engine.\nPass Context to reuse the transaction, and pass Actor, ActorCollection, and\nlocale options explicitly when the nested operation represents the same user.\nStandalone reads reject nested writes; AfterCommit starts new transactions.\nA failed nested write, or a nested read that fails in the store, rolls the\nshared transaction back: later nested calls and this operation fail too. A\nnested read that finds nothing or is refused leaves the transaction usable,\nso the hook may handle that error and continue."
 						},
 						{
 							"name": "Error",
@@ -16829,7 +16839,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 178
+						"line": 182
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -16869,7 +16879,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 112
+						"line": 116
 					},
 					"relatedDocs": [
 						"/docs/hooks/transactions-and-errors/#after-commit",
@@ -16927,7 +16937,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 94
+						"line": 98
 					},
 					"relatedDocs": [
 						"/docs/hooks/transactions-and-errors/#after-commit"
@@ -17772,7 +17782,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 397
+						"line": 400
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -18830,7 +18840,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 370
+						"line": 373
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -18910,7 +18920,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 106
+						"line": 116
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -18977,7 +18987,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 109
+						"line": 119
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -19049,7 +19059,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 129
+						"line": 139
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -19113,7 +19123,7 @@
 					],
 					"source": {
 						"path": "core/http.go",
-						"line": 155
+						"line": 165
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21079,7 +21089,7 @@
 					"kind": "type",
 					"group": "Uploads",
 					"summary": "Validation and object-storage behavior for an upload collection.",
-					"signature": "type UploadConfig struct {\n\t// MaxFileSize is the maximum accepted upload size in bytes. Zero uses the\n\t// framework default; values above 256 MiB are rejected so one request cannot\n\t// bypass the process-wide upload work budget.\n\tMaxFileSize int64\n\t// MimeTypes restricts uploads to the listed media types. Empty accepts any supported type.\n\tMimeTypes []string\n\t// Private requires a signed-in caller to download files, on top of the\n\t// collection's read access. Every download is checked against read access\n\t// and sent as private, no-store whether or not Private is set, so leave it\n\t// off when read access lets visitors download the files.\n\tPrivate bool\n\t// ImageSizes declares derived image variants generated from supported image uploads.\n\tImageSizes []ImageSize\n\t// MaxImageDimension scales a JPEG or PNG original wider or taller than this\n\t// many pixels down to fit before it is stored. The scaled image replaces\n\t// the original, including the private source later crops start from, and\n\t// image sizes are made from it. Zero keeps originals at their uploaded\n\t// size. It must be at least the width and height of every image size.\n\tMaxImageDimension int\n}",
+					"signature": "type UploadConfig struct {\n\t// MaxFileSize is the maximum accepted upload size in bytes. Zero uses the\n\t// framework default; values above 256 MiB are rejected so one request cannot\n\t// bypass the process-wide upload work budget.\n\tMaxFileSize int64\n\t// MimeTypes restricts uploads to the listed media types, detected from the\n\t// file bytes; a \"type/*\" entry accepts every subtype. Empty accepts images\n\t// and application/octet-stream, the type of bytes Go cannot identify. List\n\t// other types, such as application/pdf or text/plain, to accept them.\n\tMimeTypes []string\n\t// Private requires a signed-in caller to download files, on top of the\n\t// collection's read access. Every download is checked against read access\n\t// and sent as private, no-store whether or not Private is set, so leave it\n\t// off when read access lets visitors download the files.\n\tPrivate bool\n\t// ImageSizes declares derived image variants generated from supported image uploads.\n\tImageSizes []ImageSize\n\t// MaxImageDimension scales a JPEG or PNG original wider or taller than this\n\t// many pixels down to fit before it is stored. The scaled image replaces\n\t// the original, including the private source later crops start from, and\n\t// image sizes are made from it. Zero keeps originals at their uploaded\n\t// size. It must be at least the width and height of every image size.\n\tMaxImageDimension int\n}",
 					"parameters": [
 						{
 							"name": "MaxFileSize",
@@ -21160,7 +21170,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 387
+						"line": 390
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21336,7 +21346,7 @@
 					"kind": "type",
 					"group": "Runtime",
 					"summary": "HTTP API, embedded admin, observability, security, and worker configuration.",
-					"signature": "type HandlerOptions struct {\n\n\t// AdminAssets overrides the framework's embedded admin asset filesystem.\n\tAdminAssets fs.FS\n\t// MaxBodyBytes limits decoded request bodies. Zero uses the framework default.\n\tMaxBodyBytes int64\n\t// SecureCookies restricts auth cookies to HTTPS requests.\n\tSecureCookies bool\n\t// AllowedOrigins lists browser origins permitted by CORS.\n\tAllowedOrigins []string\n\t// AllowedRequestHeaders appends application-owned CORS request headers to\n\t// Ridu's SDK headers. Invalid HTTP token names are ignored.\n\tAllowedRequestHeaders []string\n\t// AllowedHosts restricts the HTTP Host header. Entries are exact hostnames\n\t// with an optional port; an entry without a port accepts any port. Empty\n\t// accepts every syntactically valid host for development. Production\n\t// deployments should set their public hostnames.\n\tAllowedHosts []string\n\t// TrustedProxyCIDRs lists proxies whose forwarded client addresses are trusted.\n\tTrustedProxyCIDRs []string\n\t// TrustedProxyHops counts the proxies a request passes through, the one\n\t// in TrustedProxyCIDRs that connects to Ridu included, when the others\n\t// can't be listed. For a request from a trusted proxy, Ridu treats the\n\t// last TrustedProxyHops-1 X-Forwarded-For addresses as proxies too and\n\t// takes the client address from before them. Use it only when every proxy\n\t// rewrites or appends to X-Forwarded-For, such as Railway's (2). Zero and\n\t// one trust only TrustedProxyCIDRs; it has no effect without them.\n\tTrustedProxyHops int\n\t// AuthRateLimit is the maximum auth attempts per identity and client window.\n\tAuthRateLimit int\n\t// AuthRateWindow is the duration over which AuthRateLimit is enforced.\n\tAuthRateWindow time.Duration\n\t// Audit receives security-relevant application events.\n\tAudit func(AuditEvent)\n\t// Observe receives timing and status metadata for completed requests.\n\tObserve func(RequestObservation)\n\t// RequestError receives trusted diagnostic detail for internal failures and\n\t// recovered panics. The HTTP response remains redacted.\n\tRequestError func(RequestErrorEvent)\n\t// RequestTimeout limits request execution. Zero uses the framework default;\n\t// a negative duration disables the handler deadline for streaming plugins.\n\tRequestTimeout time.Duration\n\t// ReadinessChecks add application/plugin dependencies to /readyz. Checks\n\t// must be read-only, repeatable, and honor Context cancellation.\n\tReadinessChecks []ReadinessCheck\n\t// ReadinessTimeout bounds the complete database, storage, and custom\n\t// readiness probe. Zero uses five seconds; a negative duration disables it.\n\tReadinessTimeout time.Duration\n\t// ContentSecurityPolicy overrides the framework admin policy. Empty uses a\n\t// conservative default compatible with live-preview frames.\n\tContentSecurityPolicy string\n\t// DisableContentSecurityPolicy explicitly disables the admin CSP when an\n\t// upstream gateway owns it.\n\tDisableContentSecurityPolicy bool\n\t// StrictTransportSecurity is emitted verbatim when non-empty. Configure it\n\t// only when every public request is HTTPS, normally at the TLS terminator.\n\tStrictTransportSecurity string\n\t// TaskInterval controls how often the durable task queues are polled. Zero\n\t// uses the framework default.\n\tTaskInterval time.Duration\n\t// TaskBatch limits durable task leases claimed during one polling cycle.\n\tTaskBatch int\n\t// TaskQueues optionally restricts this process to named queues. An empty\n\t// list consumes every queue, including unknown task slugs so they can be\n\t// moved to a stable terminal failure.\n\tTaskQueues []string\n\t// TaskLeaseDuration is extended by heartbeats while a handler is running.\n\tTaskLeaseDuration time.Duration\n\t// TaskHeartbeatInterval must remain shorter than TaskLeaseDuration.\n\tTaskHeartbeatInterval time.Duration\n\t// TaskPruneBatch bounds terminal records removed after their retention.\n\tTaskPruneBatch int\n\t// AuthPruneBatch bounds expired sessions and API keys removed from each\n\t// durable credential family during one background maintenance cycle.\n\tAuthPruneBatch int\n\t// JobError receives failures from scheduled background work.\n\tJobError func(error)\n\t// contains filtered or unexported fields\n}",
+					"signature": "type HandlerOptions struct {\n\n\t// AdminAssets overrides the framework's embedded admin asset filesystem.\n\tAdminAssets fs.FS\n\t// MaxBodyBytes limits decoded request bodies. Zero uses the framework default.\n\tMaxBodyBytes int64\n\t// SecureCookies restricts auth cookies to HTTPS requests.\n\tSecureCookies bool\n\t// AllowedOrigins lists browser origins permitted by CORS. Each entry is\n\t// scheme://host[:port] with no path, such as https://app.example.com or an\n\t// app scheme like tauri://localhost. Execute refuses to start on an entry\n\t// that is not an origin; Handler ignores it with a warning.\n\tAllowedOrigins []string\n\t// AllowedRequestHeaders appends application-owned CORS request headers to\n\t// Ridu's SDK headers. Invalid HTTP token names are ignored.\n\tAllowedRequestHeaders []string\n\t// AllowedHosts restricts the HTTP Host header. Entries are exact hostnames\n\t// with an optional port; an entry without a port accepts any port. Empty\n\t// accepts every syntactically valid host, except that Execute limits a\n\t// server listening only on loopback to localhost, 127.0.0.1 and [::1].\n\t// Production deployments should set their public hostnames.\n\tAllowedHosts []string\n\t// SetupToken is the secret an anonymous request must present to create the\n\t// first user of the empty admin-user collection. When it is empty the\n\t// handler generates one and logs it the first time it offers setup. Set\n\t// the same value on every replica that serves one database, at least 32\n\t// characters long; Execute refuses a shorter one.\n\tSetupToken string\n\t// TrustedProxyCIDRs lists proxies whose forwarded client addresses are trusted.\n\tTrustedProxyCIDRs []string\n\t// TrustedProxyHops counts the proxies a request passes through, the one\n\t// in TrustedProxyCIDRs that connects to Ridu included, when the others\n\t// can't be listed. For a request from a trusted proxy, Ridu treats the\n\t// last TrustedProxyHops-1 X-Forwarded-For addresses as proxies too and\n\t// takes the client address from before them. Use it only when every proxy\n\t// rewrites or appends to X-Forwarded-For, such as Railway's (2). Zero and\n\t// one trust only TrustedProxyCIDRs; it has no effect without them.\n\tTrustedProxyHops int\n\t// AuthRateLimit is the maximum auth attempts per identity and client window.\n\tAuthRateLimit int\n\t// AuthRateWindow is the duration over which AuthRateLimit is enforced.\n\tAuthRateWindow time.Duration\n\t// Audit receives security-relevant application events.\n\tAudit func(AuditEvent)\n\t// Observe receives timing and status metadata for completed requests.\n\tObserve func(RequestObservation)\n\t// RequestError receives trusted diagnostic detail for internal failures and\n\t// recovered panics. The HTTP response remains redacted.\n\tRequestError func(RequestErrorEvent)\n\t// RequestTimeout limits request execution. Zero uses the framework default;\n\t// a negative duration disables the handler deadline for streaming plugins.\n\tRequestTimeout time.Duration\n\t// ReadinessChecks add application/plugin dependencies to /readyz. Checks\n\t// must be read-only, repeatable, and honor Context cancellation.\n\tReadinessChecks []ReadinessCheck\n\t// ReadinessTimeout bounds the complete database, storage, and custom\n\t// readiness probe. Zero uses five seconds; a negative duration disables it.\n\tReadinessTimeout time.Duration\n\t// ContentSecurityPolicy overrides the framework admin policy. Empty uses a\n\t// conservative default compatible with live-preview frames.\n\tContentSecurityPolicy string\n\t// DisableContentSecurityPolicy explicitly disables the admin CSP when an\n\t// upstream gateway owns it.\n\tDisableContentSecurityPolicy bool\n\t// StrictTransportSecurity is emitted verbatim when non-empty. Configure it\n\t// only when every public request is HTTPS, normally at the TLS terminator.\n\tStrictTransportSecurity string\n\t// TaskInterval controls how often the durable task queues are polled. Zero\n\t// uses the framework default.\n\tTaskInterval time.Duration\n\t// TaskBatch limits durable task leases claimed during one polling cycle.\n\tTaskBatch int\n\t// TaskQueues optionally restricts this process to named queues. An empty\n\t// list consumes every queue, including unknown task slugs so they can be\n\t// moved to a stable terminal failure.\n\tTaskQueues []string\n\t// TaskLeaseDuration is extended by heartbeats while a handler is running.\n\tTaskLeaseDuration time.Duration\n\t// TaskHeartbeatInterval must remain shorter than TaskLeaseDuration.\n\tTaskHeartbeatInterval time.Duration\n\t// TaskPruneBatch bounds terminal records removed after their retention.\n\tTaskPruneBatch int\n\t// AuthPruneBatch bounds expired sessions and API keys removed from each\n\t// durable credential family during one background maintenance cycle.\n\tAuthPruneBatch int\n\t// JobError receives failures from scheduled background work.\n\tJobError func(error)\n\t// contains filtered or unexported fields\n}",
 					"parameters": [
 						{
 							"name": "AdminAssets",
@@ -21367,6 +21377,11 @@
 							"name": "AllowedHosts",
 							"type": "[]string",
 							"description": "Restricts Host to exact hostnames with optional ports; empty accepts syntactically valid development hosts."
+						},
+						{
+							"name": "SetupToken",
+							"type": "string",
+							"description": "SetupToken is the secret an anonymous request must present to create the\nfirst user of the empty admin-user collection. When it is empty the\nhandler generates one and logs it the first time it offers setup. Set\nthe same value on every replica that serves one database, at least 32\ncharacters long; Execute refuses a shorter one."
 						},
 						{
 							"name": "TrustedProxyCIDRs",
@@ -21566,7 +21581,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 49
+						"line": 51
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21606,7 +21621,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 36
+						"line": 38
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21646,7 +21661,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 42
+						"line": 44
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21674,7 +21689,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 44
+						"line": 46
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21712,7 +21727,7 @@
 					],
 					"source": {
 						"path": "core/config.go",
-						"line": 410
+						"line": 413
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21890,7 +21905,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 80
+						"line": 82
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21926,7 +21941,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 88
+						"line": 90
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -21964,7 +21979,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 99
+						"line": 101
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22000,7 +22015,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 107
+						"line": 110
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22036,7 +22051,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 115
+						"line": 118
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22072,7 +22087,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 123
+						"line": 126
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22115,7 +22130,7 @@
 					],
 					"source": {
 						"path": "core/execute.go",
-						"line": 131
+						"line": 134
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -25611,7 +25626,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 73
+						"line": 77
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72213,7 +72228,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 488
+						"line": 489
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72312,7 +72327,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 643
+						"line": 644
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72460,7 +72475,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 61
+						"line": 62
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72527,7 +72542,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 130
+						"line": 131
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72583,7 +72598,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 140
+						"line": 141
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72664,7 +72679,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 35
+						"line": 36
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72703,7 +72718,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 590
+						"line": 591
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72731,7 +72746,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 57
+						"line": 58
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73288,7 +73303,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 113
+						"line": 114
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73316,7 +73331,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 122
+						"line": 123
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73376,7 +73391,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 225
+						"line": 226
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73430,7 +73445,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 264
+						"line": 265
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73513,7 +73528,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 302
+						"line": 303
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73562,7 +73577,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 317
+						"line": 318
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73608,7 +73623,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 397
+						"line": 398
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73647,7 +73662,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 406
+						"line": 407
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73706,7 +73721,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 236
+						"line": 237
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73757,7 +73772,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 253
+						"line": 254
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73793,7 +73808,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 496
+						"line": 497
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73830,7 +73845,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 414
+						"line": 415
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73867,7 +73882,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 326
+						"line": 327
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73901,7 +73916,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 518
+						"line": 519
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73935,7 +73950,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 528
+						"line": 529
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73967,7 +73982,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 532
+						"line": 533
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74001,7 +74016,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 540
+						"line": 541
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74035,7 +74050,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 548
+						"line": 549
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74084,7 +74099,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 562
+						"line": 563
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74128,7 +74143,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 582
+						"line": 583
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74179,7 +74194,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 600
+						"line": 601
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74213,7 +74228,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 632
+						"line": 633
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74357,7 +74372,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 727
+						"line": 728
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74545,7 +74560,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 849
+						"line": 850
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74629,7 +74644,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 915
+						"line": 916
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74681,7 +74696,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 825
+						"line": 826
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74735,7 +74750,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 669
+						"line": 670
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74792,7 +74807,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 687
+						"line": 688
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74864,7 +74879,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 699
+						"line": 700
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74931,7 +74946,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 713
+						"line": 714
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74963,7 +74978,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 771
+						"line": 772
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74997,7 +75012,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 781
+						"line": 782
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75029,7 +75044,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 787
+						"line": 788
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75061,7 +75076,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 793
+						"line": 794
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75187,7 +75202,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 797
+						"line": 798
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75229,7 +75244,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 838
+						"line": 839
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75276,7 +75291,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 881
+						"line": 882
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75323,7 +75338,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 890
+						"line": 891
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75377,7 +75392,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 899
+						"line": 900
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75429,7 +75444,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 553
+						"line": 554
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75496,7 +75511,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 570
+						"line": 571
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75563,7 +75578,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 466
+						"line": 467
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75600,7 +75615,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 480
+						"line": 481
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75637,7 +75652,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 509
+						"line": 510
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75674,7 +75689,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 625
+						"line": 626
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75754,7 +75769,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 504
+						"line": 505
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76218,7 +76233,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 424
+						"line": 425
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76294,7 +76309,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 334
+						"line": 335
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76340,7 +76355,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 369
+						"line": 370
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76413,7 +76428,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 679
+						"line": 680
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76823,7 +76838,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 682
+						"line": 683
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76849,7 +76864,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 683
+						"line": 684
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76879,7 +76894,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 636
+						"line": 637
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76915,7 +76930,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 637
+						"line": 638
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76941,7 +76956,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 116
+						"line": 117
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76967,7 +76982,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 118
+						"line": 119
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76993,7 +77008,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 117
+						"line": 118
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77175,7 +77190,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 127
+						"line": 128
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77201,7 +77216,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 125
+						"line": 126
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77227,7 +77242,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 126
+						"line": 127
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77367,7 +77382,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 843
+						"line": 844
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77393,7 +77408,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 841
+						"line": 842
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77419,7 +77434,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 842
+						"line": 843
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77445,7 +77460,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 832
+						"line": 833
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77471,7 +77486,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 831
+						"line": 832
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77497,7 +77512,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 828
+						"line": 829
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77523,7 +77538,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 829
+						"line": 830
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77549,7 +77564,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 830
+						"line": 831
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78048,7 +78063,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 614
+						"line": 615
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78099,7 +78114,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 276
+						"line": 277
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78140,7 +78155,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 190
+						"line": 191
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78166,7 +78181,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 814
+						"line": 815
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78192,7 +78207,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 817
+						"line": 818
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78218,7 +78233,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 818
+						"line": 819
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78248,7 +78263,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 176
+						"line": 177
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78375,7 +78390,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 292
+						"line": 293
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78416,7 +78431,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 284
+						"line": 285
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78446,7 +78461,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 203
+						"line": 204
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79034,7 +79049,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 215
+						"line": 216
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79060,7 +79075,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 218
+						"line": 219
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79086,7 +79101,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 222
+						"line": 223
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79112,7 +79127,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 220
+						"line": 221
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79138,7 +79153,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 219
+						"line": 220
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79164,7 +79179,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 221
+						"line": 222
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83661,7 +83676,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 257
+						"line": 260
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83720,7 +83735,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 247
+						"line": 250
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83787,7 +83802,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 234
+						"line": 237
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83844,7 +83859,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 265
+						"line": 268
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83883,7 +83898,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 275
+						"line": 278
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83915,7 +83930,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 301
+						"line": 304
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83947,7 +83962,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 306
+						"line": 309
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -83979,7 +83994,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 296
+						"line": 299
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84018,7 +84033,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 312
+						"line": 315
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84060,7 +84075,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 318
+						"line": 321
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84094,7 +84109,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 325
+						"line": 328
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84138,7 +84153,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 384
+						"line": 387
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84227,7 +84242,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 354
+						"line": 357
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84269,7 +84284,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 372
+						"line": 375
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84306,7 +84321,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 392
+						"line": 395
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84345,7 +84360,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 399
+						"line": 402
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84384,7 +84399,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 405
+						"line": 408
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84433,7 +84448,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 421
+						"line": 424
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84492,7 +84507,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 411
+						"line": 414
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84529,7 +84544,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 429
+						"line": 432
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84603,7 +84618,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 331
+						"line": 334
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84637,7 +84652,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 343
+						"line": 346
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84671,7 +84686,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 347
+						"line": 350
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84720,7 +84735,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 435
+						"line": 438
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84784,7 +84799,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 448
+						"line": 451
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84818,7 +84833,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 459
+						"line": 462
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84852,7 +84867,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 464
+						"line": 467
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84884,7 +84899,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 495
+						"line": 498
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84916,7 +84931,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 501
+						"line": 504
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84948,7 +84963,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 507
+						"line": 510
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85002,7 +85017,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 526
+						"line": 529
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85054,7 +85069,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 535
+						"line": 538
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85088,7 +85103,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 544
+						"line": 547
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85122,7 +85137,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 549
+						"line": 552
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85176,7 +85191,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 512
+						"line": 515
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85210,7 +85225,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 521
+						"line": 524
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85246,7 +85261,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 555
+						"line": 558
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87079,7 +87094,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 282
+						"line": 285
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87121,7 +87136,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 289
+						"line": 292
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87283,6 +87298,32 @@
 					"source": {
 						"path": "protocol/envelope.go",
 						"line": 222
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/protocol#ErrorSetupTokenInvalid",
+					"name": "ErrorSetupTokenInvalid",
+					"slug": "error-setup-token-invalid",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "ErrorSetupTokenInvalid rejects first-user setup that is missing the setup token the server logs, or presents a different one.",
+					"signature": "const ErrorSetupTokenInvalid ErrorCode = \"setup_token_invalid\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"protocol.ErrorSetupTokenInvalid",
+						"ErrorSetupTokenInvalid"
+					],
+					"source": {
+						"path": "protocol/envelope.go",
+						"line": 233
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87512,7 +87553,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 480
+						"line": 483
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87549,7 +87590,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 489
+						"line": 492
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87575,7 +87616,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 469
+						"line": 472
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87601,7 +87642,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 473
+						"line": 476
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -87627,7 +87668,7 @@
 					],
 					"source": {
 						"path": "protocol/envelope.go",
-						"line": 476
+						"line": 479
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88042,7 +88083,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 69
+						"line": 70
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88086,7 +88127,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 75
+						"line": 76
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88186,7 +88227,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 44
+						"line": 45
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88301,7 +88342,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 34
+						"line": 35
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88327,7 +88368,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 195
+						"line": 202
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88363,7 +88404,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 203
+						"line": 210
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88490,7 +88531,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 219
+						"line": 226
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88526,7 +88567,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 227
+						"line": 234
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104914,7 +104955,7 @@
 						},
 						{
 							"name": "auth",
-							"type": "{ readonly session: SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null; login: <Slug>(credentials: LoginInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<SessionFor<Config, Slug>>; getSession: (options?: RequestOptions) => Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null>; rotate: (options?: RequestOptions) => Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>>>; logout: (options?: RequestOptions) => Promise<LogoutEnvelope>; logoutAll: (options?: RequestOptions) => Promise<LogoutEnvelope>; sessions: (options?: RequestOptions) => Promise<AuthSessionInfo[]>; revokeSession: (id: string, options?: RequestOptions) => Promise<DeleteEnvelope>; changePassword: (input: { currentPassword: string; password: string; }, options?: RequestOptions) => Promise<AuthActionEnvelope>; createUser: { <Slug>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: (MutationLocaleOptions<LocaleFor<Config>> & { draft?: boolean; } & { draft?: true; }) | undefined): Promise<OutputFor<Config, Slug>>; <Slug>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>> | undefined): Promise<OutputFor<Config, Slug>>; }; bootstrap: <Slug>(input: AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthBootstrapEnvelope>; requestPasswordReset: <Slug>(input: { email: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; resetPassword: <Slug>(input: { token: string; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; requestVerification: <Slug>(input: { email: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; verifyEmail: <Slug>(input: { token: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; forceUnlock: <Slug>(input: { id: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; createAPIKey: (input: CreateAPIKeyInput, options?: RequestOptions) => Promise<APIKey>; apiKeys: (options?: RequestOptions) => Promise<APIKeyInfo[]>; revokeAPIKey: (id: string, options?: RequestOptions) => Promise<DeleteEnvelope>; }",
+							"type": "{ readonly session: SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null; login: <Slug>(credentials: LoginInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<SessionFor<Config, Slug>>; getSession: (options?: RequestOptions) => Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null>; rotate: (options?: RequestOptions) => Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>>>; logout: (options?: RequestOptions) => Promise<LogoutEnvelope>; logoutAll: (options?: RequestOptions) => Promise<LogoutEnvelope>; sessions: (options?: RequestOptions) => Promise<AuthSessionInfo[]>; revokeSession: (id: string, options?: RequestOptions) => Promise<DeleteEnvelope>; changePassword: (input: { currentPassword: string; password: string; }, options?: RequestOptions) => Promise<AuthActionEnvelope>; createUser: { <Slug>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; setupToken?: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: (MutationLocaleOptions<LocaleFor<Config>> & { draft?: boolean; } & { draft?: true; }) | undefined): Promise<OutputFor<Config, Slug>>; <Slug>(input: { data: CreateFor<Config, Slug>; password: string; setupToken?: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>> | undefined): Promise<OutputFor<Config, Slug>>; }; bootstrap: <Slug>(input: AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthBootstrapEnvelope>; requestPasswordReset: <Slug>(input: { email: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; resetPassword: <Slug>(input: { token: string; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; requestVerification: <Slug>(input: { email: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; verifyEmail: <Slug>(input: { token: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; forceUnlock: <Slug>(input: { id: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthActionEnvelope>; createAPIKey: (input: CreateAPIKeyInput, options?: RequestOptions) => Promise<APIKey>; apiKeys: (options?: RequestOptions) => Promise<APIKeyInfo[]>; revokeAPIKey: (id: string, options?: RequestOptions) => Promise<DeleteEnvelope>; }",
 							"description": "Authentication, session, and account operations; see `RiduAuth`. The mapped copy keeps\nclients comparable member by member, so an exact generated client still fits a wider\ncontract such as the admin's."
 						},
 						{
@@ -108245,13 +108286,13 @@
 						},
 						{
 							"name": "createUser",
-							"type": "{ <Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>; <Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>; }",
-							"description": "Create a user in an auth-enabled collection, including sign-up and managed-user flows.\nExplicit publication requires the complete generated user data contract."
+							"type": "{ <Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; setupToken?: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>; <Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; setupToken?: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>; }",
+							"description": "Create a user in an auth-enabled collection, including sign-up and managed-user flows. To\ncreate the first user of an empty admin-user collection without signing in, pass the\n`setupToken` the server logs; that setup ignores the collection's Create rule.\nExplicit publication requires the complete generated user data contract."
 						},
 						{
 							"name": "bootstrap",
 							"type": "<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: AuthCollectionInput<DefaultAuth, Slug>, options?: RequestOptions) => Promise<AuthBootstrapEnvelope>",
-							"description": "Check whether an auth collection still permits its first bootstrap user."
+							"description": "Check whether the admin-user collection is still empty and offers first-user setup."
 						},
 						{
 							"name": "requestPasswordReset",
@@ -108846,7 +108887,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1635
+						"line": 1641
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108917,7 +108958,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1643
+						"line": 1649
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108988,7 +109029,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1629
+						"line": 1635
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109003,11 +109044,11 @@
 					"kind": "method",
 					"group": "Authentication",
 					"summary": "Create a user in an auth-enabled collection, including sign-up.",
-					"signature": "RiduAuth.createUser<Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>\nRiduAuth.createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>",
+					"signature": "RiduAuth.createUser<Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; setupToken?: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>\nRiduAuth.createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; setupToken?: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>",
 					"parameters": [
 						{
 							"name": "input",
-							"type": "[Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>",
+							"type": "[Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; setupToken?: string; } & AuthCollectionInput<DefaultAuth, Slug>",
 							"description": "The new user document, password, and optional collection."
 						},
 						{
@@ -109059,13 +109100,13 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1598
+						"line": 1602
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": [
-						"RiduAuth.createUser<Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>",
-						"RiduAuth.createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>"
+						"RiduAuth.createUser<Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<SessionCollection<Config, DefaultAuth>, DraftCollectionSlug<Config>>>(input: [Slug] extends [never] ? never : { data: DraftCreateFor<Config, Slug>; password: string; setupToken?: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true; }): Promise<OutputFor<Config, Slug>>",
+						"RiduAuth.createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(input: { data: CreateFor<Config, Slug>; password: string; setupToken?: string; } & AuthCollectionInput<DefaultAuth, Slug>, options?: CreateOptions<LocaleFor<Config>, CollectionVersionsFor<Config, Slug>, CollectionDraftsFor<Config, Slug>>): Promise<OutputFor<Config, Slug>>"
 					]
 				},
 				{
@@ -109131,7 +109172,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1649
+						"line": 1655
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109202,7 +109243,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1657
+						"line": 1663
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109346,7 +109387,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1669
+						"line": 1675
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109412,7 +109453,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1672
+						"line": 1678
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109483,7 +109524,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1675
+						"line": 1681
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109554,7 +109595,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1663
+						"line": 1669
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116347,9 +116388,9 @@
 							"description": "Read the client provided by the root layout. Call it during component initialization."
 						},
 						{
-							"name": "__@definitionKey@1895",
+							"name": "__@definitionKey@1900",
 							"type": "RiduDefinition<Config, Slug>",
-							"description": "The __@definitionKey@1895 value."
+							"description": "The __@definitionKey@1900 value."
 						}
 					],
 					"parametersLabel": "",
@@ -116592,7 +116633,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 86
+						"line": 87
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116618,7 +116659,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 88
+						"line": 89
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116631,7 +116672,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Stable machine-readable failure codes.",
-					"signature": "type ErrorCode = | \"validation\"\n\t| \"access_denied\"\n\t| \"not_found\"\n\t| \"conflict\"\n\t| \"delete_restricted\"\n\t| \"bad_request\"\n\t| \"internal\"\n\t| \"rate_limited\"\n\t| \"email_not_verified\"\n\t| \"auth_feature_disabled\"\n\t| \"invalid_auth_token\"\n\t| \"invalid_credential\"\n\t| \"invalid_preview_token\"\n\t| \"rejected\"\n\t| \"selection_too_large\"\n\t| \"bad_query\"\n\t| \"publish_required\"",
+					"signature": "type ErrorCode = | \"validation\"\n\t| \"access_denied\"\n\t| \"not_found\"\n\t| \"conflict\"\n\t| \"delete_restricted\"\n\t| \"bad_request\"\n\t| \"internal\"\n\t| \"rate_limited\"\n\t| \"email_not_verified\"\n\t| \"auth_feature_disabled\"\n\t| \"invalid_auth_token\"\n\t| \"invalid_credential\"\n\t| \"invalid_preview_token\"\n\t| \"rejected\"\n\t| \"selection_too_large\"\n\t| \"bad_query\"\n\t| \"publish_required\"\n\t| \"setup_token_invalid\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -116711,7 +116752,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 278
+						"line": 279
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116771,7 +116812,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 320
+						"line": 321
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116805,7 +116846,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 329
+						"line": 330
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116841,7 +116882,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 280
+						"line": 281
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116881,7 +116922,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 292
+						"line": 293
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116919,7 +116960,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 333
+						"line": 334
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -116978,7 +117019,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 334
+						"line": 335
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117017,7 +117058,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 353
+						"line": 354
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117055,7 +117096,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 310
+						"line": 311
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117089,7 +117130,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 377
+						"line": 378
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117121,7 +117162,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 373
+						"line": 374
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117153,7 +117194,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 381
+						"line": 382
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117190,7 +117231,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 480
+						"line": 481
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117227,7 +117268,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 385
+						"line": 386
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117269,7 +117310,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 390
+						"line": 391
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117301,7 +117342,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 396
+						"line": 397
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117388,7 +117429,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 420
+						"line": 421
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117430,7 +117471,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 435
+						"line": 436
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117472,7 +117513,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 441
+						"line": 442
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117509,7 +117550,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 449
+						"line": 450
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117546,7 +117587,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 454
+						"line": 455
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117583,7 +117624,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 459
+						"line": 460
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117640,7 +117681,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 464
+						"line": 465
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117687,7 +117728,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 473
+						"line": 474
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117734,7 +117775,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 485
+						"line": 486
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117796,7 +117837,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 492
+						"line": 493
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117828,7 +117869,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 506
+						"line": 507
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117860,7 +117901,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 502
+						"line": 503
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117892,7 +117933,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 523
+						"line": 524
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117924,7 +117965,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 527
+						"line": 528
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -117956,7 +117997,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 531
+						"line": 532
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118008,7 +118049,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 547
+						"line": 548
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118060,7 +118101,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 555
+						"line": 556
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118112,7 +118153,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 535
+						"line": 536
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118184,7 +118225,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 400
+						"line": 401
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118216,7 +118257,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 412
+						"line": 413
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118248,7 +118289,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 416
+						"line": 417
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118280,7 +118321,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 543
+						"line": 544
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118312,7 +118353,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 563
+						"line": 564
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118344,7 +118385,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 567
+						"line": 568
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118403,7 +118444,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 571
+						"line": 572
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118470,7 +118511,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 580
+						"line": 581
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118512,7 +118553,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 605
+						"line": 606
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118559,7 +118600,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 611
+						"line": 612
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118606,7 +118647,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 618
+						"line": 619
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118648,7 +118689,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 625
+						"line": 626
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118685,7 +118726,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 644
+						"line": 645
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118727,7 +118768,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 631
+						"line": 632
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118774,7 +118815,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 637
+						"line": 638
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118831,7 +118872,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 649
+						"line": 650
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118888,7 +118929,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 658
+						"line": 659
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -118960,7 +119001,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 667
+						"line": 668
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119002,7 +119043,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 679
+						"line": 680
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119089,7 +119130,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 685
+						"line": 686
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119126,7 +119167,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 700
+						"line": 701
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119158,7 +119199,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 705
+						"line": 706
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119205,7 +119246,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 773
+						"line": 774
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119231,7 +119272,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 735
+						"line": 736
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119288,7 +119329,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 780
+						"line": 781
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119365,7 +119406,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 709
+						"line": 710
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119402,7 +119443,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 722
+						"line": 723
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119454,7 +119495,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 727
+						"line": 728
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119541,7 +119582,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 737
+						"line": 738
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119593,7 +119634,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 752
+						"line": 753
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119640,7 +119681,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 760
+						"line": 761
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119682,7 +119723,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 767
+						"line": 768
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119708,7 +119749,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 54
+						"line": 55
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119734,7 +119775,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 78
+						"line": 79
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119911,7 +119952,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 789
+						"line": 790
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120038,7 +120079,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 822
+						"line": 823
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120085,7 +120126,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 850
+						"line": 851
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120122,7 +120163,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 857
+						"line": 858
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120174,7 +120215,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 862
+						"line": 863
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120211,7 +120252,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 870
+						"line": 871
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120239,7 +120280,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 875
+						"line": 876
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120286,7 +120327,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 880
+						"line": 881
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120330,7 +120371,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 897
+						"line": 898
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120362,7 +120403,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 903
+						"line": 904
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120404,7 +120445,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 907
+						"line": 908
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120446,7 +120487,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 913
+						"line": 914
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120472,7 +120513,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 919
+						"line": 920
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120504,7 +120545,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 921
+						"line": 922
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120530,7 +120571,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 925
+						"line": 926
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120556,7 +120597,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 926
+						"line": 927
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120618,7 +120659,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 928
+						"line": 929
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120644,7 +120685,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 938
+						"line": 939
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120676,7 +120717,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 940
+						"line": 941
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120718,7 +120759,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 944
+						"line": 945
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120760,7 +120801,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 950
+						"line": 951
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120822,7 +120863,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 956
+						"line": 957
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120848,7 +120889,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 966
+						"line": 967
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120900,7 +120941,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 968
+						"line": 969
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120937,7 +120978,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 976
+						"line": 977
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120989,7 +121030,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 981
+						"line": 982
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121049,7 +121090,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 989
+						"line": 990
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121096,7 +121137,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 998
+						"line": 999
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121138,7 +121179,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1006
+						"line": 1007
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121190,7 +121231,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1019
+						"line": 1020
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121237,7 +121278,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1045
+						"line": 1046
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121269,7 +121310,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1052
+						"line": 1053
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121347,7 +121388,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 192
+						"line": 193
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121394,7 +121435,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 205
+						"line": 206
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121420,7 +121461,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 188
+						"line": 189
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121457,7 +121498,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 200
+						"line": 201
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121483,7 +121524,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 196
+						"line": 197
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121520,7 +121561,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 162
+						"line": 163
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121572,7 +121613,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 597
+						"line": 598
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121609,7 +121650,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 157
+						"line": 158
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121635,7 +121676,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 145
+						"line": 146
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121677,7 +121718,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 212
+						"line": 213
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121703,7 +121744,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 90
+						"line": 91
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121740,7 +121781,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 228
+						"line": 229
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121818,7 +121859,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 249
+						"line": 250
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121895,7 +121936,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 218
+						"line": 219
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121921,7 +121962,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 141
+						"line": 142
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121958,7 +121999,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 183
+						"line": 184
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122000,7 +122041,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 177
+						"line": 178
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122204,7 +122245,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 361
+						"line": 362
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122246,7 +122287,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 366
+						"line": 367
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122303,7 +122344,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 168
+						"line": 169
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122491,7 +122532,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 350
+						"line": 351
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122529,7 +122570,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/index.ts",
-						"line": 321
+						"line": 322
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122588,7 +122629,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 299
+						"line": 300
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122623,7 +122664,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 316
+						"line": 317
 					},
 					"relatedDocs": [
 						"/docs/fields/live-validation/"
@@ -122679,7 +122720,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 308
+						"line": 309
 					},
 					"relatedDocs": [
 						"/docs/fields/live-validation/"
@@ -122739,7 +122780,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 290
+						"line": 291
 					},
 					"relatedDocs": [
 						"/docs/fields/live-validation/"
@@ -122788,7 +122829,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 512
+						"line": 513
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122911,7 +122952,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 591
+						"line": 592
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122958,7 +122999,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1012
+						"line": 1013
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123015,7 +123056,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1027
+						"line": 1028
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123067,7 +123108,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 1037
+						"line": 1038
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123104,7 +123145,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 845
+						"line": 846
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123141,7 +123182,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 892
+						"line": 893
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123167,7 +123208,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 887
+						"line": 888
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123204,7 +123245,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 518
+						"line": 519
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123230,7 +123271,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 510
+						"line": 511
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123287,7 +123328,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 344
+						"line": 345
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123334,7 +123375,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 121
+						"line": 122
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123371,7 +123412,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 111
+						"line": 112
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123403,7 +123444,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 128
+						"line": 129
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123440,7 +123481,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 116
+						"line": 117
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123497,7 +123538,7 @@
 					],
 					"source": {
 						"path": "packages/protocol/src/generated.ts",
-						"line": 132
+						"line": 133
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -128590,9 +128631,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@10932",
+							"name": "__@registration@10871",
 							"type": "true",
-							"description": "The __@registration@10932 value."
+							"description": "The __@registration@10871 value."
 						}
 					],
 					"parametersLabel": "",
@@ -129750,9 +129791,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@8020",
+							"name": "__@registration@7996",
 							"type": "true",
-							"description": "The __@registration@8020 value."
+							"description": "The __@registration@7996 value."
 						}
 					],
 					"parametersLabel": "",
@@ -131586,9 +131627,9 @@
 							"description": "The type value."
 						},
 						{
-							"name": "__@valueContract@6085",
+							"name": "__@valueContract@6053",
 							"type": "{ value: (value: Value) => Value; input: (value: Input) => Input; }",
-							"description": "The __@valueContract@6085 value."
+							"description": "The __@valueContract@6053 value."
 						},
 						{
 							"name": "fieldType",
@@ -131621,9 +131662,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@6064",
+							"name": "__@registration@6032",
 							"type": "true",
-							"description": "The __@registration@6064 value."
+							"description": "The __@registration@6032 value."
 						}
 					],
 					"parametersLabel": "",
@@ -132097,9 +132138,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@6064",
+							"name": "__@registration@6032",
 							"type": "true",
-							"description": "The __@registration@6064 value."
+							"description": "The __@registration@6032 value."
 						}
 					],
 					"parametersLabel": "",
@@ -136694,7 +136735,7 @@
 					],
 					"source": {
 						"path": "admin/src/index.ts",
-						"line": 40
+						"line": 44
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -136730,7 +136771,7 @@
 					],
 					"source": {
 						"path": "admin/src/index.ts",
-						"line": 23
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -136869,7 +136910,7 @@
 					],
 					"source": {
 						"path": "admin/src/index.ts",
-						"line": 14
+						"line": 18
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -136899,7 +136940,7 @@
 					],
 					"source": {
 						"path": "admin/src/index.ts",
-						"line": 18
+						"line": 22
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -139235,7 +139276,7 @@
 					],
 					"source": {
 						"path": "admin/src/index.ts",
-						"line": 41
+						"line": 45
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -140230,7 +140271,7 @@
 						},
 						{
 							"name": "messages",
-							"type": "Readonly<Record<\"apiReference:title\" | \"apiReference:description\" | \"apiReference:furtherNesting\" | \"apiReference:loading\" | \"apiReference:loadFailed\" | \"apiReference:list\" | \"apiReference:read\" | \"apiReference:create\" | \"apiReference:update\" | \"apiReference:delete\" | \"apiReference:operations\" | \"apiReference:examples\" | \"apiReference:languages\" | \"apiReference:copy\" | \"apiReference:guidance\" | \"apiReference:credentials\" | \"apiReference:goOptions\" | \"apiReference:omitted\" | \"apiReference:query\" | \"apiReference:fields\" | \"apiReference:field\" | \"apiReference:type\" | \"apiReference:details\" | \"apiReference:required\" | \"apiReference:readOnly\" | \"apiReference:localized\" | \"apiReference:noFields\" | \"apiReference:responses\" | \"apiReference:responseNote\" | \"apiReference:metadata\" | \"apiReference:updateNote\" | \"apiReference:uploadNote\" | \"apiReference:authNote\" | \"apiReference:trashNote\" | \"apiReference:deleteNote\" | \"apiReference:minLength\" | \"apiReference:maxLength\" | \"apiReference:minimum\" | \"apiReference:maximum\" | \"apiReference:minItems\" | \"apiReference:maxItems\" | \"apiReference:allowedValues\" | \"apiReference:unique\" | \"apiReference:dynamicDefault\" | \"apiReference:defaultValue\" | \"apiReference:queryRestricted\" | \"apiReference:references\" | \"apiReference:polymorphic\" | \"apiReference:rowIdentity\" | \"apiReference:blockDiscriminator\" | \"apiReference:jsonSchema\" | \"apiReference:queryPage\" | \"apiReference:queryLimit\" | \"apiReference:queryPagination\" | \"apiReference:queryWhere\" | \"apiReference:querySort\" | \"apiReference:queryAccess\" | \"apiReference:queryDepth\" | \"apiReference:querySelect\" | \"apiReference:queryPopulate\" | \"apiReference:queryTrash\" | \"apiReference:queryLocale\" | \"apiReference:queryFallback\" | \"apiReference:queryDraft\" | \"documents:scheduleFor\" | \"documents:scheduleType\" | \"documents:saveBeforeSchedule\" | \"documents:upcomingEvents\" | \"documents:noScheduledEvents\" | \"general:or\" | \"fields:chooseExisting\" | \"fields:time\" | \"fields:timeZone\" | \"fields:codeEditorLoadFailed\" | \"fields:dateControlLoadFailed\" | \"reference:browserLoadFailed\" | \"uploads:reloadSaved\" | \"uploads:saveOutcomeUnknownDescription\" | \"uploads:fileTooLarge\" | \"uploads:fileTypeDenied\" | \"uploads:fileOpenFailed\" | \"uploads:fileDownloadFailed\" | \"uploads:previewLoadFailed\" | \"fields:liveValidationPending\" | \"fields:liveValidationFailed\" | \"fields:liveValidationRetry\" | \"fields:liveValidationSkipped\" | \"collections:clearStatus\" | \"collections:publicationStatus\" | \"collections:createdAt\" | \"collections:updatedAt\" | \"collections:createNewButton\" | \"collections:sortAscending\" | \"collections:sortDescending\" | \"collections:reorderColumn\" | \"collections:noFilters\" | \"collections:filterWhere\" | \"collections:or\" | \"collections:and\" | \"collections:addAndFilter\" | \"collections:perPageLabel\" | \"collections:operatorIsAnyOf\" | \"collections:operatorIsNoneOf\" | \"collections:filterCollection\" | \"fields:listAdd\" | \"fields:listEmpty\" | \"fields:listItem\" | \"fields:listMoveUp\" | \"fields:listMoveDown\" | \"fields:listRemove\" | \"fields:listAdded\" | \"fields:listRemoved\" | \"fields:listMoved\" | \"errors:listMinItems\" | \"errors:listMaxItems\" | \"errors:listItemString\" | \"errors:listItemNumber\" | \"errors:listItemMinLength\" | \"errors:listItemMaxLength\" | \"errors:listItemMin\" | \"errors:listItemMax\" | \"errors:unknownBlockRecovery\" | \"fields:rowError\" | \"fields:rowErrors\" | \"account:account\" | \"account:accountMenu\" | \"account:accountMenuLabel\" | \"account:accountSecurity\" | \"account:activeSessions\" | \"account:adminRole\" | \"account:adminTheme\" | \"account:appearance\" | \"account:apiKeys\" | \"account:apiKeyCopied\" | \"account:apiKeyCopyFailed\" | \"account:apiKeyCreated\" | \"account:apiKeyNamePlaceholder\" | \"account:apiKeyRevoked\" | \"account:apiKeysDescription\" | \"account:changePassword\" | \"account:confirmRevokeAPIKey\" | \"account:confirmRevokeSession\" | \"account:confirmSignOutAll\" | \"account:copyAPIKeyNow\" | \"account:createKey\" | \"account:created\" | \"account:currentSession\" | \"account:currentPassword\" | \"account:expires\" | \"account:expiration\" | \"account:interfaceLanguage\" | \"account:languageSaveFailed\" | \"account:languageSaved\" | \"account:lastSeen\" | \"account:loadingSessions\" | \"account:name\" | \"account:never\" | \"account:newPassword\" | \"account:noAPIKeys\" | \"account:noSessions\" | \"account:password\" | \"account:passwordDescription\" | \"account:passwordMismatch\" | \"account:passwordUpdated\" | \"account:preferencesReset\" | \"account:preferencesResetFailed\" | \"account:preferencesStored\" | \"account:profile\" | \"account:profileAndPreferences\" | \"account:profileDescription\" | \"account:profileLoadFailed\" | \"account:profileRules\" | \"account:profileSaveFailed\" | \"account:profileUpdated\" | \"account:resetAllPreferences\" | \"account:resettingPreferences\" | \"account:resetPreferences\" | \"account:revoke\" | \"account:revokeCredentialDescription\" | \"account:saveProfile\" | \"account:savingProfile\" | \"account:security\" | \"account:securityAction\" | \"account:securityDescription\" | \"account:securityLoadFailed\" | \"account:securityOperationFailed\" | \"account:sessionRevoked\" | \"account:sessionsDescription\" | \"account:signOutAll\" | \"account:signOutAllDescription\" | \"account:signedInUser\" | \"account:signedOutAll\" | \"account:signingOut\" | \"account:signOutFailed\" | \"account:systemTheme\" | \"account:lightTheme\" | \"account:darkTheme\" | \"account:theme\" | \"account:themeSaveFailed\" | \"account:themeSaved\" | \"account:timeZone\" | \"account:timeZoneSaveFailed\" | \"account:timeZoneSaved\" | \"account:unknownClient\" | \"account:updatePassword\" | \"account:updatingPassword\" | \"account:updateProfile\" | \"auth:accountCreated\" | \"auth:accountReady\" | \"auth:adminAccessDenied\" | \"auth:adminBrand\" | \"auth:autoSignInFailed\" | \"auth:backToLogin\" | \"auth:checkEmail\" | \"auth:chooseNewPassword\" | \"auth:confirmPassword\" | \"auth:configuredCollectionUnavailable\" | \"auth:correctInvalidFields\" | \"auth:createAccount\" | \"auth:createFirstUser\" | \"auth:creatingAccount\" | \"auth:credentials\" | \"auth:email\" | \"auth:invalidEmail\" | \"auth:emailPlaceholder\" | \"auth:emailSent\" | \"auth:emailVerificationFailed\" | \"auth:emailVerified\" | \"auth:enterPassword\" | \"auth:firstAccountCreateFailed\" | \"auth:firstAccountExists\" | \"auth:firstAccountIdentityUnavailable\" | \"auth:firstAccountNoAdminAccess\" | \"auth:firstUserDescription\" | \"auth:forgotPassword\" | \"auth:forgotPasswordDescription\" | \"auth:hidePassword\" | \"auth:hidePasswordConfirmation\" | \"auth:login\" | \"auth:loginFailed\" | \"auth:logout\" | \"auth:missingResetToken\" | \"auth:missingVerificationToken\" | \"auth:password\" | \"auth:passwordMismatch\" | \"auth:passwordPlaceholder\" | \"auth:passwordRange\" | \"auth:passwordMinimum\" | \"auth:passwordResetFailed\" | \"auth:passwordResetSent\" | \"auth:passwordResetSuccess\" | \"auth:passwordTooLong\" | \"auth:passwordTooShort\" | \"auth:requestAnotherLink\" | \"auth:requestVerification\" | \"auth:resetRequestFailed\" | \"auth:resetPassword\" | \"auth:resettingPassword\" | \"auth:sendResetLink\" | \"auth:sendVerificationLink\" | \"auth:sending\" | \"auth:setupCompleted\" | \"auth:showPassword\" | \"auth:showPasswordConfirmation\" | \"auth:signingIn\" | \"auth:verificationDescription\" | \"auth:verificationRequestFailed\" | \"auth:verificationSent\" | \"auth:verifyDescription\" | \"auth:verifyEmail\" | \"auth:verifyYourEmail\" | \"auth:verifying\" | \"auth:welcome\" | \"collections:addFilter\" | \"collections:actions\" | \"collections:allDocumentsNotSelected\" | \"collections:allFolders\" | \"collections:allSelected\" | \"collections:applyChanges\" | \"collections:applying\" | \"collections:backToCollection\" | \"collections:blockNumber\" | \"collections:bulkActions\" | \"collections:bulkEditDescription\" | \"collections:bulkEditSelected\" | \"collections:bulkOperationFailed\" | \"collections:cannotUndo\" | \"collections:chooseField\" | \"collections:chooseOperator\" | \"collections:chooseValue\" | \"collections:clearSearch\" | \"collections:clearSelection\" | \"collections:collectionDocuments\" | \"collections:collectionView\" | \"collections:confirmDeleteDocumentPermanently\" | \"collections:confirmDeleteSelected\" | \"collections:confirmDeleteSelectedPermanently\" | \"collections:confirmEmptyTrash\" | \"collections:confirmPublishSelected\" | \"collections:confirmRestoreSelected\" | \"collections:confirmUnpublishSelected\" | \"collections:contentLocale\" | \"collections:created\" | \"collections:deleteDocumentPermanently\" | \"collections:deletePermanently\" | \"collections:deleteSavedView\" | \"collections:deleteSelectedDescription\" | \"collections:disabled\" | \"collections:document\" | \"collections:documentCount\" | \"collections:documentNotDeleted\" | \"collections:documentNotRestored\" | \"collections:documentPermanentlyDeleted\" | \"collections:documentRestored\" | \"collections:documents\" | \"collections:documentsDeleted\" | \"collections:documentsLoadFailed\" | \"collections:documentsPerPage\" | \"collections:documentsPermanentlyDeleted\" | \"collections:documentsPublished\" | \"collections:documentsRestored\" | \"collections:documentsUnpublished\" | \"collections:documentsUpdated\" | \"collections:draftsAndVersions\" | \"collections:emptyDescription\" | \"collections:emptyTrashDescription\" | \"collections:enabled\" | \"collections:filteredResultLoadFailed\" | \"collections:filterDocuments\" | \"collections:filterField\" | \"collections:filterFieldsLoadFailed\" | \"collections:allFields\" | \"collections:searchFilterFields\" | \"collections:filterFieldBack\" | \"collections:filterFieldGroup\" | \"collections:filterFieldArray\" | \"collections:filterFieldBlocks\" | \"collections:filterFieldBlock\" | \"collections:filterFieldMoreMatches\" | \"collections:filterOperator\" | \"collections:filterSummary\" | \"collections:filterValue\" | \"collections:folder\" | \"collections:hasValue\" | \"collections:hierarchy\" | \"collections:isEmpty\" | \"collections:listPreferencesNotSaved\" | \"collections:listPreferencesUnavailable\" | \"collections:listView\" | \"collections:loadingDocuments\" | \"collections:manageFolders\" | \"collections:moreItems\" | \"collections:nextPage\" | \"collections:noDocumentsChanged\" | \"collections:noMatchingDocuments\" | \"collections:noFieldsFound\" | \"collections:nothingMatches\" | \"collections:openDocument\" | \"collections:operationFailed\" | \"collections:operator\" | \"collections:operatorContains\" | \"collections:operatorEquals\" | \"collections:operatorExists\" | \"collections:operatorGreaterThan\" | \"collections:operatorGreaterThanEqual\" | \"collections:operatorLessThan\" | \"collections:operatorLessThanEqual\" | \"collections:operatorLike\" | \"collections:operatorNotEquals\" | \"collections:pageSize\" | \"collections:pagination\" | \"collections:perPage\" | \"collections:previousPage\" | \"collections:publishSelectedDescription\" | \"collections:rangeSummary\" | \"collections:relatedDocument\" | \"collections:removeFilter\" | \"collections:restoreDocument\" | \"collections:restoreSelectedDescription\" | \"collections:rowNumber\" | \"collections:savedViewDeleted\" | \"collections:savedViewName\" | \"collections:savedViewNotDeleted\" | \"collections:savedViews\" | \"collections:savedViewsUnavailable\" | \"collections:searchBy\" | \"collections:searchDocuments\" | \"collections:searchPlaceholder\" | \"collections:selectAll\" | \"collections:selectAllRows\" | \"collections:selectAllUnavailable\" | \"collections:selectFieldsPlaceholder\" | \"collections:selectFieldsToEdit\" | \"collections:selectDocument\" | \"collections:selecting\" | \"collections:selectionLimitDescription\" | \"collections:showColumn\" | \"collections:showCreatedColumn\" | \"collections:showIDColumn\" | \"collections:showStatusColumn\" | \"collections:showUpdatedColumn\" | \"collections:sortBy\" | \"collections:status\" | \"collections:statusFilters\" | \"collections:title\" | \"collections:allDocuments\" | \"collections:collectionViews\" | \"collections:noTrashResults\" | \"collections:trashNotEmptied\" | \"collections:updated\" | \"collections:view\" | \"collections:viewName\" | \"collections:workspaceLoadFailed\" | \"collections:viewNotSaved\" | \"collections:viewSaved\" | \"collections:all\" | \"collections:bulkUpload\" | \"collections:clearFilters\" | \"collections:columns\" | \"collections:createNew\" | \"collections:empty\" | \"collections:emptyTrash\" | \"collections:filters\" | \"collections:pageSummary\" | \"collections:search\" | \"collections:selected\" | \"collections:sort\" | \"collections:trash\" | \"collections:unpublishSelectedDescription\" | \"collections:trashFor\" | \"dashboard:create\" | \"dashboard:extensions\" | \"dashboard:heading\" | \"dashboard:open\" | \"dashboard:welcome\" | \"development:documentation\" | \"development:documentationDescription\" | \"development:ready\" | \"development:retrySchemaUpdate\" | \"development:schema\" | \"development:schemaUpdateApplied\" | \"development:schemaUpdateFailed\" | \"development:tools\" | \"development:toolsStatus\" | \"development:upToDate\" | \"documents:creatingLabel\" | \"documents:api\" | \"documents:apiFor\" | \"documents:autosave\" | \"documents:copyFromLocale\" | \"documents:create\" | \"documents:created\" | \"documents:delete\" | \"documents:discard\" | \"documents:download\" | \"documents:draft\" | \"documents:duplicate\" | \"documents:edit\" | \"documents:editing\" | \"documents:editedSince\" | \"documents:inheritedFrom\" | \"documents:lastModified\" | \"documents:livePreview\" | \"documents:missingTranslation\" | \"documents:publish\" | \"documents:published\" | \"documents:restore\" | \"documents:save\" | \"documents:saveDraft\" | \"documents:savedDraftChanges\" | \"documents:discardSavedDraft\" | \"documents:discardSavedDraftQuestion\" | \"documents:discardSavedDraftDescription\" | \"documents:savedDraftDiscarded\" | \"documents:discardSavedDraftFailed\" | \"documents:serverSaveConflict\" | \"documents:reviewLatest\" | \"documents:reviewLatestUnavailable\" | \"documents:saveOutcomeUnknown\" | \"documents:createOutcomeUnknownDescription\" | \"documents:saveOutcomeUnknownDescription\" | \"documents:publishing\" | \"documents:unsavedChanges\" | \"documents:leaveWithoutSavingQuestion\" | \"documents:leaveWithoutSavingDescription\" | \"documents:keepEditing\" | \"documents:leaveWithoutSaving\" | \"documents:schedule\" | \"documents:takeOver\" | \"documents:unpublish\" | \"documents:updated\" | \"documents:versions\" | \"documents:versionsFor\" | \"documents:accessEvaluationFailed\" | \"documents:accountUnlocked\" | \"documents:accountUnlockFailed\" | \"documents:anotherEditor\" | \"documents:apiAuthenticated\" | \"documents:apiURL\" | \"documents:apiDepth\" | \"documents:apiRequestFailed\" | \"documents:apiRequesting\" | \"documents:apiRunRequest\" | \"documents:apiRunnableAfterSave\" | \"documents:apiViewLoadFailed\" | \"documents:authorizingDraftPreview\" | \"documents:breadcrumb\" | \"documents:cancel\" | \"documents:closeLivePreview\" | \"documents:collectionRemoved\" | \"documents:collectionUnavailable\" | \"documents:confirmPassword\" | \"documents:contentLocale\" | \"documents:copied\" | \"documents:copy\" | \"documents:copyFrom\" | \"documents:copying\" | \"documents:copyReady\" | \"documents:copyURL\" | \"documents:createdLabel\" | \"documents:createdLabelPlain\" | \"documents:credentials\" | \"documents:credentialsDescription\" | \"documents:currentlyEditing\" | \"documents:dashboard\" | \"documents:deleteAsset\" | \"documents:deleteDescription\" | \"documents:deleteDocument\" | \"documents:deleteFailed\" | \"documents:deletedLabel\" | \"documents:deletedSuccessfully\" | \"documents:deleteQuestion\" | \"documents:destructiveAction\" | \"documents:document\" | \"documents:documentLocked\" | \"documents:documentViews\" | \"documents:draftFieldsRestored\" | \"documents:recoveryConflictTitle\" | \"documents:recoveryConflictDescription\" | \"documents:reviewUnsavedChanges\" | \"documents:recoveryBase\" | \"documents:recoveryYours\" | \"documents:recoveryLatest\" | \"documents:recoveryKeepYours\" | \"documents:recoveryLoadLatest\" | \"documents:recoveryMissingValue\" | \"documents:recoveryNoVisibleChanges\" | \"documents:duplicateFailed\" | \"documents:duplicatedLabel\" | \"documents:duplicating\" | \"documents:editingLeaseActive\" | \"documents:enterNewAccountPassword\" | \"documents:forceUnlock\" | \"documents:globals\" | \"documents:goBack\" | \"documents:incompatibleDraftValues\" | \"documents:lastModifiedLabel\" | \"documents:lastSavedAgo\" | \"documents:lessThanMinuteAgo\" | \"documents:loadFailed\" | \"documents:loadingAPIView\" | \"documents:loadingDocument\" | \"documents:locale\" | \"documents:localeCopied\" | \"documents:localeCopiedDescription\" | \"documents:localeCopyFailed\" | \"documents:localeNotCopied\" | \"documents:localeSwitchDirty\" | \"documents:lockOptionsReadOnly\" | \"documents:lockOptionsWithTakeover\" | \"documents:lockedReadOnly\" | \"documents:lockTakenOver\" | \"documents:lockTakeoverFailed\" | \"documents:moreActions\" | \"documents:movedToTrashLabel\" | \"documents:moveToTrash\" | \"documents:moveToTrashDescription\" | \"documents:moveToTrashQuestion\" | \"documents:newLabel\" | \"documents:noDraftFieldsRestored\" | \"documents:notDeleted\" | \"documents:notDuplicated\" | \"documents:notSaved\" | \"documents:openAPIURL\" | \"documents:openPreviewWindow\" | \"documents:password\" | \"documents:passwordMinimum\" | \"documents:passwordsDoNotMatch\" | \"documents:passwordTooLong\" | \"documents:passwordTooShort\" | \"documents:previewAuthorizationFailed\" | \"documents:previewAuthorizing\" | \"documents:previewConnected\" | \"documents:previewConnecting\" | \"documents:previewHeight\" | \"documents:previewUnavailable\" | \"documents:customViewport\" | \"documents:previewViewport\" | \"documents:previewWidth\" | \"documents:previewZoom\" | \"documents:publishChanges\" | \"documents:publishedTitle\" | \"documents:responsive\" | \"documents:restoreFromTrash\" | \"documents:retryPreview\" | \"documents:saved\" | \"documents:saveBeforeLocaleSwitch\" | \"documents:saveFailed\" | \"documents:saveOrDiscardFirst\" | \"documents:saveToSwitchLocale\" | \"documents:saving\" | \"documents:schemaUpdatedWithDraft\" | \"documents:status\" | \"documents:statusChangeFailed\" | \"documents:statusNotChanged\" | \"documents:statusNow\" | \"documents:takingOver\" | \"documents:unlocking\" | \"documents:unpublishedTitle\" | \"documents:untitled\" | \"documents:untitledAsset\" | \"documents:viewReadOnly\" | \"documents:workspaceLoadFailed\" | \"errors:accessDenied\" | \"errors:adminBootstrapFailed\" | \"errors:couldNotLoadApplication\" | \"errors:loadAdmin\" | \"errors:loadDocument\" | \"errors:notFound\" | \"errors:notFoundCode\" | \"errors:notFoundDescription\" | \"errors:notFoundHeading\" | \"errors:returnDashboard\" | \"errors:required\" | \"errors:save\" | \"errors:unknown\" | \"errors:allowedOption\" | \"errors:array\" | \"errors:blockObject\" | \"errors:blockType\" | \"errors:boolean\" | \"errors:clipboardBlockType\" | \"errors:clipboardField\" | \"errors:clipboardGroup\" | \"errors:clipboardMaxRows\" | \"errors:clipboardMinRows\" | \"errors:clipboardRow\" | \"errors:clipboardRows\" | \"errors:correctInvalidFields\" | \"errors:duplicateOption\" | \"errors:fieldRequired\" | \"errors:finiteNumber\" | \"errors:maxRows\" | \"errors:minRows\" | \"errors:object\" | \"errors:oneBlock\" | \"errors:oneReference\" | \"errors:oneRow\" | \"errors:polymorphicReference\" | \"errors:referenceID\" | \"errors:relatedDocumentLoad\" | \"errors:relatedDocumentsUpdate\" | \"errors:relationshipDocumentsLoad\" | \"errors:relationshipTargetUnavailable\" | \"errors:rowObject\" | \"errors:selectedDocumentsLoad\" | \"errors:string\" | \"errors:updateUnconfirmed\" | \"errors:validJSON\" | \"errors:validPoint\" | \"fields:add\" | \"fields:addBelow\" | \"fields:addBlock\" | \"fields:addRelationship\" | \"fields:addRow\" | \"fields:asset\" | \"fields:block\" | \"fields:blockNumber\" | \"fields:browse\" | \"fields:browseAll\" | \"fields:choose\" | \"fields:chooseBlockFor\" | \"fields:clear\" | \"fields:collapse\" | \"fields:collapseAll\" | \"fields:content\" | \"fields:copy\" | \"fields:copied\" | \"fields:copyField\" | \"fields:copyRow\" | \"fields:create\" | \"fields:createdAt\" | \"fields:document\" | \"fields:drag\" | \"fields:duplicate\" | \"fields:edit\" | \"fields:editRelationship\" | \"fields:expand\" | \"fields:generateSlug\" | \"fields:id\" | \"fields:inspectEdit\" | \"fields:invalidCount\" | \"fields:itemCount\" | \"fields:joinChanges\" | \"fields:labeledRowNumber\" | \"fields:latitude\" | \"fields:lockSlug\" | \"fields:loading\" | \"fields:longitude\" | \"fields:addNew\" | \"fields:manageRelationships\" | \"fields:maximum\" | \"fields:minimum\" | \"fields:moveDown\" | \"fields:moveUp\" | \"fields:noBlocks\" | \"fields:noMatch\" | \"fields:noMaximum\" | \"fields:noMinimum\" | \"fields:noRelated\" | \"fields:open\" | \"fields:openActions\" | \"fields:openCalendar\" | \"fields:paste\" | \"fields:pasted\" | \"fields:pasteField\" | \"fields:pasteRow\" | \"fields:readOnly\" | \"fields:relatedDocument\" | \"fields:relationship\" | \"fields:relationships\" | \"fields:remove\" | \"fields:removeRelationship\" | \"fields:rowLimits\" | \"fields:rowNumber\" | \"fields:search\" | \"fields:searchBlock\" | \"fields:searchLabel\" | \"fields:select\" | \"fields:selectDate\" | \"fields:sections\" | \"fields:showAll\" | \"fields:showingRelated\" | \"fields:sortBy\" | \"fields:status\" | \"fields:untitled\" | \"fields:updated\" | \"fields:updatedAt\" | \"fields:unlockSlug\" | \"fields:updating\" | \"fields:upload\" | \"general:add\" | \"general:apply\" | \"fields:embeddedEditTitle\" | \"fields:embeddedEditDescription\" | \"errors:pendingEmbeddedEdit\" | \"errors:staleEmbeddedEdit\" | \"general:back\" | \"general:bulkActions\" | \"general:cancel\" | \"general:clear\" | \"general:clearSelection\" | \"general:close\" | \"general:confirm\" | \"general:continue\" | \"general:copy\" | \"general:copyJSON\" | \"general:copyUnavailable\" | \"general:copied\" | \"general:codeExample\" | \"general:create\" | \"general:delete\" | \"general:done\" | \"general:edit\" | \"general:escape\" | \"general:exitExpandedJSONView\" | \"general:expandJSONView\" | \"general:expandedJSONDescription\" | \"general:expandedJSONResponse\" | \"general:jsonData\" | \"general:loading\" | \"general:loadingSchema\" | \"general:more\" | \"general:next\" | \"general:no\" | \"general:none\" | \"general:notifications\" | \"general:open\" | \"general:pagination\" | \"general:previous\" | \"general:replace\" | \"general:remove\" | \"general:reloadPage\" | \"general:retry\" | \"general:riduApplication\" | \"general:save\" | \"general:search\" | \"general:select\" | \"general:selected\" | \"general:dismissNotification\" | \"general:yes\" | \"navigation:closeMenu\" | \"navigation:adminHeader\" | \"navigation:adminNavigation\" | \"navigation:adminNavigationDescription\" | \"navigation:applyingSchemaUpdate\" | \"navigation:breadcrumb\" | \"navigation:collection\" | \"navigation:collectionBadge\" | \"navigation:collections\" | \"navigation:commandDescription\" | \"navigation:commandMenu\" | \"navigation:commandSearch\" | \"navigation:commandSearchPlaceholder\" | \"navigation:document\" | \"navigation:documentBadge\" | \"navigation:globals\" | \"navigation:loadingDocuments\" | \"navigation:loadingPage\" | \"navigation:navigate\" | \"navigation:navigateRidu\" | \"navigation:newBadge\" | \"navigation:nothingMatches\" | \"navigation:nothingMatchesQuery\" | \"navigation:openMenu\" | \"navigation:page\" | \"navigation:pluginShellHeader\" | \"navigation:plugins\" | \"navigation:search\" | \"navigation:searchAndNavigate\" | \"navigation:searchAndNavigateShortcut\" | \"navigation:schemaUpdateFailed\" | \"navigation:toggleMenu\" | \"reference:createNew\" | \"reference:noResults\" | \"reference:searchOrCreate\" | \"reference:accessCheckFailed\" | \"reference:addLabel\" | \"reference:addSelected\" | \"reference:all\" | \"reference:api\" | \"reference:applying\" | \"reference:backToResults\" | \"reference:browserDescription\" | \"reference:cancel\" | \"reference:cannotCreate\" | \"reference:cannotUpdate\" | \"reference:closeBrowser\" | \"reference:collectionFilters\" | \"reference:confirmPassword\" | \"reference:createdLabel\" | \"reference:createLabel\" | \"reference:credentials\" | \"reference:currentPayload\" | \"reference:deselectLabel\" | \"reference:discard\" | \"reference:discardChanges\" | \"reference:discardDescription\" | \"reference:document\" | \"reference:documents\" | \"reference:edit\" | \"reference:editLabel\" | \"reference:enterNewAccountPassword\" | \"reference:images\" | \"reference:keepEditing\" | \"reference:loadingRelated\" | \"reference:newLabel\" | \"reference:newMetadata\" | \"reference:nextPage\" | \"reference:nothingMatches\" | \"reference:password\" | \"reference:passwordMinimum\" | \"reference:passwordsDoNotMatch\" | \"reference:passwordTooLong\" | \"reference:passwordTooShort\" | \"reference:previousPage\" | \"reference:range\" | \"reference:readOnlyDescription\" | \"reference:relatedLoadFailed\" | \"reference:relatedNotSaved\" | \"reference:relatedSaveFailed\" | \"reference:results\" | \"reference:saved\" | \"reference:saveLabel\" | \"reference:saving\" | \"reference:search\" | \"reference:select\" | \"reference:selectedNotSaved\" | \"reference:selectLabel\" | \"reference:selectCollection\" | \"reference:noCollectionsMatch\" | \"reference:noCollectionsAvailable\" | \"reference:unsavedChanges\" | \"reference:untitledLabel\" | \"reference:updateNotConfirmed\" | \"reference:uploadNew\" | \"uploads:addFiles\" | \"uploads:applyToFiles\" | \"uploads:asset\" | \"uploads:bulkUpload\" | \"uploads:bulkEditDescription\" | \"uploads:chooseFile\" | \"uploads:dropFiles\" | \"uploads:original\" | \"uploads:pasteURL\" | \"uploads:upload\" | \"uploads:accessCheckFailed\" | \"uploads:applyImageEdit\" | \"uploads:assetPreview\" | \"uploads:assetURL\" | \"uploads:assetsUploaded\" | \"uploads:bulkUploadDescription\" | \"uploads:chooseFileBeforeCreating\" | \"uploads:chooseFileBeforeSaving\" | \"uploads:chooseFilesForQueue\" | \"uploads:chooseFileToUpload\" | \"uploads:chooseFocalPoint\" | \"uploads:addFile\" | \"uploads:dropFile\" | \"uploads:discardQueue\" | \"uploads:discardQueueDescription\" | \"uploads:discardQueueTitle\" | \"uploads:editAll\" | \"uploads:editingAssets\" | \"uploads:editingFilename\" | \"uploads:fileToUpload\" | \"uploads:filesToUpload\" | \"uploads:crop\" | \"uploads:cropPosition\" | \"uploads:cropHandle\" | \"uploads:widthPixels\" | \"uploads:heightPixels\" | \"uploads:reset\" | \"uploads:chooseValue\" | \"uploads:configuredTypes\" | \"uploads:correctMetadata\" | \"uploads:createPermissionDenied\" | \"uploads:cropAndFocalUpdated\" | \"uploads:cropBoundary\" | \"uploads:cropDescription\" | \"uploads:dimensions\" | \"uploads:editFilename\" | \"uploads:editImage\" | \"uploads:enableCrop\" | \"uploads:file\" | \"uploads:filename\" | \"uploads:files\" | \"uploads:focalKeyboardInstructions\" | \"uploads:focalOutcomeUnknown\" | \"uploads:focalPoint\" | \"uploads:focalPointDescription\" | \"uploads:focalPosition\" | \"uploads:focalUpdated\" | \"uploads:focalUpdateFailed\" | \"uploads:height\" | \"uploads:horizontal\" | \"uploads:horizontalFocalPoint\" | \"uploads:imageEditDescription\" | \"uploads:imageOutcomeUnknown\" | \"uploads:imageOutcomeUnknownDescription\" | \"uploads:imageSizes\" | \"uploads:imageSizesNotRegenerated\" | \"uploads:imageSizesRegenerated\" | \"uploads:imageStateRecovered\" | \"uploads:importFromURL\" | \"uploads:importing\" | \"uploads:keepUploading\" | \"uploads:left\" | \"uploads:loadingAssetPreview\" | \"uploads:maximumSize\" | \"uploads:needAttention\" | \"uploads:noFilesQueued\" | \"uploads:notConfigured\" | \"uploads:openAsset\" | \"uploads:openImportedAsset\" | \"uploads:ofFiles\" | \"uploads:outcomeNotConfirmed\" | \"uploads:outcomeUnknown\" | \"uploads:outcomeUnknownDescription\" | \"uploads:outcomeUnknownListRefreshed\" | \"uploads:previewGeneratedSizes\" | \"uploads:previewSizes\" | \"uploads:queueSummary\" | \"uploads:regenerating\" | \"uploads:remoteAssetUploaded\" | \"uploads:remoteImportDescription\" | \"uploads:remoteOutcomeNotConfirmed\" | \"uploads:removeFilename\" | \"uploads:retryFilename\" | \"uploads:serverStateRefreshed\" | \"uploads:size\" | \"uploads:sizesFor\" | \"uploads:statusComplete\" | \"uploads:statusFailed\" | \"uploads:statusQueued\" | \"uploads:statusUncertain\" | \"uploads:statusUploading\" | \"uploads:top\" | \"uploads:type\" | \"uploads:unknownOutcomesDescription\" | \"uploads:untitledAsset\" | \"uploads:uploadCount\" | \"uploads:uploading\" | \"uploads:uploadingFilename\" | \"uploads:uploadQueue\" | \"uploads:urlCopied\" | \"uploads:urlCopiedDescription\" | \"uploads:urlImportMetadata\" | \"uploads:vertical\" | \"uploads:verticalFocalPoint\" | \"uploads:width\" | \"uploads:workspaceLoadFailed\" | \"versions:updatedAt\" | \"versions:createdAt\" | \"versions:deletedAt\" | \"versions:versionID\" | \"versions:currentDraft\" | \"versions:draft\" | \"versions:currentlyPublished\" | \"versions:previouslyPublished\" | \"versions:compareVersions\" | \"versions:locales\" | \"versions:comparingAgainst\" | \"versions:currentlyViewing\" | \"versions:previousVersion\" | \"versions:moreVersions\" | \"versions:selectVersion\" | \"versions:confirmRestore\" | \"versions:restoreOptions\" | \"versions:restoreVersionDescription\" | \"versions:versionUnavailable\" | \"versions:content\" | \"versions:blockType\" | \"versions:position\" | \"versions:row\" | \"versions:noRows\" | \"versions:compare\" | \"versions:current\" | \"versions:history\" | \"versions:restore\" | \"versions:saved\" | \"versions:schedulePublication\" | \"versions:allVersions\" | \"versions:backToDocument\" | \"versions:cancel\" | \"versions:cancelScheduledPublish\" | \"versions:cancelScheduledUnpublish\" | \"versions:chooseFuturePublishTime\" | \"versions:chooseFutureUnpublishTime\" | \"versions:chooseUnambiguousTime\" | \"versions:compareRevisionWith\" | \"versions:comparisonRevision\" | \"versions:false\" | \"versions:field\" | \"versions:historyDescription\" | \"versions:historyLoadFailed\" | \"versions:modifiedFieldsOnly\" | \"versions:noComparison\" | \"versions:noModifiedFields\" | \"versions:noRevisions\" | \"versions:previousCurrentPreserved\" | \"versions:publishNotScheduled\" | \"versions:publishScheduleFailed\" | \"versions:publishScheduled\" | \"versions:unpublishScheduled\" | \"versions:resourceUnavailable\" | \"versions:restoreAsDraft\" | \"versions:restoreDescription\" | \"versions:restoreRevisionQuestion\" | \"versions:restoring\" | \"versions:revision\" | \"versions:revisionIsCurrent\" | \"versions:revisionNotRestored\" | \"versions:revisionRestoreFailed\" | \"versions:revisionRestored\" | \"versions:revisionRestoredAsDraft\" | \"versions:revisionRestoredTitle\" | \"versions:revisionWithStatus\" | \"versions:savedRevisions\" | \"versions:savedRevisionsDescription\" | \"versions:scheduleCancelFailed\" | \"versions:scheduleNotCancelled\" | \"versions:scheduledPublicationCancelled\" | \"versions:scheduledPublicationDescription\" | \"versions:scheduling\" | \"versions:shortRevision\" | \"versions:status\" | \"versions:total\" | \"versions:true\" | \"versions:versionLocale\", TranslationMessage>>",
+							"type": "Readonly<Record<\"apiReference:title\" | \"apiReference:description\" | \"apiReference:furtherNesting\" | \"apiReference:loading\" | \"apiReference:loadFailed\" | \"apiReference:list\" | \"apiReference:read\" | \"apiReference:create\" | \"apiReference:update\" | \"apiReference:delete\" | \"apiReference:operations\" | \"apiReference:examples\" | \"apiReference:languages\" | \"apiReference:copy\" | \"apiReference:guidance\" | \"apiReference:credentials\" | \"apiReference:goOptions\" | \"apiReference:omitted\" | \"apiReference:query\" | \"apiReference:fields\" | \"apiReference:field\" | \"apiReference:type\" | \"apiReference:details\" | \"apiReference:required\" | \"apiReference:readOnly\" | \"apiReference:localized\" | \"apiReference:noFields\" | \"apiReference:responses\" | \"apiReference:responseNote\" | \"apiReference:metadata\" | \"apiReference:updateNote\" | \"apiReference:uploadNote\" | \"apiReference:authNote\" | \"apiReference:trashNote\" | \"apiReference:deleteNote\" | \"apiReference:minLength\" | \"apiReference:maxLength\" | \"apiReference:minimum\" | \"apiReference:maximum\" | \"apiReference:minItems\" | \"apiReference:maxItems\" | \"apiReference:allowedValues\" | \"apiReference:unique\" | \"apiReference:dynamicDefault\" | \"apiReference:defaultValue\" | \"apiReference:queryRestricted\" | \"apiReference:references\" | \"apiReference:polymorphic\" | \"apiReference:rowIdentity\" | \"apiReference:blockDiscriminator\" | \"apiReference:jsonSchema\" | \"apiReference:queryPage\" | \"apiReference:queryLimit\" | \"apiReference:queryPagination\" | \"apiReference:queryWhere\" | \"apiReference:querySort\" | \"apiReference:queryAccess\" | \"apiReference:queryDepth\" | \"apiReference:querySelect\" | \"apiReference:queryPopulate\" | \"apiReference:queryTrash\" | \"apiReference:queryLocale\" | \"apiReference:queryFallback\" | \"apiReference:queryDraft\" | \"documents:scheduleFor\" | \"documents:scheduleType\" | \"documents:saveBeforeSchedule\" | \"documents:upcomingEvents\" | \"documents:noScheduledEvents\" | \"general:or\" | \"fields:chooseExisting\" | \"fields:time\" | \"fields:timeZone\" | \"fields:codeEditorLoadFailed\" | \"fields:dateControlLoadFailed\" | \"reference:browserLoadFailed\" | \"uploads:reloadSaved\" | \"uploads:saveOutcomeUnknownDescription\" | \"uploads:fileTooLarge\" | \"uploads:fileTypeDenied\" | \"uploads:fileOpenFailed\" | \"uploads:fileDownloadFailed\" | \"uploads:previewLoadFailed\" | \"fields:liveValidationPending\" | \"fields:liveValidationFailed\" | \"fields:liveValidationRetry\" | \"fields:liveValidationSkipped\" | \"collections:clearStatus\" | \"collections:publicationStatus\" | \"collections:createdAt\" | \"collections:updatedAt\" | \"collections:createNewButton\" | \"collections:sortAscending\" | \"collections:sortDescending\" | \"collections:reorderColumn\" | \"collections:noFilters\" | \"collections:filterWhere\" | \"collections:or\" | \"collections:and\" | \"collections:addAndFilter\" | \"collections:perPageLabel\" | \"collections:operatorIsAnyOf\" | \"collections:operatorIsNoneOf\" | \"collections:filterCollection\" | \"fields:listAdd\" | \"fields:listEmpty\" | \"fields:listItem\" | \"fields:listMoveUp\" | \"fields:listMoveDown\" | \"fields:listRemove\" | \"fields:listAdded\" | \"fields:listRemoved\" | \"fields:listMoved\" | \"errors:listMinItems\" | \"errors:listMaxItems\" | \"errors:listItemString\" | \"errors:listItemNumber\" | \"errors:listItemMinLength\" | \"errors:listItemMaxLength\" | \"errors:listItemMin\" | \"errors:listItemMax\" | \"errors:unknownBlockRecovery\" | \"fields:rowError\" | \"fields:rowErrors\" | \"account:account\" | \"account:accountMenu\" | \"account:accountMenuLabel\" | \"account:accountSecurity\" | \"account:activeSessions\" | \"account:adminRole\" | \"account:adminTheme\" | \"account:appearance\" | \"account:apiKeys\" | \"account:apiKeyCopied\" | \"account:apiKeyCopyFailed\" | \"account:apiKeyCreated\" | \"account:apiKeyNamePlaceholder\" | \"account:apiKeyRevoked\" | \"account:apiKeysDescription\" | \"account:changePassword\" | \"account:confirmRevokeAPIKey\" | \"account:confirmRevokeSession\" | \"account:confirmSignOutAll\" | \"account:copyAPIKeyNow\" | \"account:createKey\" | \"account:created\" | \"account:currentSession\" | \"account:currentPassword\" | \"account:expires\" | \"account:expiration\" | \"account:interfaceLanguage\" | \"account:languageSaveFailed\" | \"account:languageSaved\" | \"account:lastSeen\" | \"account:loadingSessions\" | \"account:name\" | \"account:never\" | \"account:newPassword\" | \"account:noAPIKeys\" | \"account:noSessions\" | \"account:password\" | \"account:passwordDescription\" | \"account:passwordMismatch\" | \"account:passwordUpdated\" | \"account:preferencesReset\" | \"account:preferencesResetFailed\" | \"account:preferencesStored\" | \"account:profile\" | \"account:profileAndPreferences\" | \"account:profileDescription\" | \"account:profileLoadFailed\" | \"account:profileRules\" | \"account:profileSaveFailed\" | \"account:profileUpdated\" | \"account:resetAllPreferences\" | \"account:resettingPreferences\" | \"account:resetPreferences\" | \"account:revoke\" | \"account:revokeCredentialDescription\" | \"account:saveProfile\" | \"account:savingProfile\" | \"account:security\" | \"account:securityAction\" | \"account:securityDescription\" | \"account:securityLoadFailed\" | \"account:securityOperationFailed\" | \"account:sessionRevoked\" | \"account:sessionsDescription\" | \"account:signOutAll\" | \"account:signOutAllDescription\" | \"account:signedInUser\" | \"account:signedOutAll\" | \"account:signingOut\" | \"account:signOutFailed\" | \"account:systemTheme\" | \"account:lightTheme\" | \"account:darkTheme\" | \"account:theme\" | \"account:themeSaveFailed\" | \"account:themeSaved\" | \"account:timeZone\" | \"account:timeZoneSaveFailed\" | \"account:timeZoneSaved\" | \"account:unknownClient\" | \"account:updatePassword\" | \"account:updatingPassword\" | \"account:updateProfile\" | \"auth:accountCreated\" | \"auth:accountReady\" | \"auth:adminAccessDenied\" | \"auth:adminBrand\" | \"auth:autoSignInFailed\" | \"auth:backToLogin\" | \"auth:checkEmail\" | \"auth:chooseNewPassword\" | \"auth:confirmPassword\" | \"auth:configuredCollectionUnavailable\" | \"auth:correctInvalidFields\" | \"auth:createAccount\" | \"auth:createFirstUser\" | \"auth:creatingAccount\" | \"auth:credentials\" | \"auth:email\" | \"auth:invalidEmail\" | \"auth:emailPlaceholder\" | \"auth:emailSent\" | \"auth:emailVerificationFailed\" | \"auth:emailVerified\" | \"auth:enterPassword\" | \"auth:enterSetupToken\" | \"auth:firstAccountCreateFailed\" | \"auth:firstAccountExists\" | \"auth:firstAccountIdentityUnavailable\" | \"auth:firstAccountNoAdminAccess\" | \"auth:firstUserDescription\" | \"auth:forgotPassword\" | \"auth:forgotPasswordDescription\" | \"auth:hidePassword\" | \"auth:hidePasswordConfirmation\" | \"auth:hideSetupToken\" | \"auth:login\" | \"auth:loginFailed\" | \"auth:logout\" | \"auth:missingResetToken\" | \"auth:missingVerificationToken\" | \"auth:password\" | \"auth:passwordMismatch\" | \"auth:passwordPlaceholder\" | \"auth:passwordRange\" | \"auth:passwordMinimum\" | \"auth:passwordResetFailed\" | \"auth:passwordResetSent\" | \"auth:passwordResetSuccess\" | \"auth:passwordTooLong\" | \"auth:passwordTooShort\" | \"auth:requestAnotherLink\" | \"auth:requestVerification\" | \"auth:resetRequestFailed\" | \"auth:resetPassword\" | \"auth:resettingPassword\" | \"auth:sendResetLink\" | \"auth:sendVerificationLink\" | \"auth:sending\" | \"auth:setupCompleted\" | \"auth:setupToken\" | \"auth:setupTokenDescription\" | \"auth:setupTokenInvalid\" | \"auth:showPassword\" | \"auth:showPasswordConfirmation\" | \"auth:showSetupToken\" | \"auth:signingIn\" | \"auth:verificationDescription\" | \"auth:verificationRequestFailed\" | \"auth:verificationSent\" | \"auth:verifyDescription\" | \"auth:verifyEmail\" | \"auth:verifyYourEmail\" | \"auth:verifying\" | \"auth:welcome\" | \"collections:addFilter\" | \"collections:actions\" | \"collections:allDocumentsNotSelected\" | \"collections:allFolders\" | \"collections:allSelected\" | \"collections:applyChanges\" | \"collections:applying\" | \"collections:backToCollection\" | \"collections:blockNumber\" | \"collections:bulkActions\" | \"collections:bulkEditDescription\" | \"collections:bulkEditSelected\" | \"collections:bulkOperationFailed\" | \"collections:cannotUndo\" | \"collections:chooseField\" | \"collections:chooseOperator\" | \"collections:chooseValue\" | \"collections:clearSearch\" | \"collections:clearSelection\" | \"collections:collectionDocuments\" | \"collections:collectionView\" | \"collections:confirmDeleteDocumentPermanently\" | \"collections:confirmDeleteSelected\" | \"collections:confirmDeleteSelectedPermanently\" | \"collections:confirmEmptyTrash\" | \"collections:confirmPublishSelected\" | \"collections:confirmRestoreSelected\" | \"collections:confirmUnpublishSelected\" | \"collections:contentLocale\" | \"collections:created\" | \"collections:deleteDocumentPermanently\" | \"collections:deletePermanently\" | \"collections:deleteSavedView\" | \"collections:deleteSelectedDescription\" | \"collections:disabled\" | \"collections:document\" | \"collections:documentCount\" | \"collections:documentNotDeleted\" | \"collections:documentNotRestored\" | \"collections:documentPermanentlyDeleted\" | \"collections:documentRestored\" | \"collections:documents\" | \"collections:documentsDeleted\" | \"collections:documentsLoadFailed\" | \"collections:documentsPerPage\" | \"collections:documentsPermanentlyDeleted\" | \"collections:documentsPublished\" | \"collections:documentsRestored\" | \"collections:documentsUnpublished\" | \"collections:documentsUpdated\" | \"collections:draftsAndVersions\" | \"collections:emptyDescription\" | \"collections:emptyTrashDescription\" | \"collections:enabled\" | \"collections:filteredResultLoadFailed\" | \"collections:filterDocuments\" | \"collections:filterField\" | \"collections:filterFieldsLoadFailed\" | \"collections:allFields\" | \"collections:searchFilterFields\" | \"collections:filterFieldBack\" | \"collections:filterFieldGroup\" | \"collections:filterFieldArray\" | \"collections:filterFieldBlocks\" | \"collections:filterFieldBlock\" | \"collections:filterFieldMoreMatches\" | \"collections:filterOperator\" | \"collections:filterSummary\" | \"collections:filterValue\" | \"collections:folder\" | \"collections:hasValue\" | \"collections:hierarchy\" | \"collections:isEmpty\" | \"collections:listPreferencesNotSaved\" | \"collections:listPreferencesUnavailable\" | \"collections:listView\" | \"collections:loadingDocuments\" | \"collections:manageFolders\" | \"collections:moreItems\" | \"collections:nextPage\" | \"collections:noDocumentsChanged\" | \"collections:noMatchingDocuments\" | \"collections:noFieldsFound\" | \"collections:nothingMatches\" | \"collections:openDocument\" | \"collections:operationFailed\" | \"collections:operator\" | \"collections:operatorContains\" | \"collections:operatorEquals\" | \"collections:operatorExists\" | \"collections:operatorGreaterThan\" | \"collections:operatorGreaterThanEqual\" | \"collections:operatorLessThan\" | \"collections:operatorLessThanEqual\" | \"collections:operatorLike\" | \"collections:operatorNotEquals\" | \"collections:pageSize\" | \"collections:pagination\" | \"collections:perPage\" | \"collections:previousPage\" | \"collections:publishSelectedDescription\" | \"collections:rangeSummary\" | \"collections:relatedDocument\" | \"collections:removeFilter\" | \"collections:restoreDocument\" | \"collections:restoreSelectedDescription\" | \"collections:rowNumber\" | \"collections:savedViewDeleted\" | \"collections:savedViewName\" | \"collections:savedViewNotDeleted\" | \"collections:savedViews\" | \"collections:savedViewsUnavailable\" | \"collections:searchBy\" | \"collections:searchDocuments\" | \"collections:searchPlaceholder\" | \"collections:selectAll\" | \"collections:selectAllRows\" | \"collections:selectAllUnavailable\" | \"collections:selectFieldsPlaceholder\" | \"collections:selectFieldsToEdit\" | \"collections:selectDocument\" | \"collections:selecting\" | \"collections:selectionLimitDescription\" | \"collections:showColumn\" | \"collections:showCreatedColumn\" | \"collections:showIDColumn\" | \"collections:showStatusColumn\" | \"collections:showUpdatedColumn\" | \"collections:sortBy\" | \"collections:status\" | \"collections:statusFilters\" | \"collections:title\" | \"collections:allDocuments\" | \"collections:collectionViews\" | \"collections:noTrashResults\" | \"collections:trashNotEmptied\" | \"collections:updated\" | \"collections:view\" | \"collections:viewName\" | \"collections:workspaceLoadFailed\" | \"collections:viewNotSaved\" | \"collections:viewSaved\" | \"collections:all\" | \"collections:bulkUpload\" | \"collections:clearFilters\" | \"collections:columns\" | \"collections:createNew\" | \"collections:empty\" | \"collections:emptyTrash\" | \"collections:filters\" | \"collections:pageSummary\" | \"collections:search\" | \"collections:selected\" | \"collections:sort\" | \"collections:trash\" | \"collections:unpublishSelectedDescription\" | \"collections:trashFor\" | \"dashboard:create\" | \"dashboard:extensions\" | \"dashboard:heading\" | \"dashboard:open\" | \"dashboard:welcome\" | \"development:documentation\" | \"development:documentationDescription\" | \"development:ready\" | \"development:retrySchemaUpdate\" | \"development:schema\" | \"development:schemaUpdateApplied\" | \"development:schemaUpdateFailed\" | \"development:tools\" | \"development:toolsStatus\" | \"development:upToDate\" | \"documents:creatingLabel\" | \"documents:api\" | \"documents:apiFor\" | \"documents:autosave\" | \"documents:copyFromLocale\" | \"documents:create\" | \"documents:created\" | \"documents:delete\" | \"documents:discard\" | \"documents:download\" | \"documents:draft\" | \"documents:duplicate\" | \"documents:edit\" | \"documents:editing\" | \"documents:editedSince\" | \"documents:inheritedFrom\" | \"documents:lastModified\" | \"documents:livePreview\" | \"documents:missingTranslation\" | \"documents:publish\" | \"documents:published\" | \"documents:restore\" | \"documents:save\" | \"documents:saveDraft\" | \"documents:savedDraftChanges\" | \"documents:discardSavedDraft\" | \"documents:discardSavedDraftQuestion\" | \"documents:discardSavedDraftDescription\" | \"documents:savedDraftDiscarded\" | \"documents:discardSavedDraftFailed\" | \"documents:serverSaveConflict\" | \"documents:reviewLatest\" | \"documents:reviewLatestUnavailable\" | \"documents:saveOutcomeUnknown\" | \"documents:createOutcomeUnknownDescription\" | \"documents:saveOutcomeUnknownDescription\" | \"documents:publishing\" | \"documents:unsavedChanges\" | \"documents:leaveWithoutSavingQuestion\" | \"documents:leaveWithoutSavingDescription\" | \"documents:keepEditing\" | \"documents:leaveWithoutSaving\" | \"documents:schedule\" | \"documents:takeOver\" | \"documents:unpublish\" | \"documents:updated\" | \"documents:versions\" | \"documents:versionsFor\" | \"documents:accessEvaluationFailed\" | \"documents:accountUnlocked\" | \"documents:accountUnlockFailed\" | \"documents:anotherEditor\" | \"documents:apiAuthenticated\" | \"documents:apiURL\" | \"documents:apiDepth\" | \"documents:apiRequestFailed\" | \"documents:apiRequesting\" | \"documents:apiRunRequest\" | \"documents:apiRunnableAfterSave\" | \"documents:apiViewLoadFailed\" | \"documents:authorizingDraftPreview\" | \"documents:breadcrumb\" | \"documents:cancel\" | \"documents:closeLivePreview\" | \"documents:collectionRemoved\" | \"documents:collectionUnavailable\" | \"documents:confirmPassword\" | \"documents:contentLocale\" | \"documents:copied\" | \"documents:copy\" | \"documents:copyFrom\" | \"documents:copying\" | \"documents:copyReady\" | \"documents:copyURL\" | \"documents:createdLabel\" | \"documents:createdLabelPlain\" | \"documents:credentials\" | \"documents:credentialsDescription\" | \"documents:currentlyEditing\" | \"documents:dashboard\" | \"documents:deleteAsset\" | \"documents:deleteDescription\" | \"documents:deleteDocument\" | \"documents:deleteFailed\" | \"documents:deletedLabel\" | \"documents:deletedSuccessfully\" | \"documents:deleteQuestion\" | \"documents:destructiveAction\" | \"documents:document\" | \"documents:documentLocked\" | \"documents:documentViews\" | \"documents:draftFieldsRestored\" | \"documents:recoveryConflictTitle\" | \"documents:recoveryConflictDescription\" | \"documents:reviewUnsavedChanges\" | \"documents:recoveryBase\" | \"documents:recoveryYours\" | \"documents:recoveryLatest\" | \"documents:recoveryKeepYours\" | \"documents:recoveryLoadLatest\" | \"documents:recoveryMissingValue\" | \"documents:recoveryNoVisibleChanges\" | \"documents:duplicateFailed\" | \"documents:duplicatedLabel\" | \"documents:duplicating\" | \"documents:editingLeaseActive\" | \"documents:enterNewAccountPassword\" | \"documents:forceUnlock\" | \"documents:globals\" | \"documents:goBack\" | \"documents:incompatibleDraftValues\" | \"documents:lastModifiedLabel\" | \"documents:lastSavedAgo\" | \"documents:lessThanMinuteAgo\" | \"documents:loadFailed\" | \"documents:loadingAPIView\" | \"documents:loadingDocument\" | \"documents:locale\" | \"documents:localeCopied\" | \"documents:localeCopiedDescription\" | \"documents:localeCopyFailed\" | \"documents:localeNotCopied\" | \"documents:localeSwitchDirty\" | \"documents:lockOptionsReadOnly\" | \"documents:lockOptionsWithTakeover\" | \"documents:lockedReadOnly\" | \"documents:lockTakenOver\" | \"documents:lockTakeoverFailed\" | \"documents:moreActions\" | \"documents:movedToTrashLabel\" | \"documents:moveToTrash\" | \"documents:moveToTrashDescription\" | \"documents:moveToTrashQuestion\" | \"documents:newLabel\" | \"documents:noDraftFieldsRestored\" | \"documents:notDeleted\" | \"documents:notDuplicated\" | \"documents:notSaved\" | \"documents:openAPIURL\" | \"documents:openPreviewWindow\" | \"documents:password\" | \"documents:passwordMinimum\" | \"documents:passwordsDoNotMatch\" | \"documents:passwordTooLong\" | \"documents:passwordTooShort\" | \"documents:previewAuthorizationFailed\" | \"documents:previewAuthorizing\" | \"documents:previewConnected\" | \"documents:previewConnecting\" | \"documents:previewHeight\" | \"documents:previewUnavailable\" | \"documents:customViewport\" | \"documents:previewViewport\" | \"documents:previewWidth\" | \"documents:previewZoom\" | \"documents:publishChanges\" | \"documents:publishedTitle\" | \"documents:responsive\" | \"documents:restoreFromTrash\" | \"documents:retryPreview\" | \"documents:saved\" | \"documents:saveBeforeLocaleSwitch\" | \"documents:saveFailed\" | \"documents:saveOrDiscardFirst\" | \"documents:saveToSwitchLocale\" | \"documents:saving\" | \"documents:schemaUpdatedWithDraft\" | \"documents:status\" | \"documents:statusChangeFailed\" | \"documents:statusNotChanged\" | \"documents:statusNow\" | \"documents:takingOver\" | \"documents:unlocking\" | \"documents:unpublishedTitle\" | \"documents:untitled\" | \"documents:untitledAsset\" | \"documents:viewReadOnly\" | \"documents:workspaceLoadFailed\" | \"errors:accessDenied\" | \"errors:adminBootstrapFailed\" | \"errors:couldNotLoadApplication\" | \"errors:loadAdmin\" | \"errors:loadDocument\" | \"errors:notFound\" | \"errors:notFoundCode\" | \"errors:notFoundDescription\" | \"errors:notFoundHeading\" | \"errors:returnDashboard\" | \"errors:required\" | \"errors:save\" | \"errors:unknown\" | \"errors:allowedOption\" | \"errors:array\" | \"errors:blockObject\" | \"errors:blockType\" | \"errors:boolean\" | \"errors:clipboardBlockType\" | \"errors:clipboardField\" | \"errors:clipboardGroup\" | \"errors:clipboardMaxRows\" | \"errors:clipboardMinRows\" | \"errors:clipboardRow\" | \"errors:clipboardRows\" | \"errors:correctInvalidFields\" | \"errors:duplicateOption\" | \"errors:fieldRequired\" | \"errors:finiteNumber\" | \"errors:maxRows\" | \"errors:minRows\" | \"errors:object\" | \"errors:oneBlock\" | \"errors:oneReference\" | \"errors:oneRow\" | \"errors:polymorphicReference\" | \"errors:referenceID\" | \"errors:relatedDocumentLoad\" | \"errors:relatedDocumentsUpdate\" | \"errors:relationshipDocumentsLoad\" | \"errors:relationshipTargetUnavailable\" | \"errors:rowObject\" | \"errors:selectedDocumentsLoad\" | \"errors:string\" | \"errors:updateUnconfirmed\" | \"errors:validJSON\" | \"errors:validPoint\" | \"fields:add\" | \"fields:addBelow\" | \"fields:addBlock\" | \"fields:addRelationship\" | \"fields:addRow\" | \"fields:asset\" | \"fields:block\" | \"fields:blockNumber\" | \"fields:browse\" | \"fields:browseAll\" | \"fields:choose\" | \"fields:chooseBlockFor\" | \"fields:clear\" | \"fields:collapse\" | \"fields:collapseAll\" | \"fields:content\" | \"fields:copy\" | \"fields:copied\" | \"fields:copyField\" | \"fields:copyRow\" | \"fields:create\" | \"fields:createdAt\" | \"fields:document\" | \"fields:drag\" | \"fields:duplicate\" | \"fields:edit\" | \"fields:editRelationship\" | \"fields:expand\" | \"fields:generateSlug\" | \"fields:id\" | \"fields:inspectEdit\" | \"fields:invalidCount\" | \"fields:itemCount\" | \"fields:joinChanges\" | \"fields:labeledRowNumber\" | \"fields:latitude\" | \"fields:lockSlug\" | \"fields:loading\" | \"fields:longitude\" | \"fields:addNew\" | \"fields:manageRelationships\" | \"fields:maximum\" | \"fields:minimum\" | \"fields:moveDown\" | \"fields:moveUp\" | \"fields:noBlocks\" | \"fields:noMatch\" | \"fields:noMaximum\" | \"fields:noMinimum\" | \"fields:noRelated\" | \"fields:open\" | \"fields:openActions\" | \"fields:openCalendar\" | \"fields:paste\" | \"fields:pasted\" | \"fields:pasteField\" | \"fields:pasteRow\" | \"fields:readOnly\" | \"fields:relatedDocument\" | \"fields:relationship\" | \"fields:relationships\" | \"fields:remove\" | \"fields:removeRelationship\" | \"fields:rowLimits\" | \"fields:rowNumber\" | \"fields:search\" | \"fields:searchBlock\" | \"fields:searchLabel\" | \"fields:select\" | \"fields:selectDate\" | \"fields:sections\" | \"fields:showAll\" | \"fields:showingRelated\" | \"fields:sortBy\" | \"fields:status\" | \"fields:untitled\" | \"fields:updated\" | \"fields:updatedAt\" | \"fields:unlockSlug\" | \"fields:updating\" | \"fields:upload\" | \"general:add\" | \"general:apply\" | \"fields:embeddedEditTitle\" | \"fields:embeddedEditDescription\" | \"errors:pendingEmbeddedEdit\" | \"errors:staleEmbeddedEdit\" | \"general:back\" | \"general:bulkActions\" | \"general:cancel\" | \"general:clear\" | \"general:clearSelection\" | \"general:close\" | \"general:confirm\" | \"general:continue\" | \"general:copy\" | \"general:copyJSON\" | \"general:copyUnavailable\" | \"general:copied\" | \"general:codeExample\" | \"general:create\" | \"general:delete\" | \"general:done\" | \"general:edit\" | \"general:escape\" | \"general:exitExpandedJSONView\" | \"general:expandJSONView\" | \"general:expandedJSONDescription\" | \"general:expandedJSONResponse\" | \"general:jsonData\" | \"general:loading\" | \"general:loadingSchema\" | \"general:more\" | \"general:next\" | \"general:no\" | \"general:none\" | \"general:notifications\" | \"general:open\" | \"general:pagination\" | \"general:previous\" | \"general:replace\" | \"general:remove\" | \"general:reloadPage\" | \"general:retry\" | \"general:riduApplication\" | \"general:save\" | \"general:search\" | \"general:select\" | \"general:selected\" | \"general:dismissNotification\" | \"general:yes\" | \"navigation:closeMenu\" | \"navigation:adminHeader\" | \"navigation:adminNavigation\" | \"navigation:adminNavigationDescription\" | \"navigation:applyingSchemaUpdate\" | \"navigation:breadcrumb\" | \"navigation:collection\" | \"navigation:collectionBadge\" | \"navigation:collections\" | \"navigation:commandDescription\" | \"navigation:commandMenu\" | \"navigation:commandSearch\" | \"navigation:commandSearchPlaceholder\" | \"navigation:document\" | \"navigation:documentBadge\" | \"navigation:globals\" | \"navigation:loadingDocuments\" | \"navigation:loadingPage\" | \"navigation:navigate\" | \"navigation:navigateRidu\" | \"navigation:newBadge\" | \"navigation:nothingMatches\" | \"navigation:nothingMatchesQuery\" | \"navigation:openMenu\" | \"navigation:page\" | \"navigation:pluginShellHeader\" | \"navigation:plugins\" | \"navigation:search\" | \"navigation:searchAndNavigate\" | \"navigation:searchAndNavigateShortcut\" | \"navigation:schemaUpdateFailed\" | \"navigation:toggleMenu\" | \"reference:createNew\" | \"reference:noResults\" | \"reference:searchOrCreate\" | \"reference:accessCheckFailed\" | \"reference:addLabel\" | \"reference:addSelected\" | \"reference:all\" | \"reference:api\" | \"reference:applying\" | \"reference:backToResults\" | \"reference:browserDescription\" | \"reference:cancel\" | \"reference:cannotCreate\" | \"reference:cannotUpdate\" | \"reference:closeBrowser\" | \"reference:collectionFilters\" | \"reference:confirmPassword\" | \"reference:createdLabel\" | \"reference:createLabel\" | \"reference:credentials\" | \"reference:currentPayload\" | \"reference:deselectLabel\" | \"reference:discard\" | \"reference:discardChanges\" | \"reference:discardDescription\" | \"reference:document\" | \"reference:documents\" | \"reference:edit\" | \"reference:editLabel\" | \"reference:enterNewAccountPassword\" | \"reference:images\" | \"reference:keepEditing\" | \"reference:loadingRelated\" | \"reference:newLabel\" | \"reference:newMetadata\" | \"reference:nextPage\" | \"reference:nothingMatches\" | \"reference:password\" | \"reference:passwordMinimum\" | \"reference:passwordsDoNotMatch\" | \"reference:passwordTooLong\" | \"reference:passwordTooShort\" | \"reference:previousPage\" | \"reference:range\" | \"reference:readOnlyDescription\" | \"reference:relatedLoadFailed\" | \"reference:relatedNotSaved\" | \"reference:relatedSaveFailed\" | \"reference:results\" | \"reference:saved\" | \"reference:saveLabel\" | \"reference:saving\" | \"reference:search\" | \"reference:select\" | \"reference:selectedNotSaved\" | \"reference:selectLabel\" | \"reference:selectCollection\" | \"reference:noCollectionsMatch\" | \"reference:noCollectionsAvailable\" | \"reference:unsavedChanges\" | \"reference:untitledLabel\" | \"reference:updateNotConfirmed\" | \"reference:uploadNew\" | \"uploads:addFiles\" | \"uploads:applyToFiles\" | \"uploads:asset\" | \"uploads:bulkUpload\" | \"uploads:bulkEditDescription\" | \"uploads:chooseFile\" | \"uploads:dropFiles\" | \"uploads:original\" | \"uploads:pasteURL\" | \"uploads:upload\" | \"uploads:accessCheckFailed\" | \"uploads:applyImageEdit\" | \"uploads:assetPreview\" | \"uploads:assetURL\" | \"uploads:assetsUploaded\" | \"uploads:bulkUploadDescription\" | \"uploads:chooseFileBeforeCreating\" | \"uploads:chooseFileBeforeSaving\" | \"uploads:chooseFilesForQueue\" | \"uploads:chooseFileToUpload\" | \"uploads:chooseFocalPoint\" | \"uploads:addFile\" | \"uploads:dropFile\" | \"uploads:discardQueue\" | \"uploads:discardQueueDescription\" | \"uploads:discardQueueTitle\" | \"uploads:editAll\" | \"uploads:editingAssets\" | \"uploads:editingFilename\" | \"uploads:fileToUpload\" | \"uploads:filesToUpload\" | \"uploads:crop\" | \"uploads:cropPosition\" | \"uploads:cropHandle\" | \"uploads:widthPixels\" | \"uploads:heightPixels\" | \"uploads:reset\" | \"uploads:chooseValue\" | \"uploads:configuredTypes\" | \"uploads:correctMetadata\" | \"uploads:createPermissionDenied\" | \"uploads:cropAndFocalUpdated\" | \"uploads:cropBoundary\" | \"uploads:cropDescription\" | \"uploads:dimensions\" | \"uploads:editFilename\" | \"uploads:editImage\" | \"uploads:enableCrop\" | \"uploads:file\" | \"uploads:filename\" | \"uploads:files\" | \"uploads:focalKeyboardInstructions\" | \"uploads:focalOutcomeUnknown\" | \"uploads:focalPoint\" | \"uploads:focalPointDescription\" | \"uploads:focalPosition\" | \"uploads:focalUpdated\" | \"uploads:focalUpdateFailed\" | \"uploads:height\" | \"uploads:horizontal\" | \"uploads:horizontalFocalPoint\" | \"uploads:imageEditDescription\" | \"uploads:imageOutcomeUnknown\" | \"uploads:imageOutcomeUnknownDescription\" | \"uploads:imageSizes\" | \"uploads:imageSizesNotRegenerated\" | \"uploads:imageSizesRegenerated\" | \"uploads:imageStateRecovered\" | \"uploads:importFromURL\" | \"uploads:importing\" | \"uploads:keepUploading\" | \"uploads:left\" | \"uploads:loadingAssetPreview\" | \"uploads:maximumSize\" | \"uploads:needAttention\" | \"uploads:noFilesQueued\" | \"uploads:notConfigured\" | \"uploads:openAsset\" | \"uploads:openImportedAsset\" | \"uploads:ofFiles\" | \"uploads:outcomeNotConfirmed\" | \"uploads:outcomeUnknown\" | \"uploads:outcomeUnknownDescription\" | \"uploads:outcomeUnknownListRefreshed\" | \"uploads:previewGeneratedSizes\" | \"uploads:previewSizes\" | \"uploads:queueSummary\" | \"uploads:regenerating\" | \"uploads:remoteAssetUploaded\" | \"uploads:remoteImportDescription\" | \"uploads:remoteOutcomeNotConfirmed\" | \"uploads:removeFilename\" | \"uploads:retryFilename\" | \"uploads:serverStateRefreshed\" | \"uploads:size\" | \"uploads:sizesFor\" | \"uploads:statusComplete\" | \"uploads:statusFailed\" | \"uploads:statusQueued\" | \"uploads:statusUncertain\" | \"uploads:statusUploading\" | \"uploads:top\" | \"uploads:type\" | \"uploads:unknownOutcomesDescription\" | \"uploads:untitledAsset\" | \"uploads:uploadCount\" | \"uploads:uploading\" | \"uploads:uploadingFilename\" | \"uploads:uploadQueue\" | \"uploads:urlCopied\" | \"uploads:urlCopiedDescription\" | \"uploads:urlImportMetadata\" | \"uploads:vertical\" | \"uploads:verticalFocalPoint\" | \"uploads:width\" | \"uploads:workspaceLoadFailed\" | \"versions:updatedAt\" | \"versions:createdAt\" | \"versions:deletedAt\" | \"versions:versionID\" | \"versions:currentDraft\" | \"versions:draft\" | \"versions:currentlyPublished\" | \"versions:previouslyPublished\" | \"versions:compareVersions\" | \"versions:locales\" | \"versions:comparingAgainst\" | \"versions:currentlyViewing\" | \"versions:previousVersion\" | \"versions:moreVersions\" | \"versions:selectVersion\" | \"versions:confirmRestore\" | \"versions:restoreOptions\" | \"versions:restoreVersionDescription\" | \"versions:versionUnavailable\" | \"versions:content\" | \"versions:blockType\" | \"versions:position\" | \"versions:row\" | \"versions:noRows\" | \"versions:compare\" | \"versions:current\" | \"versions:history\" | \"versions:restore\" | \"versions:saved\" | \"versions:schedulePublication\" | \"versions:allVersions\" | \"versions:backToDocument\" | \"versions:cancel\" | \"versions:cancelScheduledPublish\" | \"versions:cancelScheduledUnpublish\" | \"versions:chooseFuturePublishTime\" | \"versions:chooseFutureUnpublishTime\" | \"versions:chooseUnambiguousTime\" | \"versions:compareRevisionWith\" | \"versions:comparisonRevision\" | \"versions:false\" | \"versions:field\" | \"versions:historyDescription\" | \"versions:historyLoadFailed\" | \"versions:modifiedFieldsOnly\" | \"versions:noComparison\" | \"versions:noModifiedFields\" | \"versions:noRevisions\" | \"versions:previousCurrentPreserved\" | \"versions:publishNotScheduled\" | \"versions:publishScheduleFailed\" | \"versions:publishScheduled\" | \"versions:unpublishScheduled\" | \"versions:resourceUnavailable\" | \"versions:restoreAsDraft\" | \"versions:restoreDescription\" | \"versions:restoreRevisionQuestion\" | \"versions:restoring\" | \"versions:revision\" | \"versions:revisionIsCurrent\" | \"versions:revisionNotRestored\" | \"versions:revisionRestoreFailed\" | \"versions:revisionRestored\" | \"versions:revisionRestoredAsDraft\" | \"versions:revisionRestoredTitle\" | \"versions:revisionWithStatus\" | \"versions:savedRevisions\" | \"versions:savedRevisionsDescription\" | \"versions:scheduleCancelFailed\" | \"versions:scheduleNotCancelled\" | \"versions:scheduledPublicationCancelled\" | \"versions:scheduledPublicationDescription\" | \"versions:scheduling\" | \"versions:shortRevision\" | \"versions:status\" | \"versions:total\" | \"versions:true\" | \"versions:versionLocale\", TranslationMessage>>",
 							"description": "The messages value."
 						}
 					],

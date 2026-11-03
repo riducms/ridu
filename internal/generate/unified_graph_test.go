@@ -173,11 +173,11 @@ func TestUnifiedGraphManifestAndQueryProjectionExcludePrivateRuntimeIdentity(t *
 const unifiedGeneratedGoConsumer = `package generated_test
 import ("encoding/json"; "testing"; "github.com/riducms/ridu/core"; g "example.com/stable-consumer")
 func TestUnifiedShape(t *testing.T) {
- status := "ready"; create := g.PageCreate{Title:"Title", Status:&status, Author:core.Set("author"), Reviewers:core.Set([]string{"author"})}
+ status := "ready"; create := g.PageCreateInput{Title:"Title", Status:&status, Author:core.Set("author"), Reviewers:core.Set([]string{"author"})}
  encoded,err:=json.Marshal(create); if err!=nil {t.Fatal(err)}
  if string(encoded)=="" {t.Fatal("empty create")}
  for _,raw:=range []string{"{}", "{\"optional\":null}", "{\"optional\":\"value\"}"} {
-  var update g.PageUpdate; if err:=json.Unmarshal([]byte(raw), &update);err!=nil {t.Fatal(err)}
+  var update g.PageUpdateInput; if err:=json.Unmarshal([]byte(raw), &update);err!=nil {t.Fatal(err)}
   encoded,err:=json.Marshal(update);if err!=nil||string(encoded)!=raw {t.Fatalf("patch presence %s: %s %v",raw,encoded,err)}
  }
  var output g.Page

@@ -84,12 +84,18 @@ environment variables; it needs no Ridu CLI, Go or JavaScript runtime. Start the
 generated `start` package script runs the same binary, which is convenient on the build machine, but
 in production the package manager would stay in memory beside the server for as long as it runs.
 
-The server listens on `:8080` by default. Set `RIDU_ADDRESS` when you control the full address, or
-set `PORT` when a hosting platform assigns the port:
+By default the server listens on `127.0.0.1:8080`, so only programs on the same machine can reach
+it, and it answers only the host names `localhost`, `127.0.0.1` and `[::1]`. When a hosting
+platform assigns `PORT`, the server listens on that port on every interface. Otherwise set
+`RIDU_ADDRESS` to listen elsewhere, and `RIDU_ALLOWED_HOSTS` to the names clients use:
 
 ```sh title="terminal"
-RIDU_ADDRESS=':3000' ./dist/my-app
+RIDU_ADDRESS=':3000' RIDU_ALLOWED_HOSTS='cms.example.com' ./dist/my-app
 ```
+
+A reverse proxy on the same machine, such as Caddy or nginx, can reach the default address, but
+it forwards your public host name, so list that name in `RIDU_ALLOWED_HOSTS`. A container needs
+`RIDU_ADDRESS=':8080'` (or `PORT`), because its loopback interface is private to the container.
 
 ## Choose another output path {#output}
 

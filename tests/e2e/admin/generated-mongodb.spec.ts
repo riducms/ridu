@@ -39,6 +39,9 @@ test("a generated MongoDB starter survives ordinary authoring and safe schema re
 	await expect(page).toHaveURL(/\/admin\/create-first-user$/);
 	await expect(page.getByRole("heading", { name: "Welcome", exact: true })).toBeVisible();
 
+	await page
+		.getByRole("textbox", { name: "Setup token", exact: true })
+		.fill(process.env.RIDU_MONGODB_GENERATED_SETUP_TOKEN ?? "");
 	await page.getByLabel("Email", { exact: true }).fill("admin@mongodb-generated.test");
 	await page
 		.getByRole("textbox", { name: "Password", exact: true })

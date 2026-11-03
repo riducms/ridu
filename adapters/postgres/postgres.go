@@ -19,6 +19,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riducms/ridu/internal/localization"
 	"github.com/riducms/ridu/internal/localnet"
@@ -162,6 +163,12 @@ func normalizedPoolConfig(options PoolConfig) (*pgxpool.Config, error) {
 			return nil, fmt.Errorf("%s must use whole milliseconds", name)
 		}
 		configured.ConnConfig.RuntimeParams[name] = strconv.FormatInt(value.Milliseconds(), 10)
+	}
+	// Adapters return timestamps in UTC; pgx would otherwise scan timestamptz
+	// into time.Local.
+	configured.AfterConnect = func(_ context.Context, connection *pgx.Conn) error {
+		connection.TypeMap().RegisterType(&pgtype.Type{Name: "timestamptz", OID: pgtype.TimestamptzOID, Codec: &pgtype.TimestamptzCodec{ScanLocation: time.UTC}})
+		return nil
 	}
 	return configured, nil
 }
@@ -1762,8 +1769,8 @@ func (transaction *documentTransaction) ListVersions(ctx context.Context, reques
 		if err := rows.Scan(&version.Revision, &version.Status, &encoded, &version.CreatedAt); err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal(encoded, &version.Snapshot); err != nil {
-			return nil, fmt.Errorf("decode version snapshot: %w", err)
+		if err := decodeVersionSnapshot(encoded, &version.Snapshot); err != nil {
+			return nil, err
 		}
 		version.ID = request.DocumentID + ":" + fmt.Sprint(version.Revision)
 		versions = append(versions, version)
@@ -1805,10 +1812,24 @@ func (transaction *documentTransaction) FindVersion(ctx context.Context, collect
 	if err := transaction.transaction.QueryRow(ctx, statement, collection.ID, documentID, revision).Scan(&version.Status, &encoded, &version.CreatedAt); err != nil {
 		return store.Version{}, translateError(err)
 	}
-	if err := json.Unmarshal(encoded, &version.Snapshot); err != nil {
-		return store.Version{}, fmt.Errorf("decode version snapshot: %w", err)
+	if err := decodeVersionSnapshot(encoded, &version.Snapshot); err != nil {
+		return store.Version{}, err
 	}
 	return version, nil
+}
+
+// decodeVersionSnapshot returns snapshot timestamps in UTC like scanned
+// columns, whatever offset the stored JSON recorded.
+func decodeVersionSnapshot(encoded []byte, snapshot *store.Document) error {
+	if err := json.Unmarshal(encoded, snapshot); err != nil {
+		return fmt.Errorf("decode version snapshot: %w", err)
+	}
+	snapshot.CreatedAt, snapshot.UpdatedAt = snapshot.CreatedAt.UTC(), snapshot.UpdatedAt.UTC()
+	if snapshot.DeletedAt != nil {
+		deletedAt := snapshot.DeletedAt.UTC()
+		snapshot.DeletedAt = &deletedAt
+	}
+	return nil
 }
 
 func (transaction *documentTransaction) Commit(ctx context.Context) error {

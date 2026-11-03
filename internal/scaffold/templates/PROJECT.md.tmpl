@@ -100,32 +100,36 @@ exact runtime SDL with the other contracts. Keep the key absent in REST-only pro
 
 ### Initialize the first administrator
 
-The generated Users collection omits an anonymous Create policy deliberately. While the collection
-is empty, Ridu's REST and GraphQL transports permit exactly one anonymous first-user creation and
-serialize the emptiness check, document insert, and private credential insert in one transaction.
-Concurrent contenders cannot both become administrators.
+While the Users collection is empty, Ridu's REST transport permits exactly one anonymous
+first-user creation, and only with the server's setup token. It serializes the emptiness check,
+document insert, and private credential insert in one transaction, so concurrent contenders cannot
+both become administrators. The token keeps a new public deployment from giving its first account
+to whoever finds the URL first: the server logs it, with a link to the setup page, the first time
+it offers setup. `ridu dev` prints that line in its output. Set `RIDU_SETUP_TOKEN` to choose the
+token yourself, for example when several replicas serve one database.
 
 Open `/admin` in your browser. Ridu detects the empty admin-user collection, redirects you to
-`/admin/create-first-user`, renders the fields from `Users`, creates the account, and signs you
-in. After the first account exists, the setup route closes and unauthenticated visitors see the
-normal login screen.
+`/admin/create-first-user`, asks for the setup token, renders the fields from `Users`, creates the
+account, and signs you in. After the first account exists, the setup route closes and
+unauthenticated visitors see the normal login screen.
 
 For non-interactive deployment automation, the same one-time operation is available over REST:
 
 ```sh
 curl --fail-with-body http://127.0.0.1:8080/api/auth/users/create-user \
   --header 'content-type: application/json' \
-  --data '{"data":{"email":"admin@example.test"},"password":"replace-with-a-long-secret"}'
+  --data '{"data":{"email":"admin@example.test"},"password":"replace-with-a-long-secret","setupToken":"the-token-from-the-server-log"}'
 ```
 
 Do not put a real production password into shared shell history; send the JSON from a secret-aware
-deployment tool or an operator-only bootstrap job. Once any active user exists, an anonymous
-repeat receives `403` and cannot create another account. Authenticated administrators can create
+deployment tool or an operator-only bootstrap job. Once any active user exists, the setup token
+creates no one and an anonymous request receives `403`. Authenticated administrators can create
 later users normally.
 
-If the product intentionally supports public registration, add an explicit `Access.Create` rule to
-`Users`. An explicit rule owns the decision and disables the framework's omitted-policy
-first-user default for that collection.
+The generated Users collection has no `Access.Create` rule, so anonymous creation is refused
+except for first-user setup. If the product intentionally supports public registration, add an
+explicit `Access.Create` rule to `Users`; it decides every create that doesn't present the setup
+token.
 
 ### Change a collection label
 
@@ -317,10 +321,11 @@ defaults when an environment value is absent:
 | `RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS` | Optional size of the separate bounded PostgreSQL pool used to coordinate object creation/adoption/deletion across processes. The default is four; these connections are additional to the document pool so uploads cannot starve their own transactions. |
 {{else if .SQLite}}| `RIDU_SQLITE_PATH` | Required absolute SQLite file path or URI. The generated runtime rejects `:memory:` because migrations and serving are separate processes. |
 {{else if .MongoDB}}| `DATABASE_URL` | Required MongoDB URL containing the database-scoped application credential, writable replica-set selection, SCRAM-SHA-256 authentication, and CA- plus hostname-verifying TLS options. |
-{{end}}| `RIDU_ADDRESS` | Complete listener address. Defaults to `:8080`. |
-| `PORT` | Port-only alternative used when a hosting platform assigns the listener. `RIDU_ADDRESS` takes precedence. |
-| `RIDU_ALLOWED_HOSTS` | Comma-separated public hostnames, with optional ports. Set it in production because an empty list accepts every syntactically valid host for development compatibility. |
-| `RIDU_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to make cross-origin SDK requests. Same-origin admin traffic does not need an entry. |
+{{end}}| `RIDU_ADDRESS` | Complete listener address. Defaults to `127.0.0.1:8080`, which only this machine can reach; containers and networked servers set, for example, `:8080`. |
+| `PORT` | Port-only alternative used when a hosting platform assigns the listener; the server then listens on every interface. `RIDU_ADDRESS` takes precedence. |
+| `RIDU_ALLOWED_HOSTS` | Comma-separated public hostnames, with optional ports. Set it in production because an empty list accepts every syntactically valid host, except on a loopback address, where the server answers only `localhost`, `127.0.0.1` and `[::1]`. |
+| `RIDU_SETUP_TOKEN` | Token that creating the first user requires, at least 32 characters. Without it the server generates one and logs it when it first offers setup; set it when several replicas serve one database. |
+| `RIDU_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to make cross-origin SDK requests, including an app scheme such as `tauri://localhost`. Same-origin admin traffic does not need an entry. The server refuses to start on an entry that is not an origin. |
 | `RIDU_TRUSTED_PROXY_CIDRS` | Only the immediate reverse-proxy networks allowed to supply forwarded client/proto information. Leave empty when the Go process is directly exposed. |
 | `RIDU_TRUSTED_PROXY_HOPS` | Optional count of the proxies each request passes through, the trusted one included, when the others can't be listed. Ridu then reads the client address from before them in `X-Forwarded-For`, so sign-in limits apply per visitor. Railway uses `2`. |
 | `RIDU_STRICT_TRANSPORT_SECURITY` | HSTS value emitted by Ridu. Set it only when the TLS terminator guarantees HTTPS for the complete declared scope. |

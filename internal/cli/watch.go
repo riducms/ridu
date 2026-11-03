@@ -63,7 +63,7 @@ func (watcher *goSourceWatcher) addTree(root string) (bool, error) {
 			return walkError
 		}
 		if entry.IsDir() {
-			if path != root && shouldSkipDirectory(entry.Name()) {
+			if path != root && shouldSkipDirectory(path) {
 				return filepath.SkipDir
 			}
 			if err := watcher.watcher.Add(path); err != nil {
@@ -112,7 +112,7 @@ func (watcher *goSourceWatcher) run() {
 			}
 			if event.Op&fsnotify.Create != 0 {
 				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-					if shouldSkipDirectory(filepath.Base(event.Name)) {
+					if shouldSkipDirectory(event.Name) {
 						continue
 					}
 					containsGo, addError := watcher.addTree(event.Name)

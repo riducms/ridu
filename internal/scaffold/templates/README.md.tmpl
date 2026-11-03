@@ -33,8 +33,8 @@ If you enable the optional GraphQL plugin, configure `generated.graphql.schema` 
 generation also commits and drift-checks its exact SDL for client tooling.
 
 On an empty database, open the admin and create the first `users` account in the guided setup
-screen. Ridu serializes that anonymous first-user operation with the credential write, so exactly
-one contender can succeed. Afterward, the generated collection policies require authentication;
+screen, using the setup token the server logs. Ridu serializes that first-user operation with the
+credential write, so exactly one contender can succeed. Afterward, the generated collection policies require authentication;
 anonymous registration is not enabled accidentally.{{if .Starter}} The starter includes Posts as a small,
 deletable example.{{end}} See `PROJECT.md` for the non-interactive REST shape and for how to opt into
 intentional public registration.
@@ -58,7 +58,8 @@ start it:
 {{.RunCommand}} start
 ```
 
-`RIDU_ADDRESS` defaults to `:8080`. Hosting platforms such as Railway can supply `PORT` instead.
+`RIDU_ADDRESS` defaults to `127.0.0.1:8080`, which only this machine can reach. Hosting platforms
+such as Railway supply `PORT` instead, and the server then listens on every interface.
 See the [build and run guide](https://riducms.com/docs/production/build-and-run/) and
 [Railway guide](https://riducms.com/docs/production/railway/) for the complete deployment steps.
 

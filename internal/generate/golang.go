@@ -64,11 +64,13 @@ func goClient(manifest schema.Manifest) ([]byte, error) {
 		}
 		fieldNames := goModelFieldNames(collection, "UnmarshalJSON")
 		writeGoModel(&output, baseName, collection, goOutput, pluginTypes, fieldNames, blocks)
-		writeGoModel(&output, baseName+"Create", collection, goCreate, pluginTypes, fieldNames, blocks)
-		writeGoModel(&output, baseName+"Update", collection, goUpdate, pluginTypes, fieldNames, blocks)
-		draftName := baseName + "Update"
+		// Inputs end in Input so a collection named, for example, "Project update"
+		// cannot collide with the projects collection's update input.
+		writeGoModel(&output, baseName+"CreateInput", collection, goCreate, pluginTypes, fieldNames, blocks)
+		writeGoModel(&output, baseName+"UpdateInput", collection, goUpdate, pluginTypes, fieldNames, blocks)
+		draftName := baseName + "UpdateInput"
 		if collection.Versions != nil && collection.Versions.Drafts {
-			draftName = baseName + "Draft"
+			draftName = baseName + "DraftInput"
 			writeGoModel(&output, draftName, collection, goDraft, pluginTypes, fieldNames, blocks)
 		}
 		if blocks.localized {
@@ -79,7 +81,7 @@ func goClient(manifest schema.Manifest) ([]byte, error) {
 			variable = exportedGoIdentifier(string(collection.Slug))
 		}
 		variable += "Collection"
-		fmt.Fprintf(&output, "var %s = core.NewTypedCollection[%s, %sCreate, %sUpdate, %s](%q)\n\n", variable, baseName, baseName, baseName, draftName, collection.Slug)
+		fmt.Fprintf(&output, "var %s = core.NewTypedCollection[%s, %sCreateInput, %sUpdateInput, %s](%q)\n\n", variable, baseName, baseName, baseName, draftName, collection.Slug)
 		if blocks.localized {
 			fmt.Fprintf(&output, "// %sAllLocales reads all translations with optional population and projection.\nvar %sAllLocales = core.NewTypedAllLocalesCollection[%sAllLocales](%q)\n\n", variable, variable, baseName, collection.Slug)
 		}
@@ -95,10 +97,10 @@ func goClient(manifest schema.Manifest) ([]byte, error) {
 		}
 		fieldNames := goModelFieldNames(global, "UnmarshalJSON")
 		writeGoModel(&output, baseName, global, goOutput, pluginTypes, fieldNames, blocks)
-		writeGoModel(&output, baseName+"Update", global, goUpdate, pluginTypes, fieldNames, blocks)
-		draftName := baseName + "Update"
+		writeGoModel(&output, baseName+"UpdateInput", global, goUpdate, pluginTypes, fieldNames, blocks)
+		draftName := baseName + "UpdateInput"
 		if global.Versions != nil && global.Versions.Drafts {
-			draftName = baseName + "Draft"
+			draftName = baseName + "DraftInput"
 			writeGoModel(&output, draftName, global, goDraft, pluginTypes, fieldNames, blocks)
 		}
 		if blocks.localized {
@@ -109,7 +111,7 @@ func goClient(manifest schema.Manifest) ([]byte, error) {
 			variable = exportedGoIdentifier(string(global.Slug))
 		}
 		variable += "Global"
-		fmt.Fprintf(&output, "var %s = core.NewTypedGlobal[%s, %sUpdate, %s](%q)\n\n", variable, baseName, baseName, draftName, global.Slug)
+		fmt.Fprintf(&output, "var %s = core.NewTypedGlobal[%s, %sUpdateInput, %s](%q)\n\n", variable, baseName, baseName, draftName, global.Slug)
 		if blocks.localized {
 			fmt.Fprintf(&output, "// %sAllLocales reads all translations with optional population and projection.\nvar %sAllLocales = core.NewTypedAllLocalesGlobal[%sAllLocales](%q)\n\n", variable, variable, baseName, global.Slug)
 		}
@@ -501,7 +503,7 @@ func validateGoGeneratedSymbols(source []byte) error {
 	var issues []schema.Issue
 	reserve := func(name string) {
 		if used[name] {
-			issues = append(issues, schema.Issue{Code: "block_type_name_conflict", Path: "generated.go." + name, Message: "generated Go symbol collides with another model, block, relationship, or select declaration; choose distinct field names, select values, or block type names"})
+			issues = append(issues, schema.Issue{Code: "generated_name_conflict", Path: "generated.go." + name, Message: "generated Go symbol collides with another model, block, relationship, or select declaration; choose distinct singular labels, field names, select values, or block type names"})
 		}
 		used[name] = true
 	}

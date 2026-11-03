@@ -31,7 +31,8 @@ const (
 )
 
 // Document is the adapter-neutral stored representation. Framework metadata
-// remains separate from application field values.
+// remains separate from application field values. Adapters return its
+// timestamps in UTC, including in version snapshots.
 type Document struct {
 	ID        string
 	CreatedAt time.Time

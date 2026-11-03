@@ -63,6 +63,7 @@ func Protocol() []byte {
 		string(protocol.ErrorSelectionTooLarge),
 		string(protocol.ErrorBadQuery),
 		string(protocol.ErrorPublishRequired),
+		string(protocol.ErrorSetupTokenInvalid),
 	})
 	writeUnion(&output, "FieldType", []string{
 		string(schema.FieldTypeText),

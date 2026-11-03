@@ -983,7 +983,9 @@ async function bootstrapUserOnce(framework: FrameworkName, base: string): Promis
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(
-				framework === "ridu" ? { data: { email }, password } : { email, password }
+				framework === "ridu"
+					? { data: { email }, password, setupToken: "benchmark-setup-token-0123456789abcdef" }
+					: { email, password }
 			),
 			signal: AbortSignal.timeout(requestTimeoutMs),
 		}

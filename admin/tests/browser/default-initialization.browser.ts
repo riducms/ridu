@@ -1,6 +1,7 @@
 import { ownController } from "./controller-owner.svelte";
 import { describe, expect, it } from "vitest";
 import type { AccessCapabilitiesEnvelope, SchemaCollection, SchemaField } from "@riducms/protocol";
+import { RiduError } from "@riducms/sdk";
 import { createAdminI18n } from "@riducms/translations";
 
 import type { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
@@ -42,7 +43,8 @@ describe("create-flow default initialization", () => {
 				refreshAccess: async () => true,
 				client: {
 					auth: {
-						createUser: async (input: { data: Record<string, unknown> }) => {
+						createUser: async (input: { data: Record<string, unknown>; setupToken?: string }) => {
+							expect(input.setupToken).toBe("token-from-the-server-log");
 							if (outcome === "already-created") throw new Error("Setup already completed");
 							return { ...input.data, id: "ada" };
 						},
@@ -59,7 +61,10 @@ describe("create-flow default initialization", () => {
 					return new Promise<never>(() => {});
 				},
 			} as unknown as AdminRuntime;
-			const controller = new CreateFirstUserController({ runtime });
+			const controller = new CreateFirstUserController({
+				runtime,
+				setupToken: " token-from-the-server-log ",
+			});
 			controller.password = "correct-horse";
 			controller.passwordConfirmation = "correct-horse";
 			controller.submit();
@@ -76,6 +81,44 @@ describe("create-flow default initialization", () => {
 			controller.destroy();
 		});
 	}
+
+	it("asks for the setup token before creating the first user", async () => {
+		const collection = collectionWithDefaults(true);
+		collection.fields.push(textField("email", "ada@example.test"));
+		const created: unknown[] = [];
+		const runtime = {
+			authCollection: collection,
+			authBootstrapAvailable: true,
+			i18n: createAdminI18n(),
+			client: {
+				auth: {
+					createUser: async (input: unknown) => {
+						created.push(input);
+						throw new RiduError({
+							code: "setup_token_invalid",
+							status: 403,
+							message: "the setup token does not match the one the server logged",
+							issues: [],
+						});
+					},
+				},
+			},
+		} as unknown as AdminRuntime;
+		const controller = new CreateFirstUserController({ runtime });
+		controller.password = "correct-horse";
+		controller.passwordConfirmation = "correct-horse";
+		expect(await controller.submit()).toBe("setupToken");
+		expect(controller.credentialIssue?.message).toBe("Enter the setup token.");
+		expect(created).toEqual([]);
+
+		controller.setupToken = "an-old-token";
+		expect(await controller.submit()).toBe("setupToken");
+		expect(created).toHaveLength(1);
+		expect(controller.credentialIssue?.message).toBe(
+			"This setup token doesn’t match the one in the server log."
+		);
+		controller.destroy();
+	});
 
 	it("uses canonical defaults for inline creation and preserves explicit relationship values", async () => {
 		const collection = collectionWithDefaults();

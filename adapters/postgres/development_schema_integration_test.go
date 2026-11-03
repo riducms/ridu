@@ -439,6 +439,7 @@ func TestPostgresDevelopmentSchemaPublicationRechecksCurrentAndSnapshotValues(t 
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer write.Rollback(ctx)
 			document, err := write.Create(ctx, store.CreateRequest{Collection: resource, ID: "late", Values: store.Values{"body": store.Object(store.Values{"legacy": store.String("retain")})}})
 			if err != nil {
 				t.Fatal(err)
@@ -467,6 +468,9 @@ func TestPostgresDevelopmentSchemaPublicationRechecksCurrentAndSnapshotValues(t 
 			if err != nil {
 				t.Fatal(err)
 			}
+			// A failure must still return the connection, or closing the
+			// store in cleanup waits on it forever.
+			defer read.Rollback(ctx)
 			actual, err := read.Find(ctx, store.Request{Collection: resource, ID: document.ID})
 			if err != nil {
 				t.Fatal(err)

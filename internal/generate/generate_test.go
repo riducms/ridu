@@ -748,7 +748,7 @@ func TestResolveProjectMetadataExecutableRunsThePrecompiledProjectProtocol(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-project-executable-test\n\ngo 1.26.9\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/ridu-project-executable-test\n\ngo 1.26.10\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	source := fmt.Sprintf(`package main
@@ -1198,7 +1198,7 @@ func TestGeneratedGoModelsIncludeTypedGlobals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"type SiteSettings struct", "type SiteSettingsUpdate struct", `var SiteSettingsGlobal = core.NewTypedGlobal[SiteSettings, SiteSettingsUpdate, SiteSettingsUpdate]("site-settings")`} {
+	for _, expected := range []string{"type SiteSettings struct", "type SiteSettingsUpdateInput struct", `var SiteSettingsGlobal = core.NewTypedGlobal[SiteSettings, SiteSettingsUpdateInput, SiteSettingsUpdateInput]("site-settings")`} {
 		if !strings.Contains(string(generated), expected) {
 			t.Fatalf("generated Go global missing %q:\n%s", expected, generated)
 		}
@@ -1223,7 +1223,7 @@ func TestGeneratedGoModelsKeepJoinAndVirtualFieldsOutputOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(goSourceWithoutLineComments(t, generated))
-	for _, expected := range []string{"[]Posts `json:\"posts,omitempty\"`", "*string `json:\"label,omitempty\"`", "type CategoriesCreate struct {\n}", "type CategoriesUpdate struct {\n}"} {
+	for _, expected := range []string{"[]Posts `json:\"posts,omitempty\"`", "*string `json:\"label,omitempty\"`", "type CategoriesCreateInput struct {\n}", "type CategoriesUpdateInput struct {\n}"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("generated Go client missing %q:\n%s", expected, text)
 		}
@@ -1280,7 +1280,7 @@ func TestGeneratedGoNonNullNilableInputsCannotEncodeExplicitNull(t *testing.T) {
 		t.Fatal(err)
 	}
 	declarations := goDeclarations(t, generated)
-	text := declarations["Article"] + "\n" + declarations["ArticleCreate"] + "\n" + declarations["ArticleUpdate"]
+	text := declarations["Article"] + "\n" + declarations["ArticleCreateInput"] + "\n" + declarations["ArticleUpdateInput"]
 	for _, expected := range []string{
 		`(?m)^\s*RequiredTags\s+core\.NonNullInput\[\[\]ArticleRequiredTags\]\s+` + "`json:\"requiredTags\"`$",
 		`(?m)^\s*DefaultTags\s+\*core\.NonNullInput\[\[\]ArticleDefaultTags\]\s+` + "`json:\"defaultTags,omitempty\"`$",

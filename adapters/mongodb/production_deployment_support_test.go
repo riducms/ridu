@@ -636,6 +636,7 @@ func (harness *mongoDBProductionDeploymentHarness) startServer(
 	environment := strings.Join([]string{
 		"DATABASE_URL=" + databaseURL,
 		"RIDU_ADDRESS=0.0.0.0:" + fmt.Sprint(port),
+		"RIDU_SETUP_TOKEN=" + mongoDBProductionSetupToken,
 		"RIDU_SECURE_COOKIES=false",
 		"RIDU_SHUTDOWN_TIMEOUT=6s",
 		"RIDU_WORKER_DRAIN_TIMEOUT=6s",
@@ -955,6 +956,9 @@ func mongoDBProductionDeploymentDocument(t *testing.T, envelope map[string]any) 
 	return document
 }
 
+// mongoDBProductionSetupToken lets the deployment test create the first user.
+const mongoDBProductionSetupToken = "mongodb-production-setup-token-0123456789"
+
 func mongoDBProductionDeploymentBootstrapStarter(t *testing.T, baseURL string) mongoDBProductionDeploymentData {
 	t.Helper()
 	data := mongoDBProductionDeploymentData{
@@ -968,7 +972,7 @@ func mongoDBProductionDeploymentBootstrapStarter(t *testing.T, baseURL string) m
 	var envelope map[string]any
 	mongoDBProductionDeploymentRequest(
 		t, client, http.MethodPost, baseURL+"/api/auth/users/create-user",
-		strings.NewReader(fmt.Sprintf(`{"data":{"email":%q},"password":%q}`, data.email, data.password)),
+		strings.NewReader(fmt.Sprintf(`{"data":{"email":%q},"password":%q,"setupToken":%q}`, data.email, data.password, mongoDBProductionSetupToken)),
 		"application/json", http.StatusCreated, &envelope,
 	)
 	data.userID = fmt.Sprint(mongoDBProductionDeploymentDocument(t, envelope)["id"])
@@ -1311,7 +1315,7 @@ func mongoDBProductionDeploymentAssertBlank(t *testing.T, baseURL string) {
 	var envelope map[string]any
 	mongoDBProductionDeploymentRequest(
 		t, client, http.MethodPost, baseURL+"/api/auth/users/create-user",
-		strings.NewReader(`{"data":{"email":"blank@mongodb-production.test"},"password":"mongodb-blank-production-password"}`),
+		strings.NewReader(fmt.Sprintf(`{"data":{"email":%q},"password":%q,"setupToken":%q}`, email, password, mongoDBProductionSetupToken)),
 		"application/json", http.StatusCreated, &envelope,
 	)
 	mongoDBProductionDeploymentLogin(t, client, baseURL, email, password)

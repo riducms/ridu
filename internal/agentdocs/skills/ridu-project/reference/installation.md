@@ -198,7 +198,7 @@ project-local package for repeatable work and automation.
 Run the selected manager's `dev` script from the project directory and open the printed admin URL
 (normally `http://localhost:8080/admin`). PostgreSQL and MongoDB start their local services when
 needed; SQLite opens its local development file. On an empty auth collection, the admin shows
-one-time first-user setup.
+one-time first-user setup, which asks for the setup token printed in the `dev` output.
 
 The [Quickstart](./quickstart.md#open-the-admin) continues from here with the first account,
 document, and generated SDK read.

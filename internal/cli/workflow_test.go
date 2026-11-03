@@ -1022,3 +1022,43 @@ func assertNoPostgreSQLDockerDiagnostic(t *testing.T, stdout, stderr string) {
 		}
 	}
 }
+
+func TestDevelopmentAllowedHostsAddThePublicHostToLoopbackNames(t *testing.T) {
+	for public, want := range map[string]string{
+		"127.0.0.1":     "localhost,127.0.0.1,[::1]",
+		"LOCALHOST":     "localhost,127.0.0.1,[::1]",
+		"cms.ridu.test": "localhost,127.0.0.1,[::1],cms.ridu.test",
+		"::1":           "localhost,127.0.0.1,[::1]",
+		"192.168.1.20":  "localhost,127.0.0.1,[::1],192.168.1.20",
+	} {
+		if got := developmentAllowedHosts(public); got != want {
+			t.Errorf("development allowed hosts for %q = %q, want %q", public, got, want)
+		}
+	}
+}
+
+func TestGoSourceWalksSkipOtherToolsBuildCaches(t *testing.T) {
+	root := t.TempDir()
+	for _, directory := range []string{"src-tauri/target", "content/target", "cache"} {
+		if err := os.MkdirAll(filepath.Join(root, directory), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "src-tauri", "Cargo.toml"), []byte("[package]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "cache", "CACHEDIR.TAG"), []byte("Signature: 8a477f597d28d172789f06886806bc55\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for directory, want := range map[string]bool{
+		"src-tauri/target": true,
+		"content/target":   false,
+		"cache":            true,
+		"node_modules":     true,
+		"content":          false,
+	} {
+		if got := shouldSkipDirectory(filepath.Join(root, directory)); got != want {
+			t.Errorf("skip %s = %t, want %t", directory, got, want)
+		}
+	}
+}

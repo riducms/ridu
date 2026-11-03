@@ -51,7 +51,7 @@ func TestReferenceWorkflow(t *testing.T) {
 	}
 	pages := generated.PagesCollection.With(app.Local())
 	assets := generated.AssetsCollection.With(app.Local())
-	asset, err := assets.Create(ctx, generated.AssetCreate{Title: "Mountains", URL: "/mountains.svg"}, ridu.TypedMutationOptions{})
+	asset, err := assets.Create(ctx, generated.AssetCreateInput{Title: "Mountains", URL: "/mountains.svg"}, ridu.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestReferenceWorkflow(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"version":1,"root":{"type":"root","version":1,"format":"","indent":0,"direction":null,"children":[{"type":"paragraph","version":1,"format":"","indent":0,"direction":null,"textFormat":0,"textStyle":"","children":[{"type":"text","version":1,"text":"A portable page.","detail":0,"format":0,"mode":"normal","style":""}]}]}}`), &body); err != nil {
 		t.Fatal(err)
 	}
-	input := generated.PageCreate{Title: "Reference", Layout: core.NonNull(generated.PagesLayoutInput{
+	input := generated.PageCreateInput{Title: "Reference", Layout: core.NonNull(generated.PagesLayoutInput{
 		&generated.HeroInput{Heading: "Hello <reader>", Appearance: core.Set(generated.HeroAppearanceInput{Tone: core.Set(generated.HeroAppearanceToneDark)})},
 		&generated.ContentInput{Title: core.Set("Story"), Body: core.Set(body), Links: core.Set([]generated.ContentLinksRowInput{{Key: "read-more", Label: "Read more", Href: "/about"}, {Key: "contact", Label: "Contact", Href: "/contact"}})},
 		&generated.MediaInput{Asset: asset.ID, Caption: core.Set("Mountains")},
@@ -102,7 +102,7 @@ func TestReferenceWorkflow(t *testing.T) {
 		t.Fatal(rendered.String())
 	}
 	// Reused block types use the same renderer across distinct generated layouts.
-	campaign, err := generated.CampaignsCollection.With(app.Local()).Create(ctx, generated.CampaignCreate{
+	campaign, err := generated.CampaignsCollection.With(app.Local()).Create(ctx, generated.CampaignCreateInput{
 		Title: core.Set("Campaign"),
 		Layout: core.Set(generated.CampaignsLayoutInput{
 			&generated.HeroInput{Heading: "Campaign <reader>"},
@@ -172,7 +172,7 @@ func TestReferenceWorkflow(t *testing.T) {
 	}
 	// Media is deliberately untouched and still retained, with all its fields.
 
-	_, err = pages.Update(ctx, page.ID, generated.PageUpdate{Layout: core.SetNonNull(translated)}, ridu.TypedMutationOptions{ExpectedRevision: page.Revision, Locale: "fr"})
+	_, err = pages.Update(ctx, page.ID, generated.PageUpdateInput{Layout: core.SetNonNull(translated)}, ridu.TypedMutationOptions{ExpectedRevision: page.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,10 +308,10 @@ func TestReferenceWorkflow(t *testing.T) {
 	if !edited {
 		t.Fatal("nested link was not edited")
 	}
-	if _, err := restrictedPages.Update(ctx, page.ID, generated.PageUpdate{Layout: core.SetNonNull(patch)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision}); err != nil {
+	if _, err := restrictedPages.Update(ctx, page.ID, generated.PageUpdateInput{Layout: core.SetNonNull(patch)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := restrictedPages.Update(ctx, page.ID, generated.PageUpdate{Layout: core.SetNonNull(patch)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision}); err == nil {
+	if _, err := restrictedPages.Update(ctx, page.ID, generated.PageUpdateInput{Layout: core.SetNonNull(patch)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision}); err == nil {
 		t.Fatal("stale nested update accepted")
 	}
 	after, err := pages.Find(ctx, page.ID, core.TypedReadOptions{Draft: &draft, Populate: []query.Population{{Path: assetPath, Depth: 1}}})

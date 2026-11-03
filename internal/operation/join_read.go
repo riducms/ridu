@@ -53,6 +53,10 @@ func (engine *Engine) ListJoin(ctx context.Context, collection, id, field string
 	if request.Limit <= 0 || join.Join.Limit > 0 && request.Limit > join.Join.Limit {
 		request.Limit = join.Join.Limit
 	}
+	if len(request.Sort) == 0 {
+		// The same order a populated join uses in a document read.
+		request.Sort = joinDefaultSort(join.Join.DefaultSort)
+	}
 	request.Operation, request.Collection, request.ID = operation.Read, string(join.Join.CollectionID), ""
 	filter := query.Equal(join.Join.On, id).Node()
 	request.internalFilter = &filter

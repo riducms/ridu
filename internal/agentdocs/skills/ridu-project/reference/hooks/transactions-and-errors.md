@@ -40,6 +40,10 @@ A few rules apply to every related write:
 - The related operation runs its own access rules, validation, and hooks.
 - If it fails, the shared transaction fails. Ignoring the error does not save the original
   document.
+- A related read is different: when it finds nothing (`not_found`) or its access rule refuses it,
+  the transaction is still usable. A hook can look up a document that may be missing, such as a
+  stale parent ID, and handle the error. A read that fails in the database still fails the
+  transaction.
 - A standalone read runs in a read-only transaction, so write from a save or delete hook, not
   from `AfterRead` or `BeforeRead`.
 - Attach the hook to the collection being changed, not to the collection it writes to. An audit

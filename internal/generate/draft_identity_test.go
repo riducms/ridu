@@ -22,14 +22,14 @@ func TestGeneratedGoAuthDraftKeepsIdentityNonNull(t *testing.T) {
 	runGeneratedGoConsumer(t, generated, `package generated_test
 import ("encoding/json"; "testing"; g "example.com/stable-consumer")
 func TestAuthDraftIdentity(t *testing.T) {
- var draft g.UserDraft
+ var draft g.UserDraftInput
  if err:=json.Unmarshal([]byte("{\"email\":null}"),&draft);err==nil {t.Fatal("draft accepted null identity")}
  for _,raw:=range []string{"{}","{\"email\":\"editor@example.test\",\"displayName\":null}"} {
   if err:=json.Unmarshal([]byte(raw),&draft);err!=nil {t.Fatalf("legal draft rejected: %s: %v",raw,err)}
   if _,err:=json.Marshal(draft);err!=nil {t.Fatal(err)}
  }
  email:="editor@example.test"
- draft=g.UserDraft{Email:&email}
+ draft=g.UserDraftInput{Email:&email}
  if raw,err:=json.Marshal(draft);err!=nil||string(raw)!="{\"email\":\"editor@example.test\"}" {t.Fatalf("identity encoding = %s, %v",raw,err)}
 }
 `)
@@ -51,14 +51,14 @@ func TestDraftIdentityAdmission(t *testing.T) {
   "{\"rows\":[{\"_key\":\"\"}]}",
   "{\"rows\":[{\"_key\":\" \"}]}",
  } {
-  var draft g.PageDraft
+  var draft g.PageDraftInput
   if err:=json.Unmarshal([]byte(raw),&draft);err==nil {t.Fatalf("draft silently accepted invalid identity: %s",raw)}
  }
  for _,raw:=range []string{
   "{\"layout\":[{\"blockType\":\"hero\"}],\"rows\":[{}]}",
   "{\"layout\":[{\"blockType\":\"hero\",\"_key\":\"hero-1\"}],\"rows\":[{\"_key\":\"row-1\"}]}",
  } {
-  var draft g.PageDraft
+  var draft g.PageDraftInput
   if err:=json.Unmarshal([]byte(raw),&draft);err!=nil {t.Fatalf("legal draft identity rejected: %s: %v",raw,err)}
   if _,err:=json.Marshal(draft);err!=nil {t.Fatal(err)}
  }

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -18,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -745,6 +747,22 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		trustedProxyCIDRs = existing + "," + trustedProxyCIDRs
 	}
 	serverEnvironment = append(serverEnvironment, "RIDU_TRUSTED_PROXY_CIDRS="+trustedProxyCIDRs)
+	if strings.TrimSpace(os.Getenv("RIDU_ALLOWED_HOSTS")) == "" {
+		// The server listens on loopback behind the proxy, which forwards the
+		// public host.
+		serverEnvironment = append(serverEnvironment, "RIDU_ALLOWED_HOSTS="+developmentAllowedHosts(publicServerURL.Hostname()))
+	}
+	if strings.TrimSpace(os.Getenv("RIDU_SETUP_TOKEN")) == "" {
+		// One token for the session, so the one the server logs stays valid
+		// across reloads.
+		setupToken, tokenError := developmentSetupToken()
+		if tokenError != nil {
+			_ = activeBinary.remove()
+			output.Error("start server", tokenError)
+			return 1
+		}
+		serverEnvironment = append(serverEnvironment, "RIDU_SETUP_TOKEN="+setupToken)
+	}
 
 	handoffProxy, err := startDevelopmentProxy(*address)
 	if err != nil {
@@ -1644,7 +1662,7 @@ func unformattedGoFiles(ctx context.Context, root string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() && path != root && shouldSkipDirectory(entry.Name()) {
+		if entry.IsDir() && path != root && shouldSkipDirectory(path) {
 			return filepath.SkipDir
 		}
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
@@ -1667,13 +1685,21 @@ func unformattedGoFiles(ctx context.Context, root string) ([]string, error) {
 	return relative, nil
 }
 
-func shouldSkipDirectory(name string) bool {
-	switch name {
+// shouldSkipDirectory reports a directory that holds no project Go source:
+// tooling and generated output, or another tool's build cache, such as a
+// Tauri app's Rust target directory.
+func shouldSkipDirectory(path string) bool {
+	switch filepath.Base(path) {
 	case ".git", ".ridu", "node_modules", "dist", "generated":
 		return true
-	default:
-		return false
+	case "target":
+		// Cargo creates its target directory before it writes CACHEDIR.TAG.
+		if _, err := os.Stat(filepath.Join(filepath.Dir(path), "Cargo.toml")); err == nil {
+			return true
+		}
 	}
+	_, err := os.Stat(filepath.Join(path, "CACHEDIR.TAG"))
+	return err == nil
 }
 
 func frameworkVersion(options Options) string {
@@ -1740,6 +1766,27 @@ func relativePath(root, path string) string {
 		return filepath.ToSlash(path)
 	}
 	return filepath.ToSlash(relative)
+}
+
+// developmentAllowedHosts lists the loopback names and the proxy's public
+// host for a development server.
+func developmentAllowedHosts(public string) string {
+	hosts := []string{"localhost", "127.0.0.1", "[::1]"}
+	if strings.Contains(public, ":") {
+		public = "[" + public + "]"
+	}
+	if public != "" && !slices.Contains(hosts, strings.ToLower(public)) {
+		hosts = append(hosts, public)
+	}
+	return strings.Join(hosts, ",")
+}
+
+func developmentSetupToken() (string, error) {
+	token := make([]byte, 32)
+	if _, err := rand.Read(token); err != nil {
+		return "", fmt.Errorf("generate the development setup token: %w", err)
+	}
+	return hex.EncodeToString(token), nil
 }
 
 func developmentServerURL(address string) string {

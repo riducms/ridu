@@ -228,6 +228,9 @@ const (
 	// ErrorPublishRequired rejects a plain update of a published versioned
 	// document or global. Publish the changes instead.
 	ErrorPublishRequired ErrorCode = "publish_required"
+	// ErrorSetupTokenInvalid rejects first-user setup that is missing the
+	// setup token the server logs, or presents a different one.
+	ErrorSetupTokenInvalid ErrorCode = "setup_token_invalid"
 )
 
 // ValidationIssue identifies one invalid input path.

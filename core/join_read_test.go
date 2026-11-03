@@ -57,3 +57,45 @@ func TestListJoinPreservesSourceReadRulesAndPrivateMembership(t *testing.T) {
 		}
 	}
 }
+
+func TestListJoinUsesTheJoinsDefaultSortUnlessTheCallerSorts(t *testing.T) {
+	app, err := ridu.New(ridu.Config{Name: "Join default sort", Collections: []ridu.Collection{
+		{Slug: "categories", Fields: field.Fields{field.Text("name"), field.Join("posts", "posts", "category").DefaultSort("-title")}},
+		{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("category", "categories")}},
+	}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	category, err := app.Local().Create(t.Context(), "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Beta", "Alpha", "Gamma"} {
+		if _, err := app.Local().Create(t.Context(), "posts", store.Values{"title": store.String(title), "category": store.String(category.ID)}, ridu.MutationOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	titles := func(page store.Page) []string {
+		result := make([]string, len(page.Documents))
+		for index, document := range page.Documents {
+			result[index], _ = document.Values["title"].StringValue()
+		}
+		return result
+	}
+	page, err := app.Local().ListJoin(t.Context(), "categories", category.ID, "posts", ridu.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(page); len(got) != 3 || got[0] != "Gamma" || got[1] != "Beta" || got[2] != "Alpha" {
+		t.Fatalf("default join order = %v, want Gamma, Beta, Alpha", got)
+	}
+	titlePath, _ := query.ParsePath("title")
+	ascending, _ := query.NewSort(titlePath, query.Ascending)
+	page, err = app.Local().ListJoin(t.Context(), "categories", category.ID, "posts", ridu.ListOptions{Sort: []query.Sort{ascending}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(page); len(got) != 3 || got[0] != "Alpha" || got[2] != "Gamma" {
+		t.Fatalf("caller join order = %v, want Alpha first", got)
+	}
+}

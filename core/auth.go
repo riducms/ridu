@@ -115,15 +115,16 @@ func (application *App) AuthInitialized(ctx context.Context, collection string) 
 	return len(page.Documents) > 0, nil
 }
 
-// AuthBootstrapAvailable reports whether the configured admin-user collection
-// still permits Ridu's omitted-policy, one-time anonymous bootstrap. Explicit
-// Create policies and secondary auth collections never use this setup path.
+// AuthBootstrapAvailable reports whether collection is the admin-user
+// collection and has no user yet, so a transport may offer first-user setup.
+// Setup needs the transport's setup token and ignores the collection's Create
+// rule, so the rule cannot leave a fresh install without a way in.
 func (application *App) AuthBootstrapAvailable(ctx context.Context, collection string) (bool, error) {
 	resolved, exists := application.authBySlug[collection]
 	if !exists {
 		return false, unknownAuthCollection(collection)
 	}
-	if resolved.ID != application.adminUserCollection || application.authCreatePolicySet[collection] {
+	if resolved.ID != application.adminUserCollection {
 		return false, nil
 	}
 	initialized, err := application.AuthInitialized(ctx, collection)
@@ -139,18 +140,38 @@ func (application *App) CreateAuthUser(ctx context.Context, collection string, v
 	return application.createAuthUserWithOptions(ctx, collection, values, password, options, false)
 }
 
-// CreateAuthUserForTransport is the selection-aware transport form
-// of CreateAuthUserForTransport.
-func (application *App) CreateAuthUserForTransport(ctx context.Context, collection string, values store.Values, password string, options MutationOptions) (store.Document, error) {
+// CreateAuthUserForTransport creates an auth user for a transport request.
+// setup reports that an anonymous request presented the transport's setup
+// token: it creates the first user of the empty admin-user collection as
+// trusted server code, whatever the collection's Create rule says. Otherwise
+// the Create rule decides, and anonymous creation without one is refused.
+func (application *App) CreateAuthUserForTransport(ctx context.Context, collection string, values store.Values, password string, options MutationOptions, setup bool) (store.Document, error) {
 	authCollection, exists := application.authBySlug[collection]
 	if !exists {
 		return store.Document{}, unknownAuthCollection(collection)
 	}
-	bootstrap := options.Actor == nil && !application.authCreatePolicySet[collection]
-	if bootstrap && authCollection.ID != application.adminUserCollection {
+	if options.Actor != nil || application.authCreatePolicySet[collection] && !setup {
+		return application.createAuthUserWithOptions(ctx, collection, values, password, options, false)
+	}
+	if authCollection.ID != application.adminUserCollection {
 		return store.Document{}, &operationengine.Error{Code: "access_denied", Status: 403, Message: "anonymous auth user creation is not permitted"}
 	}
-	return application.createAuthUserWithOptions(ctx, collection, values, password, options, bootstrap)
+	if !setup {
+		initialized, err := application.AuthInitialized(ctx, collection)
+		if err != nil {
+			return store.Document{}, err
+		}
+		if initialized {
+			return store.Document{}, &operationengine.Error{Code: "access_denied", Status: 403, Message: "auth collection is already initialized", Cause: store.ErrAuthInitialized}
+		}
+		return store.Document{}, setupTokenRequiredError()
+	}
+	options.System = true
+	return application.createAuthUserWithOptions(ctx, collection, values, password, options, true)
+}
+
+func setupTokenRequiredError() error {
+	return &operationengine.Error{Code: "setup_token_invalid", Status: 403, Message: "creating the first user needs the setup token that the server logs while no user exists"}
 }
 
 func (application *App) createAuthUserWithOptions(ctx context.Context, collection string, values store.Values, password string, options MutationOptions, bootstrap bool) (store.Document, error) {

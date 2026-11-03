@@ -127,7 +127,7 @@ func validate(options Options) (string, data, error) {
 var templates = map[string]string{
 	"go.mod": `module {{.ModulePath}}
 
-go 1.26.9
+go 1.26.10
 
 require github.com/riducms/ridu {{.GoVersion}}
 `,

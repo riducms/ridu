@@ -559,7 +559,7 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 			var document store.Document
 			var err error
 			if current.Auth != nil {
-				document, err = builder.app.CreateAuthUserForTransport(params.Context, string(current.Slug), valuesArg(params, "data", current.Fields), dataStringArg(params.Args, "data", "password"), builder.mutationOptions(current, params, request, 0))
+				document, err = builder.app.CreateAuthUserForTransport(params.Context, string(current.Slug), valuesArg(params, "data", current.Fields), dataStringArg(params.Args, "data", "password"), builder.mutationOptions(current, params, request, 0), false)
 			} else {
 				document, err = builder.local.Create(params.Context, string(current.Slug), valuesArg(params, "data", current.Fields), builder.mutationOptions(current, params, request, 0))
 			}

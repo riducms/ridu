@@ -349,7 +349,10 @@ type UploadConfig struct {
 	// framework default; values above 256 MiB are rejected so one request cannot
 	// bypass the process-wide upload work budget.
 	MaxFileSize int64
-	// MimeTypes restricts uploads to the listed media types. Empty accepts any supported type.
+	// MimeTypes restricts uploads to the listed media types, detected from the
+	// file bytes; a "type/*" entry accepts every subtype. Empty accepts images
+	// and application/octet-stream, the type of bytes Go cannot identify. List
+	// other types, such as application/pdf or text/plain, to accept them.
 	MimeTypes []string
 	// Private requires a signed-in caller to download files, on top of the
 	// collection's read access. Every download is checked against read access

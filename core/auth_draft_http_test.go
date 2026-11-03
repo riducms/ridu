@@ -24,7 +24,7 @@ func TestRESTAuthCreateUserHonorsDraftIntentWithoutStoringCredentials(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := handlerClient(app.Handler(ridu.HandlerOptions{}))
+	client := handlerClient(app.Handler(ridu.HandlerOptions{SetupToken: testSetupToken}))
 	create := func(target, body, cookie string, want int) map[string]any {
 		t.Helper()
 		response := requestJSON(t, client, http.MethodPost, target, strings.NewReader(body), cookie)
@@ -43,7 +43,7 @@ func TestRESTAuthCreateUserHonorsDraftIntentWithoutStoringCredentials(t *testing
 		return envelope.Doc
 	}
 	base := "http://ridu.test/api/auth/users/create-user"
-	first := create(base, `{"data":{"email":"first@example.test"},"password":"correct-horse"}`, "", http.StatusCreated)
+	first := create(base, `{"data":{"email":"first@example.test"},"password":"correct-horse","setupToken":"`+testSetupToken+`"}`, "", http.StatusCreated)
 	if first["_status"] != "draft" || first["displayName"] != nil {
 		t.Fatalf("default auth draft = %#v", first)
 	}

@@ -66,7 +66,7 @@ type Article struct {
 	Title *string §json:"title,omitempty"§
 }
 
-type ArticleCreate struct {
+type ArticleCreateInput struct {
 	IDField *core.Input[string] §json:"iD,omitempty"§
 	CreatedAtField *core.Input[string] §json:"created_at,omitempty"§
 	UpdatedAtField *core.Input[string] §json:"updated_at,omitempty"§
@@ -77,7 +77,7 @@ type ArticleCreate struct {
 	Title *core.Input[string] §json:"title,omitempty"§
 }
 
-type ArticleUpdate struct {
+type ArticleUpdateInput struct {
 	IDField *core.Input[string] §json:"iD,omitempty"§
 	CreatedAtField *core.Input[string] §json:"created_at,omitempty"§
 	UpdatedAtField *core.Input[string] §json:"updated_at,omitempty"§
@@ -88,7 +88,7 @@ type ArticleUpdate struct {
 	Title *core.Input[string] §json:"title,omitempty"§
 }
 
-var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreate, ArticleUpdate, ArticleDraft]("articles")
+var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreateInput, ArticleUpdateInput, ArticleDraftInput]("articles")
 `, "§", "`")
 	expected, err := format.Source([]byte(expectedSource))
 	if err != nil {
@@ -104,6 +104,43 @@ var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreate, Article
 	compileGeneratedGo(t, generated)
 }
 
+// A collection's model may be named like another collection's input: "Project
+// update" beside "Project".
+func TestGeneratedGoModelsDoNotCollideWithOtherCollectionsInputs(t *testing.T) {
+	title := schema.Field{Name: "title", Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar}
+	collection := func(id, singular, plural string, drafts bool) schema.Collection {
+		result := schema.Collection{ID: schema.StableID(id), Slug: schema.CollectionSlug(id), Labels: schema.CollectionLabels{Singular: singular, Plural: plural}}
+		field := title
+		field.ID = schema.StableID(id + "-title")
+		result.Fields = []schema.Field{field}
+		if drafts {
+			result.Capabilities = schema.Capabilities{Versions: true}
+			result.Versions = &schema.VersionSettings{Drafts: true, MaxPerDocument: 10}
+		}
+		return result
+	}
+	manifest := schema.NewManifest(schema.Snapshot{
+		Version: schema.CurrentVersion, Application: schema.Application{Name: "Go model and input names"},
+		Collections: []schema.Collection{
+			collection("projects", "Project", "Projects", true),
+			collection("project-updates", "Project update", "Project updates", false),
+			collection("project-drafts", "Project draft", "Project drafts", false),
+			collection("project-creates", "Project create", "Project creates", false),
+		},
+	})
+	generated, err := goClient(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	declarations := goDeclarations(t, generated)
+	for _, name := range []string{"Project", "ProjectCreateInput", "ProjectUpdateInput", "ProjectDraftInput", "ProjectUpdate", "ProjectDraft", "ProjectCreate"} {
+		if _, exists := declarations[name]; !exists {
+			t.Errorf("generated Go has no %s", name)
+		}
+	}
+	compileGeneratedGo(t, generated)
+}
+
 func compileGeneratedGo(t *testing.T, generated []byte) {
 	t.Helper()
 	frameworkRoot, err := filepath.Abs(filepath.Join("..", ".."))
@@ -111,7 +148,7 @@ func compileGeneratedGo(t *testing.T, generated []byte) {
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	goModule := fmt.Sprintf("module example.com/ridu-generated-collision\n\ngo 1.26.9\n\nrequire github.com/riducms/ridu v0.0.0\n\nreplace github.com/riducms/ridu => %s\n", filepath.ToSlash(frameworkRoot))
+	goModule := fmt.Sprintf("module example.com/ridu-generated-collision\n\ngo 1.26.10\n\nrequire github.com/riducms/ridu v0.0.0\n\nreplace github.com/riducms/ridu => %s\n", filepath.ToSlash(frameworkRoot))
 	if err := os.WriteFile(filepath.Join(directory, "go.mod"), []byte(goModule), 0o644); err != nil {
 		t.Fatal(err)
 	}

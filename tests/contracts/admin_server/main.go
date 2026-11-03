@@ -287,6 +287,9 @@ func resetTokenMatches(provided, expected string) bool {
 	return expected != "" && subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
+// fixtureSetupToken is the first-user setup token tests/e2e/admin/bootstrap.spec.ts enters.
+const fixtureSetupToken = "admin-fixture-setup-token-0123456789"
+
 func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstrapFixture bool, adminAssets fs.FS, databaseURL, sqlitePath, mongoDatabaseURL, historyDigest string) (http.Handler, func(), error) {
 	backend, closeBackend, err := fixtureBackend(ctx, config, databaseURL, sqlitePath, mongoDatabaseURL, historyDigest)
 	if err != nil {
@@ -319,6 +322,8 @@ func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstra
 	options := ridu.HandlerOptions{
 		AllowedOrigins: []string{"http://127.0.0.1:5173"},
 		AdminAssets:    adminAssets,
+		// The bootstrap browser case enters this token on the setup screen.
+		SetupToken: fixtureSetupToken,
 		// Browser cases intentionally authenticate for each flow. Keep the fixture
 		// above that suite traffic while core tests exercise the production boundary.
 		AuthRateLimit: 100,

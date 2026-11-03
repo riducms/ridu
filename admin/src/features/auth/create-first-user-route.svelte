@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { useLocation } from "@hvniel/svelte-router";
+
 	import { adminApplicationName } from "@admin/app-meta";
 	import { Banner } from "@admin/components/ui/banner";
 	import { Button } from "@riducms/ui";
@@ -9,7 +11,11 @@
 	import FieldLayout from "@admin/fields/field-layout.svelte";
 
 	const runtime = getAdminRuntime();
-	const controller = new CreateFirstUserController({ runtime });
+	const location = useLocation();
+	const controller = new CreateFirstUserController({
+		runtime,
+		setupToken: new URLSearchParams(location.current.search).get("setupToken") ?? undefined,
+	});
 
 	const { form, fields } = $derived(controller);
 	const applicationName = $derived(
@@ -27,12 +33,14 @@
 	}
 
 	function focusIssue(path: string) {
-		if (path === "password" || path === "passwordConfirmation") {
-			document
-				.getElementById(
-					path === "password" ? "ridu-first-user-password" : "ridu-first-user-password-confirmation"
-				)
-				?.focus();
+		const credentialInputs: Record<string, string> = {
+			setupToken: "ridu-first-user-setup-token",
+			password: "ridu-first-user-password",
+			passwordConfirmation: "ridu-first-user-password-confirmation",
+		};
+		const credentialInput = credentialInputs[path];
+		if (credentialInput !== undefined) {
+			document.getElementById(credentialInput)?.focus();
 			return;
 		}
 
@@ -80,6 +88,23 @@
 						{runtime.i18n.t("auth:credentials")}
 					</legend>
 					<div class="ridu-auth__fields">
+						<AuthField
+							id="ridu-first-user-setup-token"
+							label={runtime.i18n.t("auth:setupToken")}
+							type="password"
+							autocomplete="off"
+							bind:value={controller.setupToken}
+							description={runtime.i18n.t("auth:setupTokenDescription")}
+							errors={controller.credentialIssue?.path === "setupToken"
+								? [controller.credentialIssue.message]
+								: []}
+							oninput={() => {
+								if (controller.credentialIssue?.path === "setupToken")
+									controller.credentialIssue = undefined;
+							}}
+							showLabel={runtime.i18n.t("auth:showSetupToken")}
+							hideLabel={runtime.i18n.t("auth:hideSetupToken")}
+						/>
 						<AuthField
 							id="ridu-first-user-password"
 							label={runtime.i18n.t("auth:password")}

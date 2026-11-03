@@ -315,7 +315,7 @@ for _, row := range patch {
 	}
 }
 // Supply core.SetNonNull(patch) as Layout
-// in a revision-checked PageUpdate.
+// in a revision-checked PageUpdateInput.
 ```
 
 `Retain()` does not copy child values into the update, so unrelated fields stay unchanged,

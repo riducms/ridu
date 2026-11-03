@@ -1192,6 +1192,29 @@ describe("Fetch client", () => {
 		}
 	);
 
+	it("sends a first-user setup token only when one is given", async () => {
+		let captured: Request | undefined;
+		const client = createClient<TestConfig>({
+			baseURL: "https://cms.example.test",
+			fetch: async (request) => {
+				captured = request as Request;
+				return Response.json({ doc: { id: "post_auth", title: "First account" } });
+			},
+		});
+
+		await client.auth.createUser({
+			collection: "posts",
+			data: { title: "First account" },
+			password: "correct-horse",
+			setupToken: "token-from-the-server-log",
+		});
+		expect(await captured?.json()).toEqual({
+			data: { title: "First account" },
+			password: "correct-horse",
+			setupToken: "token-from-the-server-log",
+		});
+	});
+
 	it("exposes recovery, verification, and API key endpoints", async () => {
 		const paths: string[] = [];
 		const client = createClient<TestConfig, "posts">({

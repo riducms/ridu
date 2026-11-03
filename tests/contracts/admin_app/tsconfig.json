@@ -11,5 +11,5 @@
 			"@admin/*": ["../../../admin/src/*"]
 		}
 	},
-	"include": ["*.ts", "*.svelte", "../../../admin/src/vite-env.d.ts"]
+	"include": ["*.ts", "*.svelte"]
 }

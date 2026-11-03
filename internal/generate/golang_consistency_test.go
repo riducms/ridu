@@ -79,7 +79,7 @@ func runGeneratedGoConsumers(t *testing.T, fixtures []generatedGoConsumerFixture
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	module := fmt.Sprintf("module example.com/stable-consumer\n\ngo 1.26.9\n\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root)
+	module := fmt.Sprintf("module example.com/stable-consumer\n\ngo 1.26.10\n\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root)
 	if err := os.WriteFile(filepath.Join(directory, "go.mod"), []byte(module), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func runGeneratedGoConsumer(t *testing.T, generated []byte, consumer string) {
 	}
 	directory := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod":            fmt.Sprintf("module example.com/stable-consumer\n\ngo 1.26.9\n\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root),
+		"go.mod":            fmt.Sprintf("module example.com/stable-consumer\n\ngo 1.26.10\n\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root),
 		"ridu.generated.go": string(generated), "consumer_test.go": consumer,
 	} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(data), 0600); err != nil {
@@ -141,7 +141,7 @@ func TestStableRead(t *testing.T){
  }
  if post.Author.Document==nil||post.Author.Document.Name==nil||*post.Author.Document.Name!="Ada"{t.Fatal("population lost")}
  for _,raw:=range []string{"{\"author\":null}","{\"meta\":{\"author\":null}}","{}"} {
-  var update g.PostUpdate
+  var update g.PostUpdateInput
   if err:=json.Unmarshal([]byte(raw),&update);err!=nil{t.Fatal(err)}
   data,err:=json.Marshal(update);if err!=nil||string(data)!=raw{t.Fatalf("mutation presence lost: %s -> %s: %v",raw,data,err)}
  }
@@ -156,9 +156,9 @@ func TestPopulatedLocalReadsWithoutBlocks(t *testing.T){
  manifest,err:=core.Resolve(config);if err!=nil{t.Fatal(err)}
  if err:=backend.Migrate(ctx,manifest);err!=nil{t.Fatal(err)}
  app,err:=core.New(config,backend);if err!=nil{t.Fatal(err)}
- author,err:=g.AuthorsCollection.With(app.Local()).Create(ctx,g.AuthorCreate{Name:core.Set("Ada")},core.TypedMutationOptions{});if err!=nil{t.Fatal(err)}
+ author,err:=g.AuthorsCollection.With(app.Local()).Create(ctx,g.AuthorCreateInput{Name:core.Set("Ada")},core.TypedMutationOptions{});if err!=nil{t.Fatal(err)}
  posts:=g.PostsCollection.With(app.Local())
- created,err:=posts.Create(ctx,g.PostCreate{Author:core.Set(author.ID)},core.TypedMutationOptions{});if err!=nil{t.Fatal(err)}
+ created,err:=posts.Create(ctx,g.PostCreateInput{Author:core.Set(author.ID)},core.TypedMutationOptions{});if err!=nil{t.Fatal(err)}
  path,err:=query.ParsePath("author");if err!=nil{t.Fatal(err)}
  populate:=[]query.Population{{Path:path,Depth:1}}
  found,err:=posts.Find(ctx,created.ID,core.TypedReadOptions{Populate:populate});if err!=nil{t.Fatal(err)}
@@ -166,7 +166,7 @@ func TestPopulatedLocalReadsWithoutBlocks(t *testing.T){
  listed,err:=posts.List(ctx,core.TypedListOptions{Populate:populate});if err!=nil{t.Fatal(err)}
  if *listed.Total!=1||len(listed.Documents)!=1||listed.Documents[0].Author.Document==nil{t.Fatal("List did not populate")}
  site:=g.SiteGlobal.With(app.Local())
- if _,err:=site.Update(ctx,g.SiteUpdate{Author:core.Set(author.ID)},core.TypedMutationOptions{});err!=nil{t.Fatal(err)}
+ if _,err:=site.Update(ctx,g.SiteUpdateInput{Author:core.Set(author.ID)},core.TypedMutationOptions{});err!=nil{t.Fatal(err)}
  global,err:=site.Find(ctx,core.TypedReadOptions{Populate:populate});if err!=nil{t.Fatal(err)}
  if global.Author==nil||global.Author.Document==nil{t.Fatal("Global Find did not populate")}
 }

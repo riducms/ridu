@@ -135,7 +135,7 @@ func TestGeneratedMongoDBDevelopmentProject(t *testing.T) {
 		t,
 		cliBinary,
 		starterRoot,
-		map[string]string{"DATABASE_URL": ""},
+		map[string]string{"DATABASE_URL": "", "RIDU_SETUP_TOKEN": generatedMongoDBSetupToken},
 		"--address",
 		fmt.Sprintf("127.0.0.1:%d", starterAPIPort),
 		"--admin-port",
@@ -179,6 +179,7 @@ func TestGeneratedMongoDBDevelopmentProject(t *testing.T) {
 		frameworkRoot,
 		map[string]string{
 			"RIDU_MONGODB_GENERATED_ADMIN_URL":    starterAdminURL,
+			"RIDU_MONGODB_GENERATED_SETUP_TOKEN":  generatedMongoDBSetupToken,
 			"RIDU_MONGODB_GENERATED_API_URL":      starterAPIURL,
 			"RIDU_MONGODB_GENERATED_PROJECT_ROOT": starterRoot,
 			"RIDU_MONGODB_GENERATED_LOG":          starterDev.logPath,
@@ -397,6 +398,9 @@ type generatedMongoDBDevelopment struct {
 	stopErr  error
 	stopOnce sync.Once
 }
+
+// generatedMongoDBSetupToken is the first-user setup token the browser proof enters.
+const generatedMongoDBSetupToken = "generated-mongodb-setup-token-0123456789"
 
 func startGeneratedMongoDBDevelopment(t *testing.T, binary, root string, environment map[string]string, arguments ...string) *generatedMongoDBDevelopment {
 	t.Helper()

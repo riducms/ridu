@@ -70,14 +70,14 @@ func (value *User) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UserCreate supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
-type UserCreate struct {
+// UserCreateInput supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
+type UserCreateInput struct {
 	// Name is required when creating this value.
 	Name string `json:"name"`
 }
 
-func (value *UserCreate) UnmarshalJSON(data []byte) error {
-	type payload UserCreate
+func (value *UserCreateInput) UnmarshalJSON(data []byte) error {
+	type payload UserCreateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -101,20 +101,20 @@ func (value *UserCreate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "UserCreate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "UserCreateInput", Reason: "invalid document", Err: err})
 	}
-	*value = UserCreate(decoded)
+	*value = UserCreateInput(decoded)
 	return nil
 }
 
-// UserUpdate edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
-type UserUpdate struct {
+// UserUpdateInput edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
+type UserUpdateInput struct {
 	// Name: nil omits the field; a pointer sends a value. Null is not allowed.
 	Name *string `json:"name,omitempty"`
 }
 
-func (value *UserUpdate) UnmarshalJSON(data []byte) error {
-	type payload UserUpdate
+func (value *UserUpdateInput) UnmarshalJSON(data []byte) error {
+	type payload UserUpdateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -138,9 +138,9 @@ func (value *UserUpdate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "UserUpdate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "UserUpdateInput", Reason: "invalid document", Err: err})
 	}
-	*value = UserUpdate(decoded)
+	*value = UserUpdateInput(decoded)
 	return nil
 }
 
@@ -201,7 +201,7 @@ func (value *UserAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var UsersCollection = core.NewTypedCollection[User, UserCreate, UserUpdate, UserUpdate]("users")
+var UsersCollection = core.NewTypedCollection[User, UserCreateInput, UserUpdateInput, UserUpdateInput]("users")
 
 // UsersCollectionAllLocales reads all translations with optional population and projection.
 var UsersCollectionAllLocales = core.NewTypedAllLocalesCollection[UserAllLocales]("users")
@@ -777,8 +777,8 @@ func (value *UnifiedArticle) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnifiedArticleCreate supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
-type UnifiedArticleCreate struct {
+// UnifiedArticleCreateInput supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
+type UnifiedArticleCreateInput struct {
 	// Title is required when creating this value.
 	Title string `json:"title"`
 	// Sku: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -835,8 +835,8 @@ type UnifiedArticleCreate struct {
 	Body *core.Input[richtext.Document[UnifiedArticlesBodyBlocksBlockInputPayload]] `json:"body,omitempty"`
 }
 
-func (value *UnifiedArticleCreate) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticleCreate
+func (value *UnifiedArticleCreateInput) UnmarshalJSON(data []byte) error {
+	type payload UnifiedArticleCreateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -1301,14 +1301,14 @@ func (value *UnifiedArticleCreate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "UnifiedArticleCreate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "UnifiedArticleCreateInput", Reason: "invalid document", Err: err})
 	}
-	*value = UnifiedArticleCreate(decoded)
+	*value = UnifiedArticleCreateInput(decoded)
 	return nil
 }
 
-// UnifiedArticleUpdate edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
-type UnifiedArticleUpdate struct {
+// UnifiedArticleUpdateInput edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
+type UnifiedArticleUpdateInput struct {
 	// Title: nil omits the field; a pointer sends a value. Null is not allowed.
 	Title *string `json:"title,omitempty"`
 	// Sku: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -1366,8 +1366,8 @@ type UnifiedArticleUpdate struct {
 	Body *core.Input[richtext.Document[UnifiedArticlesBodyBlocksBlockUpdatePayload]] `json:"body,omitempty"`
 }
 
-func (value *UnifiedArticleUpdate) UnmarshalJSON(data []byte) error {
-	type payload UnifiedArticleUpdate
+func (value *UnifiedArticleUpdateInput) UnmarshalJSON(data []byte) error {
+	type payload UnifiedArticleUpdateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -1826,9 +1826,9 @@ func (value *UnifiedArticleUpdate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "UnifiedArticleUpdate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "UnifiedArticleUpdateInput", Reason: "invalid document", Err: err})
 	}
-	*value = UnifiedArticleUpdate(decoded)
+	*value = UnifiedArticleUpdateInput(decoded)
 	return nil
 }
 
@@ -2414,7 +2414,7 @@ func (value *UnifiedArticleAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var UnifiedArticlesCollection = core.NewTypedCollection[UnifiedArticle, UnifiedArticleCreate, UnifiedArticleUpdate, UnifiedArticleUpdate]("unified-articles")
+var UnifiedArticlesCollection = core.NewTypedCollection[UnifiedArticle, UnifiedArticleCreateInput, UnifiedArticleUpdateInput, UnifiedArticleUpdateInput]("unified-articles")
 
 // UnifiedArticlesCollectionAllLocales reads all translations with optional population and projection.
 var UnifiedArticlesCollectionAllLocales = core.NewTypedAllLocalesCollection[UnifiedArticleAllLocales]("unified-articles")

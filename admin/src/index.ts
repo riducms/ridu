@@ -1,3 +1,7 @@
+// The admin ships as source, so applications type-check its unplugin-icons imports. The
+// reference brings their declaration into every program that imports this entry.
+/// <reference path="./icons.d.ts" />
+
 import "@riducms/ui/theme.css";
 import "uno.css";
 import "@admin/app.css";

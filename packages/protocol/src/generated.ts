@@ -49,7 +49,8 @@ export type ErrorCode =
 	| "rejected"
 	| "selection_too_large"
 	| "bad_query"
-	| "publish_required";
+	| "publish_required"
+	| "setup_token_invalid";
 
 export type FieldType =
 	| "text"

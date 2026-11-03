@@ -20,7 +20,7 @@ transaction.
 ## Create {#create}
 
 ```go
-post, err := posts.Create(ctx, generated.PostCreate{
+post, err := posts.Create(ctx, generated.PostCreateInput{
 	Title:  "Hello, Ridu",
 	Status: core.Set(generated.PostStatusPublished),
 	Tags:   core.Set([]string{"launch", "go"}),
@@ -70,7 +70,7 @@ if post.Author != nil && post.Author.Document != nil {
 
 ```go
 title := "A better idea"
-post, err := posts.Update(ctx, postID, generated.PostUpdate{
+post, err := posts.Update(ctx, postID, generated.PostUpdateInput{
 	Title: &title,
 	Tags:  core.Null[[]string](),
 }, ridu.TypedMutationOptions{Actor: user})
@@ -103,7 +103,7 @@ to `PublishChanges` with the revision you read:
 pages := generated.PagesCollection.With(app.Local())
 
 title := "About us"
-updated, err := pages.PublishChanges(ctx, page.ID, generated.PageUpdate{
+updated, err := pages.PublishChanges(ctx, page.ID, generated.PageUpdateInput{
 	Title: &title,
 }, ridu.TypedMutationOptions{
 	ExpectedRevision: page.Revision,
@@ -120,7 +120,7 @@ draft, and `Unpublish` takes a document offline and keeps its content. See
 ```go
 settings := generated.SiteSettingsGlobal.With(app.Local())
 
-current, err := settings.Update(ctx, generated.SiteSettingsUpdate{
+current, err := settings.Update(ctx, generated.SiteSettingsUpdateInput{
 	SiteName: core.Set("Acme"),
 }, ridu.TypedMutationOptions{Actor: user})
 ```

@@ -96,6 +96,11 @@ var Media = ridu.Collection{
 }
 ```
 
+`MimeTypes` is checked against the type Ridu detects from the file bytes, and `image/*` accepts
+every image type. Without it, a collection accepts images and `application/octet-stream`, the type
+of bytes that Go can't identify; list other types such as `application/pdf` or `text/plain` to
+accept them.
+
 The `media` collection now accepts images up to 10 MiB. JPEG and PNG originals are retained,
 and Ridu generates `card` and `thumb` JPEG variants. Every download is checked against the
 collection's read access; `Private: true` also requires a signed-in caller, so leave it off when
@@ -124,6 +129,10 @@ Ridu adds the following server-owned fields to every upload document:
 | `url`                         | Access-checked delivery path for the current primary file        |
 | `sizes.card`, `sizes.thumb`   | URL, dimensions, MIME type, and byte size for each image variant |
 | `focalX`, `focalY`            | Image focal point as percentages from `0` through `100`          |
+
+Upload collections also keep `objectKey`, `source` (the private original behind a crop), and
+`cropX`, `cropY`, `cropWidth` and `cropHeight`. These names, and the ones in the table, are
+reserved: name your own fields something else, such as `sourceURL`.
 
 Clients cannot forge these values with an ordinary JSON create. They submit the file and authored
 fields such as `alt`; Ridu derives the file metadata.

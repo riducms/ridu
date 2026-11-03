@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"net/netip"
 	"net/url"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -117,25 +119,30 @@ type Config struct {
 	// LocalizationForRequest returns the content localization presented to one
 	// identity, or nil when it sees the manifest's settings unchanged. It only
 	// narrows admin presentation; it never weakens API validation or access.
-	LocalizationForRequest       func(context.Context, *AuthIdentity) (*schema.LocalizationSettings, error)
-	Engine                       *operationengine.Engine
-	AdminAssets                  fs.FS
-	MaxBodyBytes                 int64
-	SecureCookies                bool
-	Login                        func(context.Context, string, string, string, LoginMetadata) (AuthSession, error)
-	Session                      func(context.Context, string) (AuthSession, error)
-	RotateSession                func(context.Context, string) (AuthSession, error)
-	Logout                       func(context.Context, string) error
-	LogoutAll                    func(context.Context, string) error
-	Sessions                     func(context.Context, string) ([]AuthSessionInfo, error)
-	RevokeSession                func(context.Context, string, string) error
-	RequestPasswordReset         func(context.Context, string, string) error
-	ResetPassword                func(context.Context, string, string, string) error
-	RequestVerification          func(context.Context, string, string) error
-	VerifyEmail                  func(context.Context, string, string) error
-	ChangePassword               func(context.Context, string, string, string) error
-	AuthBootstrapAvailable       func(context.Context, string) (bool, error)
-	CreateAuthUser               func(context.Context, string, store.Values, string, *AuthIdentity, LocaleOptions, *bool) (store.Document, error)
+	LocalizationForRequest func(context.Context, *AuthIdentity) (*schema.LocalizationSettings, error)
+	Engine                 *operationengine.Engine
+	AdminAssets            fs.FS
+	MaxBodyBytes           int64
+	SecureCookies          bool
+	Login                  func(context.Context, string, string, string, LoginMetadata) (AuthSession, error)
+	Session                func(context.Context, string) (AuthSession, error)
+	RotateSession          func(context.Context, string) (AuthSession, error)
+	Logout                 func(context.Context, string) error
+	LogoutAll              func(context.Context, string) error
+	Sessions               func(context.Context, string) ([]AuthSessionInfo, error)
+	RevokeSession          func(context.Context, string, string) error
+	RequestPasswordReset   func(context.Context, string, string) error
+	ResetPassword          func(context.Context, string, string, string) error
+	RequestVerification    func(context.Context, string, string) error
+	VerifyEmail            func(context.Context, string, string) error
+	ChangePassword         func(context.Context, string, string, string) error
+	AuthBootstrapAvailable func(context.Context, string) (bool, error)
+	// CreateAuthUser receives setup when an anonymous request presented
+	// SetupToken.
+	CreateAuthUser func(context.Context, string, store.Values, string, *AuthIdentity, LocaleOptions, *bool, bool) (store.Document, error)
+	// SetupToken is the secret first-user setup must present. New generates
+	// one when it is empty.
+	SetupToken                   string
 	CreateAPIKey                 func(context.Context, string, string, time.Time) (APIKey, error)
 	APIKeys                      func(context.Context, string) ([]APIKeyInfo, error)
 	RevokeAPIKey                 func(context.Context, string, string) error
@@ -287,6 +294,10 @@ type API struct {
 	pluginTransports map[string]PluginEndpoint
 	customEndpoints  []CustomEndpoint
 	allowedHosts     []allowedHost
+	// allowedOrigins holds AllowedOrigins in canonical form.
+	allowedOrigins   []string
+	setupToken       string
+	setupLogged      sync.Once
 	allowedHeaders   []string
 	allowedHeaderSet map[string]struct{}
 	restrictHosts    bool
@@ -356,6 +367,21 @@ func New(config Config) http.Handler {
 	for _, configured := range config.AllowedHosts {
 		if parsed, err := parseAllowedHost(configured); err == nil {
 			api.allowedHosts = append(api.allowedHosts, parsed)
+		} else {
+			slog.Warn("Ridu ignores an allowed host it can't parse", "host", configured)
+		}
+	}
+	api.setupToken = config.SetupToken
+	if api.setupToken == "" {
+		token := make([]byte, 32)
+		_, _ = rand.Read(token)
+		api.setupToken = hex.EncodeToString(token)
+	}
+	for _, configured := range config.AllowedOrigins {
+		if canonical, err := canonicalOrigin(configured); err == nil {
+			api.allowedOrigins = append(api.allowedOrigins, canonical)
+		} else {
+			slog.Warn("Ridu ignores an allowed origin it can't parse", "origin", configured)
 		}
 	}
 	snapshot := config.Snapshot
@@ -2471,13 +2497,25 @@ func (api *API) authBootstrap(writer http.ResponseWriter, request *http.Request,
 		api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_auth_collection", Status: 404, Message: "auth collection was not found"})
 		return
 	}
-	available, err := api.config.AuthBootstrapAvailable(request.Context(), collection)
+	available, err := api.setupAvailable(request.Context(), collection)
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
 	}
 	writer.Header().Set("Cache-Control", "no-store")
 	writeJSON(writer, http.StatusOK, protocol.AuthBootstrapEnvelope{Available: available})
+}
+
+// setupAvailable reports whether collection offers first-user setup, and the
+// first time it does, logs the setup token for the operator.
+func (api *API) setupAvailable(ctx context.Context, collection string) (bool, error) {
+	available, err := api.config.AuthBootstrapAvailable(ctx, collection)
+	if err == nil && available {
+		api.setupLogged.Do(func() {
+			slog.Info("No user exists yet. To create the first one, open the admin and enter this setup token, or open setup_path on this server", "setup_token", api.setupToken, "setup_path", "/admin/create-first-user?setupToken="+api.setupToken)
+		})
+	}
+	return available, err
 }
 
 func authUserCreateAction(path string) (string, bool) {
@@ -2498,8 +2536,9 @@ func (api *API) createAuthUser(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var input struct {
-		Data     store.Values `json:"data"`
-		Password string       `json:"password"`
+		Data       store.Values `json:"data"`
+		Password   string       `json:"password"`
+		SetupToken string       `json:"setupToken"`
 	}
 	if err := api.decodeJSON(writer, request, &input); err != nil {
 		api.writeError(writer, requestID, err)
@@ -2507,6 +2546,14 @@ func (api *API) createAuthUser(writer http.ResponseWriter, request *http.Request
 	}
 	identity := api.optionalIdentity(request)
 	actor := identityActor(identity)
+	setup := false
+	if identity == nil && input.SetupToken != "" {
+		if subtle.ConstantTimeCompare([]byte(input.SetupToken), []byte(api.setupToken)) != 1 {
+			api.writeError(writer, requestID, &operationengine.Error{Code: "setup_token_invalid", Status: 403, Message: "the setup token does not match the one the server logged"})
+			return
+		}
+		setup = true
+	}
 	localeOptions, err := decodeLocaleQuery(request.URL.Query())
 	if err != nil {
 		api.writeError(writer, requestID, err)
@@ -2517,7 +2564,7 @@ func (api *API) createAuthUser(writer http.ResponseWriter, request *http.Request
 		api.writeError(writer, requestID, err)
 		return
 	}
-	document, err := api.config.CreateAuthUser(request.Context(), collection, input.Data, input.Password, identity, localeOptions.public(), draft)
+	document, err := api.config.CreateAuthUser(request.Context(), collection, input.Data, input.Password, identity, localeOptions.public(), draft, setup)
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
@@ -2866,11 +2913,8 @@ func (api *API) originAllowed(request *http.Request, origin string) bool {
 	if err != nil {
 		return false
 	}
-	for _, allowed := range api.config.AllowedOrigins {
-		allowedCanonical, allowedError := canonicalOrigin(allowed)
-		if allowedError == nil && originCanonical == allowedCanonical {
-			return true
-		}
+	if slices.Contains(api.allowedOrigins, originCanonical) {
+		return true
 	}
 	requestCanonical, requestError := canonicalRequestOrigin(request, api.config.TrustedProxies)
 	if requestError != nil {
@@ -2892,16 +2936,42 @@ func (api *API) originAllowed(request *http.Request, origin string) bool {
 	return secureError == nil && originCanonical == secureCanonical
 }
 
+// canonicalOrigin normalizes a browser origin: scheme://host[:port] with no
+// path. Besides http and https it accepts an application scheme such as
+// tauri://localhost or capacitor://localhost, which matches only an exact
+// entry in AllowedOrigins because no request to Ridu has that origin.
 func canonicalOrigin(encoded string) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(encoded))
 	if err != nil || parsed.User != nil || parsed.Host == "" || parsed.Path != "" || parsed.RawPath != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Opaque != "" {
-		return "", errors.New("invalid HTTP origin")
+		return "", errors.New("invalid origin")
 	}
 	scheme := strings.ToLower(parsed.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return "", errors.New("invalid HTTP origin scheme")
+	if scheme == "" || scheme == "file" {
+		return "", errors.New("invalid origin scheme")
 	}
 	return canonicalSchemeHost(scheme, parsed.Host)
+}
+
+// ValidateAllowedOrigins reports the first configured origin that can never
+// match a browser request.
+func ValidateAllowedOrigins(origins []string) error {
+	for _, origin := range origins {
+		if _, err := canonicalOrigin(origin); err != nil {
+			return fmt.Errorf("allowed origin %q is not an origin; write scheme://host[:port] with no path, such as https://app.example.com or tauri://localhost", origin)
+		}
+	}
+	return nil
+}
+
+// ValidateAllowedHosts reports the first configured host that can never match
+// a request.
+func ValidateAllowedHosts(hosts []string) error {
+	for _, host := range hosts {
+		if _, err := parseAllowedHost(host); err != nil {
+			return fmt.Errorf("allowed host %q is not a hostname with an optional port, such as app.example.com or localhost:8080", host)
+		}
+	}
+	return nil
 }
 
 func canonicalRequestOrigin(request *http.Request, trusted []netip.Prefix) (string, error) {
@@ -3172,21 +3242,29 @@ func (api *API) logDeniedHost(raw string) {
 	}
 }
 
-// logDeniedOrigin logs the first refusal of each well-formed origin, with the
-// origin Ridu computed for the request, so a browser client missing from the
-// allowed origins, or a proxy that changes the scheme or host, leaves a
-// visible cause.
+// logDeniedOrigin logs the first refusal of each origin, with the origin Ridu
+// computed for the request, so a browser client missing from the allowed
+// origins, or a proxy that changes the scheme or host, leaves a visible cause.
 func (api *API) logDeniedOrigin(request *http.Request, origin string) {
 	canonical, err := canonicalOrigin(origin)
 	if err != nil {
-		return
+		// Browsers send "null" from file:// pages and sandboxed frames. Log the
+		// header itself, shortened, so the cause stays visible.
+		canonical = origin
+		if len(canonical) > 128 {
+			canonical = canonical[:128]
+		}
 	}
 	first, last := api.deniedOrigins.first(canonical)
 	if !first {
 		return
 	}
 	requestOrigin, _ := canonicalRequestOrigin(request, api.config.TrustedProxies)
-	slog.Warn("Ridu refused a browser request from an origin other than its own; add the origin to RIDU_ALLOWED_ORIGINS if browser code on it should call Ridu", "origin", canonical, "request_origin", requestOrigin)
+	if err != nil {
+		slog.Warn("Ridu refused a browser request whose Origin is not scheme://host; it can't be allowed", "origin", canonical, "request_origin", requestOrigin)
+	} else {
+		slog.Warn("Ridu refused a browser request from an origin other than its own; add the origin to RIDU_ALLOWED_ORIGINS if browser code on it should call Ridu", "origin", canonical, "request_origin", requestOrigin)
+	}
 	if last {
 		slog.Warn("Ridu logs no further refused origins", "logged", maxLoggedRefusals)
 	}
@@ -3832,6 +3910,8 @@ func wireErrorCode(code string, status int) protocol.ErrorCode {
 		return protocol.ErrorInvalidAuthToken
 	case "invalid_credential":
 		return protocol.ErrorInvalidCredential
+	case "setup_token_invalid":
+		return protocol.ErrorSetupTokenInvalid
 	case "rejected":
 		return protocol.ErrorRejected
 	case "invalid_preview_token":

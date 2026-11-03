@@ -135,7 +135,7 @@ func TestPrimitiveListGeneratedGoExternalCodec(t *testing.T) {
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	for name, source := range map[string]string{"go.mod": fmt.Sprintf("module example.com/list-consumer\n\ngo 1.26.9\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "lists_test.go": primitiveListGoConsumer} {
+	for name, source := range map[string]string{"go.mod": fmt.Sprintf("module example.com/list-consumer\n\ngo 1.26.10\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "lists_test.go": primitiveListGoConsumer} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(source), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -164,17 +164,17 @@ func TestListOutputRoundtrip(t *testing.T) {
  encoded,err:=json.Marshal(g.Product{});if err!=nil||strings.Contains(string(encoded),"sellingPoints")||strings.Contains(string(encoded),"availableSizes"){t.Fatalf("absent list emitted: %s %v",encoded,err)}
 }
 func TestListCodecs(t *testing.T) {
- input:=g.ProductCreate{SellingPoints:core.NonNull([]string{"Oak","Oak"}),AvailableSizes:core.Set([]float64{0,10,10})}
+ input:=g.ProductCreateInput{SellingPoints:core.NonNull([]string{"Oak","Oak"}),AvailableSizes:core.Set([]float64{0,10,10})}
  raw,err:=json.Marshal(input);if err!=nil{t.Fatal(err)}
- var decoded g.ProductCreate;if err:=json.Unmarshal(raw,&decoded);err!=nil{t.Fatal(err)}
+ var decoded g.ProductCreateInput;if err:=json.Unmarshal(raw,&decoded);err!=nil{t.Fatal(err)}
  values,_:=decoded.AvailableSizes.Get();if len(values)!=3||values[0]!=0||values[1]!=values[2]{t.Fatal(values)}
  for _,raw:=range []string{
   "{\"sellingPoints\":[null]}","{\"availableSizes\":[null]}","{\"availableSizes\":[\"0\"]}","{\"sellingPoints\":\"Oak\"}",
   "{\"variants\":[{\"tags\":[null]}]}","{\"meta\":{\"sizes\":[null]}}",
   "{\"content\":[{\"blockType\":\"card\",\"tags\":[null]}]}"} {
-  var value g.ProductCreate;if err:=json.Unmarshal([]byte(raw),&value);err==nil{t.Fatalf("accepted %s",raw)}
+  var value g.ProductCreateInput;if err:=json.Unmarshal([]byte(raw),&value);err==nil{t.Fatalf("accepted %s",raw)}
  }
- var update g.ProductUpdate;if err:=json.Unmarshal([]byte("{\"availableSizes\":[]}"),&update);err!=nil{t.Fatal(err)}
+ var update g.ProductUpdateInput;if err:=json.Unmarshal([]byte("{\"availableSizes\":[]}"),&update);err!=nil{t.Fatal(err)}
  empty,ok:=update.AvailableSizes.Get();if !ok||empty==nil||len(empty)!=0{t.Fatal("empty list lost")}
  encoded,err:=json.Marshal(update);if err!=nil||!strings.Contains(string(encoded),"\"availableSizes\":[]"){t.Fatalf("%s %v",encoded,err)}
  if err:=json.Unmarshal([]byte("{\"availableSizes\":null}"),&update);err!=nil{t.Fatal(err)}

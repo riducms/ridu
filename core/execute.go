@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -15,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/riducms/ridu/internal/httpapi"
 	"github.com/riducms/ridu/internal/project"
 	"github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -103,7 +105,8 @@ func WithProjectMigrations(driver migration.ProjectDriver) ExecuteOption {
 }
 
 // WithAddress configures the HTTP listen address independently from the
-// document-store adapter. The default is :8080.
+// document-store adapter. The default, 127.0.0.1:8080, accepts connections
+// only from this machine; use :8080 to listen on every interface.
 func WithAddress(address string) ExecuteOption {
 	return func(options *executeOptions) {
 		options.address = address
@@ -129,7 +132,7 @@ func WithServerOptions(server ServerOptions) ExecuteOption {
 // runtime store factory; `migrate up` applies the build's migrations; the
 // no-argument branch starts the HTTP server.
 func Execute(applicationConfig Config, supplied ...ExecuteOption) (result error) {
-	options := executeOptions{address: ":8080"}
+	options := executeOptions{address: "127.0.0.1:8080"}
 	for _, option := range supplied {
 		option(&options)
 	}
@@ -155,6 +158,15 @@ func Execute(applicationConfig Config, supplied ...ExecuteOption) (result error)
 	}()
 	if options.storeFactory == nil {
 		return fmt.Errorf("the Ridu server requires a lazy store adapter configured with ridu.WithStore")
+	}
+	if err := httpapi.ValidateAllowedOrigins(options.handler.AllowedOrigins); err != nil {
+		return err
+	}
+	if err := httpapi.ValidateAllowedHosts(options.handler.AllowedHosts); err != nil {
+		return err
+	}
+	if token := options.handler.SetupToken; token != "" && len(token) < 32 {
+		return fmt.Errorf("the setup token must be at least 32 characters long; generate one with: openssl rand -hex 32")
 	}
 	serverContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -184,6 +196,7 @@ func Execute(applicationConfig Config, supplied ...ExecuteOption) (result error)
 		return err
 	}
 	handlerOptions := options.handler
+	handlerOptions.AllowedHosts = listenerAllowedHosts(options.address, handlerOptions.AllowedHosts)
 	handlerOptions.allowUnverifiableReadiness = serverOptions.AllowUnverifiableReadiness
 	handlerOptions.developmentReadiness = serverOptions.SkipReadinessPreflight
 	if !serverOptions.AllowUnverifiableReadiness {
@@ -310,6 +323,30 @@ func closeRuntimeResources(resources []runtimeResource, timeout time.Duration) e
 		}
 	}
 	return errors.Join(closeErrors...)
+}
+
+// listenerAllowedHosts returns the configured hosts or, when none are and the
+// server listens only on loopback, the local names. A page on another site can
+// resolve its own name to 127.0.0.1 and so reach a local server.
+func listenerAllowedHosts(address string, configured []string) []string {
+	if len(configured) == 0 && loopbackAddress(address) {
+		return []string{"localhost", "127.0.0.1", "[::1]"}
+	}
+	return configured
+}
+
+// loopbackAddress reports whether a listen address accepts connections only
+// from this machine.
+func loopbackAddress(address string) bool {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.IsLoopback()
 }
 
 func normalizedServerOptions(options ServerOptions) ServerOptions {

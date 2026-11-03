@@ -46,7 +46,7 @@ func TestGeneratedGoBlocksExternalCodec(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	files := map[string]string{"go.mod": fmt.Sprintf("module example.com/block-consumer\n\ngo 1.26.9\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "blocks_test.go": generatedBlocksConsumer, "ergonomics_test.go": generatedBlocksErgonomicsConsumer, "array_retention_test.go": generatedArrayRetentionConsumer}
+	files := map[string]string{"go.mod": fmt.Sprintf("module example.com/block-consumer\n\ngo 1.26.10\nrequire github.com/riducms/ridu v0.0.0\nreplace github.com/riducms/ridu => %s\n", root), "ridu.generated.go": string(generated), "blocks_test.go": generatedBlocksConsumer, "ergonomics_test.go": generatedBlocksErgonomicsConsumer, "array_retention_test.go": generatedArrayRetentionConsumer}
 	for name, data := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)
@@ -122,11 +122,11 @@ func TestCodecs(t *testing.T){
 }
 func TestAPIRedactedKeyedUpdate(t *testing.T){
  base:=os.Getenv("RIDU_TEST_URL");if base==""{t.Fatal("missing API fixture")}
- body,err:=json.Marshal(g.PageCreate{Layout:core.Set(g.PagesLayoutInput{&g.HeroInput{Heading:"Hidden required"},&g.CTAInput{Label:"Untouched"}})});if err!=nil{t.Fatal(err)}
+ body,err:=json.Marshal(g.PageCreateInput{Layout:core.Set(g.PagesLayoutInput{&g.HeroInput{Heading:"Hidden required"},&g.CTAInput{Label:"Untouched"}})});if err!=nil{t.Fatal(err)}
  response,err:=http.Post(base+"/api/collections/pages","application/json",bytes.NewReader(body));if err!=nil{t.Fatal(err)};defer response.Body.Close()
  var result struct{Data g.Page ` + "`" + `json:"doc"` + "`" + `};if err:=json.NewDecoder(response.Body).Decode(&result);err!=nil{t.Fatal(err)};if response.StatusCode!=201{t.Fatalf("create status %d",response.StatusCode)}
  hero:=(*result.Data.Layout)[0].(*g.Hero);if hero.Key==""||hero.Heading!=nil{t.Fatal("identity/redaction contract")}
- untouchedKey:=(*result.Data.Layout)[1].BlockKey();retained,err:=result.Data.Layout.Retain();if err!=nil{t.Fatal(err)};retained[0].(*g.HeroUpdate).Subtitle=core.Set("Updated");body,err=json.Marshal(g.PageUpdate{Layout:core.Set(retained)});if err!=nil{t.Fatal(err)}
+ untouchedKey:=(*result.Data.Layout)[1].BlockKey();retained,err:=result.Data.Layout.Retain();if err!=nil{t.Fatal(err)};retained[0].(*g.HeroUpdate).Subtitle=core.Set("Updated");body,err=json.Marshal(g.PageUpdateInput{Layout:core.Set(retained)});if err!=nil{t.Fatal(err)}
  request,err:=http.NewRequest(http.MethodPatch,base+"/api/collections/pages/"+result.Data.ID,bytes.NewReader(body));if err!=nil{t.Fatal(err)};request.Header.Set("Content-Type","application/json");response,err=http.DefaultClient.Do(request);if err!=nil{t.Fatal(err)};defer response.Body.Close();if response.StatusCode!=200{t.Fatalf("keyed update status %d",response.StatusCode)}
  if err:=json.NewDecoder(response.Body).Decode(&result);err!=nil{t.Fatal(err)};if len(*result.Data.Layout)!=2||(*result.Data.Layout)[1].BlockKey()!=untouchedKey{t.Fatal("retention lost untouched variant")};updated:=(*result.Data.Layout)[0].(*g.Hero);subtitle,ok:=updated.Subtitle.Get();if updated.Key!=hero.Key||updated.Heading!=nil||!ok||subtitle!="Updated"{t.Fatal("keyed redacted edit failed")}
 }

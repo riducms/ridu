@@ -52,6 +52,10 @@ type HookContext struct {
 	// Pass Context to reuse the transaction, and pass Actor, ActorCollection, and
 	// locale options explicitly when the nested operation represents the same user.
 	// Standalone reads reject nested writes; AfterCommit starts new transactions.
+	// A failed nested write, or a nested read that fails in the store, rolls the
+	// shared transaction back: later nested calls and this operation fail too. A
+	// nested read that finds nothing or is refused leaves the transaction usable,
+	// so the hook may handle that error and continue.
 	Local *LocalAPI
 	// Error is set only for after-error hooks and preserves the original failure.
 	// Returning nil from AfterError does not make the failed operation succeed.

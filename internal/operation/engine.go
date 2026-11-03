@@ -795,7 +795,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	state.addTransactionResource(request.TransactionResource)
 	if !ownsTransaction {
 		defer func() {
-			if err != nil {
+			if err != nil && (request.Operation != operation.Read || readFailureAbortsTransaction(err)) {
 				state.markRollbackOnly(err)
 			}
 		}()
@@ -1560,7 +1560,11 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}
 	}
 	if request.Operation == operation.Create || request.Operation == operation.Duplicate || request.Operation == operation.Update || request.Operation == operation.RestoreDeleted || request.Operation == operation.Publish || request.Operation == operation.Unpublish || request.Operation == operation.DiscardDraft {
-		referenceIssues, referenceError := engine.validateDocumentReferences(operationContext, state.transaction, referenceData, referenceSelection)
+		var savedReferences store.Values
+		if request.Operation != operation.Create && request.Operation != operation.Duplicate {
+			savedReferences = originalCanonical
+		}
+		referenceIssues, referenceError := engine.validateDocumentReferences(operationContext, state.transaction, referenceData, referenceSelection, savedReferences)
 		if referenceError != nil {
 			return Result{}, referenceError
 		}
@@ -3479,6 +3483,16 @@ func (state *transactionState) addTransactionResource(resource *TransactionResou
 		return
 	}
 	state.transactionResources = append(state.transactionResources, resource)
+}
+
+// readFailureAbortsTransaction reports whether a failed nested read must end
+// the transaction it shares. A read writes nothing, so a miss, a denial, or a
+// rejected query leaves the transaction usable and the caller may handle it.
+// Other failures may come from the store, whose transaction may already be
+// aborted.
+func readFailureAbortsTransaction(err error) bool {
+	var operationError *Error
+	return !errors.As(err, &operationError) || operationError.Status >= 500
 }
 
 func (state *transactionState) markRollbackOnly(err error) {

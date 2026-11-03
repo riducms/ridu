@@ -8,19 +8,26 @@ import type { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 
 interface CreateFirstUserControllerOptions {
 	runtime: AdminRuntime;
+	/** A setup token from the link the server logs, if the visitor followed it. */
+	setupToken?: string;
 }
 
 export class CreateFirstUserController {
 	readonly form: FormController;
+	setupToken = $state("");
 	password = $state("");
 	passwordConfirmation = $state("");
 	pending = $state(false);
 	error = $state<string>();
-	credentialIssue = $state<{ path: "password" | "passwordConfirmation"; message: string }>();
+	credentialIssue = $state<{
+		path: "setupToken" | "password" | "passwordConfirmation";
+		message: string;
+	}>();
 	#request?: AbortController;
 	#generation = 0;
 
 	constructor(readonly options: CreateFirstUserControllerOptions) {
+		this.setupToken = options.setupToken ?? "";
 		this.form = new FormController({}, options.runtime.i18n);
 		this.form.reset(initialFormValues(this.fields));
 		this.form.setAccess(undefined, "create");
@@ -59,7 +66,14 @@ export class CreateFirstUserController {
 		}
 		const passwordMessage = this.#validatePassword(collection);
 		this.credentialIssue =
-			passwordMessage === undefined ? undefined : { path: "password", message: passwordMessage };
+			this.setupToken.trim() === ""
+				? {
+						path: "setupToken",
+						message: this.options.runtime.i18n.t("auth:enterSetupToken"),
+					}
+				: passwordMessage === undefined
+					? undefined
+					: { path: "password", message: passwordMessage };
 		if (this.credentialIssue === undefined && this.password !== this.passwordConfirmation) {
 			this.credentialIssue = {
 				path: "passwordConfirmation",
@@ -78,7 +92,12 @@ export class CreateFirstUserController {
 		try {
 			await this.form.submit(this.fields, true, (values) =>
 				this.options.runtime.client.auth.createUser(
-					{ collection: collection.slug, data: values, password: this.password },
+					{
+						collection: collection.slug,
+						data: values,
+						password: this.password,
+						setupToken: this.setupToken.trim(),
+					},
 					{ signal: request.signal }
 				)
 			);
@@ -121,6 +140,13 @@ export class CreateFirstUserController {
 			if (cause instanceof FormValidationError) {
 				this.error = cause.message;
 				return this.form.issues[0]?.path;
+			}
+			if (cause instanceof RiduError && cause.code === "setup_token_invalid") {
+				this.credentialIssue = {
+					path: "setupToken",
+					message: this.options.runtime.i18n.t("auth:setupTokenInvalid"),
+				};
+				return "setupToken";
 			}
 			if (cause instanceof RiduError) {
 				const passwordIssue = cause.issues.find((issue) => issue.path === "password");

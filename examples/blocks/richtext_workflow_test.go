@@ -37,7 +37,7 @@ func TestTypedArticleRoundTripPreservesRedactionLocalizationAndPopulation(t *tes
 		t.Fatal(err)
 	}
 	assets := generated.AssetsCollection.With(app.Local())
-	asset, err := assets.Create(ctx, generated.AssetCreate{Title: "Article image", URL: "/article.svg"}, ridu.TypedMutationOptions{})
+	asset, err := assets.Create(ctx, generated.AssetCreateInput{Title: "Article image", URL: "/article.svg"}, ridu.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestTypedArticleRoundTripPreservesRedactionLocalizationAndPopulation(t *tes
 		typedRichTextBlock(generated.ArticlesBodyBlocksBlockInputPayload{Value: &generated.CTAInput{Label: "Outer action"}}),
 	)
 	articles := generated.ArticlesCollection.With(app.Local())
-	created, err := articles.Create(ctx, generated.ArticleCreate{Title: "Typed article", Body: core.Set(body)}, ridu.TypedMutationOptions{})
+	created, err := articles.Create(ctx, generated.ArticleCreateInput{Title: "Typed article", Body: core.Set(body)}, ridu.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestTypedArticleRoundTripPreservesRedactionLocalizationAndPopulation(t *tes
 		t.Fatal(err)
 	}
 	translation.Root.Children[1].Fields.Value.(*generated.CalloutUpdate).Message = core.Set("French message")
-	translated, err := articles.Update(ctx, created.ID, generated.ArticleUpdate{Body: core.Set(translation)}, ridu.TypedMutationOptions{ExpectedRevision: created.Revision, Locale: "fr"})
+	translated, err := articles.Update(ctx, created.ID, generated.ArticleUpdateInput{Body: core.Set(translation)}, ridu.TypedMutationOptions{ExpectedRevision: created.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,11 +144,11 @@ func TestTypedArticleRoundTripPreservesRedactionLocalizationAndPopulation(t *tes
 	}
 	// Saving has one field-specific update type; ordinary prose and the node envelope
 	// survive the payload conversion, without JSON re-encoding or arbitrary maps.
-	saved, err := restrictedArticles.Update(ctx, created.ID, generated.ArticleUpdate{Body: core.Set(updates)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision})
+	saved, err := restrictedArticles.Update(ctx, created.ID, generated.ArticleUpdateInput{Body: core.Set(updates)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := restrictedArticles.Update(ctx, created.ID, generated.ArticleUpdate{Body: core.Set(updates)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision}); err == nil {
+	if _, err := restrictedArticles.Update(ctx, created.ID, generated.ArticleUpdateInput{Body: core.Set(updates)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision}); err == nil {
 		t.Fatal("typed edit ignored stale revision")
 	}
 	for _, locale := range []schema.LocaleCode{"en", "fr"} {

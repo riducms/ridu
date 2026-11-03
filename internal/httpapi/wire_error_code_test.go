@@ -19,6 +19,7 @@ func TestWireErrorCodeNeverContradictsItsStatus(t *testing.T) {
 		{"publish_required", http.StatusConflict, protocol.ErrorPublishRequired},
 		{"unknown_collection", http.StatusNotFound, protocol.ErrorNotFound},
 		{"origin_denied", http.StatusForbidden, protocol.ErrorAccess},
+		{"setup_token_invalid", http.StatusForbidden, protocol.ErrorSetupTokenInvalid},
 		{"transaction_aborted", http.StatusConflict, protocol.ErrorConflict},
 		{"body_too_large", http.StatusRequestEntityTooLarge, protocol.ErrorBadRequest},
 		{"unsupported_media_type", http.StatusUnsupportedMediaType, protocol.ErrorBadRequest},

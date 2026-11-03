@@ -26,6 +26,13 @@ test("empty collection guides first-user creation and then closes setup", async 
 		.toBe(1);
 
 	await page.getByRole("button", { name: "Create account" }).click();
+	await expect(page.locator("#ridu-first-user-setup-token-error")).toContainText(
+		"Enter the setup token."
+	);
+	await expect(page.getByRole("textbox", { name: "Setup token", exact: true })).toBeFocused();
+	await page.getByRole("textbox", { name: "Setup token", exact: true }).fill("wrong-token");
+
+	await page.getByRole("button", { name: "Create account" }).click();
 	await expect(page.locator("#ridu-first-user-password-error")).toBeVisible();
 	await expect(page.getByRole("textbox", { name: "Password", exact: true })).toBeFocused();
 
@@ -47,6 +54,17 @@ test("empty collection guides first-user creation and then closes setup", async 
 		"The passwords do not match."
 	);
 
+	await page.getByRole("textbox", { name: "Confirm password", exact: true }).fill("correct-horse");
+	await page.getByRole("button", { name: "Create account" }).click();
+	await expect(page.locator("#ridu-first-user-setup-token-error")).toContainText(
+		"doesn’t match the one in the server log"
+	);
+	await expect(page.getByRole("textbox", { name: "Setup token", exact: true })).toBeFocused();
+
+	await page.goto("/admin/create-first-user?setupToken=admin-fixture-setup-token-0123456789");
+	await page.getByLabel("Name", { exact: true }).fill("Ada Admin");
+	await page.getByLabel("Email", { exact: true }).fill("ada@example.test");
+	await page.getByRole("textbox", { name: "Password", exact: true }).fill("correct-horse");
 	await page.getByRole("textbox", { name: "Confirm password", exact: true }).fill("correct-horse");
 	await page.getByRole("button", { name: "Create account" }).click();
 	await expect(page).toHaveURL(/\/admin\/?$/);

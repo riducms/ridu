@@ -382,7 +382,19 @@ func requestCallState(ctx context.Context) (callState, error) {
 func (state callState) publicError(err error) error {
 	var operationError *ridu.OperationError
 	if errors.As(err, &operationError) {
-		return fmt.Errorf("%s: %s", operationError.Code, operationError.Message)
+		message := operationError.Code + ": " + operationError.Message
+		if len(operationError.Issues) != 0 {
+			// An agent needs the paths to correct its input.
+			details := make([]string, len(operationError.Issues))
+			for index, issue := range operationError.Issues {
+				details[index] = issue.Message
+				if issue.Path != "" {
+					details[index] = issue.Path + ": " + issue.Message
+				}
+			}
+			message += " (" + strings.Join(details, "; ") + ")"
+		}
+		return errors.New(message)
 	}
 	if state.reportError != nil {
 		state.reportError(err, "mcp_operation")

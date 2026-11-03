@@ -407,8 +407,8 @@ func (value *PrimitiveProduct) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// PrimitiveProductCreate supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
-type PrimitiveProductCreate struct {
+// PrimitiveProductCreateInput supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
+type PrimitiveProductCreateInput struct {
 	// Title is required when creating this value.
 	Title string `json:"title"`
 	// SellingPoints requires core.NonNull(value); JSON null is rejected.
@@ -442,8 +442,8 @@ type PrimitiveProductCreate struct {
 	LocalizedBody *core.Input[richtext.Document[PrimitiveProductsLocalizedBodyBlocksBlockInputPayload]] `json:"localizedBody,omitempty"`
 }
 
-func (value *PrimitiveProductCreate) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductCreate
+func (value *PrimitiveProductCreateInput) UnmarshalJSON(data []byte) error {
+	type payload PrimitiveProductCreateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -751,14 +751,14 @@ func (value *PrimitiveProductCreate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "PrimitiveProductCreate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "PrimitiveProductCreateInput", Reason: "invalid document", Err: err})
 	}
-	*value = PrimitiveProductCreate(decoded)
+	*value = PrimitiveProductCreateInput(decoded)
 	return nil
 }
 
-// PrimitiveProductUpdate edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
-type PrimitiveProductUpdate struct {
+// PrimitiveProductUpdateInput edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
+type PrimitiveProductUpdateInput struct {
 	// Title: nil omits the field; a pointer sends a value. Null is not allowed.
 	Title *string `json:"title,omitempty"`
 	// SellingPoints: nil omits the field; core.SetNonNull sends a value and rejects JSON null.
@@ -793,8 +793,8 @@ type PrimitiveProductUpdate struct {
 	LocalizedBody *core.Input[richtext.Document[PrimitiveProductsLocalizedBodyBlocksBlockUpdatePayload]] `json:"localizedBody,omitempty"`
 }
 
-func (value *PrimitiveProductUpdate) UnmarshalJSON(data []byte) error {
-	type payload PrimitiveProductUpdate
+func (value *PrimitiveProductUpdateInput) UnmarshalJSON(data []byte) error {
+	type payload PrimitiveProductUpdateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -1099,9 +1099,9 @@ func (value *PrimitiveProductUpdate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "PrimitiveProductUpdate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "PrimitiveProductUpdateInput", Reason: "invalid document", Err: err})
 	}
-	*value = PrimitiveProductUpdate(decoded)
+	*value = PrimitiveProductUpdateInput(decoded)
 	return nil
 }
 
@@ -1510,7 +1510,7 @@ func (value *PrimitiveProductAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var PrimitiveProductsCollection = core.NewTypedCollection[PrimitiveProduct, PrimitiveProductCreate, PrimitiveProductUpdate, PrimitiveProductUpdate]("primitive-products")
+var PrimitiveProductsCollection = core.NewTypedCollection[PrimitiveProduct, PrimitiveProductCreateInput, PrimitiveProductUpdateInput, PrimitiveProductUpdateInput]("primitive-products")
 
 // PrimitiveProductsCollectionAllLocales reads all translations with optional population and projection.
 var PrimitiveProductsCollectionAllLocales = core.NewTypedAllLocalesCollection[PrimitiveProductAllLocales]("primitive-products")

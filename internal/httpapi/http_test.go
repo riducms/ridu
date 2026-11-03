@@ -16,6 +16,7 @@ import (
 	"net/netip"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -724,6 +725,86 @@ func TestDeniedOriginsAreLoggedOnceWithTheRequestOrigin(t *testing.T) {
 	send(http.MethodGet, "https://reader.example.test")
 	if count := strings.Count(logs.String(), "origin=https://web.example.test request_origin=http://api.example.test"); count != 1 || strings.Contains(logs.String(), "reader.example.test") || !strings.Contains(logs.String(), "RIDU_ALLOWED_ORIGINS") {
 		t.Fatalf("denied origin logs: %q", logs.String())
+	}
+}
+
+// A packaged desktop or mobile app has an application-scheme origin such as
+// tauri://localhost. Listing it allows exactly that origin.
+func TestApplicationSchemeOriginsMatchOnlyAnExactAllowedEntry(t *testing.T) {
+	previous := slog.Default()
+	var logs bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	handler := New(Config{AllowedOrigins: []string{"tauri://localhost", "capacitor://LOCALHOST"}})
+	send := func(origin string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:7477/missing", nil)
+		request.Header.Set("Origin", origin)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	for _, origin := range []string{"tauri://localhost", "capacitor://localhost"} {
+		response := send(origin)
+		if response.Code == http.StatusForbidden || response.Header().Get("Access-Control-Allow-Origin") != origin {
+			t.Fatalf("listed origin %s = %d %q", origin, response.Code, response.Header().Get("Access-Control-Allow-Origin"))
+		}
+	}
+	for _, origin := range []string{"tauri://localhost:1420", "tauri://evil.test", "http://localhost", "null"} {
+		if code := send(origin).Code; code != http.StatusForbidden {
+			t.Fatalf("unlisted origin %s = %d, want 403", origin, code)
+		}
+	}
+	for _, logged := range []string{"origin=tauri://evil.test", "origin=null"} {
+		if !strings.Contains(logs.String(), logged) {
+			t.Fatalf("denied origin logs lack %s: %q", logged, logs.String())
+		}
+	}
+
+	if err := ValidateAllowedOrigins([]string{"https://app.example.test", "tauri://localhost"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []string{"*", "app.example.test", "https://app.example.test/", "file://", "null"} {
+		if err := ValidateAllowedOrigins([]string{invalid}); err == nil {
+			t.Fatalf("allowed origin %q was accepted", invalid)
+		}
+	}
+	if err := ValidateAllowedHosts([]string{"app.example.test", "localhost:8080", "127.0.0.1", "[::1]"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateAllowedHosts([]string{"https://app.example.test"}); err == nil {
+		t.Fatal("allowed host with a scheme was accepted")
+	}
+}
+
+// The operator finds the setup token in the server log the first time the
+// server offers first-user setup.
+func TestSetupTokenIsLoggedOnceWhenSetupIsFirstOffered(t *testing.T) {
+	previous := slog.Default()
+	var logs bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	available := false
+	handler := New(Config{AuthBootstrapAvailable: func(context.Context, string) (bool, error) { return available, nil }})
+	check := func() {
+		request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/api/auth/users/bootstrap", nil)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("bootstrap status = %d: %s", response.Code, response.Body)
+		}
+	}
+	check()
+	if strings.Contains(logs.String(), "setup_token") {
+		t.Fatalf("setup token logged while setup was unavailable: %q", logs.String())
+	}
+	available = true
+	check()
+	check()
+	token := regexp.MustCompile(`setup_token=([0-9a-f]{64}) `).FindStringSubmatch(logs.String())
+	if token == nil || strings.Count(logs.String(), "setup_token=") != 1 || !strings.Contains(logs.String(), "setupToken="+token[1]) {
+		t.Fatalf("setup token logs: %q", logs.String())
 	}
 }
 

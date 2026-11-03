@@ -85,16 +85,16 @@ func (value *Asset) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// AssetCreate supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
-type AssetCreate struct {
+// AssetCreateInput supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
+type AssetCreateInput struct {
 	// Title is required when creating this value.
 	Title string `json:"title"`
 	// URL is required when creating this value.
 	URL string `json:"url"`
 }
 
-func (value *AssetCreate) UnmarshalJSON(data []byte) error {
-	type payload AssetCreate
+func (value *AssetCreateInput) UnmarshalJSON(data []byte) error {
+	type payload AssetCreateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -129,22 +129,22 @@ func (value *AssetCreate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "AssetCreate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "AssetCreateInput", Reason: "invalid document", Err: err})
 	}
-	*value = AssetCreate(decoded)
+	*value = AssetCreateInput(decoded)
 	return nil
 }
 
-// AssetUpdate edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
-type AssetUpdate struct {
+// AssetUpdateInput edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
+type AssetUpdateInput struct {
 	// Title: nil omits the field; a pointer sends a value. Null is not allowed.
 	Title *string `json:"title,omitempty"`
 	// URL: nil omits the field; a pointer sends a value. Null is not allowed.
 	URL *string `json:"url,omitempty"`
 }
 
-func (value *AssetUpdate) UnmarshalJSON(data []byte) error {
-	type payload AssetUpdate
+func (value *AssetUpdateInput) UnmarshalJSON(data []byte) error {
+	type payload AssetUpdateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -179,9 +179,9 @@ func (value *AssetUpdate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "AssetUpdate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "AssetUpdateInput", Reason: "invalid document", Err: err})
 	}
-	*value = AssetUpdate(decoded)
+	*value = AssetUpdateInput(decoded)
 	return nil
 }
 
@@ -257,7 +257,7 @@ func (value *AssetAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var AssetsCollection = core.NewTypedCollection[Asset, AssetCreate, AssetUpdate, AssetUpdate]("assets")
+var AssetsCollection = core.NewTypedCollection[Asset, AssetCreateInput, AssetUpdateInput, AssetUpdateInput]("assets")
 
 // AssetsCollectionAllLocales reads all translations with optional population and projection.
 var AssetsCollectionAllLocales = core.NewTypedAllLocalesCollection[AssetAllLocales]("assets")
@@ -358,16 +358,16 @@ func (value *Page) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// PageCreate supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
-type PageCreate struct {
+// PageCreateInput supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
+type PageCreateInput struct {
 	// Title is required when creating this value.
 	Title string `json:"title"`
 	// Layout requires core.NonNull(value); JSON null is rejected.
 	Layout core.NonNullInput[PagesLayoutInput] `json:"layout"`
 }
 
-func (value *PageCreate) UnmarshalJSON(data []byte) error {
-	type payload PageCreate
+func (value *PageCreateInput) UnmarshalJSON(data []byte) error {
+	type payload PageCreateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -402,14 +402,14 @@ func (value *PageCreate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "PageCreate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "PageCreateInput", Reason: "invalid document", Err: err})
 	}
-	*value = PageCreate(decoded)
+	*value = PageCreateInput(decoded)
 	return nil
 }
 
-// PageUpdate edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
-type PageUpdate struct {
+// PageUpdateInput edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
+type PageUpdateInput struct {
 	// Title: nil omits the field; a pointer sends a value. Null is not allowed.
 	Title *string `json:"title,omitempty"`
 	// Layout: nil omits the field; core.SetNonNull sends a value and rejects JSON null.
@@ -417,8 +417,8 @@ type PageUpdate struct {
 	Layout *core.NonNullInput[PagesLayoutUpdate] `json:"layout,omitempty"`
 }
 
-func (value *PageUpdate) UnmarshalJSON(data []byte) error {
-	type payload PageUpdate
+func (value *PageUpdateInput) UnmarshalJSON(data []byte) error {
+	type payload PageUpdateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -453,22 +453,22 @@ func (value *PageUpdate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "PageUpdate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "PageUpdateInput", Reason: "invalid document", Err: err})
 	}
-	*value = PageUpdate(decoded)
+	*value = PageUpdateInput(decoded)
 	return nil
 }
 
-// PageDraft saves unfinished working content. Nil fields are omitted; core.Null clears editorial values. Publication validates completeness.
-type PageDraft struct {
+// PageDraftInput saves unfinished working content. Nil fields are omitted; core.Null clears editorial values. Publication validates completeness.
+type PageDraftInput struct {
 	// Title: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Title *core.Input[string] `json:"title,omitempty"`
 	// Layout: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Layout *core.Input[PagesLayoutDraft] `json:"layout,omitempty"`
 }
 
-func (value *PageDraft) UnmarshalJSON(data []byte) error {
-	type payload PageDraft
+func (value *PageDraftInput) UnmarshalJSON(data []byte) error {
+	type payload PageDraftInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -503,9 +503,9 @@ func (value *PageDraft) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "PageDraft", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "PageDraftInput", Reason: "invalid document", Err: err})
 	}
-	*value = PageDraft(decoded)
+	*value = PageDraftInput(decoded)
 	return nil
 }
 
@@ -605,7 +605,7 @@ func (value *PageAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var PagesCollection = core.NewTypedCollection[Page, PageCreate, PageUpdate, PageDraft]("pages")
+var PagesCollection = core.NewTypedCollection[Page, PageCreateInput, PageUpdateInput, PageDraftInput]("pages")
 
 // PagesCollectionAllLocales reads all translations with optional population and projection.
 var PagesCollectionAllLocales = core.NewTypedAllLocalesCollection[PageAllLocales]("pages")
@@ -682,16 +682,16 @@ func (value *Campaign) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// CampaignCreate supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
-type CampaignCreate struct {
+// CampaignCreateInput supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
+type CampaignCreateInput struct {
 	// Title: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Title *core.Input[string] `json:"title,omitempty"`
 	// Layout: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Layout *core.Input[CampaignsLayoutInput] `json:"layout,omitempty"`
 }
 
-func (value *CampaignCreate) UnmarshalJSON(data []byte) error {
-	type payload CampaignCreate
+func (value *CampaignCreateInput) UnmarshalJSON(data []byte) error {
+	type payload CampaignCreateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -726,14 +726,14 @@ func (value *CampaignCreate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "CampaignCreate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "CampaignCreateInput", Reason: "invalid document", Err: err})
 	}
-	*value = CampaignCreate(decoded)
+	*value = CampaignCreateInput(decoded)
 	return nil
 }
 
-// CampaignUpdate edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
-type CampaignUpdate struct {
+// CampaignUpdateInput edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
+type CampaignUpdateInput struct {
 	// Title: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Title *core.Input[string] `json:"title,omitempty"`
 	// Layout: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -741,8 +741,8 @@ type CampaignUpdate struct {
 	Layout *core.Input[CampaignsLayoutUpdate] `json:"layout,omitempty"`
 }
 
-func (value *CampaignUpdate) UnmarshalJSON(data []byte) error {
-	type payload CampaignUpdate
+func (value *CampaignUpdateInput) UnmarshalJSON(data []byte) error {
+	type payload CampaignUpdateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -777,9 +777,9 @@ func (value *CampaignUpdate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "CampaignUpdate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "CampaignUpdateInput", Reason: "invalid document", Err: err})
 	}
-	*value = CampaignUpdate(decoded)
+	*value = CampaignUpdateInput(decoded)
 	return nil
 }
 
@@ -855,7 +855,7 @@ func (value *CampaignAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var CampaignsCollection = core.NewTypedCollection[Campaign, CampaignCreate, CampaignUpdate, CampaignUpdate]("campaigns")
+var CampaignsCollection = core.NewTypedCollection[Campaign, CampaignCreateInput, CampaignUpdateInput, CampaignUpdateInput]("campaigns")
 
 // CampaignsCollectionAllLocales reads all translations with optional population and projection.
 var CampaignsCollectionAllLocales = core.NewTypedAllLocalesCollection[CampaignAllLocales]("campaigns")
@@ -971,8 +971,8 @@ func (value *Article) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ArticleCreate supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
-type ArticleCreate struct {
+// ArticleCreateInput supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.
+type ArticleCreateInput struct {
 	// Title is required when creating this value.
 	Title string `json:"title"`
 	// Body: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -981,8 +981,8 @@ type ArticleCreate struct {
 	LocalizedBody *core.Input[richtext.Document[ArticlesLocalizedBodyBlocksBlockInputPayload]] `json:"localizedBody,omitempty"`
 }
 
-func (value *ArticleCreate) UnmarshalJSON(data []byte) error {
-	type payload ArticleCreate
+func (value *ArticleCreateInput) UnmarshalJSON(data []byte) error {
+	type payload ArticleCreateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -1028,14 +1028,14 @@ func (value *ArticleCreate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "ArticleCreate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "ArticleCreateInput", Reason: "invalid document", Err: err})
 	}
-	*value = ArticleCreate(decoded)
+	*value = ArticleCreateInput(decoded)
 	return nil
 }
 
-// ArticleUpdate edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
-type ArticleUpdate struct {
+// ArticleUpdateInput edits a document. Nil fields are unchanged; supplied block lists replace order and membership.
+type ArticleUpdateInput struct {
 	// Title: nil omits the field; a pointer sends a value. Null is not allowed.
 	Title *string `json:"title,omitempty"`
 	// Body: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -1044,8 +1044,8 @@ type ArticleUpdate struct {
 	LocalizedBody *core.Input[richtext.Document[ArticlesLocalizedBodyBlocksBlockUpdatePayload]] `json:"localizedBody,omitempty"`
 }
 
-func (value *ArticleUpdate) UnmarshalJSON(data []byte) error {
-	type payload ArticleUpdate
+func (value *ArticleUpdateInput) UnmarshalJSON(data []byte) error {
+	type payload ArticleUpdateInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -1091,14 +1091,14 @@ func (value *ArticleUpdate) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "ArticleUpdate", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "ArticleUpdateInput", Reason: "invalid document", Err: err})
 	}
-	*value = ArticleUpdate(decoded)
+	*value = ArticleUpdateInput(decoded)
 	return nil
 }
 
-// ArticleDraft saves unfinished working content. Nil fields are omitted; core.Null clears editorial values. Publication validates completeness.
-type ArticleDraft struct {
+// ArticleDraftInput saves unfinished working content. Nil fields are omitted; core.Null clears editorial values. Publication validates completeness.
+type ArticleDraftInput struct {
 	// Title: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Title *core.Input[string] `json:"title,omitempty"`
 	// Body: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -1107,8 +1107,8 @@ type ArticleDraft struct {
 	LocalizedBody *core.Input[richtext.Document[ArticlesLocalizedBodyBlocksBlockDraftPayload]] `json:"localizedBody,omitempty"`
 }
 
-func (value *ArticleDraft) UnmarshalJSON(data []byte) error {
-	type payload ArticleDraft
+func (value *ArticleDraftInput) UnmarshalJSON(data []byte) error {
+	type payload ArticleDraftInput
 	var decoded payload
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -1154,9 +1154,9 @@ func (value *ArticleDraft) UnmarshalJSON(data []byte) error {
 		return nil
 	}()
 	if err != nil {
-		return newContractError(ContractError{Container: "ArticleDraft", Reason: "invalid document", Err: err})
+		return newContractError(ContractError{Container: "ArticleDraftInput", Reason: "invalid document", Err: err})
 	}
-	*value = ArticleDraft(decoded)
+	*value = ArticleDraftInput(decoded)
 	return nil
 }
 
@@ -1276,7 +1276,7 @@ func (value *ArticleAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreate, ArticleUpdate, ArticleDraft]("articles")
+var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreateInput, ArticleUpdateInput, ArticleDraftInput]("articles")
 
 // ArticlesCollectionAllLocales reads all translations with optional population and projection.
 var ArticlesCollectionAllLocales = core.NewTypedAllLocalesCollection[ArticleAllLocales]("articles")

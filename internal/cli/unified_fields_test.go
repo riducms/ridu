@@ -61,7 +61,8 @@ func TestFreshUnifiedFieldStarterAndBlank(t *testing.T) {
 			server.Dir = target
 			// A directly built development entry has no release-embedded migration
 			// history; the existing development readiness policy permits its local DB.
-			server.Env = append(os.Environ(), "RIDU_SQLITE_PATH="+database, "RIDU_ADDRESS="+address, "RIDU_ALLOW_UNVERIFIABLE_READINESS=true")
+			const setupToken = "generated-project-setup-token-0123456789"
+			server.Env = append(os.Environ(), "RIDU_SQLITE_PATH="+database, "RIDU_ADDRESS="+address, "RIDU_ALLOW_UNVERIFIABLE_READINESS=true", "RIDU_SETUP_TOKEN="+setupToken)
 			server.Stdout, server.Stderr = log, log
 			if err := server.Start(); err != nil {
 				cancel()
@@ -97,7 +98,7 @@ func TestFreshUnifiedFieldStarterAndBlank(t *testing.T) {
 			if !bootstrap.Available {
 				t.Fatal("fresh server did not expose first-user setup")
 			}
-			response, err := client.Post(base+"/api/auth/users/create-user", "application/json", strings.NewReader(`{"data":{"email":"admin@example.test"},"password":"correct-horse"}`))
+			response, err := client.Post(base+"/api/auth/users/create-user", "application/json", strings.NewReader(`{"data":{"email":"admin@example.test"},"password":"correct-horse","setupToken":"`+setupToken+`"}`))
 			if err != nil {
 				t.Fatal(err)
 			}

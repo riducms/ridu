@@ -26,6 +26,9 @@ import (
 	"github.com/riducms/ridu/query"
 )
 
+// benchmarkSetupToken lets run.ts create the benchmark's first user.
+const benchmarkSetupToken = "benchmark-setup-token-0123456789abcdef"
+
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
 		log.Print(err)
@@ -163,7 +166,7 @@ func serve(parent context.Context) error {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Handler: application.Handler(ridu.HandlerOptions{}), ReadHeaderTimeout: 10 * time.Second}
+	server := &http.Server{Handler: application.Handler(ridu.HandlerOptions{SetupToken: benchmarkSetupToken}), ReadHeaderTimeout: 10 * time.Second}
 	serveError := make(chan error, 1)
 	go func() { serveError <- server.Serve(listener) }()
 	select {

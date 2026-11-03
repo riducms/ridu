@@ -210,6 +210,7 @@ function startSQLiteApp(projectRoot: string, port: number): RunningApp {
 			...Bun.env,
 			RIDU_SQLITE_PATH: databasePath,
 			RIDU_ADDRESS: `127.0.0.1:${port}`,
+			RIDU_SETUP_TOKEN: documentationSetupToken,
 		},
 		stdin: "ignore",
 		stdout: "pipe",
@@ -255,7 +256,7 @@ function startPostgresApp(projectRoot: string, apiPort: number, adminPort: numbe
 		],
 		{
 			cwd: projectRoot,
-			env: { ...Bun.env, GOWORK: "off" },
+			env: { ...Bun.env, GOWORK: "off", RIDU_SETUP_TOKEN: documentationSetupToken },
 			stdin: "ignore",
 			stdout: "pipe",
 			stderr: "pipe",
@@ -435,8 +436,11 @@ async function captureFieldApplication(
 	await page.context().close();
 }
 
+// The documentation app's first-user setup token; screenshots never show it.
+const documentationSetupToken = "documentation-setup-token-0123456789";
+
 async function createStarterAccount(page: Page) {
-	await page.goto("/admin/");
+	await page.goto(`/admin/create-first-user?setupToken=${documentationSetupToken}`);
 	await page.getByRole("heading", { name: "Welcome", exact: true }).waitFor();
 	await page.getByLabel("Email", { exact: true }).fill("editor@riducms.test");
 	await page.locator("#ridu-first-user-password").fill("ridu-documentation");

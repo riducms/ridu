@@ -44,11 +44,22 @@ the project was created, and `<project>` with the name in the `build` script's
 `--output dist/<project>`:
 
 ```text title="Railway service settings"
-Build command:      bun run build
+Build command:      bun install --frozen-lockfile && bun run build
 Pre-deploy command: ./dist/<project> migrate up
 Start command:      ./dist/<project>
 Healthcheck path:   /readyz
 ```
+
+Railway builds with Railpack, which treats a repository with a `go.mod` as a Go project: it
+installs Go, but not Bun, and it doesn't install the JavaScript dependencies. Add this service
+variable so the build has the package manager, which is why the build command installs first:
+
+```dotenv title="Railway variables"
+RAILPACK_PACKAGES=bun
+```
+
+For npm, use `RAILPACK_PACKAGES=node` and `npm ci && npm run build`; for pnpm,
+`RAILPACK_PACKAGES=node pnpm` and `pnpm install --frozen-lockfile && pnpm run build`.
 
 The build command produces `dist/<project>` with the embedded admin. The pre-deploy command applies
 committed migrations before the release starts, and `/readyz` keeps traffic away until the database
@@ -114,7 +125,10 @@ Trigger the deployment, then watch these three stages in order:
 2. The pre-deploy command ends with `Migrations are current.`
 3. `/readyz` returns a successful response and Railway sends traffic to the new release.
 
-Open the generated domain and create the first user if the database is empty. If the service exits
+If the database is empty, open the generated domain and create the first user. The setup screen
+asks for the setup token: find it in the deployment's logs, in the line that starts "No user exists
+yet". If the service runs more than one replica, set `RIDU_SETUP_TOKEN` before the first deploy
+instead. If the service exits
 before binding its port, inspect `ridu migrate status` against the same `DATABASE_URL`; startup
 rejects pending, missing, reordered, or modified migration artifacts.
 

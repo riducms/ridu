@@ -99,32 +99,48 @@ provisioning code.
 
 The transport creation path has this first-run rule:
 
-1. If `CollectionAccess.Create` is omitted, one anonymous request may create the first active user
-   only in `Config.Admin.User`.
-2. After that first user, anonymous creation is denied. Other auth collections are never opened by
-   the implicit bootstrap rule.
-3. If you define `CollectionAccess.Create`, that rule decides every creation request. Use it to
-   provide public registration or restrict provisioning to administrators.
+1. While `Config.Admin.User` has no active user, an anonymous request that presents the server's
+   setup token creates the first user. This works whatever the collection's
+   `CollectionAccess.Create` rule says, so a rule such as "only administrators add users" can't
+   leave a fresh install without a way in.
+2. Without the token, the `Create` rule decides. If it is omitted, anonymous creation is refused.
+   Other auth collections never use the setup token.
+3. Once a user exists, the token no longer creates anyone. Use the `Create` rule for public
+   registration or to restrict provisioning to administrators.
 
-When the configured admin collection is eligible, opening `/admin` redirects to the
-`/admin/create-first-user` setup screen. It renders the collection fields, creates the account
-through the same atomic operation, and signs the new administrator in. Once an active user exists,
-the setup route closes and the normal login screen takes over. Automation can check the boolean
-`GET /api/auth/{collection}/bootstrap` response before calling `create-user`; the database
-transaction remains the authority if two callers race.
+The setup token keeps a new public deployment from giving its first account to whoever finds the
+URL first. The server generates one when it starts and logs it, with a link to the setup page, the
+first time it offers setup:
 
-The one-time operation can set fields whose Create access normally requires an authenticated
-actor, because no actor exists before the first administrator. Schema validation, hooks, password
-policy, and the atomic transaction still run. Every later create uses the authored field access
-rules normally.
+```txt title="server log"
+level=INFO msg="No user exists yet. To create the first one, open the admin and enter this setup token, or open setup_path on this server" setup_token=4f1c… setup_path=/admin/create-first-user?setupToken=4f1c…
+```
+
+Set `RIDU_SETUP_TOKEN` (at least 32 characters, for example from `openssl rand -hex 32`) to choose
+the token yourself. Do that when several replicas serve one database, because each generated token
+is known only to the replica that logged it. `ridu dev` keeps one token for the whole session.
+
+When the configured admin collection is empty, opening `/admin` redirects to the
+`/admin/create-first-user` setup screen. It asks for the setup token, renders the collection
+fields, creates the account through the same atomic operation, and signs the new administrator in.
+The link from the log fills in the token. Once an active user exists, the setup route closes and
+the normal login screen takes over. Automation can check the boolean
+`GET /api/auth/{collection}/bootstrap` response, then call `create-user` with `setupToken` in the
+body; the database transaction remains the authority if two callers race. GraphQL and the MCP
+plugin don't create the first user.
+
+The setup operation runs as trusted server code, so it can set fields whose Create access normally
+requires an authenticated actor. Schema validation, hooks, password policy, and the atomic
+transaction still run. Every later create uses the authored access rules normally.
 
 The first admin bootstrap credential is marked verified so a broken or not-yet-configured delivery
 system cannot lock the initial operator out. Later users in a verification-enabled collection must
 consume a verification token before login.
 
-Go application code uses `app.CreateAuthUser`; HTTP adapters use
-`CreateAuthUserForTransport` to include the one-user bootstrap behaviour. All forms create the
-document and credential atomically and run create access, validation, hooks, and version logic.
+Go application code uses `app.CreateAuthUser`, which needs no setup token: code that can call it
+is already trusted. HTTP adapters use `CreateAuthUserForTransport`, passing whether the request
+presented the setup token. All forms create the document and credential atomically and run
+validation, hooks, and version logic; only first-user setup skips the access rules.
 `app.AuthInitialized` reveals only whether an active auth document
 exists, not any user data. `app.SetPassword` is a trusted application operation for an existing
 user; it revokes existing sessions and should not be exposed as an unauthorised arbitrary-user

@@ -84,6 +84,17 @@ await ridu.restoreDeleted('posts', post.id);
 The document returns to ordinary list/API reads only after the restore commits. Its retained upload
 objects remain available throughout trash and restore.
 
+## Documents that refer to trashed content {#trashed-references}
+
+Moving a document to trash leaves the relationships and uploads that point at it in place. The
+documents that refer to it can still be edited and restored: a reference a document already holds
+may point at a document in trash. A reference that a create, duplicate, or edit adds must point at
+an active document, so a trashed document can't be picked again until it is restored. Access rules
+and relationship filters still apply to every reference.
+
+To detach referrers when something moves to trash, clear their fields in a `BeforeDelete` hook.
+The fields' `OnDelete` policies apply when the document is permanently deleted.
+
 ## Permanently delete content {#permanent-delete}
 
 `deletePermanent`, `bulkDeletePermanent`, and **Empty trash** cannot be undone by Ridu. They apply
