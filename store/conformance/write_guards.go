@@ -1,8 +1,10 @@
 package conformance
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -62,6 +64,59 @@ func RunWriteGuards(t *testing.T, factory Factory) {
 				t.Fatalf("%s update from the stored version = %v", collection.Slug, err)
 			}
 			commit(t, transaction)
+		}
+	})
+
+	// Local.Increment and every read-modify-write in a hook rely on this:
+	// a transaction that locks a row with LockMutation reads the value the
+	// previous holder committed, so no update is lost. An adapter may make the
+	// second locker wait (PostgreSQL, SQLite) or fail fast with ErrConflict
+	// (MongoDB); the caller then retries.
+	t.Run("a mutation lock serializes read-modify-write", func(t *testing.T) {
+		backend := factory(t, manifest)
+		transaction := begin(t, backend)
+		if _, err := transaction.Create(t.Context(), store.CreateRequest{Collection: notes, ID: "counter", Values: store.Values{"count": store.Number(0)}}); err != nil {
+			rollback(t, transaction)
+			t.Fatal(err)
+		}
+		commit(t, transaction)
+		const writers = 8
+		results := make(chan error, writers)
+		seen := make(chan float64, writers)
+		for range writers {
+			go func() {
+				for attempt := 0; ; attempt++ {
+					value, err := incrementUnderLock(t.Context(), backend, notes, "counter")
+					if errors.Is(err, store.ErrConflict) && attempt < 200 {
+						time.Sleep(time.Duration(attempt%10+1) * time.Millisecond)
+						continue
+					}
+					if err == nil {
+						seen <- value
+					}
+					results <- err
+					return
+				}
+			}()
+		}
+		for range writers {
+			if err := <-results; err != nil {
+				t.Fatal(err)
+			}
+		}
+		close(seen)
+		values := map[float64]bool{}
+		for value := range seen {
+			values[value] = true
+		}
+		transaction = begin(t, backend)
+		stored, err := transaction.Find(t.Context(), store.Request{Collection: notes, ID: "counter"})
+		rollback(t, transaction)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count, _ := stored.Values["count"].NumberValue(); count != writers || len(values) != writers {
+			t.Fatalf("count after %d locked increments = %v, distinct results %v", writers, count, values)
 		}
 	})
 
@@ -134,6 +189,7 @@ func writeGuardManifest() schema.Manifest {
 		return []schema.Field{
 			textField(schema.StableID("guards-"+collection+"-title"), "title", false),
 			textField(schema.StableID("guards-"+collection+"-body"), "body", false),
+			numberField(schema.StableID("guards-"+collection+"-count"), "count"),
 		}
 	}
 	return schema.NewManifest(schema.Snapshot{
@@ -151,4 +207,28 @@ func writeGuardManifest() schema.Manifest {
 		},
 		Plugins: []schema.Plugin{},
 	})
+}
+
+// incrementUnderLock reads a document's count with LockMutation and writes it
+// back one higher in the same transaction.
+func incrementUnderLock(ctx context.Context, backend store.Store, collection schema.Collection, id string) (float64, error) {
+	transaction, err := backend.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	request := store.Request{Collection: collection, ID: id}
+	current, err := transaction.Find(ctx, request.CurrentRequest())
+	if err != nil {
+		_ = transaction.Rollback(ctx)
+		return 0, err
+	}
+	count, _ := current.Values["count"].NumberValue()
+	if _, err := transaction.Update(ctx, store.UpdateRequest{Request: request, Values: store.Values{"count": store.Number(count + 1)}, Current: &current}); err != nil {
+		_ = transaction.Rollback(ctx)
+		return 0, err
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return count + 1, nil
 }

@@ -1,6 +1,9 @@
 package field_test
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -44,6 +47,24 @@ func TestNormalizeSlugIsDeterministic(t *testing.T) {
 	for input, expected := range tests {
 		if actual := field.NormalizeSlug(input); actual != expected {
 			t.Errorf("NormalizeSlug(%q) = %q, want %q", input, actual, expected)
+		}
+	}
+}
+
+// The TypeScript normalizer in @riducms/protocol checks the same fixture, so a
+// preview in the admin or an app matches what the server stores.
+func TestNormalizeSlugMatchesTheSharedProtocolFixture(t *testing.T) {
+	encoded, err := os.ReadFile(filepath.Join("..", "testdata", "protocol", "slug.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct{ Input, Slug string }
+	if err := json.Unmarshal(encoded, &cases); err != nil || len(cases) == 0 {
+		t.Fatalf("slug fixture = %d cases, %v", len(cases), err)
+	}
+	for _, test := range cases {
+		if actual := field.NormalizeSlug(test.Input); actual != test.Slug {
+			t.Errorf("NormalizeSlug(%q) = %q, want %q", test.Input, actual, test.Slug)
 		}
 	}
 }

@@ -36,6 +36,7 @@ reference. If the Go syntax itself is unfamiliar, start with
 | Build document data or read values returned by the local API         | `store`     | [Documents and values](/docs/go-packages/store/)         |
 | Describe which documents a query or access rule should match         | `query`     | [Filters and paths](/docs/go-packages/query/)            |
 | Understand resolved field definitions, resource IDs, or locale types | `schema`    | [Schema and identifiers](/docs/go-packages/schema/)      |
+| Fetch a URL a person supplied without reaching private networks      | `publicnet` | [Custom endpoints](/docs/custom-endpoints/#fetch-urls)   |
 
 The import paths start with `github.com/riducms/ridu`. For example, import
 `"github.com/riducms/ridu/operation"` to use `operation.Keep(...)`. The root import,

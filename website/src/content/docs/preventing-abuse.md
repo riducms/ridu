@@ -103,23 +103,17 @@ verification, password validation, and administrative unlocks.
 
 ## Bound the HTTP server {#http-boundary}
 
-Generated projects already contain the following `HandlerOptions` block in
-`cmd/server/main.go`. Add the highlighted request and authentication limits alongside its existing
-host, origin, proxy, readiness, and HSTS settings:
+Generated projects pass a `HandlerOptions` block to `ridu.WithHandlerOptions` in
+`cmd/server/main.go`. Add the highlighted request and authentication limits to it. Leave the host,
+origin, proxy, readiness, and HSTS fields unset: `ridu.Execute` fills them from the variables below.
 
-```go title="cmd/server/main.go" add={7-10}
+```go title="cmd/server/main.go" add={3-6}
 ridu.WithHandlerOptions(ridu.HandlerOptions{
-	AdminAssets:             adminassets.FS(),
-	AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS"),
-	AllowedHosts:            envList("RIDU_ALLOWED_HOSTS"),
-	TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS"),
-	TrustedProxyHops:        envInt("RIDU_TRUSTED_PROXY_HOPS"),
-	MaxBodyBytes:            1 << 20, // 1 × 2²⁰ = 1,048,576 bytes (1 MiB)
-	AuthRateLimit:           5,
-	AuthRateWindow:          5 * time.Minute,
-	RequestTimeout:          20 * time.Second,
-	ReadinessTimeout:        envDuration("RIDU_READINESS_TIMEOUT"),
-	StrictTransportSecurity: os.Getenv("RIDU_STRICT_TRANSPORT_SECURITY"),
+	AdminAssets:    adminassets.FS(),
+	MaxBodyBytes:   1 << 20, // 1 × 2²⁰ = 1,048,576 bytes (1 MiB)
+	AuthRateLimit:  5,
+	AuthRateWindow: 5 * time.Minute,
+	RequestTimeout: 20 * time.Second,
 })
 ```
 
@@ -148,8 +142,9 @@ list, set `RIDU_TRUSTED_PROXY_HOPS` to the number of proxies each request passes
 and every visitor behind it shares one limit. Per-address limits don't stop an attacker who spreads
 guesses across many addresses; `MaxLoginAttempts` locks the account itself.
 
-The production executor enables secure cookies. If your application constructs `app.Handler`
-directly, set `SecureCookies: true` yourself whenever the public URL uses HTTPS.
+The production executor enables secure cookies unless `RIDU_SECURE_COOKIES=false`. If your
+application constructs `app.Handler` directly, set `SecureCookies: true` yourself whenever the public
+URL uses HTTPS. `app.Handler` reads no variables; only `ridu.Execute` does.
 
 ## Keep browser requests same-origin {#csrf-and-cors}
 

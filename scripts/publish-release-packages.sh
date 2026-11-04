@@ -44,6 +44,7 @@ artifacts=(
 	ridu-framework-plugin-seo.tgz
 	ridu-framework-plugin-form-builder.tgz
 	ridu-framework-plugin-graphql.tgz
+	ridu-framework-plugin-oauth.tgz
 	ridu-framework-admin.tgz
 )
 package_names=()

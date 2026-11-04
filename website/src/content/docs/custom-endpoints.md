@@ -63,7 +63,6 @@ This Payload-familiar tracking route is available at
 package content
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/riducms/ridu"
@@ -81,19 +80,18 @@ var Orders = ridu.Collection{
 		Summary: "Read order tracking",
 		Handler: func(ctx ridu.EndpointContext) {
 			if ctx.Actor == nil {
-				http.Error(
-					ctx.Writer,
-					"authentication required",
-					http.StatusUnauthorized,
-				)
+				ctx.Error(&ridu.OperationError{
+					Code:    "access_denied",
+					Status:  http.StatusUnauthorized,
+					Message: "Sign in to track orders.",
+				})
 				return
 			}
 
 			id := ctx.RouteParams["id"]
 			// The same value is also available through
 			// ctx.Request.PathValue("id").
-			ctx.Writer.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(ctx.Writer).Encode(map[string]string{
+			ctx.JSON(http.StatusOK, map[string]string{
 				"id":     id,
 				"status": "in-transit",
 			})
@@ -121,16 +119,28 @@ order, err := ctx.Local.Find(
 	},
 )
 if err != nil {
-	// Translate the operation failure to the endpoint's chosen public
-	// response.
-	http.Error(ctx.Writer, "order unavailable", http.StatusNotFound)
+	// Not found, access denied and validation failures keep their
+	// code, status and issues; anything else is an internal error.
+	ctx.Error(err)
 	return
 }
+ctx.JSON(http.StatusOK, order.Values)
 ```
 
-The endpoint chooses its own response envelope. Return JSON, text, an empty response, or a bounded
-stream as the route contract requires. Ridu still applies host and origin checks, CORS preflight,
-request IDs and deadlines, identity resolution, panic recovery, and error reporting.
+## Responses {#responses}
+
+The endpoint chooses its own response. Two helpers cover the common case:
+
+| Helper                    | Response                                                                                                                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ctx.JSON(status, value)` | `value` encoded as JSON with `Content-Type: application/json`. A value that can't be encoded becomes an internal error.                                                                                                                                            |
+| `ctx.Error(err)`          | Ridu's error envelope, exactly as REST sends it, so the SDK reads it as a `RiduError`. A `*ridu.OperationError` keeps its code, status, message and issues; any other error, and any 5xx, is answered as `internal` and reported to `HandlerOptions.RequestError`. |
+
+Return a Local call's error to `ctx.Error` as it is, or build a `*ridu.OperationError` for the
+endpoint's own failures. For anything else, such as text, an empty response or a bounded stream,
+write to `ctx.Writer` directly. Ridu still applies host and origin checks, CORS preflight, request
+IDs and deadlines, identity resolution, `Cache-Control: private, no-store`, panic recovery, and
+error reporting.
 
 ## Root and global endpoints {#root-and-global}
 
@@ -163,11 +173,56 @@ code out of that byte limit; pair it with explicit work, duration, and downstrea
 Use `ctx.Request.Context()` for every dependency call. It carries client cancellation and the
 framework request deadline. `ctx.RequestID` matches the `X-Request-ID` response header.
 
-Call `ctx.ReportError(err, "stable_code")` when the endpoint writes its own public failure response
-but an internal dependency error should reach `HandlerOptions.RequestError` and request
-observations. The trusted error is never copied into Ridu’s panic response. An authentication-like
-endpoint should call `ctx.AdmitAuthAttempt` before work that aliases or repeated requests can
-amplify.
+`ctx.Error` reports internal failures for you. Call `ctx.ReportError(err, "stable_code")` when the
+endpoint writes some other failure response but an internal dependency error should reach
+`HandlerOptions.RequestError` and request observations. The trusted error is never copied into
+Ridu’s panic response. An authentication-like endpoint should call `ctx.AdmitAuthAttempt` before
+work that aliases or repeated requests can amplify.
+
+## Fetch a URL someone supplied {#fetch-urls}
+
+An endpoint that fetches a URL from a request, such as a link to preview or a file to import,
+must not let that URL reach the server's own network. Use `publicnet.NewClient`, the client Ridu
+uses for `uploadFromURL`. It connects only to public internet addresses, checked after DNS on
+every connection and redirect, ignores proxy settings and doesn't ask for compressed responses:
+
+```go title="content/link-preview.go"
+var previews = publicnet.NewClient(publicnet.Options{MaxRedirects: 3})
+
+func linkPreview(ctx ridu.EndpointContext) {
+	unusable := func(message string) {
+		ctx.Error(&ridu.OperationError{
+			Code:    "validation",
+			Status:  http.StatusUnprocessableEntity,
+			Message: message,
+		})
+	}
+	target, err := publicnet.CheckURL(ctx.Request.Context(), ctx.Request.URL.Query().Get("url"))
+	if err != nil {
+		unusable(err.Error())
+		return
+	}
+	request, err := http.NewRequestWithContext(ctx.Request.Context(), http.MethodGet, target.String(), nil)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+	response, err := previews.Do(request)
+	if err != nil {
+		unusable("That page couldn't be fetched.")
+		return
+	}
+	defer response.Body.Close()
+	page, err := io.ReadAll(io.LimitReader(response.Body, 512<<10))
+	// …
+}
+```
+
+`CheckURL` gives a clear error before any request is sent; the client checks again when it
+connects, so a host whose DNS changes in between still can't reach a private address. Errors for
+such hosts match `publicnet.ErrNotPublic`. `Options.Timeout` bounds each request (15 seconds by
+default) and `Options.MaxRedirects` the redirects it follows (5 by default, none when negative).
+Bound what you read from the body yourself, as above.
 
 ## Call a custom endpoint from TypeScript {#typescript}
 

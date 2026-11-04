@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/mail"
 	"reflect"
 	"slices"
@@ -197,6 +198,11 @@ type Request struct {
 	// Draft overrides versioned read visibility or selects the status written
 	// by create/update. Nil preserves the caller's existing behavior.
 	Draft *bool
+	// Increments adds each amount to a top-level number field of an Update's
+	// document, read under the operation's row lock, so concurrent increments
+	// never read the same value. The sums join Data before any hook runs and
+	// go through field access, validation and hooks like submitted values.
+	Increments map[string]float64
 	// ExpectedRevision, when nonzero, must equal the revision of the document
 	// as the operation locks it, before any hook runs; otherwise the operation
 	// fails with a conflict. Writes the operation's own hooks make in its
@@ -687,6 +693,9 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			return Result{}, identityError
 		}
 	}
+	if err := validateIncrements(collection.Schema, request); err != nil {
+		return Result{}, err
+	}
 	submittedData = store.CloneValues(request.Data)
 	hasSubmittedChanges = len(submittedData) != 0
 	failureContext.ID = request.ID
@@ -1006,6 +1015,22 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			visibleOriginal := projections.Document(canonicalDocument, visibleSelection)
 			originalVisible = visibleOriginal.Values
 			operationContext.Original = &visibleOriginal
+			if len(request.Increments) != 0 {
+				// The row is locked, so no other transaction can change these
+				// values before this one commits.
+				if request.Data == nil {
+					request.Data = store.Values{}
+				}
+				if operationContext.Data == nil {
+					operationContext.Data = store.Values{}
+				}
+				for name, amount := range request.Increments {
+					current, _ := canonicalDocument.Values[name].NumberValue()
+					sum := store.Number(current + amount)
+					request.Data[name], operationContext.Data[name], submittedData[name] = sum, sum, sum
+				}
+				hasSubmittedChanges = true
+			}
 			if request.Operation == operation.DiscardDraft {
 				request.LocalizationPrepared = true
 				preparedValidationSelection = exactUpdateSelection(selection)
@@ -3646,6 +3671,51 @@ func (engine *Engine) transaction(ctx context.Context, intent transactionIntent)
 		return nil, false, err
 	}
 	return &transactionState{transaction: transaction, intent: intent}, true, nil
+}
+
+// validateIncrements admits Request.Increments only on an Update of a
+// collection document without drafts, for top-level, non-localized number
+// fields the request doesn't also set, by finite amounts.
+func validateIncrements(collection schema.Collection, request Request) error {
+	if len(request.Increments) == 0 {
+		return nil
+	}
+	invalid := func(name, message string) error {
+		return &Error{Code: "validation", Status: 422, Message: "increment is not supported", Issues: []schema.Issue{{Code: "invalid_increment", Path: name, Message: message}}}
+	}
+	if request.Operation != operation.Update || request.ID == "" || collection.Capabilities.Global {
+		return invalid("", "only an update of one collection document can increment a field")
+	}
+	if collection.Versions != nil && collection.Versions.Drafts {
+		return invalid("", "a collection with drafts can't increment a field, because a draft and the published document would count separately")
+	}
+	for name, amount := range request.Increments {
+		var definition *schema.Field
+		for index := range collection.Fields {
+			if collection.Fields[index].Name == name {
+				definition = &collection.Fields[index]
+			}
+		}
+		switch {
+		case definition == nil || definition.Type != schema.FieldTypeNumber:
+			return invalid(name, "only a top-level number field can be incremented")
+		case definition.Localized:
+			return invalid(name, "a localized field can't be incremented")
+		case math.IsNaN(amount) || math.IsInf(amount, 0):
+			return invalid(name, "the amount must be a finite number")
+		}
+		if _, set := request.Data[name]; set {
+			return invalid(name, "a field can't be set and incremented in one update")
+		}
+	}
+	return nil
+}
+
+// InTransaction reports whether ctx belongs to an operation's open
+// transaction, as a hook's context does until the transaction commits.
+func InTransaction(ctx context.Context) bool {
+	state, _ := ctx.Value(transactionKey{}).(*transactionState)
+	return state != nil && !state.finished
 }
 
 func requireWritableTransactionContext(ctx context.Context) error {

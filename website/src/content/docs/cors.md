@@ -44,7 +44,8 @@ matches the API's effective request origin.
 
 ## Configure a generated application {#generated-application}
 
-Generated servers read a comma-separated `RIDU_ALLOWED_ORIGINS` value:
+`ridu.Execute`, which every generated server calls, reads a comma-separated `RIDU_ALLOWED_ORIGINS`
+value:
 
 ```sh title="terminal"
 export RIDU_ALLOWED_ORIGINS='https://app.example.com,https://staff.example.com'
@@ -76,23 +77,27 @@ that starts the Ridu binary—for example in your container, service manager, or
 
 ### Projects created by `ridu new` {#generated-handler-options}
 
-Set `RIDU_ALLOWED_ORIGINS`; the generated `cmd/server/main.go` already passes its comma-separated
-values to `HandlerOptions.AllowedOrigins`. You do not need to edit the Go entrypoint for ordinary
-origin configuration.
+Set `RIDU_ALLOWED_ORIGINS`; `ridu.Execute` reads its comma-separated values into
+`HandlerOptions.AllowedOrigins` when the application leaves that field empty. You do not need to
+edit the Go entrypoint for ordinary origin configuration.
+
+To fix the list in code instead, set `AllowedOrigins` in the `HandlerOptions` that the generated
+`cmd/server/main.go` passes to `WithHandlerOptions`, as in the next example. A list set in code
+wins, and Ridu then ignores `RIDU_ALLOWED_ORIGINS`.
 
 ### Custom `ridu.Execute` entrypoints {#custom-execute}
 
 If the application did not come from `ridu new`, pass `WithHandlerOptions` directly to
-`ridu.Execute`, beside `WithStore` and `WithAddress`:
+`ridu.Execute`, beside `WithStore`. `ridu.Execute` reads `RIDU_ALLOWED_ORIGINS` here too, so set
+`AllowedOrigins` only when the list belongs in code:
 
-```go title="cmd/server/main.go" add={8-12}
+```go title="cmd/server/main.go" add={7-11}
 func main() {
 	err := ridu.Execute(
 		content.Config(),
 		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
 			return postgres.Open(ctx, os.Getenv("DATABASE_URL"))
 		}),
-		ridu.WithAddress(":8080"),
 		ridu.WithHandlerOptions(ridu.HandlerOptions{
 			AllowedOrigins: []string{
 				"https://app.example.com",
@@ -146,14 +151,12 @@ allows `Accept`, `Authorization`, `Content-Type`, and `If-Match`.
 For example, if the browser sends `X-Workspace-ID`, add `AllowedRequestHeaders` inside the existing
 `HandlerOptions` block in `cmd/server/main.go`:
 
-```go title="cmd/server/main.go" add={4-6}
+```go title="cmd/server/main.go" add={3-5}
 ridu.WithHandlerOptions(ridu.HandlerOptions{
-	AdminAssets:    adminassets.FS(),
-	AllowedOrigins: envList("RIDU_ALLOWED_ORIGINS"),
+	AdminAssets: adminassets.FS(),
 	AllowedRequestHeaders: []string{
 		"X-Workspace-ID",
 	},
-	AllowedHosts: envList("RIDU_ALLOWED_HOSTS"),
 })
 ```
 
@@ -177,7 +180,7 @@ const response = await fetch('https://cms.example.com/api/auth/me', {
 });
 ```
 
-Set `SecureCookies` in production; `ridu.Execute` does so unless disabled. The session
+Set `SecureCookies` in production; `ridu.Execute` does so unless `RIDU_SECURE_COOKIES=false`. The session
 cookie is `SameSite=Lax`. Separate origins that remain on the same site—for example two HTTPS
 subdomains—can use the cookie flow. A genuinely cross-site application uses the token transport;
 CORS alone cannot make the browser send an ineligible cookie.

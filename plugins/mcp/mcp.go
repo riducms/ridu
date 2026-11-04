@@ -45,6 +45,18 @@ type Config struct {
 	MaxLimit     int
 	Collections  []Resource
 	Globals      []Resource
+	// Authorization tells clients without a working credential where to sign
+	// in. The OAuth plugin (github.com/riducms/ridu/plugins/oauth) provides
+	// it; without one, clients authenticate with an API key.
+	Authorization Authorization
+}
+
+// Authorization is an authorization server that protects the MCP endpoint.
+type Authorization interface {
+	// Challenge is the WWW-Authenticate value for a request without a
+	// working credential, such as one naming the protected resource
+	// metadata (RFC 9728).
+	Challenge(*http.Request) string
 }
 
 // Plugin is one configured MCP transport.
@@ -88,7 +100,11 @@ func (plugin *Plugin) BindTransports(binding ridu.PluginTransportContext) ([]rid
 		MaxBodyBytes: plugin.config.MaxBodyBytes,
 		Handler: func(endpoint ridu.EndpointContext) {
 			if endpoint.Actor == nil {
-				endpoint.Writer.Header().Set("WWW-Authenticate", `Bearer realm="ridu-mcp"`)
+				challenge := `Bearer realm="ridu-mcp"`
+				if plugin.config.Authorization != nil {
+					challenge = plugin.config.Authorization.Challenge(endpoint.Request)
+				}
+				endpoint.Writer.Header().Set("WWW-Authenticate", challenge)
 				http.Error(endpoint.Writer, "MCP authentication required", http.StatusUnauthorized)
 				return
 			}

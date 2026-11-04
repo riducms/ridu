@@ -81,7 +81,10 @@ MongoDB all compare the live ordered ledger with the fingerprint embedded by `ri
 
 ## Configure the generated boundary {#environment}
 
-Generated projects read the deployment topology from environment variables:
+`ridu.Execute` and the official database adapters' `ConfigFromEnvironment` functions read the
+deployment topology from environment variables. Each variable fills only an option the application
+leaves unset in `cmd/server/main.go`; a value set in code wins. A malformed value, such as
+`RIDU_SHUTDOWN_TIMEOUT=soon`, stops the server with an error naming the variable:
 
 <dl class="doc-option-list">
   <div>
@@ -169,8 +172,9 @@ operations.
 
 ## Harden HTTP and proxies {#http}
 
-The generated environment covers common topology. `HandlerOptions` and `ServerOptions` expose finer
-bounds:
+The variables above cover common topology. `HandlerOptions` and `ServerOptions` expose finer
+bounds. A field set in code replaces its variable, as `AllowedHosts` and `ShutdownTimeout` do here;
+leave a field unset to let the deployment environment choose it:
 
 ```go title="cmd/server/main.go"
 ridu.WithHandlerOptions(ridu.HandlerOptions{

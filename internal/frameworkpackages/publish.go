@@ -39,6 +39,7 @@ var packages = []packageDefinition{
 	{name: "@riducms/plugin-seo", source: "packages/plugin-seo", target: "ridu-framework-plugin-seo", build: true},
 	{name: "@riducms/plugin-form-builder", source: "packages/plugin-form-builder", target: "ridu-framework-plugin-form-builder", build: true},
 	{name: "@riducms/plugin-graphql", source: "packages/plugin-graphql", target: "ridu-framework-plugin-graphql", build: true},
+	{name: "@riducms/plugin-oauth", source: "packages/plugin-oauth", target: "ridu-framework-plugin-oauth", build: true},
 }
 
 // Publish copies source packages into ignored directories covered by the

@@ -49,14 +49,14 @@ func TestTypedTaskRunsThroughDurableRegistryAndPersistsOutput(t *testing.T) {
 	}, TaskQueue("notifications"))
 	application, _ := newTaskTestApp(t, task)
 
-	receipt, err := task.Enqueue(context.Background(), application, taskGreetingInput{Name: "Ada"}, TaskEnqueueOptions{})
+	receipt, err := task.Enqueue(context.Background(), application.Local(), taskGreetingInput{Name: "Ada"}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if receipt.ID == "" || receipt.Queue != "notifications" || receipt.Slug != "send-greeting" {
 		t.Fatalf("receipt = %#v", receipt)
 	}
-	before, err := task.Result(context.Background(), application, receipt.ID)
+	before, err := task.Result(context.Background(), application.Local(), receipt.ID)
 	if err != nil || before.State != store.TaskStateQueued || before.HasOutput {
 		t.Fatalf("queued result = %#v, %v", before, err)
 	}
@@ -64,7 +64,7 @@ func TestTypedTaskRunsThroughDurableRegistryAndPersistsOutput(t *testing.T) {
 	if err != nil || summary.Claimed != 1 || summary.Succeeded != 1 {
 		t.Fatalf("run summary = %#v, %v", summary, err)
 	}
-	after, err := task.Result(context.Background(), application, receipt.ID)
+	after, err := task.Result(context.Background(), application.Local(), receipt.ID)
 	if err != nil || after.State != store.TaskStateSucceeded || !after.HasOutput || after.Output.Greeting != "Hello Ada" {
 		t.Fatalf("completed result = %#v, %v", after, err)
 	}
@@ -84,7 +84,7 @@ func TestTaskAdmissionReconcilerRunsBeforeEveryClaimCycle(t *testing.T) {
 		if reconciliations.Add(1) != 1 {
 			return nil
 		}
-		_, err := task.Enqueue(ctx, application, struct{}{}, TaskEnqueueOptions{})
+		_, err := task.Enqueue(ctx, application.Local(), struct{}{}, TaskEnqueueOptions{})
 		return err
 	}))
 	application, _ := newTaskTestApp(t, task)
@@ -108,7 +108,7 @@ func TestTaskAdmissionReconcilerFailureIsSurfacedWithoutStarvingQueuedTasks(t *t
 		return struct{}{}, nil
 	}, TaskAdmissionReconciler(func(context.Context, *App) error { return reconcileError }))
 	application, _ := newTaskTestApp(t, task)
-	if _, err := task.Enqueue(t.Context(), application, struct{}{}, TaskEnqueueOptions{}); err != nil {
+	if _, err := task.Enqueue(t.Context(), application.Local(), struct{}{}, TaskEnqueueOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -131,11 +131,11 @@ func TestTaskRetryClassificationAndTerminalFailureAreDurable(t *testing.T) {
 			return struct{}{}, AbortTask("invalid_destination", errors.New("destination is invalid"))
 		})
 		application, _ := newTaskTestApp(t, retrying, terminal)
-		retryReceipt, err := retrying.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+		retryReceipt, err := retrying.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		terminalReceipt, err := terminal.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+		terminalReceipt, err := terminal.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -143,7 +143,7 @@ func TestTaskRetryClassificationAndTerminalFailureAreDurable(t *testing.T) {
 		if err != nil || summary.Retried != 1 || summary.Failed != 1 {
 			t.Fatalf("first run = %#v, %v", summary, err)
 		}
-		failed, err := terminal.Result(context.Background(), application, terminalReceipt.ID)
+		failed, err := terminal.Result(context.Background(), application.Local(), terminalReceipt.ID)
 		if err != nil || failed.State != store.TaskStateFailed || failed.LastErrorCode != "invalid_destination" || failed.LastError != "destination is invalid" {
 			t.Fatalf("terminal result = %#v, %v", failed, err)
 		}
@@ -152,7 +152,7 @@ func TestTaskRetryClassificationAndTerminalFailureAreDurable(t *testing.T) {
 		if err != nil || summary.Succeeded != 1 {
 			t.Fatalf("retry run = %#v, %v", summary, err)
 		}
-		succeeded, err := retrying.Result(context.Background(), application, retryReceipt.ID)
+		succeeded, err := retrying.Result(context.Background(), application.Local(), retryReceipt.ID)
 		if err != nil || !succeeded.HasOutput || succeeded.Output != "done" || succeeded.Attempts != 2 {
 			t.Fatalf("retry result = %#v, %v", succeeded, err)
 		}
@@ -165,7 +165,7 @@ func TestTaskHandlerPanicIsRecoveredWithoutPersistingOrReturningItsValue(t *test
 		panic(secret)
 	}, TaskRetries(1, time.Millisecond, time.Second, TaskBackoffFixed))
 	application, _ := newTaskTestApp(t, panicking)
-	receipt, err := panicking.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	receipt, err := panicking.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestTaskHandlerPanicIsRecoveredWithoutPersistingOrReturningItsValue(t *test
 	if summary.Claimed != 1 || summary.Failed != 1 {
 		t.Fatalf("run summary = %#v", summary)
 	}
-	result, err := panicking.Result(context.Background(), application, receipt.ID)
+	result, err := panicking.Result(context.Background(), application.Local(), receipt.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestTaskHandlerPanickingErrorIsRecoveredWithoutEscapingTheWorker(t *testing
 		return struct{}{}, panickingTaskError(secret)
 	}, TaskRetries(1, time.Millisecond, time.Second, TaskBackoffFixed))
 	application, _ := newTaskTestApp(t, panicking)
-	receipt, err := panicking.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	receipt, err := panicking.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestTaskHandlerPanickingErrorIsRecoveredWithoutEscapingTheWorker(t *testing
 	if summary.Claimed != 1 || summary.Failed != 1 {
 		t.Fatalf("run summary = %#v", summary)
 	}
-	result, err := panicking.Result(context.Background(), application, receipt.ID)
+	result, err := panicking.Result(context.Background(), application.Local(), receipt.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestTaskRuntimePanicIsContainedWithoutPersistingOrReportingThePanicValue(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := definition.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	receipt, err := definition.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestTaskBackoffIsDeterministicAndCapped(t *testing.T) {
 func TestFutureTaskIsNotClaimedEarly(t *testing.T) {
 	task := NewTask("future-task", func(_ TaskContext, _ struct{}) (struct{}, error) { return struct{}{}, nil })
 	application, _ := newTaskTestApp(t, task)
-	receipt, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{RunAt: time.Now().Add(time.Hour)})
+	receipt, err := task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{RunAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestFutureTaskIsNotClaimedEarly(t *testing.T) {
 	if err != nil || summary.Claimed != 0 {
 		t.Fatalf("early run = %#v, %v", summary, err)
 	}
-	result, err := task.Result(context.Background(), application, receipt.ID)
+	result, err := task.Result(context.Background(), application.Local(), receipt.ID)
 	if err != nil || result.State != store.TaskStateQueued {
 		t.Fatalf("future result = %#v, %v", result, err)
 	}
@@ -323,11 +323,11 @@ func TestTypedTaskRejectsAnUnregisteredDefinitionAndOversizedInput(t *testing.T)
 	unregistered := NewTask("unregistered-task", func(_ TaskContext, input taskGreetingInput) (struct{}, error) { return struct{}{}, nil })
 	wrongExactType := NewTask("registered-task", func(_ TaskContext, input taskGreetingInputTwin) (struct{}, error) { return struct{}{}, nil })
 	application, _ := newTaskTestApp(t, registered)
-	_, err := unregistered.Enqueue(context.Background(), application, taskGreetingInput{Name: "Ada"}, TaskEnqueueOptions{})
+	_, err := unregistered.Enqueue(context.Background(), application.Local(), taskGreetingInput{Name: "Ada"}, TaskEnqueueOptions{})
 	assertTaskErrorCode(t, err, TaskErrorNotRegistered)
-	_, err = wrongExactType.Enqueue(context.Background(), application, taskGreetingInputTwin{Name: "Ada"}, TaskEnqueueOptions{})
+	_, err = wrongExactType.Enqueue(context.Background(), application.Local(), taskGreetingInputTwin{Name: "Ada"}, TaskEnqueueOptions{})
 	assertTaskErrorCode(t, err, TaskErrorNotRegistered)
-	_, err = registered.Enqueue(context.Background(), application, taskGreetingInput{Name: strings.Repeat("x", MaxTaskPayloadBytes)}, TaskEnqueueOptions{})
+	_, err = registered.Enqueue(context.Background(), application.Local(), taskGreetingInput{Name: strings.Repeat("x", MaxTaskPayloadBytes)}, TaskEnqueueOptions{})
 	assertTaskErrorCode(t, err, TaskErrorInvalidInput)
 }
 
@@ -336,7 +336,7 @@ func TestTypedTaskResultRejectsPersistedOutputOutsideItsExactContract(t *testing
 		return taskGreetingOutput{Greeting: "hello"}, nil
 	})
 	application, backend := newTaskTestApp(t, task)
-	receipt, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	receipt, err := task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestTypedTaskResultRejectsPersistedOutputOutsideItsExactContract(t *testing
 	if err := backend.CompleteTask(context.Background(), receipt.ID, claimed[0].LeaseToken, json.RawMessage(`{"greeting":"hello","unexpected":true}`)); err != nil {
 		t.Fatal(err)
 	}
-	_, err = task.Result(context.Background(), application, receipt.ID)
+	_, err = task.Result(context.Background(), application.Local(), receipt.ID)
 	assertTaskErrorCode(t, err, TaskErrorInvalidOutput)
 }
 
@@ -377,17 +377,17 @@ func TestTaskDocumentReferencesAreAdmittedAndCleanedUpWithHardDelete(t *testing.
 	}
 	targetReference := store.DocumentReference{CollectionID: application.bySlug["posts"].ID, DocumentID: target.ID}
 	requesterReference := store.DocumentReference{CollectionID: application.bySlug["posts"].ID, DocumentID: requester.ID}
-	receipt, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{Target: &targetReference, RequestedBy: &requesterReference})
+	receipt, err := task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{Target: &targetReference, RequestedBy: &requesterReference})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Delete(context.Background(), "posts", requester.ID, MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = task.Result(context.Background(), application, receipt.ID)
+	_, err = task.Result(context.Background(), application.Local(), receipt.ID)
 	assertTaskErrorCode(t, err, TaskErrorNotFound)
 	missing := store.DocumentReference{CollectionID: targetReference.CollectionID, DocumentID: "missing"}
-	_, err = task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{Target: &missing})
+	_, err = task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{Target: &missing})
 	assertTaskErrorCode(t, err, TaskErrorNotFound)
 }
 
@@ -397,7 +397,7 @@ func TestTaskCancellationFencesTheActiveLease(t *testing.T) {
 		return struct{}{}, ctx.Context.Err()
 	})
 	application, backend := newTaskTestApp(t, task)
-	receipt, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	receipt, err := task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,13 +405,13 @@ func TestTaskCancellationFencesTheActiveLease(t *testing.T) {
 	if err != nil || len(claimed) != 1 {
 		t.Fatalf("claim = %#v, %v", claimed, err)
 	}
-	if err := task.Cancel(context.Background(), application, receipt.ID); err != nil {
+	if err := task.Cancel(context.Background(), application.Local(), receipt.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.CompleteTask(context.Background(), receipt.ID, claimed[0].LeaseToken, []byte(`{}`)); !errors.Is(err, store.ErrTaskLeaseLost) {
 		t.Fatalf("stale completion error = %v", err)
 	}
-	result, err := task.Result(context.Background(), application, receipt.ID)
+	result, err := task.Result(context.Background(), application.Local(), receipt.ID)
 	if err != nil || result.State != store.TaskStateCanceled {
 		t.Fatalf("canceled result = %#v, %v", result, err)
 	}
@@ -426,7 +426,7 @@ func TestRunningHandlerCannotCompleteAfterCancellationBeforeHeartbeat(t *testing
 		return struct{}{}, nil
 	})
 	application, _ := newTaskTestApp(t, task)
-	receipt, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	receipt, err := task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -442,12 +442,12 @@ func TestRunningHandlerCannotCompleteAfterCancellationBeforeHeartbeat(t *testing
 	case <-time.After(time.Second):
 		t.Fatal("task did not start")
 	}
-	if err := task.Cancel(context.Background(), application, receipt.ID); err != nil {
+	if err := task.Cancel(context.Background(), application.Local(), receipt.ID); err != nil {
 		t.Fatal(err)
 	}
 	close(release)
 	assertTaskErrorCode(t, <-run, TaskErrorLeaseLost)
-	result, err := task.Result(context.Background(), application, receipt.ID)
+	result, err := task.Result(context.Background(), application.Local(), receipt.ID)
 	if err != nil || result.State != store.TaskStateCanceled || result.LastErrorCode != "" {
 		t.Fatalf("canceled result was overwritten = %#v, %v", result, err)
 	}
@@ -469,7 +469,7 @@ func TestTaskHeartbeatPreventsConcurrentCrashRecovery(t *testing.T) {
 			}
 		})
 		application, backend := newTaskTestApp(t, task)
-		if _, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{}); err != nil {
+		if _, err := task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{}); err != nil {
 			t.Fatal(err)
 		}
 		type runResult struct {
@@ -516,7 +516,7 @@ func TestEveryTaskInAClaimedBatchStartsAndHeartbeatsImmediately(t *testing.T) {
 		})
 		application, backend := newTaskTestApp(t, task)
 		for id := 1; id <= 2; id++ {
-			if _, err := task.Enqueue(context.Background(), application, postgresStyleTaskInput{ID: id}, TaskEnqueueOptions{}); err != nil {
+			if _, err := task.Enqueue(context.Background(), application.Local(), postgresStyleTaskInput{ID: id}, TaskEnqueueOptions{}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -559,7 +559,7 @@ func TestTaskHeartbeatsWhileRegisteredInputValidationRuns(t *testing.T) {
 			return struct{}{}, nil
 		})
 		application, backend := newTaskTestApp(t, task)
-		if _, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{}); err != nil {
+		if _, err := task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{}); err != nil {
 			t.Fatal(err)
 		}
 		runtime := application.taskRegistry[task.TaskSlug()]
@@ -607,7 +607,7 @@ func TestTaskWorkerCancellationReturnsTheLeaseForImmediateRecovery(t *testing.T)
 		return struct{}{}, ctx.Context.Err()
 	})
 	application, backend := newTaskTestApp(t, task)
-	receipt, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	receipt, err := task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -653,7 +653,7 @@ func TestTaskWorkerShutdownReleasesWhenHeartbeatObservesParentCancellation(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := definition.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	receipt, err := definition.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -693,11 +693,11 @@ func TestTaskOutputAndPersistedErrorsAreBounded(t *testing.T) {
 		return struct{}{}, AbortTask("provider_rejected", errors.New(strings.Repeat("é", maxTaskErrorBytes)))
 	})
 	application, _ := newTaskTestApp(t, oversizedOutput, oversizedError)
-	outputReceipt, err := oversizedOutput.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	outputReceipt, err := oversizedOutput.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	errorReceipt, err := oversizedError.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+	errorReceipt, err := oversizedError.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -705,11 +705,11 @@ func TestTaskOutputAndPersistedErrorsAreBounded(t *testing.T) {
 	if err != nil || summary.Failed != 2 {
 		t.Fatalf("run = %#v, %v", summary, err)
 	}
-	outputResult, err := oversizedOutput.Result(context.Background(), application, outputReceipt.ID)
+	outputResult, err := oversizedOutput.Result(context.Background(), application.Local(), outputReceipt.ID)
 	if err != nil || outputResult.LastErrorCode != "task_output_too_large" {
 		t.Fatalf("output result = %#v, %v", outputResult, err)
 	}
-	errorResult, err := oversizedError.Result(context.Background(), application, errorReceipt.ID)
+	errorResult, err := oversizedError.Result(context.Background(), application.Local(), errorReceipt.ID)
 	if err != nil || errorResult.LastErrorCode != "provider_rejected" || len(errorResult.LastError) > maxTaskErrorBytes || !strings.HasPrefix(errorResult.LastError, "é") {
 		t.Fatalf("error result = %#v, %v", errorResult, err)
 	}
@@ -823,4 +823,70 @@ func (backend *shutdownHeartbeatTaskStore) HeartbeatTask(ctx context.Context, _ 
 func (backend *shutdownHeartbeatTaskStore) ReleaseTask(ctx context.Context, id, leaseToken string, delay time.Duration, code, message string) error {
 	backend.releases.Add(1)
 	return backend.Store.ReleaseTask(ctx, id, leaseToken, delay, code, message)
+}
+
+func TestTasksEnqueueThroughLocalFromEndpointsHooksAndTasks(t *testing.T) {
+	var followUps atomic.Int32
+	var followUp TypedTask[taskGreetingInput, struct{}]
+	followUp = NewTask("follow-up", func(TaskContext, taskGreetingInput) (struct{}, error) {
+		followUps.Add(1)
+		return struct{}{}, nil
+	})
+	greeting := NewTask("greet-from-local", func(ctx TaskContext, input taskGreetingInput) (taskGreetingOutput, error) {
+		// A task starts the next step through its own Local.
+		if _, err := followUp.Enqueue(ctx.Context, ctx.Local, input, TaskEnqueueOptions{}); err != nil {
+			return taskGreetingOutput{}, err
+		}
+		return taskGreetingOutput{Greeting: "Hello " + input.Name}, nil
+	})
+	var insideTransaction, afterCommit error
+	var committedTask string
+	config := taskTestConfig(greeting, followUp)
+	config.Collections[0].Hooks.AfterChange = []Hook{func(ctx HookContext) error {
+		_, insideTransaction = greeting.Enqueue(ctx.Context, ctx.Local, taskGreetingInput{Name: "inside"}, TaskEnqueueOptions{})
+		return nil
+	}}
+	config.Collections[0].Hooks.AfterCommit = []Hook{func(ctx HookContext) error {
+		var receipt TaskReceipt[taskGreetingOutput]
+		receipt, afterCommit = greeting.Enqueue(ctx.Context, ctx.Local, taskGreetingInput{Name: "committed"}, TaskEnqueueOptions{})
+		committedTask = receipt.ID
+		return afterCommit
+	}}
+	application, err := New(config, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Hello")}, MutationOptions{System: true}); err != nil {
+		t.Fatal(err)
+	}
+	assertTaskErrorCode(t, insideTransaction, TaskErrorInTransaction)
+	if afterCommit != nil || committedTask == "" {
+		t.Fatalf("AfterCommit enqueue = %q, %v", committedTask, afterCommit)
+	}
+	queued, err := application.tasks.ListTasks(context.Background(), store.TaskList{Slug: "greet-from-local", Limit: 10})
+	if err != nil || len(queued) != 1 || queued[0].ID != committedTask {
+		t.Fatalf("queued greetings = %#v, %v; the in-transaction enqueue must not be stored", queued, err)
+	}
+	if err := greeting.Cancel(context.Background(), application.Local(), committedTask); err != nil {
+		t.Fatal(err)
+	}
+
+	// An endpoint enqueues and follows the task with the Local its context carries.
+	receipt, err := greeting.Enqueue(context.Background(), application.Local(), taskGreetingInput{Name: "Ada"}, TaskEnqueueOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.RunTasks(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	result, err := greeting.Result(context.Background(), application.Local(), receipt.ID)
+	if err != nil || !result.HasOutput || result.Output.Greeting != "Hello Ada" {
+		t.Fatalf("result = %#v, %v", result, err)
+	}
+	if _, err := application.RunTasks(context.Background(), 10); err != nil || followUps.Load() != 1 {
+		t.Fatalf("follow-up runs = %d, %v", followUps.Load(), err)
+	}
+	if _, err := greeting.Enqueue(context.Background(), nil, taskGreetingInput{}, TaskEnqueueOptions{}); err == nil {
+		t.Fatal("a nil Local enqueued a task")
+	}
 }

@@ -108,9 +108,20 @@ export function createAdminApplicationConfig(options: AdminApplicationConfigOpti
 				},
 			},
 		},
+		// The development admin origin forwards what the Go server answers beside the admin in
+		// production: the API and well-known metadata such as OAuth's. The Host header stays the
+		// browser's, as it would on one production origin, so URLs the server builds from it,
+		// such as an OAuth issuer's endpoints, point back at this origin.
 		...(options.proxyTarget === undefined
 			? {}
-			: { server: { proxy: { "/api": options.proxyTarget } } }),
+			: {
+					server: {
+						proxy: {
+							"/api": { target: options.proxyTarget, changeOrigin: false },
+							"/.well-known": { target: options.proxyTarget, changeOrigin: false },
+						},
+					},
+				}),
 	}));
 }
 

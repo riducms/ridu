@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SchemaField } from "@riducms/protocol";
+	import { normalizeSlug, type SchemaField } from "@riducms/protocol";
 	import { fieldControlARIA, Button, Input } from "@riducms/ui";
 	import { untrack } from "svelte";
 
@@ -9,7 +9,7 @@
 	} from "@admin/core/forms/form-controller.svelte";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 	import FieldShell from "@admin/fields/field-shell.svelte";
-	import { normalizeSlug, slugFollowsSource } from "@admin/fields/text/slug";
+	import { slugFollowsSource } from "@admin/fields/text/slug";
 	import "@admin/fields/text/slug-field.scss";
 
 	interface Props {

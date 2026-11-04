@@ -2,8 +2,11 @@ package core
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"github.com/riducms/ridu/internal/httpapi"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -68,6 +71,43 @@ type EndpointContext struct {
 	// ReportError records a stable code and sends trusted detail to
 	// HandlerOptions.RequestError without exposing it to the client.
 	ReportError func(error, string)
+
+	writeError func(error)
+}
+
+// JSON answers with status and value encoded as JSON, with an
+// application/json Content-Type. A value that can't be encoded is answered as
+// Error answers an internal failure.
+func (ctx EndpointContext) JSON(status int, value any) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		ctx.Error(fmt.Errorf("encode endpoint response: %w", err))
+		return
+	}
+	ctx.Writer.Header().Set("Content-Type", "application/json")
+	ctx.Writer.WriteHeader(status)
+	_, _ = ctx.Writer.Write(append(encoded, '\n'))
+}
+
+// Error answers with Ridu's error envelope, exactly as REST does, so the SDK
+// reads it as a RiduError. An *OperationError, such as one returned by Local
+// or built by the handler, keeps its code, status, message and validation
+// issues. Any other error, and any 5xx, is answered as a generic internal
+// error, and the error itself goes to HandlerOptions.RequestError.
+func (ctx EndpointContext) Error(err error) {
+	ctx.Writer.Header().Set("Content-Type", "application/json")
+	if ctx.writeError != nil {
+		ctx.writeError(err)
+		return
+	}
+	// A context built outside Ridu's handler, as in a test, has no request
+	// observation to record; it still reports internal failures.
+	envelope := httpapi.ErrorEnvelope(ctx.RequestID, err)
+	if envelope.Error.Status >= http.StatusInternalServerError && ctx.ReportError != nil {
+		ctx.ReportError(err, string(envelope.Error.Code))
+	}
+	ctx.Writer.WriteHeader(envelope.Error.Status)
+	_ = json.NewEncoder(ctx.Writer).Encode(envelope)
 }
 
 // EndpointHandler serves one trusted compiled custom route. It writes the

@@ -5,6 +5,7 @@ export {
 	resolveBlockTypes,
 	mapBlockTypes,
 } from "./schema-registry.js";
+export { normalizeSlug } from "./slug.js";
 export * from "./generated.js";
 
 // The generator owns versioned wire shapes; this authored entry point owns the

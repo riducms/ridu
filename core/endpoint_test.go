@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -204,6 +205,96 @@ func TestCustomEndpointBodiesAreBoundedAndPanicsAreRedacted(t *testing.T) {
 	streamBody := readBody(t, streamed)
 	if streamed.StatusCode != http.StatusOK || streamBody != "" || streamObservation.Status != http.StatusOK {
 		t.Fatalf("stream panic response = %d %q, observation = %#v", streamed.StatusCode, streamBody, streamObservation)
+	}
+}
+
+func TestCustomEndpointJSONAndErrorAnswerAsREST(t *testing.T) {
+	var diagnostics []error
+	var observations []ridu.RequestObservation
+	application, err := ridu.New(ridu.Config{
+		Name:        "Endpoint responses",
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title").Required()}}},
+		Endpoints: []ridu.Endpoint{
+			{Method: http.MethodPost, Path: "/invalid", Handler: func(ctx ridu.EndpointContext) {
+				_, err := ctx.Local.Create(ctx.Request.Context(), "posts", store.Values{}, ridu.MutationOptions{System: true})
+				ctx.Error(err)
+			}},
+			{Method: http.MethodGet, Path: "/denied", Handler: func(ctx ridu.EndpointContext) {
+				ctx.Error(&ridu.OperationError{Code: "access_denied", Status: http.StatusUnauthorized, Message: "Sign in first."})
+			}},
+			{Method: http.MethodGet, Path: "/broken", Handler: func(ctx ridu.EndpointContext) {
+				ctx.Error(errors.New("private database detail"))
+			}},
+			{Method: http.MethodGet, Path: "/created", Handler: func(ctx ridu.EndpointContext) {
+				ctx.JSON(http.StatusCreated, map[string]any{"id": "post-1", "tags": []string{"go"}})
+			}},
+			{Method: http.MethodGet, Path: "/unencodable", Handler: func(ctx ridu.EndpointContext) {
+				ctx.JSON(http.StatusOK, map[string]any{"handler": func() {}})
+			}},
+		},
+	}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := handlerClient(application.Handler(ridu.HandlerOptions{
+		RequestError: func(event ridu.RequestErrorEvent) { diagnostics = append(diagnostics, event.Error) },
+		Observe:      func(observation ridu.RequestObservation) { observations = append(observations, observation) },
+	}))
+	envelope := func(path, method string, status int) map[string]any {
+		t.Helper()
+		response := requestJSON(t, client, method, "http://ridu.test/api"+path, nil, "")
+		body := readBody(t, response)
+		if response.StatusCode != status || response.Header.Get("Content-Type") != "application/json" {
+			t.Fatalf("%s = %d %q: %s", path, response.StatusCode, response.Header.Get("Content-Type"), body)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+			t.Fatalf("%s body %q: %v", path, body, err)
+		}
+		return decoded
+	}
+
+	invalid := envelope("/invalid", http.MethodPost, http.StatusUnprocessableEntity)["error"].(map[string]any)
+	issues, _ := invalid["issues"].([]any)
+	if invalid["code"] != "validation" || len(issues) != 1 || issues[0].(map[string]any)["path"] != "title" || invalid["requestId"] == "" {
+		t.Fatalf("validation envelope = %#v", invalid)
+	}
+	denied := envelope("/denied", http.MethodGet, http.StatusUnauthorized)["error"].(map[string]any)
+	if denied["code"] != "access_denied" || denied["message"] != "Sign in first." {
+		t.Fatalf("denied envelope = %#v", denied)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("client errors were reported as request failures: %v", diagnostics)
+	}
+	broken := envelope("/broken", http.MethodGet, http.StatusInternalServerError)["error"].(map[string]any)
+	if broken["code"] != "internal" || broken["message"] != "internal server error" {
+		t.Fatalf("internal envelope = %#v", broken)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Error() != "private database detail" {
+		t.Fatalf("internal diagnostics = %v", diagnostics)
+	}
+	created := envelope("/created", http.MethodGet, http.StatusCreated)
+	if created["id"] != "post-1" || len(created["tags"].([]any)) != 1 {
+		t.Fatalf("JSON body = %#v", created)
+	}
+	unencodable := envelope("/unencodable", http.MethodGet, http.StatusInternalServerError)["error"].(map[string]any)
+	if unencodable["code"] != "internal" || len(diagnostics) != 2 {
+		t.Fatalf("unencodable = %#v, diagnostics %v", unencodable, diagnostics)
+	}
+	codes := map[string]string{}
+	for _, observation := range observations {
+		codes[observation.Path] = observation.ErrorCode
+	}
+	if codes["/api/invalid"] != "validation" || codes["/api/denied"] != "access_denied" || codes["/api/broken"] != "internal" || codes["/api/created"] != "" {
+		t.Fatalf("observed error codes = %v", codes)
+	}
+
+	// A context a test builds by hand answers the same way.
+	recorder := httptest.NewRecorder()
+	var reported string
+	ridu.EndpointContext{Writer: recorder, RequestID: "test", ReportError: func(_ error, code string) { reported = code }}.Error(errors.New("hidden"))
+	if recorder.Code != http.StatusInternalServerError || reported != "internal" || strings.Contains(recorder.Body.String(), "hidden") {
+		t.Fatalf("hand-built context = %d %q reported %q", recorder.Code, recorder.Body.String(), reported)
 	}
 }
 

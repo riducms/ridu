@@ -121,6 +121,9 @@ only replaces the destination after the complete build succeeds.
   from that directory, or pass `--directory`.
 - **The host cannot connect to the server:** set `PORT` or `RIDU_ADDRESS`, and configure its health
   check to use `/readyz`.
+- **The server stops with an error that names a variable:** for example
+  `RIDU_TRUSTED_PROXY_HOPS must be a whole number of zero or more, not "-1"`. Correct or unset that
+  variable, then start the server again.
 
 Continue with the [Railway guide](./railway.md) for a concrete hosted deployment, or
 the [production overview](../production.md) for security, health checks, backups, and rollout

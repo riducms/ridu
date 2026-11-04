@@ -62,8 +62,8 @@ func proveGeneratedMongoDBStarterDeployment(
 	// so the replacement can be admitted before the old process drains.
 	serverPath := filepath.Join(project.root, "cmd", "server", "main.go")
 	mongoDBProductionReplaceFile(t, serverPath,
-		`ApplicationName:        "ridu-server",`,
-		`ApplicationName:        "ridu-server-code-only-rollout",`,
+		`config.ApplicationName = "ridu-server"`,
+		`config.ApplicationName = "ridu-server-code-only-rollout"`,
 	)
 	if output, err := harness.run(30*time.Second, project.root, nil, "gofmt", "-w", "cmd/server/main.go"); err != nil {
 		t.Fatalf("format generated MongoDB code-only release: %v\n%s", err, output)

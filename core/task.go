@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	operationengine "github.com/riducms/ridu/internal/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -136,7 +137,8 @@ type TaskDefinition interface {
 }
 
 // TypedTask is one compiled, typed task definition. Add it to Config.Tasks,
-// then use Enqueue, Result, and Cancel from trusted application code.
+// then use Enqueue, Result, and Cancel with the Local API, which endpoints,
+// hooks and tasks receive in their contexts and App.Local returns.
 type TypedTask[Input, Output any] struct{ runtime taskRuntime }
 
 // NewTask defines a compiled task handler. Validation is deterministic during
@@ -251,9 +253,18 @@ type TaskResult[Output any] struct {
 
 // Enqueue validates and durably stores typed input. The task must be the same
 // slug/type contract registered in the running application's Config.Tasks.
-func (task TypedTask[Input, Output]) Enqueue(ctx context.Context, application *App, input Input, options TaskEnqueueOptions) (TaskReceipt[Output], error) {
-	if application == nil {
-		return TaskReceipt[Output]{}, newTaskError(TaskErrorUnavailable, "task runtime is unavailable", nil)
+// Enqueue is trusted code's choice, like any work an endpoint does: it checks
+// no access rule, so authorize the actor first.
+//
+// A task can't be enqueued inside an operation's transaction, such as from a
+// BeforeChange or AfterChange hook, because the store admits it at once and a
+// rollback could not withdraw it. Enqueue from an AfterCommit hook instead,
+// which runs once the transaction commits; if work must never be lost between
+// that commit and the enqueue, register a TaskAdmissionReconciler.
+func (task TypedTask[Input, Output]) Enqueue(ctx context.Context, local *LocalAPI, input Input, options TaskEnqueueOptions) (TaskReceipt[Output], error) {
+	application, err := taskApplication(ctx, local, true)
+	if err != nil {
+		return TaskReceipt[Output]{}, err
 	}
 	encoded, err := marshalTaskJSON(input)
 	if err != nil {
@@ -266,10 +277,12 @@ func (task TypedTask[Input, Output]) Enqueue(ctx context.Context, application *A
 	return TaskReceipt[Output]{ID: queued.ID, Slug: queued.Slug, Queue: queued.Queue, RunAt: queued.RunAt}, nil
 }
 
-// Result loads and decodes one task created by this typed definition.
-func (task TypedTask[Input, Output]) Result(ctx context.Context, application *App, id string) (TaskResult[Output], error) {
-	if application == nil || application.tasks == nil {
-		return TaskResult[Output]{}, newTaskError(TaskErrorUnavailable, "task store is unavailable", nil)
+// Result loads and decodes one task created by this typed definition, so a
+// caller can follow it to completion. Like Enqueue, it checks no access rule.
+func (task TypedTask[Input, Output]) Result(ctx context.Context, local *LocalAPI, id string) (TaskResult[Output], error) {
+	application, err := taskApplication(ctx, local, false)
+	if err != nil {
+		return TaskResult[Output]{}, err
 	}
 	record, err := application.tasks.FindTask(ctx, id)
 	if err != nil {
@@ -297,10 +310,12 @@ func (task TypedTask[Input, Output]) Result(ctx context.Context, application *Ap
 }
 
 // Cancel atomically prevents a queued task from starting and fences a running
-// attempt so its later heartbeat/completion cannot win.
-func (task TypedTask[Input, Output]) Cancel(ctx context.Context, application *App, id string) error {
-	if application == nil || application.tasks == nil {
-		return newTaskError(TaskErrorUnavailable, "task store is unavailable", nil)
+// attempt so its later heartbeat/completion cannot win. Like Enqueue, it
+// can't run inside an operation's transaction.
+func (task TypedTask[Input, Output]) Cancel(ctx context.Context, local *LocalAPI, id string) error {
+	application, err := taskApplication(ctx, local, true)
+	if err != nil {
+		return err
 	}
 	record, err := application.tasks.FindTask(ctx, id)
 	if err != nil || record.Slug != task.runtime.slug {
@@ -318,12 +333,25 @@ func (task TypedTask[Input, Output]) Cancel(ctx context.Context, application *Ap
 	return nil
 }
 
+// taskApplication finds the application behind local. A change to the queue
+// is refused inside an operation's transaction, which can still roll back.
+func taskApplication(ctx context.Context, local *LocalAPI, changes bool) (*App, error) {
+	if local == nil || local.app == nil || local.app.tasks == nil {
+		return nil, newTaskError(TaskErrorUnavailable, "task store is unavailable", nil)
+	}
+	if changes && operationengine.InTransaction(ctx) {
+		return nil, newTaskError(TaskErrorInTransaction, "tasks can't be enqueued or canceled inside an operation's transaction, which may still roll back; do it from an AfterCommit hook", nil)
+	}
+	return local.app, nil
+}
+
 // TaskErrorCode is stable for local callers and persisted task failures.
 type TaskErrorCode string
 
 const (
 	TaskErrorNotRegistered TaskErrorCode = "task_not_registered"
 	TaskErrorUnavailable   TaskErrorCode = "task_unavailable"
+	TaskErrorInTransaction TaskErrorCode = "task_in_transaction"
 	TaskErrorInvalidInput  TaskErrorCode = "task_input_invalid"
 	TaskErrorInvalidOutput TaskErrorCode = "task_output_invalid"
 	TaskErrorNotFound      TaskErrorCode = "task_not_found"

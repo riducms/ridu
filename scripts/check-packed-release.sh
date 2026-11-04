@@ -231,12 +231,14 @@ printf '%s\n' \
 	'import { seoMessages } from "@riducms/plugin-seo";' \
 	'import { formBuilderMessages } from "@riducms/plugin-form-builder/admin";' \
 	'import { graphqlMessages } from "@riducms/plugin-graphql";' \
+	'import { oauthMessages } from "@riducms/plugin-oauth";' \
 	'import { RichTextEditor } from "@riducms/plugin-richtext/editor";' \
 	'import { convertMarkdownToLexical } from "@riducms/plugin-richtext/markdown";' \
 	'void richTextMessages;' \
 	'void seoMessages;' \
 	'void formBuilderMessages;' \
 	'void graphqlMessages;' \
+	'void oauthMessages;' \
 	'void RichTextEditor;' \
 	'void convertMarkdownToLexical;' > "$project_root/admin/src/framework-alias-contract.ts"
 

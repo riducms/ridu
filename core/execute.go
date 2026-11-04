@@ -71,6 +71,7 @@ type ServerOptions struct {
 type executeOptions struct {
 	storeFactory      StoreFactory
 	address           string
+	addressConfigured bool
 	handler           HandlerOptions
 	storageFactory    StorageFactory
 	server            ServerOptions
@@ -105,16 +106,20 @@ func WithProjectMigrations(driver migration.ProjectDriver) ExecuteOption {
 }
 
 // WithAddress configures the HTTP listen address independently from the
-// document-store adapter. The default, 127.0.0.1:8080, accepts connections
-// only from this machine; use :8080 to listen on every interface.
+// document-store adapter, in place of RIDU_ADDRESS and PORT. Without either,
+// the server listens on 127.0.0.1:8080, which accepts connections only from
+// this machine; use :8080 to listen on every interface.
 func WithAddress(address string) ExecuteOption {
 	return func(options *executeOptions) {
 		options.address = address
+		options.addressConfigured = true
 	}
 }
 
 // WithHandlerOptions customizes the framework HTTP handler, including the
-// generated application's embedded admin assets.
+// generated application's embedded admin assets. Execute fills each field
+// left at its zero value that has a standard variable, such as AllowedHosts
+// from RIDU_ALLOWED_HOSTS; see Execute.
 func WithHandlerOptions(handler HandlerOptions) ExecuteOption {
 	return func(options *executeOptions) {
 		options.handler = handler
@@ -122,7 +127,9 @@ func WithHandlerOptions(handler HandlerOptions) ExecuteOption {
 }
 
 // WithServerOptions customizes production socket and drain bounds without
-// replacing Ridu's framework-owned http.Server lifecycle.
+// replacing Ridu's framework-owned http.Server lifecycle. Execute fills the
+// drain and readiness fields left at their zero values from their standard
+// variables; see Execute.
 func WithServerOptions(server ServerOptions) ExecuteOption {
 	return func(options *executeOptions) { options.server = server }
 }
@@ -131,6 +138,28 @@ func WithServerOptions(server ServerOptions) ExecuteOption {
 // application. Project commands resolve config without invoking the lazy
 // runtime store factory; `migrate up` applies the build's migrations; the
 // no-argument branch starts the HTTP server.
+//
+// The server reads Ridu's standard variables for every option the
+// application left unset, so a variable added in a later release works
+// without editing main.go. A malformed value stops the server with an error
+// naming the variable. Options set in code take precedence:
+//
+//   - RIDU_ADDRESS, or :$PORT when only PORT is set: WithAddress
+//   - RIDU_ALLOWED_ORIGINS, RIDU_ALLOWED_HOSTS and RIDU_TRUSTED_PROXY_CIDRS
+//     (comma-separated), RIDU_TRUSTED_PROXY_HOPS, RIDU_SETUP_TOKEN,
+//     RIDU_READINESS_TIMEOUT and RIDU_STRICT_TRANSPORT_SECURITY: the
+//     HandlerOptions fields of the same names
+//   - RIDU_SHUTDOWN_TIMEOUT, RIDU_WORKER_DRAIN_TIMEOUT and
+//     RIDU_READINESS_DRAIN_DELAY: the ServerOptions fields of the same names
+//   - RIDU_SECURE_COOKIES=false: cookies without the Secure attribute, for
+//     plain-HTTP development
+//
+// ServerOptions.AllowUnverifiableReadiness and SkipReadinessPreflight have no
+// variable here: each turns off a production readiness check, so only the
+// application's code sets them, as a generated server does for ridu dev.
+//
+// The official adapters read their own connection variables, such as
+// DATABASE_URL and RIDU_SQLITE_PATH, in their ConfigFromEnvironment functions.
 func Execute(applicationConfig Config, supplied ...ExecuteOption) (result error) {
 	options := executeOptions{address: "127.0.0.1:8080"}
 	for _, option := range supplied {
@@ -150,6 +179,9 @@ func Execute(applicationConfig Config, supplied ...ExecuteOption) (result error)
 			},
 			options.projectMigrations,
 		)
+	}
+	if err := applyEnvironment(&options); err != nil {
+		return err
 	}
 	serverOptions := normalizedServerOptions(options.server)
 	var runtimeResources []runtimeResource
@@ -217,9 +249,6 @@ func Execute(applicationConfig Config, supplied ...ExecuteOption) (result error)
 		if err := application.checkReadiness(handlerOptions)(serverContext); err != nil {
 			return fmt.Errorf("production readiness preflight: %w", err)
 		}
-	}
-	if os.Getenv("RIDU_SECURE_COOKIES") != "false" {
-		handlerOptions.SecureCookies = true
 	}
 	requestRoot, cancelRequests := context.WithCancel(context.Background())
 	defer cancelRequests()

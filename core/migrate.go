@@ -6,12 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
+	"github.com/riducms/ridu/internal/environment"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/migration"
 )
@@ -94,9 +92,9 @@ func runMigrateCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 		}
 		request.DatabasePath = strings.TrimSpace(*databasePath)
 		if !explicit["database-path"] {
-			request.DatabasePath = strings.TrimSpace(os.Getenv("RIDU_SQLITE_PATH"))
+			request.DatabasePath = environment.Text("RIDU_SQLITE_PATH")
 		}
-		if !sqlitePathAbsolute(request.DatabasePath) {
+		if !environment.SQLitePathAbsolute(request.DatabasePath) {
 			return errors.New("the SQLite database path must be an absolute file path or file URI, as the server requires")
 		}
 	} else {
@@ -109,8 +107,11 @@ func runMigrateCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 		}
 		request.AllowInsecureDatabase = *allowInsecureDatabase
 		if !explicit["allow-insecure-database"] {
-			enabled, err := strconv.ParseBool(strings.TrimSpace(os.Getenv("RIDU_ALLOW_INSECURE_DATABASE")))
-			request.AllowInsecureDatabase = err == nil && enabled
+			enabled, err := environment.Bool("RIDU_ALLOW_INSECURE_DATABASE")
+			if err != nil {
+				return err
+			}
+			request.AllowInsecureDatabase = enabled
 		}
 		request.AllowMaintenance, request.AllowUnbounded = *allowMaintenance, *allowUnbounded
 		request.LockWait, request.OperationTimeout = *advisoryLockWait, *concurrentIndexTimeout
@@ -125,31 +126,4 @@ func runMigrateCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 	}
 	fmt.Fprintln(stdout, "Migrations are current.")
 	return nil
-}
-
-// sqlitePathAbsolute applies the generated server's rule for RIDU_SQLITE_PATH,
-// so migrate up opens the file the server will serve.
-func sqlitePathAbsolute(path string) bool {
-	if !strings.HasPrefix(path, "file:") {
-		return filepath.IsAbs(path)
-	}
-	parsed, err := url.Parse(path)
-	if err != nil {
-		return false
-	}
-	target := parsed.Path
-	if target == "" {
-		if target, err = url.PathUnescape(parsed.Opaque); err != nil {
-			return false
-		}
-	}
-	if parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost") {
-		// A Windows UNC share names its server as the host.
-		return true
-	}
-	if strings.HasPrefix(target, "/") && filepath.VolumeName(target[1:]) != "" {
-		// A Windows drive path is written /C:/….
-		target = target[1:]
-	}
-	return filepath.IsAbs(filepath.FromSlash(target))
 }

@@ -98,14 +98,18 @@ dataset between adapters is an application-owned export, transform, validation, 
    ```
 
 2. Replace the old adapter import and store factory inside the existing `runtimeOptions` function.
-   Keep the generated address, admin assets, handler options, and server options around it. Lazy
-   opening keeps config resolution and generation offline:
+   `postgres.ConfigFromEnvironment` reads `DATABASE_URL`, `RIDU_ALLOW_INSECURE_DATABASE`, and
+   `RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS`. Keep the admin assets and any handler options beside it.
+   Lazy opening keeps config resolution and generation offline:
 
-   ```go title="cmd/server/main.go" remove={8,15} add={7,16-20}
+   ```go title="cmd/server/main.go" remove={11,18,23} add={10,19,24}
    import (
      "context"
+     "log"
      "os"
+     "strconv"
 
+     "github.com/acme/content/content"
      "github.com/acme/content/internal/adminassets"
      "github.com/riducms/ridu"
      "github.com/riducms/ridu/adapters/postgres"
@@ -113,29 +117,30 @@ dataset between adapters is an application-owned export, transform, validation, 
      "github.com/riducms/ridu/store"
    )
 
-   func runtimeOptions(applicationConfig ridu.Config) []ridu.ExecuteOption {
+   func runtimeOptions() []ridu.ExecuteOption {
      return []ridu.ExecuteOption{
        ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-         return sqlite.Open(ctx, sqliteDatabasePath())
-         return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
-           DatabaseURL:              os.Getenv("DATABASE_URL"),
-           AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE"),
-           MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS"),
-         })
+         config, err := sqlite.ConfigFromEnvironment()
+         config, err := postgres.ConfigFromEnvironment()
+         if err != nil {
+           return nil, err
+         }
+         return sqlite.OpenWithConfig(ctx, config)
+         return postgres.OpenWithConfig(ctx, config)
        }),
-       ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
-       ridu.WithHandlerOptions(ridu.HandlerOptions{
-         AdminAssets:    adminassets.FS(),
-         AllowedOrigins: envList("RIDU_ALLOWED_ORIGINS"),
+       ridu.WithHandlerOptions(ridu.HandlerOptions{AdminAssets: adminassets.FS()}),
+       ridu.WithServerOptions(ridu.ServerOptions{
+         AllowUnverifiableReadiness: readinessOverride("RIDU_ALLOW_UNVERIFIABLE_READINESS"),
+         SkipReadinessPreflight:     readinessOverride("RIDU_SKIP_READINESS_PREFLIGHT"),
        }),
      }
    }
    ```
 
-   The duplicate return statements and adapter imports represent the before/after diff—the finished
-   file contains only the PostgreSQL lines. The generated server template also supplies the
-   `envBool` and `envInt32` parsers; copy them from a fresh `--database postgres` scaffold if the
-   current entry does not already have them.
+   The duplicate adapter lines represent the before/after diff—the finished file contains only the
+   PostgreSQL lines. Starting from MongoDB, also remove its internal development server handling
+   and index check, so `runtimeOptions` takes no arguments, and copy the `readinessOverride`
+   function from a fresh `--database postgres` scaffold for the `WithServerOptions` lines above.
 
    Swap the migration driver in `main` as well, so `ridu migrate` and the built binary's
    `migrate up` use PostgreSQL. Move any data transforms to the new call:
@@ -183,9 +188,9 @@ dataset between adapters is an application-owned export, transform, validation, 
 ## Connect the generated server {#connect}
 
 Generated applications open the store lazily so schema generation never needs database access.
-The factory belongs inside `runtimeOptions`, between the surrounding address and handler settings,
-as shown in the [existing-project diff](#existing-project) above. Do not open a database from a
-package initializer or from `content.Config()`.
+The factory belongs inside `runtimeOptions`, beside the handler options, as shown in the
+[existing-project diff](#existing-project) above. Do not open a database from a package initializer
+or from `content.Config()`.
 
 Use encrypted transport outside an explicitly local environment:
 
@@ -194,21 +199,23 @@ export DATABASE_URL='postgres://ridu:secret@db.example.com:5432/content?sslmode=
 export RIDU_ADDRESS=':8080'
 ```
 
-`postgres.Open` uses bounded defaults. Use `OpenWithConfig` when the application needs deliberate
-pool or session tuning:
+Zero `PoolConfig` fields use bounded defaults. When the application needs deliberate pool or
+session tuning, set fields on the config that `ConfigFromEnvironment` returns before opening the
+store. A field set in code replaces its variable:
 
 ```go title="cmd/server/main.go"
-return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
-	DatabaseURL:                     os.Getenv("DATABASE_URL"),
-	ApplicationName:                 "acme-content",
-	MaxConnections:                  30,
-	MinConnections:                  2,
-	MaxUploadLockConnections:        4,
-	ConnectTimeout:                  10 * time.Second,
-	StatementTimeout:                45 * time.Second,
-	LockTimeout:                     5 * time.Second,
-	IdleInTransactionSessionTimeout: 30 * time.Second,
-})
+config, err := postgres.ConfigFromEnvironment()
+if err != nil {
+	return nil, err
+}
+config.ApplicationName = "acme-content"
+config.MaxConnections = 30
+config.MinConnections = 2
+config.ConnectTimeout = 10 * time.Second
+config.StatementTimeout = 45 * time.Second
+config.LockTimeout = 5 * time.Second
+config.IdleInTransactionSessionTimeout = 30 * time.Second
+return postgres.OpenWithConfig(ctx, config)
 ```
 
 Size connections against the database service and the total replica count, not one process in
@@ -249,8 +256,9 @@ multi-host URL must qualify. That lets `ridu migrate` reach the same local datab
 without an override.
 
 `AllowInsecureTransport` exists for development databases on another host that are protected
-outside PostgreSQL. Do not expose it as a silent production fallback. Protect credentials independently and
-use a least-privilege application role.
+outside PostgreSQL. `ConfigFromEnvironment` sets it from `RIDU_ALLOW_INSECURE_DATABASE`. Do not
+expose it as a silent production fallback. Protect credentials independently and use a
+least-privilege application role.
 
 ## Readiness checks {#readiness}
 

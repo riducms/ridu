@@ -15,6 +15,7 @@ import (
 // LocalAPI enters the same operation engine used by HTTP and jobs.
 type LocalAPI struct {
 	engine *operationengine.Engine
+	app    *App
 }
 
 // ListOptions controls filtering, pagination, projection, and authorization for a list read.
@@ -450,6 +451,27 @@ func (local *LocalAPI) Capabilities(ctx context.Context, collection, id string, 
 // population plan to the response inside the write transaction.
 func (local *LocalAPI) Update(ctx context.Context, collection, id string, values store.Values, options MutationOptions) (store.Document, error) {
 	request := operationengine.Request{Operation: operation.Update, Collection: collection, ID: id, Data: values}
+	applyMutationOptions(&request, options)
+	result, err := local.engine.Execute(ctx, request)
+	return requiredDocument(result, err)
+}
+
+// Increment adds by to the number field name of one document and returns the
+// document as saved, with the new value in its Values. The document is read
+// under the update's row lock, so concurrent increments of one document never
+// see the same value: use it for per-scope sequences such as issue, order or
+// invoice numbers, kept on the document that owns the scope. It is an
+// ordinary update in every other way: access rules, field access, validation
+// such as Min and Max, hooks and the transaction apply, and inside a hook it
+// joins the hook's transaction, so a rolled-back create gives its number back.
+//
+// The field must be a top-level, non-localized number field that the update
+// doesn't also set, in a collection without drafts; a missing value counts
+// as zero. On PostgreSQL and SQLite a concurrent increment waits for the lock.
+// MongoDB doesn't wait: the second transaction fails with a conflict error
+// and must be retried.
+func (local *LocalAPI) Increment(ctx context.Context, collection, id, name string, by float64, options MutationOptions) (store.Document, error) {
+	request := operationengine.Request{Operation: operation.Update, Collection: collection, ID: id, Increments: map[string]float64{name: by}}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)

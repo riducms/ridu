@@ -66,8 +66,8 @@ async function overlayJournal() {
 	// Give the generated server local upload storage, as the documentation capture does.
 	const serverPath = resolve(projectRoot, "cmd/server/main.go");
 	let server = await readFile(serverPath, "utf8");
-	const addressOption = "\t\tridu.WithAddress(serverAddress()),";
-	if (!server.includes(addressOption)) {
+	const handlerOption = "\t\tridu.WithHandlerOptions(";
+	if (!server.includes(handlerOption)) {
 		throw new Error("generated server no longer has the expected upload-storage insertion point");
 	}
 	if (!server.includes("ridu.WithUploadStorage(")) {
@@ -81,11 +81,11 @@ async function overlayJournal() {
 				'"github.com/riducms/ridu/storage"\n\t"github.com/riducms/ridu/store"\n'
 			)
 			.replace(
-				addressOption,
+				handlerOption,
 				"\t\tridu.WithUploadStorage(func(context.Context) (storage.Backend, error) {\n" +
-					'\t\t\treturn localstorage.New(filepath.Join(".ridu", "hero-uploads"))\n' +
+					'\t\t\treturn localstorage.New(".ridu/hero-uploads")\n' +
 					"\t\t}),\n" +
-					addressOption
+					handlerOption
 			);
 		await writeFile(serverPath, server);
 	}

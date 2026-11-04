@@ -218,6 +218,9 @@ type EndpointContext struct {
 	ActorCollection  schema.CollectionSlug
 	AdmitAuthAttempt func(context.Context, string, string) error
 	ReportError      func(error, string)
+	// WriteError answers with REST's error envelope and records the failure
+	// as REST does.
+	WriteError func(error)
 }
 
 type EndpointHandler func(EndpointContext)
@@ -1222,7 +1225,8 @@ func (api *API) invokeEndpoint(writer http.ResponseWriter, request *http.Request
 	admitAuthAttempt := func(ctx context.Context, scope, identity string) error {
 		return api.admitAuthAttempt(ctx, api.clientIP(request), scope, identity)
 	}
-	handler(EndpointContext{Writer: writer, Request: request, RequestID: requestID, ClientIP: api.clientIP(request), RouteParams: params, Actor: actor, ActorCollection: collection, AdmitAuthAttempt: admitAuthAttempt, ReportError: report})
+	writeError := func(err error) { api.writeError(writer, requestID, err) }
+	handler(EndpointContext{Writer: writer, Request: request, RequestID: requestID, ClientIP: api.clientIP(request), RouteParams: params, Actor: actor, ActorCollection: collection, AdmitAuthAttempt: admitAuthAttempt, ReportError: report, WriteError: writeError})
 }
 
 func (api *API) admitAuthAttempt(ctx context.Context, clientIP, scope, identity string) error {
@@ -3847,6 +3851,11 @@ func publicErrorPayload(requestID string, err error) protocol.ErrorPayload {
 		code, message, issues = "internal", "internal server error", []protocol.ValidationIssue{}
 	}
 	return protocol.ErrorPayload{Code: wireErrorCode(code, status), Status: status, Message: message, RequestID: requestID, Issues: issues}
+}
+
+// ErrorEnvelope is the public error response REST sends for err.
+func ErrorEnvelope(requestID string, err error) protocol.ErrorEnvelope {
+	return protocol.ErrorEnvelope{Error: publicErrorPayload(requestID, err)}
 }
 
 func (api *API) writeError(writer http.ResponseWriter, requestID string, err error) {

@@ -2,41 +2,19 @@ package remotefile
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
-	"net/netip"
-	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/riducms/ridu/publicnet"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return function(request)
-}
-
-func TestPublicAddressPolicyRejectsIANASpecialPurposeRanges(t *testing.T) {
-	for _, address := range []string{
-		"0.0.0.1", "10.0.0.1", "100.64.0.1", "127.0.0.1", "169.254.0.1", "172.16.0.1",
-		"192.0.0.1", "192.0.2.1", "192.31.196.1", "192.52.193.1", "192.88.99.1",
-		"192.168.0.1", "192.175.48.1", "198.18.0.1", "198.51.100.1", "203.0.113.1",
-		"224.0.0.1", "240.0.0.1", "::", "::1", "::ffff:192.0.2.1", "64:ff9b::1",
-		"64:ff9b:1::1", "100::1", "100:0:0:1::1", "2001::1", "2001:db8::1", "2002::1",
-		"2620:4f:8000::1", "3fff::1", "5f00::1", "fc00::1", "fe80::1", "ff00::1",
-		// IPv6 outside the 2000::/3 global unicast block, including
-		// IPv4-compatible forms of loopback and link-local metadata.
-		"::7f00:1", "::a9fe:a9fe", "::1:0:0:1", "4000::1", "e000::1",
-	} {
-		if isPublic(netip.MustParseAddr(address)) {
-			t.Errorf("special-purpose address %s was accepted", address)
-		}
-	}
-	for _, address := range []string{"8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"} {
-		if !isPublic(netip.MustParseAddr(address)) {
-			t.Errorf("public address %s was rejected", address)
-		}
-	}
 }
 
 func TestFetchAcceptsBoundedPublicHTTPResponse(t *testing.T) {
@@ -76,10 +54,9 @@ func TestFetchRejectsPrivateCredentialsSchemesAndOversize(t *testing.T) {
 	}
 }
 
-func TestSafeClientRejectsRedirectsToSpecialUseNetworks(t *testing.T) {
-	client := safeClient()
-	request := &http.Request{URL: &url.URL{Scheme: "http", Host: "100.100.100.200", Path: "/latest/meta-data"}}
-	if err := client.CheckRedirect(request, []*http.Request{{URL: &url.URL{Scheme: "https", Host: "93.184.216.34"}}}); err == nil {
-		t.Fatal("redirect to carrier-grade NAT metadata address succeeded")
+func TestFetchNamesTheUploadInAddressErrors(t *testing.T) {
+	_, err := fetchWithClient(context.Background(), http.DefaultClient, "http://127.0.0.1/file", 10)
+	if !errors.Is(err, publicnet.ErrNotPublic) || err.Error() != "remote upload URL resolves to a non-public address" {
+		t.Fatalf("private address error = %v", err)
 	}
 }

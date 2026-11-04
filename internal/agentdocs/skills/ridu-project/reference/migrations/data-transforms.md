@@ -110,7 +110,7 @@ func main() {
 		),
 	}
 	if len(os.Args) == 1 {
-		options = append(options, runtimeOptions(applicationConfig)...)
+		options = append(options, runtimeOptions()...)
 	}
 	if err := ridu.Execute(applicationConfig, options...); err != nil {
 		log.Fatal(err)

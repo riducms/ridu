@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { AccessCapabilitiesEnvelope, SchemaBlockType, SchemaField } from "@riducms/protocol";
+import {
+	normalizeSlug,
+	type AccessCapabilitiesEnvelope,
+	type SchemaBlockType,
+	type SchemaField,
+} from "@riducms/protocol";
 
-import { normalizeSlug, slugFollowsSource } from "@admin/fields/text/slug";
+import { slugFollowsSource } from "@admin/fields/text/slug";
 import { changedFormValues, reconcileFormSchema } from "@admin/core/forms/form-schema";
 import { bindBlockField } from "../block-manifest";
 import { card, tree } from "./draft-fixture";

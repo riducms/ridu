@@ -129,6 +129,7 @@ const expectedGroupOrders: Readonly<Record<string, readonly string[]>> = {
 	mongodb: ['Functions', 'Types', 'Methods', 'Migrations'],
 	graphql: ['Functions', 'Types'],
 	mcp: ['Functions', 'Types'],
+	oauth: ['Functions', 'Types'],
 	richtext: ['Functions', 'Types'],
 	'plugin-richtext': ['Types', 'Interfaces'],
 	seo: ['Functions', 'Types'],
@@ -136,6 +137,7 @@ const expectedGroupOrders: Readonly<Record<string, readonly string[]>> = {
 	formbuilder: ['Functions', 'Types'],
 	'plugin-form-builder': ['Functions', 'Types', 'Interfaces'],
 	'plugin-graphql': ['Constants'],
+	'plugin-oauth': ['Constants'],
 	'storage-local': ['Functions', 'Types', 'Methods'],
 	'storage-s3': ['Functions', 'Types', 'Methods'],
 	cli: ['Commands', 'Agent guidance', 'Migrations', 'Plugins']
@@ -156,7 +158,8 @@ const typescriptEntrypoints: Readonly<Record<string, readonly string[]>> = {
 		'packages/plugin-form-builder/src/lib/index.ts',
 		'packages/plugin-form-builder/src/lib/admin.ts'
 	],
-	'plugin-graphql': ['packages/plugin-graphql/src/lib/index.ts']
+	'plugin-graphql': ['packages/plugin-graphql/src/lib/index.ts'],
+	'plugin-oauth': ['packages/plugin-oauth/src/lib/index.ts']
 };
 
 const goPackageDirectories: Readonly<Record<string, string>> = {
@@ -174,6 +177,7 @@ const goPackageDirectories: Readonly<Record<string, string>> = {
 	mongodb: 'adapters/mongodb',
 	graphql: 'plugins/graphql',
 	mcp: 'plugins/mcp',
+	oauth: 'plugins/oauth',
 	richtext: 'plugins/richtext',
 	seo: 'plugins/seo',
 	formbuilder: 'plugins/formbuilder',

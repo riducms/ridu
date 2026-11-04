@@ -607,7 +607,7 @@ func (application *App) endpointHandler(handler EndpointHandler, scope endpointS
 		endpoint := EndpointContext{Writer: ctx.Writer, Request: ctx.Request, RequestID: ctx.RequestID,
 			ClientIP: ctx.ClientIP, RouteParams: ctx.RouteParams, Actor: cloneDocument(ctx.Actor),
 			ActorCollection: ctx.ActorCollection, Local: application.local,
-			AdmitAuthAttempt: ctx.AdmitAuthAttempt, ReportError: ctx.ReportError}
+			AdmitAuthAttempt: ctx.AdmitAuthAttempt, ReportError: ctx.ReportError, writeError: ctx.WriteError}
 		switch scope {
 		case endpointScopeCollection:
 			endpoint.Collection = resource

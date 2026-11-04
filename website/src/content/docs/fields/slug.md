@@ -48,26 +48,35 @@ kept as it is.
 
 ## Configuration {#configuration}
 
-| Constructor or method                     | What it controls                                                                    |
-| ----------------------------------------- | ----------------------------------------------------------------------------------- |
-| `field.Slug(name, sourcePath)`            | Creates a required, unique, indexed text field generated from a string source path. |
-| `sourcePath`                              | Names a direct string or a string inside non-repeated groups, such as `seo.title`.  |
-| `.Label(...)` / `.LabelTranslations(...)` | Changes author-facing copy without changing the stored key.                         |
-| `.Admin(...)`                             | Sets description, width, visibility, and other editor presentation.                 |
-| `.Access(...)` / `.RestrictAccess(...)`   | Replaces or narrows field create/read/update access.                                |
-| `.Validate(...)` / `.LiveValidate(...)`   | Adds save or live rules after slug normalization.                                   |
-| `field.NormalizeSlug(text)`               | Applies the same lowercase, separator, and cleanup rules in application code.       |
+| Constructor or method                       | What it controls                                                                    |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `field.Slug(name, sourcePath)`              | Creates a required, unique, indexed text field generated from a string source path. |
+| `sourcePath`                                | Names a direct string or a string inside non-repeated groups, such as `seo.title`.  |
+| `.Label(...)` / `.LabelTranslations(...)`   | Changes author-facing copy without changing the stored key.                         |
+| `.Admin(...)`                               | Sets description, width, visibility, and other editor presentation.                 |
+| `.Access(...)` / `.RestrictAccess(...)`     | Replaces or narrows field create/read/update access.                                |
+| `.Validate(...)` / `.LiveValidate(...)`     | Adds save or live rules after slug normalization.                                   |
+| `field.NormalizeSlug(text)`                 | Applies the same lowercase, separator, and cleanup rules in application code.       |
+| `normalizeSlug(text)` (`@riducms/protocol`) | Applies the same rules in a frontend, for a preview that matches the stored slug.   |
 
 ## How titles become slugs {#normalization}
 
 Ridu converts the title in the same way in the server and admin: ASCII letters become lowercase,
 digits and underscores remain, whitespace and hyphen runs become one hyphen, and other characters
 are removed. Requests that bypass the admin are normalized too. Use `field.NormalizeSlug` when
-application code needs the same result.
+Go code needs the same result, and `normalizeSlug` from `@riducms/protocol` to preview a slug in a
+frontend before the server derives it. Both are tested against one shared fixture.
 
-```go title="slug_test.go"
+```go title="slug_test.go" group="normalize" tab="Go"
 got := field.NormalizeSlug("  Hello, Ridu!  ")
 // got == "hello-ridu"
+```
+
+```ts title="slug-preview.ts" group="normalize" tab="TypeScript"
+import { normalizeSlug } from '@riducms/protocol';
+
+const preview = normalizeSlug('  Hello, Ridu!  ');
+// preview === "hello-ridu"
 ```
 
 ## Localization and changing URLs {#constraints}

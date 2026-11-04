@@ -473,8 +473,8 @@ var Media = ridu.Collection{
 		"\t\"github.com/riducms/ridu/adapters/mongodb\"\n\tlocalstorage \"github.com/riducms/ridu/adapters/storage/local\"\n\t\"github.com/riducms/ridu/storage\"\n\t\"github.com/riducms/ridu/store\"",
 	)
 	mongoDBProductionReplaceFile(t, serverPath,
-		"\t\t}),\n\t\tridu.WithAddress(serverAddress()),",
-		"\t\t}),\n\t\tridu.WithUploadStorage(func(context.Context) (storage.Backend, error) {\n\t\t\troot := strings.TrimSpace(os.Getenv(\"RIDU_UPLOAD_ROOT\"))\n\t\t\tif root == \"\" {\n\t\t\t\treturn nil, fmt.Errorf(\"RIDU_UPLOAD_ROOT is required\")\n\t\t\t}\n\t\t\treturn localstorage.New(root)\n\t\t}),\n\t\tridu.WithAddress(serverAddress()),",
+		"\t\t}),\n\t\tridu.WithHandlerOptions(",
+		"\t\t}),\n\t\tridu.WithUploadStorage(func(context.Context) (storage.Backend, error) {\n\t\t\troot := os.Getenv(\"RIDU_UPLOAD_ROOT\")\n\t\t\tif root == \"\" {\n\t\t\t\treturn nil, fmt.Errorf(\"RIDU_UPLOAD_ROOT is required\")\n\t\t\t}\n\t\t\treturn localstorage.New(root)\n\t\t}),\n\t\tridu.WithHandlerOptions(",
 	)
 }
 

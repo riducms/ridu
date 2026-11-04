@@ -137,8 +137,8 @@ async function overlayFieldGallery(projectRoot: string) {
 
 	const serverPath = resolve(projectRoot, "cmd/server/main.go");
 	let server = await readFile(serverPath, "utf8");
-	const addressOption = "\t\tridu.WithAddress(serverAddress()),";
-	if (!server.includes(addressOption)) {
+	const handlerOption = "\t\tridu.WithHandlerOptions(";
+	if (!server.includes(handlerOption)) {
 		throw new Error("generated server no longer has the expected upload-storage insertion point");
 	}
 	if (!server.includes('localstorage "github.com/riducms/ridu/adapters/storage/local"')) {
@@ -155,11 +155,11 @@ async function overlayFieldGallery(projectRoot: string) {
 	}
 	if (!server.includes("ridu.WithUploadStorage(")) {
 		server = server.replace(
-			addressOption,
+			handlerOption,
 			"\t\tridu.WithUploadStorage(func(context.Context) (storage.Backend, error) {\n" +
-				'\t\t\treturn localstorage.New(filepath.Join(".ridu", "documentation-uploads"))\n' +
+				'\t\t\treturn localstorage.New(".ridu/documentation-uploads")\n' +
 				"\t\t}),\n" +
-				addressOption
+				handlerOption
 		);
 	}
 	await writeFile(serverPath, server);

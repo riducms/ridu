@@ -361,7 +361,7 @@ do not derive it from `Config.Name`, because the display name can change.
 For runtime-created clients, prefer `ridu.WithUploadStorage`. Its factory is evaluated only when
 the server starts, not while the CLI resolves config:
 
-```go title="cmd/server/main.go" add={12,24-32}
+```go title="cmd/server/main.go" add={12,27-35}
 package main
 
 import (
@@ -381,9 +381,12 @@ func main() {
 	err := ridu.Execute(
 		content.Config(),
 		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-			return postgres.Open(ctx, os.Getenv("DATABASE_URL"))
+			config, err := postgres.ConfigFromEnvironment()
+			if err != nil {
+				return nil, err
+			}
+			return postgres.OpenWithConfig(ctx, config)
 		}),
-		ridu.WithAddress(":8080"),
 		ridu.WithUploadStorage(func(
 			context.Context,
 		) (storage.Backend, error) {
@@ -432,7 +435,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 
 	"example.com/acme/content"
 	"example.com/acme/internal/adminassets"
@@ -445,9 +447,12 @@ func main() {
 	err := ridu.Execute(
 		content.Config(),
 		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-			return postgres.Open(ctx, os.Getenv("DATABASE_URL"))
+			config, err := postgres.ConfigFromEnvironment()
+			if err != nil {
+				return nil, err
+			}
+			return postgres.OpenWithConfig(ctx, config)
 		}),
-		ridu.WithAddress(":8080"),
 		ridu.WithHandlerOptions(ridu.HandlerOptions{
 			AdminAssets: adminassets.FS(),
 			AllowedOrigins: []string{
@@ -461,9 +466,22 @@ func main() {
 }
 ```
 
-SQLite-selected projects import `adapters/sqlite` and open `RIDU_SQLITE_PATH`; see
-[SQLite](./sqlite.md). MongoDB-selected projects import `adapters/mongodb`, open `DATABASE_URL`,
-and verify the resolved index plan before serving; see [MongoDB](./mongodb.md).
+`ridu.Execute` reads Ridu's standard variables for every option the entry leaves unset: the listen
+address from `RIDU_ADDRESS` or `PORT`, and the hosts, proxies, and timeouts listed in
+[Production](./production.md#environment). `postgres.ConfigFromEnvironment` reads
+`DATABASE_URL`. An option set in code wins over its variable, so this entry ignores
+`RIDU_ALLOWED_ORIGINS`, and `ridu.WithAddress(":8080")` would fix the address the same way. A
+malformed value stops the server with an error naming the variable.
+
+`RIDU_ALLOW_UNVERIFIABLE_READINESS` and `RIDU_SKIP_READINESS_PREFLIGHT` are the exception. Each
+turns off a check a production server fails closed on, so `ridu.Execute` never reads them. A
+generated PostgreSQL or SQLite server reads them in its own `main.go`, because `ridu dev` sets them
+for its development server; a MongoDB server doesn't read them.
+
+SQLite-selected projects import `adapters/sqlite`, whose `ConfigFromEnvironment` reads
+`RIDU_SQLITE_PATH`; see [SQLite](./sqlite.md). MongoDB-selected projects import `adapters/mongodb`,
+read `DATABASE_URL` the same way, and verify the resolved index plan before serving; see
+[MongoDB](./mongodb.md).
 
 Use `ridu.New(config, store)` for tests, embedded use, or a custom HTTP process. It still applies
 access, validation, and hooks. Build production applications with `ridu build`; a direct `go build`

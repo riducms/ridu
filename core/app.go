@@ -255,6 +255,7 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 		customEndpoints:        runtimeEndpoints(applicationConfig),
 		availableLocales:       applicationConfig.Localization.AvailableLocales,
 	}
+	local.app = application
 	if versionedCollectionsConfigured {
 		application.taskRegistry[builtinPublishTask] = scheduledPublicationTaskRuntime(application)
 	}
@@ -284,7 +285,7 @@ func bindPluginTransports(plugins []Plugin, application *App) ([]runtimePluginTr
 			if !validPluginTransport(method, path) || strings.TrimSpace(transport.Summary) == "" || transport.Handler == nil {
 				return nil, schema.NewValidationError([]schema.Issue{{
 					Code: "invalid_plugin_transport", Path: fmt.Sprintf("plugins[%d].transports[%d]", index, transportIndex),
-					Message: "plugin transports require POST or GET, an unreserved absolute /api path, a summary, and a handler",
+					Message: "plugin transports require POST or GET of an unreserved absolute /api path, or GET of a /.well-known/ path, a summary, and a handler",
 				}})
 			}
 			identity := method + " " + path
@@ -301,11 +302,21 @@ func bindPluginTransports(plugins []Plugin, application *App) ([]runtimePluginTr
 	return result, nil
 }
 
+// validPluginTransport admits an exact POST or GET path below /api, outside
+// the framework's own routes, or an exact GET of a well-known URI (RFC 8615)
+// such as /.well-known/oauth-authorization-server, where protocols such as
+// OAuth look for a server's metadata at its root.
 func validPluginTransport(method, path string) bool {
 	if method != http.MethodPost && method != http.MethodGet {
 		return false
 	}
-	if path == "" || path != strings.TrimSpace(path) || !strings.HasPrefix(path, "/api/") || strings.ContainsAny(path, " \t\r\n?#*") || strings.Contains(path, "..") || strings.HasSuffix(path, "/") {
+	if path == "" || path != strings.TrimSpace(path) || strings.ContainsAny(path, " \t\r\n?#*%") || strings.Contains(path, "..") || strings.Contains(path, "//") || strings.HasSuffix(path, "/") {
+		return false
+	}
+	if name, wellKnown := strings.CutPrefix(path, "/.well-known/"); wellKnown {
+		return method == http.MethodGet && name != ""
+	}
+	if !strings.HasPrefix(path, "/api/") {
 		return false
 	}
 	for _, reserved := range []string{"/api/auth", "/api/collections", "/api/globals", "/api/plugins", "/api/preferences", "/api/schema", "/api/uploads", "/api/access", "/api/preview"} {

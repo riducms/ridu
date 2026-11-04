@@ -146,19 +146,15 @@ and do not share it with another application using the same storage location.
 Keep the storage setup in the generated `cmd/server/main.go`. First add the local-storage and
 storage-contract imports alongside the existing SQLite imports:
 
-```go title="cmd/server/main.go" add={16-17}
+```go title="cmd/server/main.go" add={12-13}
 package main
 
 import (
 	"context"
 	"log"
-	"net/url"
 	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 
+	"example.com/acme/content"
 	"example.com/acme/internal/adminassets"
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/adapters/sqlite"
@@ -172,29 +168,30 @@ Then create the backend lazily inside `runtimeOptions`. This example uses SQLite
 PostgreSQL or MongoDB `WithStore` block unchanged and add the same highlighted
 `WithUploadStorage` block after it.
 
-```go title="cmd/server/main.go" add={8-16}
-func runtimeOptions(
-	applicationConfig ridu.Config,
-) []ridu.ExecuteOption {
+```go title="cmd/server/main.go" add={10-18}
+func runtimeOptions() []ridu.ExecuteOption {
 	return []ridu.ExecuteOption{
 		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-			return sqlite.Open(ctx, sqliteDatabasePath())
+			config, err := sqlite.ConfigFromEnvironment()
+			if err != nil {
+				return nil, err
+			}
+			return sqlite.OpenWithConfig(ctx, config)
 		}),
 		ridu.WithUploadStorage(func(
 			_ context.Context,
 		) (storage.Backend, error) {
-			root := os.Getenv("RIDU_UPLOAD_PATH")
+			root := os.Getenv("UPLOAD_PATH")
 			if root == "" {
 				root = ".ridu/uploads"
 			}
 			return localstorage.New(root)
 		}),
-		ridu.WithAddress(serverAddress()),
-		ridu.WithHandlerOptions(ridu.HandlerOptions{
-			AdminAssets: adminassets.FS(),
-			// Keep the remaining generated handler options here.
+		ridu.WithHandlerOptions(ridu.HandlerOptions{AdminAssets: adminassets.FS()}),
+		ridu.WithServerOptions(ridu.ServerOptions{
+			AllowUnverifiableReadiness: readinessOverride("RIDU_ALLOW_UNVERIFIABLE_READINESS"),
+			SkipReadinessPreflight:     readinessOverride("RIDU_SKIP_READINESS_PREFLIGHT"),
 		}),
-		// Keep the generated WithServerOptions block here.
 	}
 }
 ```
@@ -202,7 +199,7 @@ func runtimeOptions(
 The factory runs only when the application server starts. Commands that resolve config—such as
 generation and offline migration creation—do not need the upload directory or cloud credentials.
 For local development the default `.ridu/uploads` directory is already disposable project state.
-Set an absolute `RIDU_UPLOAD_PATH` when the files must survive a process working-directory change.
+Set an absolute `UPLOAD_PATH` when the files must survive a process working-directory change.
 
 ## 4. Add a media picker to posts {#reference-upload}
 
@@ -513,7 +510,11 @@ In `cmd/server/main.go`, replace the `localstorage` import with
 
 ```go title="cmd/server/main.go"
 ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-	return postgres.Open(ctx, os.Getenv("DATABASE_URL"))
+	config, err := postgres.ConfigFromEnvironment()
+	if err != nil {
+		return nil, err
+	}
+	return postgres.OpenWithConfig(ctx, config)
 }),
 ridu.WithUploadStorage(func(
 	_ context.Context,
@@ -529,7 +530,7 @@ ridu.WithUploadStorage(func(
 		SpoolDirectory: "/var/tmp/ridu-spool",
 	})
 }),
-ridu.WithAddress(serverAddress()),
+ridu.WithHandlerOptions(ridu.HandlerOptions{AdminAssets: adminassets.FS()}),
 ```
 
 Set `S3_ENDPOINT` to the provider's endpoint without the bucket, such as `https://t3.storageapi.dev`

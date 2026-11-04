@@ -347,6 +347,26 @@
 		}
 	},
 	{
+		"id": "plugin.oauth",
+		"name": "OAuth plugin",
+		"category": "Official plugins",
+		"status": "limited",
+		"summary": "The opt-in OAuth 2.1 authorization server lets MCP clients register, get a person's consent in the admin, and sign in as a chosen user with PKCE and rotating refresh tokens.",
+		"qualificationLimits": [
+			"Only public clients with PKCE are supported; scopes, confidential clients, and OpenID Connect are not.",
+			"An access token acts as its user across Ridu's API, as an API key does, rather than only at the MCP endpoint."
+		],
+		"owners": ["plugins/oauth", "packages/plugin-oauth"],
+		"evidence": ["plugins/oauth/oauth_test.go", "packages/plugin-oauth/tests/oauth.test.ts"],
+		"adapters": ["sqlite"],
+		"guides": ["/docs/mcp/"],
+		"symbols": ["go:github.com/riducms/ridu/plugins/oauth#New"],
+		"setupCoverage": {
+			"newProject": "/docs/mcp/#oauth",
+			"existingProject": "/docs/mcp/#oauth"
+		}
+	},
+	{
 		"id": "extensions.custom-fields",
 		"name": "Custom fields",
 		"category": "Extend Ridu",

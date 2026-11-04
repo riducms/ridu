@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -65,28 +64,5 @@ func TestMigrateCommandRefusesWhatItCannotProve(t *testing.T) {
 	}
 	if len(driver.requests) != 0 {
 		t.Fatalf("driver ran %d migrations despite refusing", len(driver.requests))
-	}
-}
-
-func TestSQLitePathAbsoluteMatchesTheServer(t *testing.T) {
-	absolute := filepath.Join(t.TempDir(), "content.sqlite")
-	cases := map[string]bool{
-		"":                 false,
-		":memory:":         false,
-		"content.sqlite":   false,
-		"file:data.sqlite": false,
-		absolute:           true,
-		"file:" + filepath.ToSlash(absolute) + "?_pragma=busy_timeout(5000)": true,
-	}
-	if runtime.GOOS == "windows" {
-		cases["file:///C:/data/content.sqlite"] = true
-		cases["file://server/share/content.sqlite"] = true
-	} else {
-		cases["file:///var/lib/ridu/content.sqlite"] = true
-	}
-	for path, want := range cases {
-		if got := sqlitePathAbsolute(path); got != want {
-			t.Errorf("sqlitePathAbsolute(%q) = %v, want %v", path, got, want)
-		}
 	}
 }

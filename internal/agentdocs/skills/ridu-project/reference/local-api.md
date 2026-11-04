@@ -50,6 +50,7 @@ A call made inside a hook joins the transaction of the operation that ran the ho
 | ------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------- |
 | read documents and globals      | `Find`, `List`, `Global`, `Distinct`                                            | [Querying data](./querying.md)                  |
 | create, change and remove them  | `Create`, `Update`, `Delete`, `Duplicate`, `UpdateGlobal`                       | [Writing data](./writing-data.md)               |
+| count without races             | `Increment`                                                                     | [Below](#increment)                               |
 | publish, and work with history  | `PublishChanges`, `Publish`, `Unpublish`, `DiscardDraft`, `Versions`, `Restore` | [Drafts and versions](./drafts-and-versions.md) |
 | change many documents at once   | `BulkUpdate`, `BulkPublish`, `BulkUnpublish`, `BulkDelete`                      | [Bulk actions and trash](./bulk-and-trash.md)   |
 | restore or empty the trash      | `RestoreDeleted`, `DeletePermanent`, `EmptyTrash`                               | [Bulk actions and trash](./bulk-and-trash.md)   |
@@ -132,6 +133,38 @@ A system call skips access rules, including field access, and reads drafts unles
 to `false`. Validation, hooks, versions and the transaction still run, and `Actor` still tells hooks
 whom the work is for. Nested calls don't inherit `System`; pass it again only for work that is also
 trusted. Only Go can set it: no transport accepts it from a client.
+
+## Count without races {#increment}
+
+A per-scope number, such as an issue, order or invoice number, is usually kept on the document
+that owns the scope. Reading it and writing it back one higher is wrong when two requests do it at
+once: both read the same value. `Increment` adds to a number field while the update holds the
+document's row lock and returns the document as saved:
+
+```go
+func numberIssue(ctx ridu.HookContext) error {
+	if ctx.Operation != operation.Create {
+		return nil
+	}
+	teamID, _ := ctx.Data["team"].StringValue()
+	team, err := ctx.Local.Increment(ctx.Context, "teams", teamID, "nextIssueNumber", 1, ridu.MutationOptions{System: true})
+	if err != nil {
+		return err
+	}
+	ctx.Data["number"] = team.Values["nextIssueNumber"]
+	return nil
+}
+```
+
+In a `BeforeChange` hook like this one the increment joins the create's transaction: the team stays
+locked until the issue is saved, and if the create fails, the number is given back. In every other
+way it is an update: access rules, field access, validation such as `Max`, and hooks apply to the
+new value. The field must be a top-level, non-localized number field in a collection without
+drafts, and a missing value counts as zero.
+
+On PostgreSQL and SQLite a second increment of the same document waits for the first to commit.
+MongoDB doesn't wait: the second transaction fails with a `conflict` error, which the caller
+retries.
 
 ## Options {#options}
 

@@ -257,23 +257,33 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 	for _, productionBoundary := range []string{
 		`ridu.WithProjectMigrations(postgres.ProjectMigrations()),`,
 		`if len(os.Args) == 1 {`,
-		`options = append(options, runtimeOptions(applicationConfig)...)`,
-		`AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE")`,
-		`MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS")`,
-		`AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS")`,
-		`AllowedHosts:            envList("RIDU_ALLOWED_HOSTS")`,
-		`TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS")`,
-		`TrustedProxyHops:        envInt("RIDU_TRUSTED_PROXY_HOPS")`,
-		`StrictTransportSecurity: os.Getenv("RIDU_STRICT_TRANSPORT_SECURITY")`,
-		`AllowUnverifiableReadiness: envBool("RIDU_ALLOW_UNVERIFIABLE_READINESS")`,
-		`SkipReadinessPreflight:     envBool("RIDU_SKIP_READINESS_PREFLIGHT")`,
-		`ShutdownTimeout:            envDuration("RIDU_SHUTDOWN_TIMEOUT")`,
-		`WorkerDrainTimeout:         envDuration("RIDU_WORKER_DRAIN_TIMEOUT")`,
-		`ridu.WithAddress(serverAddress())`,
-		`strings.TrimSpace(os.Getenv("PORT"))`,
+		`options = append(options, runtimeOptions()...)`,
+		`config, err := postgres.ConfigFromEnvironment()`,
+		`return postgres.OpenWithConfig(ctx, config)`,
+		`ridu.WithHandlerOptions(ridu.HandlerOptions{AdminAssets: adminassets.FS()}),`,
 	} {
 		if !strings.Contains(serverText, productionBoundary) {
 			t.Errorf("generated server is missing production boundary %q:\n%s", productionBoundary, serverMain)
+		}
+	}
+	// Execute and the adapter read Ridu's variables, so a variable a later
+	// release adds works without editing the generated main.go. The one
+	// exception is the pair of readiness overrides ridu dev sets: each turns
+	// off a production check, so Execute leaves them to code.
+	for _, override := range []string{
+		`AllowUnverifiableReadiness: readinessOverride("RIDU_ALLOW_UNVERIFIABLE_READINESS"),`,
+		`SkipReadinessPreflight:     readinessOverride("RIDU_SKIP_READINESS_PREFLIGHT"),`,
+	} {
+		if !strings.Contains(serverText, override) {
+			t.Errorf("generated server is missing readiness override %q:\n%s", override, serverMain)
+		}
+	}
+	if strings.Count(serverText, "Getenv") != 1 || !strings.Contains(serverText, "raw := os.Getenv(name)") {
+		t.Errorf("generated server reads variables other than the readiness overrides:\n%s", serverMain)
+	}
+	for _, copied := range []string{"LookupEnv", "func env"} {
+		if strings.Contains(serverText, copied) {
+			t.Errorf("generated server reads %q itself:\n%s", copied, serverMain)
 		}
 	}
 	adminTypeScript, err := os.ReadFile(filepath.Join(target, "admin", "tsconfig.json"))
@@ -496,9 +506,9 @@ func TestCreateSQLiteRendersAdapterSpecificRuntimeWithoutCompose(t *testing.T) {
 	}
 	serverText := string(server)
 	if !strings.Contains(serverText, `"github.com/riducms/ridu/adapters/sqlite"`) ||
-		!strings.Contains(serverText, `sqlite.Open(ctx, sqliteDatabasePath())`) ||
+		!strings.Contains(serverText, `config, err := sqlite.ConfigFromEnvironment()`) ||
+		!strings.Contains(serverText, `return sqlite.OpenWithConfig(ctx, config)`) ||
 		!strings.Contains(serverText, `ridu.WithProjectMigrations(sqlite.ProjectMigrations()),`) ||
-		!strings.Contains(serverText, `filepath.IsAbs(path)`) ||
 		strings.Contains(serverText, `adapters/postgres`) || strings.Contains(serverText, `DATABASE_URL`) {
 		t.Fatalf("SQLite scaffold runtime is not adapter-specific:\n%s", server)
 	}
@@ -611,7 +621,9 @@ func TestCreateMongoDBRendersQualifiedReplicaSetGuidanceForStarterAndBlank(t *te
 				`os.Args = os.Args[:1]`,
 				`ridu.WithProjectMigrations(mongodb.ProjectMigrations()),`,
 				`options = append(options, runtimeOptions(applicationConfig, internalDevelopmentServer)...)`,
-				"backend, err := mongodb.OpenWithConfig(ctx, mongodb.Config{",
+				"config, err := mongodb.ConfigFromEnvironment()",
+				`config.ApplicationName = "ridu-server"`,
+				"backend, err := mongodb.OpenWithConfig(ctx, config)",
 				"manifest, err := ridu.Resolve(applicationConfig)",
 				"if err := backend.VerifyIndexes(ctx, manifest); err != nil {",
 				"verify MongoDB development indexes",

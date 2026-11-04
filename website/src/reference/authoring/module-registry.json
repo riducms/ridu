@@ -1171,6 +1171,29 @@
 			]
 		},
 		{
+			"id": "go:github.com/riducms/ridu/publicnet",
+			"name": "publicnet",
+			"slug": "publicnet",
+			"packageName": "github.com/riducms/ridu/publicnet",
+			"language": "go",
+			"group": "Go packages",
+			"summary": "Fetch URLs that people or remote systems supply without reaching the server's own private networks.",
+			"groupOrder": ["Functions", "Types", "Variables"],
+			"sources": [
+				{
+					"kind": "go",
+					"pattern": "./publicnet"
+				}
+			],
+			"symbolOrder": [
+				"go:github.com/riducms/ridu/publicnet#NewClient",
+				"go:github.com/riducms/ridu/publicnet#Options",
+				"go:github.com/riducms/ridu/publicnet#CheckURL",
+				"go:github.com/riducms/ridu/publicnet#IsPublic",
+				"go:github.com/riducms/ridu/publicnet#ErrNotPublic"
+			]
+		},
+		{
 			"id": "go:github.com/riducms/ridu/migration",
 			"name": "migration",
 			"slug": "migration",
@@ -1733,6 +1756,28 @@
 				"go:github.com/riducms/ridu/plugins/mcp#Plugin.BindTransports",
 				"go:github.com/riducms/ridu/plugins/mcp#Plugin.Descriptor",
 				"go:github.com/riducms/ridu/plugins/mcp#Plugin.Key"
+			]
+		},
+		{
+			"id": "go:github.com/riducms/ridu/plugins/oauth",
+			"name": "oauth",
+			"slug": "oauth",
+			"packageName": "github.com/riducms/ridu/plugins/oauth",
+			"language": "go",
+			"group": "Official plugins",
+			"summary": "An optional OAuth 2.1 authorization server for the MCP endpoint, so clients such as Claude sign in instead of using an API key.",
+			"groupOrder": ["Functions", "Types"],
+			"sources": [
+				{
+					"kind": "go",
+					"pattern": "./plugins/oauth"
+				}
+			],
+			"symbolOrder": [
+				"go:github.com/riducms/ridu/plugins/oauth#Key",
+				"go:github.com/riducms/ridu/plugins/oauth#New",
+				"go:github.com/riducms/ridu/plugins/oauth#Config",
+				"go:github.com/riducms/ridu/plugins/oauth#Plugin"
 			]
 		},
 		{
@@ -2723,6 +2768,33 @@
 			"symbolOrder": [
 				"ts:@riducms/plugin-graphql#graphqlAdminPlugin",
 				"ts:@riducms/plugin-graphql#graphqlMessages"
+			]
+		},
+		{
+			"id": "ts:@riducms/plugin-oauth",
+			"name": "@riducms/plugin-oauth",
+			"slug": "plugin-oauth",
+			"packageName": "@riducms/plugin-oauth",
+			"language": "ts",
+			"group": "Official plugins",
+			"summary": "The statically bundled admin consent page paired with the Go OAuth plugin.",
+			"groupOrder": ["Constants"],
+			"sources": [
+				{
+					"kind": "typescript",
+					"packageJSON": "packages/plugin-oauth/package.json",
+					"entrypoints": [
+						{
+							"specifier": "@riducms/plugin-oauth",
+							"path": "packages/plugin-oauth/src/lib/index.ts",
+							"tsconfig": "packages/plugin-oauth/tsconfig.json"
+						}
+					]
+				}
+			],
+			"symbolOrder": [
+				"ts:@riducms/plugin-oauth#oauthAdminPlugin",
+				"ts:@riducms/plugin-oauth#oauthMessages"
 			]
 		},
 		{

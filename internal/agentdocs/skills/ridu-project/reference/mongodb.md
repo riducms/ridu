@@ -122,12 +122,13 @@ MongoDB development needs more than replacing one `Open` call. The internal cand
 Copy the following generated pattern into `cmd/server/main.go` (retaining the project's admin asset
 and handler options):
 
-```go title="cmd/server/main.go" remove={10,27,31,39,43-47,83-84} add={3,11,15,19-22,28,32,40,48-67,85-86}
+```go title="cmd/server/main.go" remove={6,11,27,31,44,48,53,74-75,81-94} add={3,12,16,20-23,28,32,45,49,54-70,76-77}
 import (
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/acme/content/content"
 	"github.com/acme/content/internal/adminassets"
@@ -145,7 +146,6 @@ func main() {
 	if internalDevelopmentServer {
 		os.Args = os.Args[:1]
 	}
-
 	// The migration driver lets the built binary apply its own migrations with
 	// `migrate up`, so production needs no Ridu CLI. Register data transforms here.
 	options := []ridu.ExecuteOption{
@@ -153,7 +153,7 @@ func main() {
 		ridu.WithProjectMigrations(mongodb.ProjectMigrations()),
 	}
 	if len(os.Args) == 1 {
-		options = append(options, runtimeOptions(applicationConfig)...)
+		options = append(options, runtimeOptions()...)
 		options = append(options, runtimeOptions(applicationConfig, internalDevelopmentServer)...)
 	}
 	if err := ridu.Execute(applicationConfig, options...); err != nil {
@@ -161,20 +161,23 @@ func main() {
 	}
 }
 
-func runtimeOptions(applicationConfig ridu.Config) []ridu.ExecuteOption {
+// runtimeOptions holds what this application chooses for its server. Ridu
+// reads its standard variables itself, such as RIDU_ADDRESS, the allowed
+// hosts and the database connection, for every option left unset here; an
+// option set here wins over its variable. The readiness overrides are the
+// exception: each turns off a production check, so only this code sets them.
+func runtimeOptions() []ridu.ExecuteOption {
 func runtimeOptions(applicationConfig ridu.Config, internalDevelopmentServer bool) []ridu.ExecuteOption {
 	return []ridu.ExecuteOption{
 		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-			return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
-				DatabaseURL:              os.Getenv("DATABASE_URL"),
-				AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE"),
-				MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS"),
-			})
-			backend, err := mongodb.OpenWithConfig(ctx, mongodb.Config{
-				DatabaseURL:            os.Getenv("DATABASE_URL"),
-				AllowInsecureTransport: envBool("RIDU_ALLOW_INSECURE_DATABASE"),
-				ApplicationName:        "ridu-server",
-			})
+			config, err := postgres.ConfigFromEnvironment()
+			config, err := mongodb.ConfigFromEnvironment()
+			if err != nil {
+				return nil, err
+			}
+			return postgres.OpenWithConfig(ctx, config)
+			config.ApplicationName = "ridu-server"
+			backend, err := mongodb.OpenWithConfig(ctx, config)
 			if err != nil {
 				return nil, err
 			}
@@ -191,37 +194,42 @@ func runtimeOptions(applicationConfig ridu.Config, internalDevelopmentServer boo
 			}
 			return backend, nil
 		}),
-		ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
-		ridu.WithHandlerOptions(ridu.HandlerOptions{
-			AdminAssets:             adminassets.FS(),
-			AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS"),
-			AllowedHosts:            envList("RIDU_ALLOWED_HOSTS"),
-			TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS"),
-			TrustedProxyHops:        envInt("RIDU_TRUSTED_PROXY_HOPS"),
-			ReadinessTimeout:        envDuration("RIDU_READINESS_TIMEOUT"),
-			StrictTransportSecurity: os.Getenv("RIDU_STRICT_TRANSPORT_SECURITY"),
-		}),
+		ridu.WithHandlerOptions(ridu.HandlerOptions{AdminAssets: adminassets.FS()}),
 		ridu.WithServerOptions(ridu.ServerOptions{
-			ShutdownTimeout:            envDuration("RIDU_SHUTDOWN_TIMEOUT"),
-			WorkerDrainTimeout:         envDuration("RIDU_WORKER_DRAIN_TIMEOUT"),
-			ReadinessDrainDelay:        envDuration("RIDU_READINESS_DRAIN_DELAY"),
-			AllowUnverifiableReadiness: envBool("RIDU_ALLOW_UNVERIFIABLE_READINESS"),
-			SkipReadinessPreflight:     envBool("RIDU_SKIP_READINESS_PREFLIGHT"),
+			AllowUnverifiableReadiness: readinessOverride("RIDU_ALLOW_UNVERIFIABLE_READINESS"),
+			SkipReadinessPreflight:     readinessOverride("RIDU_SKIP_READINESS_PREFLIGHT"),
 			AllowUnverifiableReadiness: internalDevelopmentServer,
 			SkipReadinessPreflight:     internalDevelopmentServer,
 		}),
 	}
 }
+
+// readinessOverride reads a readiness override that ridu dev sets for its
+// development server. Never set one for a production server.
+func readinessOverride(name string) bool {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return false
+	}
+	enabled, err := strconv.ParseBool(raw)
+	if err != nil {
+		log.Fatalf("%s must be true or false: %v", name, err)
+	}
+	return enabled
+}
 ```
 
 The red PostgreSQL lines are context from the existing generated server. Remove them after adding
-the MongoDB lines; the finished file has one adapter import, one `runtimeOptions` call and
-declaration, one store factory, and one value for each readiness option.
+the MongoDB lines; the finished file has one adapter import, one migration driver, one
+`runtimeOptions` call and declaration, one store factory, and no `readinessOverride` function. `mongodb.ConfigFromEnvironment` reads
+`DATABASE_URL` and `RIDU_ALLOW_INSECURE_DATABASE`, and a malformed value stops the server with an
+error naming the variable.
 
 The readiness exceptions are **only** for the CLI's internal development candidate, after the
-explicit index check. Do not expose them as production environment fallbacks. Keep the template's
-`envBool` helper so invalid environment values fail clearly, and close the backend on every
-resolution/verification error as shown.
+explicit index check. A MongoDB server doesn't read `RIDU_ALLOW_UNVERIFIABLE_READINESS` or
+`RIDU_SKIP_READINESS_PREFLIGHT`, and `ridu.Execute` never does, so neither can talk a production
+server out of its migration history. Close the backend on every resolution/verification error as
+shown.
 
 ### 3. Add the local replica-set service {#existing-project-compose}
 

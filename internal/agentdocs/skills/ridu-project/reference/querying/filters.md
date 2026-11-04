@@ -207,7 +207,7 @@ const notAboutGo: PostsWhere = { not: { tags: { in: ['go'] } } };
 where={"not":{"tags":{"in":["go"]}}}
 ```
 
-`and` and `or` take two or more conditions; `not` takes one.
+`and` and `or` take one or more conditions (one condition is the same as that condition alone); `not` takes one.
 
 ## Lists and has-many fields {#membership}
 

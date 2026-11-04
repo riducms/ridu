@@ -45,11 +45,11 @@ func TestPostgresDurableTasksClaimConcurrentlyAndRecoverExpiredLeases(t *testing
 	const total = 32
 	receipts := make([]ridu.TaskReceipt[postgresTaskOutput], total)
 	for index := range receipts {
-		receipts[index], err = task.Enqueue(ctx, application, postgresTaskInput{ID: index}, ridu.TaskEnqueueOptions{})
+		receipts[index], err = task.Enqueue(ctx, application.Local(), postgresTaskInput{ID: index}, ridu.TaskEnqueueOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		queued, err := task.Result(ctx, application, receipts[index].ID)
+		queued, err := task.Result(ctx, application.Local(), receipts[index].ID)
 		if err != nil || queued.State != store.TaskStateQueued {
 			t.Fatalf("queued task %d = %#v, %v", index, queued, err)
 		}
@@ -78,7 +78,7 @@ func TestPostgresDurableTasksClaimConcurrentlyAndRecoverExpiredLeases(t *testing
 		t.Fatal(err)
 	}
 	for index, receipt := range receipts {
-		result, err := task.Result(ctx, application, receipt.ID)
+		result, err := task.Result(ctx, application.Local(), receipt.ID)
 		if err != nil || result.State != store.TaskStateSucceeded || !result.HasOutput || result.Output.ID != index {
 			t.Fatalf("result %d = %#v, %v", index, result, err)
 		}
@@ -91,7 +91,7 @@ func TestPostgresDurableTasksClaimConcurrentlyAndRecoverExpiredLeases(t *testing
 		}
 	}
 
-	crashReceipt, err := task.Enqueue(ctx, application, postgresTaskInput{ID: 1000}, ridu.TaskEnqueueOptions{})
+	crashReceipt, err := task.Enqueue(ctx, application.Local(), postgresTaskInput{ID: 1000}, ridu.TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestPostgresDurableTasksClaimConcurrentlyAndRecoverExpiredLeases(t *testing
 	if err := backend.CompleteTask(ctx, crashReceipt.ID, second[0].LeaseToken, output); err != nil {
 		t.Fatal(err)
 	}
-	recovered, err := task.Result(ctx, application, crashReceipt.ID)
+	recovered, err := task.Result(ctx, application.Local(), crashReceipt.ID)
 	if err != nil || recovered.State != store.TaskStateSucceeded || recovered.Attempts != 2 || recovered.Output.ID != 1000 {
 		t.Fatalf("recovered result = %#v, %v", recovered, err)
 	}
@@ -137,7 +137,7 @@ func TestPostgresDurableTaskConcurrencyBacklogDoesNotStarveIndependentKeys(t *te
 		t.Fatal(err)
 	}
 
-	owner, err := task.Enqueue(ctx, application, postgresTaskInput{ID: 1}, ridu.TaskEnqueueOptions{ConcurrencyKey: "occupied"})
+	owner, err := task.Enqueue(ctx, application.Local(), postgresTaskInput{ID: 1}, ridu.TaskEnqueueOptions{ConcurrencyKey: "occupied"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,11 +146,11 @@ func TestPostgresDurableTaskConcurrencyBacklogDoesNotStarveIndependentKeys(t *te
 		t.Fatalf("active key claim = %#v, %v", active, err)
 	}
 	for index := 0; index < 12; index++ {
-		if _, err := task.Enqueue(ctx, application, postgresTaskInput{ID: 10 + index}, ridu.TaskEnqueueOptions{ConcurrencyKey: "occupied"}); err != nil {
+		if _, err := task.Enqueue(ctx, application.Local(), postgresTaskInput{ID: 10 + index}, ridu.TaskEnqueueOptions{ConcurrencyKey: "occupied"}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	independent, err := task.Enqueue(ctx, application, postgresTaskInput{ID: 99}, ridu.TaskEnqueueOptions{ConcurrencyKey: "independent"})
+	independent, err := task.Enqueue(ctx, application.Local(), postgresTaskInput{ID: 99}, ridu.TaskEnqueueOptions{ConcurrencyKey: "independent"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,11 +180,11 @@ func TestPostgresDurableTaskConcurrencyKeysCancelAndUnknownSlugs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first, err := blocking.Enqueue(ctx, application, postgresTaskInput{ID: 1}, ridu.TaskEnqueueOptions{ConcurrencyKey: "account-1"})
+	first, err := blocking.Enqueue(ctx, application.Local(), postgresTaskInput{ID: 1}, ridu.TaskEnqueueOptions{ConcurrencyKey: "account-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := blocking.Enqueue(ctx, application, postgresTaskInput{ID: 2}, ridu.TaskEnqueueOptions{ConcurrencyKey: "account-1"})
+	second, err := blocking.Enqueue(ctx, application.Local(), postgresTaskInput{ID: 2}, ridu.TaskEnqueueOptions{ConcurrencyKey: "account-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestPostgresDurableTaskConcurrencyKeysCancelAndUnknownSlugs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cancelReceipt, err := blocking.Enqueue(ctx, application, postgresTaskInput{ID: 99}, ridu.TaskEnqueueOptions{})
+	cancelReceipt, err := blocking.Enqueue(ctx, application.Local(), postgresTaskInput{ID: 99}, ridu.TaskEnqueueOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestPostgresDurableTaskConcurrencyKeysCancelAndUnknownSlugs(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("blocking task did not start")
 	}
-	if err := blocking.Cancel(ctx, application, cancelReceipt.ID); err != nil {
+	if err := blocking.Cancel(ctx, application.Local(), cancelReceipt.ID); err != nil {
 		t.Fatal(err)
 	}
 	close(release)
@@ -244,7 +244,7 @@ func TestPostgresDurableTaskConcurrencyKeysCancelAndUnknownSlugs(t *testing.T) {
 	if err := <-run; !errors.As(err, &taskError) || taskError.Code != ridu.TaskErrorLeaseLost {
 		t.Fatalf("canceled handler completion = %T %v", err, err)
 	}
-	canceled, err := blocking.Result(ctx, application, cancelReceipt.ID)
+	canceled, err := blocking.Result(ctx, application.Local(), cancelReceipt.ID)
 	if err != nil || canceled.State != store.TaskStateCanceled {
 		t.Fatalf("canceled result = %#v, %v", canceled, err)
 	}
@@ -290,14 +290,14 @@ func TestPostgresDurableTaskReferencesRaceSafelyWithHardDelete(t *testing.T) {
 	}
 	targetReference := store.DocumentReference{CollectionID: collectionID, DocumentID: target.ID}
 	requesterReference := store.DocumentReference{CollectionID: collectionID, DocumentID: requester.ID}
-	receipt, err := task.Enqueue(ctx, application, struct{}{}, ridu.TaskEnqueueOptions{Target: &targetReference, RequestedBy: &requesterReference})
+	receipt, err := task.Enqueue(ctx, application.Local(), struct{}{}, ridu.TaskEnqueueOptions{Target: &targetReference, RequestedBy: &requesterReference})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Delete(ctx, "posts", requester.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := task.Result(ctx, application, receipt.ID); !hasTaskCode(err, ridu.TaskErrorNotFound) {
+	if _, err := task.Result(ctx, application.Local(), receipt.ID); !hasTaskCode(err, ridu.TaskErrorNotFound) {
 		t.Fatalf("requester cleanup = %v", err)
 	}
 
@@ -316,7 +316,7 @@ func TestPostgresDurableTaskReferencesRaceSafelyWithHardDelete(t *testing.T) {
 		deleted := make(chan error, 1)
 		go func() {
 			<-start
-			receipt, err := task.Enqueue(ctx, application, struct{}{}, ridu.TaskEnqueueOptions{Target: &reference})
+			receipt, err := task.Enqueue(ctx, application.Local(), struct{}{}, ridu.TaskEnqueueOptions{Target: &reference})
 			enqueued <- enqueueResult{receipt: receipt, err: err}
 		}()
 		go func() {
@@ -333,7 +333,7 @@ func TestPostgresDurableTaskReferencesRaceSafelyWithHardDelete(t *testing.T) {
 			t.Fatalf("iteration %d enqueue = %v", iteration, admission.err)
 		}
 		if admission.err == nil {
-			if _, err := task.Result(ctx, application, admission.receipt.ID); !hasTaskCode(err, ridu.TaskErrorNotFound) {
+			if _, err := task.Result(ctx, application.Local(), admission.receipt.ID); !hasTaskCode(err, ridu.TaskErrorNotFound) {
 				t.Fatalf("iteration %d left orphan task: %v", iteration, err)
 			}
 		}

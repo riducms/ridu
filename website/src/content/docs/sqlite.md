@@ -109,18 +109,19 @@ state, uploads, and a rehearsed cutover.
    admin = "./admin"
    ```
 
-2. Wire the server to the official adapter inside `runtimeOptions`. Keep the address and handler
-   settings beside the store factory; the helper can remain lower in the same file:
+2. Replace the store factory inside `runtimeOptions` with the SQLite adapter's.
+   `sqlite.ConfigFromEnvironment` reads `RIDU_SQLITE_PATH` and refuses a relative path or
+   `:memory:`, so the server and the built binary's `migrate up` open the same file. Keep the handler
+   options beside it:
 
-   ```go title="cmd/server/main.go" remove={11,19-23} add={4,6,12,24,34-60}
+   ```go title="cmd/server/main.go" remove={10,18,23} add={11,19,24}
    import (
      "context"
      "log"
-     "net/url"
      "os"
-     "path/filepath"
-     "strings"
+     "strconv"
 
+     "github.com/acme/content/content"
      "github.com/acme/content/internal/adminassets"
      "github.com/riducms/ridu"
      "github.com/riducms/ridu/adapters/postgres"
@@ -128,62 +129,31 @@ state, uploads, and a rehearsed cutover.
      "github.com/riducms/ridu/store"
    )
 
-   func runtimeOptions(applicationConfig ridu.Config) []ridu.ExecuteOption {
+   func runtimeOptions() []ridu.ExecuteOption {
      return []ridu.ExecuteOption{
        ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-         return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
-           DatabaseURL:              os.Getenv("DATABASE_URL"),
-           AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE"),
-           MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS"),
-         })
-         return sqlite.Open(ctx, sqliteDatabasePath())
+         config, err := postgres.ConfigFromEnvironment()
+         config, err := sqlite.ConfigFromEnvironment()
+         if err != nil {
+           return nil, err
+         }
+         return postgres.OpenWithConfig(ctx, config)
+         return sqlite.OpenWithConfig(ctx, config)
        }),
-       ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
-       ridu.WithHandlerOptions(ridu.HandlerOptions{
-         AdminAssets:    adminassets.FS(),
-         AllowedOrigins: envList("RIDU_ALLOWED_ORIGINS"),
+       ridu.WithHandlerOptions(ridu.HandlerOptions{AdminAssets: adminassets.FS()}),
+       ridu.WithServerOptions(ridu.ServerOptions{
+         AllowUnverifiableReadiness: readinessOverride("RIDU_ALLOW_UNVERIFIABLE_READINESS"),
+         SkipReadinessPreflight:     readinessOverride("RIDU_SKIP_READINESS_PREFLIGHT"),
        }),
      }
-   }
-
-   func sqliteDatabasePath() string {
-     path := strings.TrimSpace(os.Getenv("RIDU_SQLITE_PATH"))
-     switch {
-     case path == "":
-       log.Fatal("RIDU_SQLITE_PATH is required")
-     case path == ":memory:":
-       log.Fatal(
-         "RIDU_SQLITE_PATH must be a file because migrations " +
-           "and the server run in separate processes",
-       )
-     case strings.HasPrefix(path, "file:"):
-       parsed, err := url.Parse(path)
-       if err != nil {
-         log.Fatalf("RIDU_SQLITE_PATH must be a valid SQLite file URI: %v", err)
-       }
-       target := parsed.Path
-       if target == "" {
-         target, err = url.PathUnescape(parsed.Opaque)
-       }
-       if parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost") {
-         // A Windows UNC share names its server as the host.
-         target = "//" + parsed.Host + target
-       } else if strings.HasPrefix(target, "/") && filepath.VolumeName(target[1:]) != "" {
-         // A Windows drive path is written /C:/….
-         target = target[1:]
-       }
-       if err != nil || !filepath.IsAbs(filepath.FromSlash(target)) {
-         log.Fatal("RIDU_SQLITE_PATH file URI must contain an absolute path")
-       }
-     case !filepath.IsAbs(path):
-       log.Fatal("RIDU_SQLITE_PATH must be an absolute file path")
-     }
-     return path
    }
    ```
 
-   The duplicate adapter imports and return statements show the before/after change. Remove every
-   red line; the finished file contains only the SQLite import and `sqlite.Open` call.
+   The duplicate adapter lines show the before/after change. Remove every red line; the finished
+   file contains only the SQLite import and calls. Starting from MongoDB, also remove its internal
+   development server handling and index check, so `runtimeOptions` takes no arguments, and copy
+   the `readinessOverride` function from a fresh SQLite scaffold for the `WithServerOptions` lines
+   above.
 
    Swap the migration driver in `main` as well, so `ridu migrate` and the built binary's
    `migrate up` use SQLite. Move any data transforms to the new call:
@@ -194,9 +164,6 @@ state, uploads, and a rehearsed cutover.
      ridu.WithProjectMigrations(sqlite.ProjectMigrations()),
    }
    ```
-
-   A fresh generated SQLite project contains the canonical helper, including support for an
-   absolute opaque `file:` URI. Prefer copying that generated helper verbatim if you use URI paths.
 
 3. Start the development loop against the file:
 

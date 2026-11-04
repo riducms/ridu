@@ -112,6 +112,31 @@ func TestDecodeWhereEnforcesDepthExpressionMembershipAndDuplicateLimits(t *testi
 	}
 }
 
+func TestDecodeWhereAcceptsOneConditionLogicalExpressions(t *testing.T) {
+	collection := schema.Collection{Fields: []schema.Field{{Name: "title", Type: schema.FieldTypeText}}}
+	single, err := decodeWhere([]byte(`{"title":{"equals":"one"}}`), collection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, encoded := range []string{
+		`{"and":[{"title":{"equals":"one"}}]}`,
+		`{"or":[{"title":{"equals":"one"}}]}`,
+	} {
+		expression, err := decodeWhere([]byte(encoded), collection)
+		if err != nil {
+			t.Fatalf("decodeWhere(%s): %v", encoded, err)
+		}
+		if !reflect.DeepEqual(expression.Node(), single.Node()) {
+			t.Fatalf("decodeWhere(%s) = %#v, want the lone condition %#v", encoded, expression.Node(), single.Node())
+		}
+	}
+	for _, encoded := range []string{`{"and":[]}`, `{"or":[]}`, `{"and":{"title":{"equals":"one"}}}`} {
+		if _, err := decodeWhere([]byte(encoded), collection); err == nil || !strings.Contains(err.Error(), "at least one expression") {
+			t.Fatalf("decodeWhere(%s) error = %v", encoded, err)
+		}
+	}
+}
+
 func TestDecodeWhereAcceptsOnlyQueryableSystemFields(t *testing.T) {
 	collection := schema.Collection{
 		Capabilities: schema.Capabilities{Versions: true},

@@ -114,7 +114,7 @@ Ridu follows the HTTPS scheme the trusted proxies report, so the admin signs in 
 the API. If Railway's proxies move to another range, Ridu stops trusting them: sign-in still works,
 and every visitor shares the proxy's limit again.
 
-Railway supplies `PORT`; generated Ridu servers turn it into the listener address automatically.
+Railway supplies `PORT`; `ridu.Execute` listens on that port on every interface automatically.
 `RIDU_ADDRESS` remains available when you need to override the complete address yourself.
 
 ## Deploy and check the result {#deploy}

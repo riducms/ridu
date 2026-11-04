@@ -38,3 +38,30 @@ func TestNewRegistersScheduledPublicationingOnlyForVersionedCollections(t *testi
 		t.Fatal("versioned application did not register the scheduled-publish task")
 	}
 }
+
+func TestPluginTransportsAcceptAPIAndWellKnownPaths(t *testing.T) {
+	for _, transport := range []struct {
+		method, path string
+		valid        bool
+	}{
+		{"POST", "/api/mcp", true},
+		{"GET", "/api/graphql", true},
+		{"GET", "/.well-known/oauth-authorization-server", true},
+		{"GET", "/.well-known/oauth-protected-resource/api/mcp", true},
+		{"POST", "/.well-known/oauth-authorization-server", false},
+		{"GET", "/.well-known/", false},
+		{"GET", "/.well-known//api", false},
+		{"GET", "/.well-known/a%2Fb", false},
+		{"GET", "/healthz", false},
+		{"GET", "/admin/oauth", false},
+		{"POST", "/api/auth/login", false},
+		{"POST", "/api/plugins/oauth/token", false},
+		{"GET", "/api/mcp/", false},
+		{"GET", "/api/../admin", false},
+		{"DELETE", "/api/mcp", false},
+	} {
+		if got := validPluginTransport(transport.method, transport.path); got != transport.valid {
+			t.Errorf("validPluginTransport(%s %s) = %v, want %v", transport.method, transport.path, got, transport.valid)
+		}
+	}
+}

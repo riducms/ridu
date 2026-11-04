@@ -50,8 +50,8 @@ func (budget *whereBudget) decode(encoded []byte, collection schema.Collection, 
 		switch name {
 		case "and", "or":
 			var children []json.RawMessage
-			if err := json.Unmarshal(raw, &children); err != nil || len(children) < 2 {
-				return nil, fmt.Errorf("%s requires at least two expressions", name)
+			if err := json.Unmarshal(raw, &children); err != nil || len(children) == 0 {
+				return nil, fmt.Errorf("%s requires at least one expression", name)
 			}
 			decoded := make([]query.Expression, len(children))
 			for index, child := range children {
@@ -62,6 +62,8 @@ func (budget *whereBudget) decode(encoded []byte, collection schema.Collection, 
 				decoded[index] = expression
 			}
 			// The length check above keeps these helpers from panicking on input.
+			// One expression is that expression, so a client can build and or
+			// or from a list without special-casing a single condition.
 			if name == "and" {
 				expressions = append(expressions, query.And(decoded...))
 			} else {

@@ -4,13 +4,9 @@ import (
 	"context"
 {{if .MongoDB}}	"fmt"
 {{end}}	"log"
-{{if .SQLite}}	"net/url"
-{{end}}	"os"
-{{if .SQLite}}	"path/filepath"
-{{end}}	"strconv"
-	"strings"
-	"time"
-
+	"os"
+{{if not .MongoDB}}	"strconv"
+{{end}}
 	"{{.ModulePath}}/content"
 	"{{.ModulePath}}/internal/adminassets"
 	"github.com/riducms/ridu"
@@ -34,26 +30,32 @@ import (
 		ridu.WithProjectMigrations({{if .Postgres}}postgres{{else if .MongoDB}}mongodb{{else if .SQLite}}sqlite{{end}}.ProjectMigrations()),
 	}
 	if len(os.Args) == 1 {
-		options = append(options, runtimeOptions(applicationConfig{{if .MongoDB}}, internalDevelopmentServer{{end}})...)
+		options = append(options, runtimeOptions({{if .MongoDB}}applicationConfig, internalDevelopmentServer{{end}})...)
 	}
 	if err := ridu.Execute(applicationConfig, options...); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runtimeOptions(applicationConfig ridu.Config{{if .MongoDB}}, internalDevelopmentServer bool{{end}}) []ridu.ExecuteOption {
+// runtimeOptions holds what this application chooses for its server. Ridu
+// reads its standard variables itself, such as RIDU_ADDRESS, the allowed
+// hosts and the database connection, for every option left unset here; an
+// option set here wins over its variable. The readiness overrides are the
+// exception: each turns off a production check, so only this code sets them.
+func runtimeOptions({{if .MongoDB}}applicationConfig ridu.Config, internalDevelopmentServer bool{{end}}) []ridu.ExecuteOption {
 	return []ridu.ExecuteOption{
 		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-{{if .Postgres}}			return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
-				DatabaseURL:              os.Getenv("DATABASE_URL"),
-				AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE"),
-				MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS"),
-			})
-{{else if .MongoDB}}			backend, err := mongodb.OpenWithConfig(ctx, mongodb.Config{
-				DatabaseURL:            os.Getenv("DATABASE_URL"),
-				AllowInsecureTransport: envBool("RIDU_ALLOW_INSECURE_DATABASE"),
-				ApplicationName:        "ridu-server",
-			})
+{{if .Postgres}}			config, err := postgres.ConfigFromEnvironment()
+			if err != nil {
+				return nil, err
+			}
+			return postgres.OpenWithConfig(ctx, config)
+{{else if .MongoDB}}			config, err := mongodb.ConfigFromEnvironment()
+			if err != nil {
+				return nil, err
+			}
+			config.ApplicationName = "ridu-server"
+			backend, err := mongodb.OpenWithConfig(ctx, config)
 			if err != nil {
 				return nil, err
 			}
@@ -69,134 +71,33 @@ func runtimeOptions(applicationConfig ridu.Config{{if .MongoDB}}, internalDevelo
 				}
 			}
 			return backend, nil
-{{else if .SQLite}}			return sqlite.Open(ctx, sqliteDatabasePath())
+{{else if .SQLite}}			config, err := sqlite.ConfigFromEnvironment()
+			if err != nil {
+				return nil, err
+			}
+			return sqlite.OpenWithConfig(ctx, config)
 {{end}}		}),
-		ridu.WithAddress(serverAddress()),
-		ridu.WithHandlerOptions(ridu.HandlerOptions{
-			AdminAssets:             adminassets.FS(),
-			AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS"),
-			AllowedHosts:            envList("RIDU_ALLOWED_HOSTS"),
-			SetupToken:              os.Getenv("RIDU_SETUP_TOKEN"),
-			TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS"),
-			TrustedProxyHops:        envInt("RIDU_TRUSTED_PROXY_HOPS"),
-			ReadinessTimeout:        envDuration("RIDU_READINESS_TIMEOUT"),
-			StrictTransportSecurity: os.Getenv("RIDU_STRICT_TRANSPORT_SECURITY"),
-		}),
+		ridu.WithHandlerOptions(ridu.HandlerOptions{AdminAssets: adminassets.FS()}),
 		ridu.WithServerOptions(ridu.ServerOptions{
-			ShutdownTimeout:            envDuration("RIDU_SHUTDOWN_TIMEOUT"),
-			WorkerDrainTimeout:         envDuration("RIDU_WORKER_DRAIN_TIMEOUT"),
-			ReadinessDrainDelay:        envDuration("RIDU_READINESS_DRAIN_DELAY"),
-			AllowUnverifiableReadiness: {{if .MongoDB}}internalDevelopmentServer{{else}}envBool("RIDU_ALLOW_UNVERIFIABLE_READINESS"){{end}},
-			SkipReadinessPreflight:     {{if .MongoDB}}internalDevelopmentServer{{else}}envBool("RIDU_SKIP_READINESS_PREFLIGHT"){{end}},
-		}),
+{{if .MongoDB}}			AllowUnverifiableReadiness: internalDevelopmentServer,
+			SkipReadinessPreflight:     internalDevelopmentServer,
+{{else}}			AllowUnverifiableReadiness: readinessOverride("RIDU_ALLOW_UNVERIFIABLE_READINESS"),
+			SkipReadinessPreflight:     readinessOverride("RIDU_SKIP_READINESS_PREFLIGHT"),
+{{end}}		}),
 	}
 }
-
-// serverAddress listens only on this machine unless RIDU_ADDRESS says
-// otherwise. A hosting platform that assigns PORT expects every interface.
-func serverAddress() string {
-	if address := strings.TrimSpace(os.Getenv("RIDU_ADDRESS")); address != "" {
-		return address
-	}
-	if port := strings.TrimSpace(os.Getenv("PORT")); port != "" {
-		return ":" + port
-	}
-	return "127.0.0.1:8080"
-}
-
-{{if .SQLite}}func sqliteDatabasePath() string {
-	path := strings.TrimSpace(os.Getenv("RIDU_SQLITE_PATH"))
-	switch {
-	case path == "":
-		log.Fatal("RIDU_SQLITE_PATH is required")
-	case path == ":memory:":
-		log.Fatal("RIDU_SQLITE_PATH must be a file because migrations and the server run in separate processes")
-	case strings.HasPrefix(path, "file:"):
-		parsed, err := url.Parse(path)
-		if err != nil {
-			log.Fatalf("RIDU_SQLITE_PATH must be a valid SQLite file URI: %v", err)
-		}
-		target := parsed.Path
-		if target == "" {
-			target, err = url.PathUnescape(parsed.Opaque)
-		}
-		if parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost") {
-			// A Windows UNC share names its server as the host.
-			target = "//" + parsed.Host + target
-		} else if strings.HasPrefix(target, "/") && filepath.VolumeName(target[1:]) != "" {
-			// A Windows drive path is written /C:/….
-			target = target[1:]
-		}
-		if err != nil || !filepath.IsAbs(filepath.FromSlash(target)) {
-			log.Fatal("RIDU_SQLITE_PATH file URI must contain an absolute path")
-		}
-	case !filepath.IsAbs(path):
-		log.Fatal("RIDU_SQLITE_PATH must be an absolute file path")
-	}
-	return path
-}
-
-{{end}}func envBool(name string) bool {
-	raw := strings.TrimSpace(os.Getenv(name))
+{{if not .MongoDB}}
+// readinessOverride reads a readiness override that ridu dev sets for its
+// development server. Never set one for a production server.
+func readinessOverride(name string) bool {
+	raw := os.Getenv(name)
 	if raw == "" {
 		return false
 	}
-	value, err := strconv.ParseBool(raw)
+	enabled, err := strconv.ParseBool(raw)
 	if err != nil {
-		log.Fatalf("%s must be a boolean: %v", name, err)
+		log.Fatalf("%s must be true or false: %v", name, err)
 	}
-	return value
+	return enabled
 }
-
-func envInt(name string) int {
-	raw := strings.TrimSpace(os.Getenv(name))
-	if raw == "" {
-		return 0
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value < 0 {
-		log.Fatalf("%s must be a whole number of zero or more", name)
-	}
-	return value
-}
-
-func envDuration(name string) time.Duration {
-	raw := strings.TrimSpace(os.Getenv(name))
-	if raw == "" {
-		return 0
-	}
-	value, err := time.ParseDuration(raw)
-	if err != nil {
-		log.Fatalf("%s must be a Go duration: %v", name, err)
-	}
-	return value
-}
-
-func envInt32(name string) int32 {
-	raw := strings.TrimSpace(os.Getenv(name))
-	if raw == "" {
-		return 0
-	}
-	value, err := strconv.ParseInt(raw, 10, 32)
-	if err != nil || value < 0 {
-		log.Fatalf("%s must be a non-negative 32-bit integer", name)
-	}
-	return int32(value)
-}
-
-func envList(name string) []string {
-	var values []string
-	for _, value := range strings.Split(os.Getenv(name), ",") {
-		if value = strings.TrimSpace(value); value != "" {
-			values = append(values, value)
-		}
-	}
-	return values
-}
-
-func env(name, fallback string) string {
-	if value := os.Getenv(name); value != "" {
-		return value
-	}
-	return fallback
-}
+{{end}}

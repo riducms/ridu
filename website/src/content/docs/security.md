@@ -72,6 +72,10 @@ ridu.WithHandlerOptions(ridu.HandlerOptions{
 })
 ```
 
+Several of these fields also have a [deployment variable](/docs/production/#environment), such as
+`RIDU_ALLOWED_HOSTS`, that `ridu.Execute` reads when the field is unset. A value set in code wins
+over its variable.
+
 List trusted proxies narrowly. Forwarding headers are accepted only from configured networks; an
 over-broad CIDR lets an untrusted hop influence scheme or client-address decisions. Enable HSTS
 only when HTTPS is permanent for its complete declared scope.

@@ -239,6 +239,7 @@ const (
 
 	TaskErrorNotRegistered = core.TaskErrorNotRegistered
 	TaskErrorUnavailable   = core.TaskErrorUnavailable
+	TaskErrorInTransaction = core.TaskErrorInTransaction
 	TaskErrorInvalidInput  = core.TaskErrorInvalidInput
 	TaskErrorInvalidOutput = core.TaskErrorInvalidOutput
 	TaskErrorNotFound      = core.TaskErrorNotFound

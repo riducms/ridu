@@ -81,10 +81,11 @@ missing-handler, and invalid retry-policy definitions fail config validation.
 
 ## Enqueue and inspect work {#enqueue}
 
-Use the same typed definition from trusted Go code:
+Use the same typed definition from trusted Go code, with the local API. Endpoints, hooks and tasks
+receive it as `ctx.Local`; elsewhere call `app.Local()`:
 
 ```go
-receipt, err := SendEmail.Enqueue(ctx, app, EmailInput{
+receipt, err := SendEmail.Enqueue(ctx, local, EmailInput{
 	MessageID: requestID,
 	To:        "author@example.com",
 }, ridu.TaskEnqueueOptions{
@@ -95,7 +96,7 @@ if err != nil {
 	return err
 }
 
-result, err := SendEmail.Result(ctx, app, receipt.ID)
+result, err := SendEmail.Result(ctx, local, receipt.ID)
 ```
 
 `RunAt` schedules future admission. `Queue` can override the definition's queue. A concurrency key
@@ -103,10 +104,46 @@ serializes active leases for that key within one queue. Optional `Target` and `R
 references attach lifecycle-safe collection/document identities; hard deletion removes tasks that
 refer to the deleted identity.
 
+`Enqueue`, `Result` and `Cancel` check no access rule, like any other work an endpoint does, so
+authorize the actor first.
+
 `Result` returns typed output plus state, attempts, retained failure code and message, and completion
 time. `HasOutput` distinguishes a successful zero value from work that has not succeeded. `Cancel`
 atomically stops queued work and fences a running lease so a stale heartbeat or completion cannot
 win afterward.
+
+## Start work from a request or a hook {#from-requests-and-hooks}
+
+An endpoint can enqueue long work, answer with the task's ID, and let the client follow it:
+
+```go title="content/import.go"
+func startImport(ctx ridu.EndpointContext) {
+	if ctx.Actor == nil {
+		ctx.Error(&ridu.OperationError{Code: "access_denied", Status: http.StatusUnauthorized, Message: "Sign in to import."})
+		return
+	}
+	receipt, err := ImportWorkspace.Enqueue(
+		ctx.Request.Context(),
+		ctx.Local,
+		ImportInput{UserID: ctx.Actor.ID},
+		ridu.TaskEnqueueOptions{},
+	)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+	ctx.JSON(http.StatusAccepted, map[string]string{"task": receipt.ID})
+}
+```
+
+A second endpoint can return `ImportWorkspace.Result(...)` for that ID until its `State` is
+terminal.
+
+A hook enqueues from `AfterCommit`, which runs once the document's transaction has committed.
+`Enqueue` and `Cancel` refuse to run inside a transaction, such as from `BeforeChange` or
+`AfterChange`, with the `task_in_transaction` error: the task store would admit the task at once,
+and a rollback could not withdraw it. If work must not be lost when the process stops between the
+commit and the enqueue, add a [reconciler](#admission-reconciliation).
 
 ## Delivery is at least once {#at-least-once}
 

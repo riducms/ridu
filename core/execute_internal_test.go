@@ -283,7 +283,7 @@ func TestExecuteBindsListenerBeforeStartingDurableWorkers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{}); err != nil {
+	if _, err := task.Enqueue(context.Background(), application.Local(), struct{}{}, TaskEnqueueOptions{}); err != nil {
 		t.Fatal(err)
 	}
 

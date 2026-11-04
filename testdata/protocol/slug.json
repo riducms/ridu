@@ -1,0 +1,15 @@
+[
+  { "input": "  Hello,  WORLD!  ", "slug": "hello-world" },
+  { "input": "already--slugged", "slug": "already-slugged" },
+  { "input": "snake_case", "slug": "snake_case" },
+  { "input": "Café & Tea", "slug": "caf-tea" },
+  { "input": "---", "slug": "" },
+  { "input": "", "slug": "" },
+  { "input": "-Leading and trailing-", "slug": "leading-and-trailing" },
+  { "input": "Tabs\tand\nnew\r\nlines\fand\u000bfeeds", "slug": "tabs-and-new-lines-and-feeds" },
+  { "input": " No-break space em", "slug": "no-breakspaceem" },
+  { "input": "Version 2.0 (beta)", "slug": "version-20-beta" },
+  { "input": "Ünïcödé ✨ 🚀 rocket", "slug": "ncd-rocket" },
+  { "input": "UPPER_lower-123", "slug": "upper_lower-123" },
+  { "input": "a - - b", "slug": "a-b" }
+]
